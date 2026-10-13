@@ -1,0 +1,12 @@
+probe at: 2026-10-13 06:41:47 UTC
+runner: Linux runnervmmprz5 6.17.0-1022-azure #22-Ubuntu SMP Mon Jul 27 17:24:03 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+v22.23.3
+Python 3.12.3
+https://vip.titan007.com/ -> HTTP 000ERR size=00
+https://bf.titan007.com/football/Over_20261012.htm -> HTTP 200 size=360650
+https://www.okooo.com/ -> HTTP 200 size=145438
+https://m.okooo.com/ -> HTTP 200 size=16124
+https://m.gqj2.tv/api/new/getfootball_list?day=20261013&state=-1 -> HTTP 200 size=48
+https://webapi.sporttery.cn/ -> HTTP 567 size=7352
+https://trade.500.com/ -> HTTP 200 size=82192
+---- done ----
