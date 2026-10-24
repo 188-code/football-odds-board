@@ -1,0 +1,172 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>预设盘偏差回测 + 洋哥27场精选 · 离线对照报告</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--line:#e3e7ee;--t1:#1a1f29;--mut:#69748a;--accent:#2b6cff;--pos:#0a7d34;--posbg:#e8f6ee;--neg:#c0341d;--negbg:#fdecea;--neu:#6b7280;--neubg:#f0f2f5;}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--t1)}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 18px 80px}
+h1{font-size:23px;margin:0 0 4px}
+.sub{color:var(--mut);font-size:13px;margin-bottom:18px}
+.toc{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 0;margin-bottom:18px;display:flex;gap:14px;flex-wrap:wrap;font-size:13px}
+.toc a{color:var(--accent);text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 2px rgba(20,30,60,.04)}
+h2{font-size:18px;margin:0 0 12px;border-left:4px solid var(--accent);padding-left:10px}
+h3{font-size:15px;margin:16px 0 8px;color:var(--t1)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:center;vertical-align:top}
+th{background:#f0f3f8;font-weight:600;color:#33405a}
+td.lab{text-align:left;background:#fafbfc;font-weight:500}
+td.lg,td.pk,td.nt{text-align:left}
+.ci{color:var(--mut);font-size:11px;font-family:ui-monospace,Menlo,monospace}
+.r1{font-size:13px}.r2{font-size:13px;margin-top:2px}
+.pos{color:var(--pos);background:var(--posbg);border-radius:5px;padding:1px 4px;font-weight:600}
+.neg{color:var(--neg);background:var(--negbg);border-radius:5px;padding:1px 4px;font-weight:600}
+.negw,.posw{color:var(--neu);background:var(--neubg);border-radius:5px;padding:1px 4px}
+.neu{color:var(--neu);background:var(--neubg);border-radius:5px;padding:1px 4px}
+.muted{color:var(--mut)}
+.base{background:#f7f9fc}
+.tag{font-size:11px;color:var(--mut)}
+.verdict{border:1px solid var(--line);border-left:5px solid var(--neg);background:#fff;border-radius:8px;padding:12px 16px;margin:12px 0}
+.verdict b{color:var(--neg)}
+.kpi{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
+.kpi .box{flex:1;min-width:150px;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+.kpi .n{font-size:22px;font-weight:700;color:var(--accent)}
+.kpi .l{font-size:12px;color:var(--mut)}
+.foot{color:var(--mut);font-size:12px;margin-top:8px}
+.win{color:var(--pos);font-weight:700}.lose{color:var(--neg);font-weight:700}
+.c{color:var(--mut)}.lg{color:var(--mut)}.pk{color:#0b5cad;font-weight:600}.nt{color:#445}
+.note{background:#fffbe9;border:1px solid #f3e6b8;border-radius:8px;padding:10px 14px;font-size:13px;color:#6b5a16;margin:10px 0}
+</style></head><body><div class="wrap">
+<h1>预设盘偏差(pan_gap)回测 + 洋哥 27 场精选 · 离线对照报告</h1>
+<div class="sub">生成时间 2026-10-24T14:29:07 · 数据源 3 份 bake_pack 快照去重合并（cleanN=2089）· 含 Wilson/Bootstrap 95% CI + 时间外留出验证 · 报告本地自包含，可离线打开</div>
+<div class="toc"><a href="#a">A. 预设盘偏差回测(带CI)</a><a href="#b">B. 洋哥 27 场明细</a><a href="#c">C. 结论与对账</a></div>
+
+<!-- PART A -->
+<div class="card" id="a">
+<h2>A. 预设盘偏差(pan_gap) 正式回测报告</h2>
+<div class="kpi">
+  <div class="box"><div class="n">2089</div><div class="l">有效完场样本</div></div>
+  <div class="box"><div class="n">337</div><div class="l">脏场(|gap|≥2)剔除</div></div>
+  <div class="box"><div class="n">6</div><div class="l">分桶(幅度) + 4(方向) + 5(阈值)</div></div>
+</div>
+<div class="note"><b>口径</b>：pan_gap=实际初盘−欧赔换算预期盘。高开(gap>0)→反买下盘；浅开(gap<0)→反买上盘。结算=临场盘p1；半盘半赢半输；整数盘走水退本；水位和=1.90。命中率Wilson95%CI，ROI=Bootstrap3000次95%CI。脏场|gap|≥2剔除。</div>
+
+<div class="verdict">
+  <b>核心结论：pan_gap 作为独立 PICK 线索 → 不入门。</b><br>
+  命中率与 ROI 呈 <b>U 型</b>：小偏差(≤0.75)下盘占优、大偏差(≥1.0)上盘占优。但「大偏差上盘赢」正是引擎
+  <code>classifyPan</code> 已标的「深盘→上盘」规则（亚盘回测深盘·上盘 n=186 +27.4%）；pan_gap 没有超出引擎已有增量 alpha。
+  按洋哥「预设盘偏差即反买」的纯符号策略：高开反买下盘 ROI <b>-5%</b>（CI 含 0，不显著）、浅开反买上盘 ROI <b>-12.3%</b>（显著亏损）。
+  故维持「观察证据、不入门」铁律。
+</div>
+
+<h3>表 A1 · 幅度分桶（上盘 / 下盘 覆盖与 ROI，含 95% CI）</h3>
+<table>
+<tr><th>pan_gap 幅度</th><th>上盘(买让球方)</th><th>下盘(买受让方)</th></tr>
+<tr><td class="lab">|gap| ≤ 0.25</td><td><div class="r1">命中 <b>39.9%</b> <span class="ci">[35.7, 44.2]</span></div><div class="r2 neg">ROI <b>-21.2%</b> <span class="ci">[-29.1, -13.1]</span> 亏·显著</div></td><td><div class="r1">命中 <b>57.2%</b> <span class="ci">[52.9, 61.4]</span></div><div class="r2 pos">ROI <b>+17.1%</b> <span class="ci">[8.6, 25.3]</span> 盈·显著</div></td></tr>
+<tr><td class="lab">0.25 < |gap| ≤ 0.5</td><td><div class="r1">命中 <b>39%</b> <span class="ci">[34.9, 43.2]</span></div><div class="r2 neg">ROI <b>-22.7%</b> <span class="ci">[-30.4, -14.6]</span> 亏·显著</div></td><td><div class="r1">命中 <b>57.4%</b> <span class="ci">[53.1, 61.5]</span></div><div class="r2 pos">ROI <b>+18.7%</b> <span class="ci">[10.7, 27.2]</span> 盈·显著</div></td></tr>
+<tr><td class="lab">0.5 < |gap| ≤ 0.75</td><td><div class="r1">命中 <b>42.7%</b> <span class="ci">[36.6, 49.1]</span></div><div class="r2 neg">ROI <b>-17.9%</b> <span class="ci">[-29.4, -5.6]</span> 亏·显著</div></td><td><div class="r1">命中 <b>55.6%</b> <span class="ci">[49.2, 61.8]</span></div><div class="r2 pos">ROI <b>+13.4%</b> <span class="ci">[0.3, 26.4]</span> 盈·显著</div></td></tr>
+<tr><td class="lab">0.75 < |gap| ≤ 1.0</td><td><div class="r1">命中 <b>53.9%</b> <span class="ci">[46.3, 61.4]</span></div><div class="r2 posw">ROI <b>+5.2%</b> <span class="ci">[-8.9, 19.5]</span> </div></td><td><div class="r1">命中 <b>43.6%</b> <span class="ci">[36.3, 51.3]</span></div><div class="r2 neu">ROI <b>-10.3%</b> <span class="ci">[-25.7, 4.6]</span> </div></td></tr>
+<tr><td class="lab">1.0 < |gap| ≤ 1.5</td><td><div class="r1">命中 <b>62.4%</b> <span class="ci">[56.5, 67.9]</span></div><div class="r2 pos">ROI <b>+21.6%</b> <span class="ci">[10.9, 32.1]</span> 盈·显著</div></td><td><div class="r1">命中 <b>35%</b> <span class="ci">[29.6, 40.9]</span></div><div class="r2 neg">ROI <b>-27.3%</b> <span class="ci">[-38.3, -15.9]</span> 亏·显著</div></td></tr>
+<tr><td class="lab">1.5 < |gap| ≤ 2.0</td><td><div class="r1">命中 <b>54%</b> <span class="ci">[48.9, 59]</span></div><div class="r2 posw">ROI <b>+3.7%</b> <span class="ci">[-6.3, 13.4]</span> </div></td><td><div class="r1">命中 <b>44.7%</b> <span class="ci">[39.7, 49.7]</span></div><div class="r2 neu">ROI <b>-9.8%</b> <span class="ci">[-19.8, 0.4]</span> </div></td></tr>
+</table>
+
+<h3>表 A2 · 方向分桶（洋哥「预设盘偏差即反买」逻辑验证）</h3>
+<table>
+<tr><th>策略</th><th>命中率 / ROI（含 95% CI）</th></tr>
+<tr><td class="lab">高开(gap>0)·反买下盘<br><span class="tag">洋哥预设盘逻辑</span></td><td><div class="r1">命中 <b>46.7%</b> <span class="ci">[42.8, 50.7]</span></div><div class="r2 neu">ROI <b>-5%</b> <span class="ci">[-13, 2.5]</span> </div></td></tr>
+<tr><td class="lab">高开(gap>0)·买上盘(对照)<br><span class="tag">反向对照</span></td><td><div class="r1">命中 <b>51.2%</b> <span class="ci">[47.2, 55.1]</span></div><div class="r2 neu">ROI <b>-1%</b> <span class="ci">[-8.6, 6.4]</span> </div></td></tr>
+<tr><td class="lab">浅开(gap<0)·反买上盘<br><span class="tag">洋哥预设盘逻辑</span></td><td><div class="r1">命中 <b>44.7%</b> <span class="ci">[42.2, 47.2]</span></div><div class="r2 neg">ROI <b>-12.3%</b> <span class="ci">[-17, -7.5]</span> 亏·显著</div></td></tr>
+<tr><td class="lab">浅开(gap<0)·买下盘(对照)<br><span class="tag">反向对照</span></td><td><div class="r1">命中 <b>52.5%</b> <span class="ci">[50, 55.1]</span></div><div class="r2 pos">ROI <b>+8.1%</b> <span class="ci">[3.2, 13.1]</span> 盈·显著</div></td></tr>
+</table>
+
+<h3>表 A3 · 阈值 fade（|gap|≥T 押偏离反方向）</h3>
+<table>
+<tr><th>阈值</th><th>命中率 / ROI（含 95% CI）</th></tr>
+<tr><td class="lab">|gap| ≥ 0.25 押偏离反方向</td><td><div class="r1">命中 <b>46.8%</b> <span class="ci">[44.3, 49.2]</span></div><div class="r2 neg">ROI <b>-7.5%</b> <span class="ci">[-12.1, -2.9]</span> 亏·显著</div></td></tr>
+<tr><td class="lab">|gap| ≥ 0.5 押偏离反方向</td><td><div class="r1">命中 <b>50%</b> <span class="ci">[46.9, 53]</span></div><div class="r2 neu">ROI <b>-1.5%</b> <span class="ci">[-7.5, 4.5]</span> </div></td></tr>
+<tr><td class="lab">|gap| ≥ 0.75 押偏离反方向</td><td><div class="r1">命中 <b>51.9%</b> <span class="ci">[48.5, 55.3]</span></div><div class="r2 posw">ROI <b>+2.6%</b> <span class="ci">[-4.1, 8.9]</span> </div></td></tr>
+<tr><td class="lab">|gap| ≥ 1 押偏离反方向</td><td><div class="r1">命中 <b>52.5%</b> <span class="ci">[48.6, 56.3]</span></div><div class="r2 posw">ROI <b>+3.7%</b> <span class="ci">[-3.9, 10.9]</span> </div></td></tr>
+<tr><td class="lab">|gap| ≥ 1.5 押偏离反方向</td><td><div class="r1">命中 <b>59.6%</b> <span class="ci">[54.6, 64.5]</span></div><div class="r2 pos">ROI <b>+17.3%</b> <span class="ci">[7.7, 27]</span> 盈·显著</div></td></tr>
+</table>
+
+<h3>表 A4 · 时间外留出验证（按比赛真实时间切分，防快照重叠过拟合）</h3>
+<div class="note">切分：训练集=时间较早 60%（n=1253），测试集=较晚 40%（n=836）；时间跨度 1791954000→1792679400（unix 秒）。若 U 型仅来自过拟合，测试集应消失。</div>
+<table>
+<tr><th>策略 / 桶</th><th>训练集(早60%) ROI[CI]</th><th>测试集(晚40%) ROI[CI]</th><th>方向是否存活</th></tr>
+<tr><td class="lab">小偏差 m025 下盘</td><td><div class="r2 pos">ROI <b>+17.1%</b> <span class="ci">[6.7, 28.1]</span> 盈·显著</div><div class="ci">n=328</div></td><td><div class="r2 pos">ROI <b>+16.9%</b> <span class="ci">[2.5, 30.8]</span> 盈·显著</div><div class="ci">n=186</div></td><td>✓ 存活</td></tr>
+<tr><td class="lab">小偏差 m05 下盘</td><td><div class="r2 pos">ROI <b>+18.5%</b> <span class="ci">[7.6, 28.2]</span> 盈·显著</div><div class="ci">n=365</div></td><td><div class="r2 pos">ROI <b>+19.2%</b> <span class="ci">[4.3, 33.4]</span> 盈·显著</div><div class="ci">n=163</div></td><td>✓ 存活</td></tr>
+<tr><td class="lab">大偏差 m15 上盘</td><td><div class="r2 pos">ROI <b>+29.8%</b> <span class="ci">[15.8, 43]</span> 盈·显著</div><div class="ci">n=143</div></td><td><div class="r2 posw">ROI <b>+12.7%</b> <span class="ci">[-2.6, 27.9]</span> </div><div class="ci">n=131</div></td><td>✓ 存活</td></tr>
+<tr><td class="lab">大偏差 m15 下盘(对照)</td><td><div class="r2 neg">ROI <b>-35.7%</b> <span class="ci">[-50.7, -20.5]</span> 亏·显著</div><div class="ci">n=143</div></td><td><div class="r2 neg">ROI <b>-18.2%</b> <span class="ci">[-34.6, -1.6]</span> 亏·显著</div><div class="ci">n=131</div></td><td>—</td></tr>
+<tr><td class="lab">浅开反买上盘(洋哥逻辑)</td><td><div class="r2 neg">ROI <b>-10.9%</b> <span class="ci">[-17, -4.9]</span> 亏·显著</div><div class="ci">n=929</div></td><td><div class="r2 neg">ROI <b>-14.7%</b> <span class="ci">[-22.6, -7]</span> 亏·显著</div><div class="ci">n=554</div></td><td>✗ 显著亏损</td></tr>
+<tr><td class="lab">高开反买下盘(洋哥逻辑)</td><td><div class="r2 neu">ROI <b>-2.2%</b> <span class="ci">[-13.1, 8.2]</span> </div><div class="ci">n=324</div></td><td><div class="r2 neu">ROI <b>-8.3%</b> <span class="ci">[-19.9, 3.1]</span> </div><div class="ci">n=282</div></td><td>✗ 亏损</td></tr>
+</table>
+<h3>5 折时间块稳定性（U 型方向是否贯穿各时段）</h3>
+<table>
+<tr><th>折</th><th>n</th><th>小偏差下盘 ROI[CI]</th><th>大偏差上盘 ROI[CI]</th></tr>
+<tr><td>1</td><td>418</td><td class="pos">+38.8% <span class="ci">[19.4, 57.5]</span></td><td class="pos">+22% <span class="ci">[0.8, 42.1]</span></td></tr>
+<tr><td>2</td><td>418</td><td class="pos">+10% <span class="ci">[-9.8, 28.4]</span></td><td class="pos">+22.7% <span class="ci">[-4.2, 48.7]</span></td></tr>
+<tr><td>3</td><td>418</td><td class="pos">+10.3% <span class="ci">[-5.1, 26.5]</span></td><td class="pos">+67% <span class="ci">[40.5, 90.5]</span></td></tr>
+<tr><td>4</td><td>418</td><td class="pos">+7.1% <span class="ci">[-13.5, 27.3]</span></td><td class="pos">+1.3% <span class="ci">[-22.9, 25.3]</span></td></tr>
+<tr><td>5</td><td>417</td><td class="pos">+27.2% <span class="ci">[7.4, 46.6]</span></td><td class="pos">+20.9% <span class="ci">[0.8, 40.9]</span></td></tr>
+</table>
+<div class="verdict" style="border-left-color:#2b6cff">
+  <b>留出验证结论：</b>U 型在测试集仍成立（<code>uShapeHoldsInTest=true</code>），最佳桶 m025_down 训练 <b>+17.1%</b> → 测试 <b>+16.9%</b>，5 折各时段方向全部同向 → <b>U 型是真实结构、非过拟合</b>。
+  但盈利来源并非洋哥「反买预设盘偏差」：浅开反买上盘在训练/测试均<b>显著亏损</b>（-10.9% / -14.7%），高开反买下盘亦负。真正可解释的两条已为引擎既有规则——①小偏差下盘的结构性边缘（naive_down 基线 +4.3% 显著）②深盘上盘（=引擎 <code>pan_predict</code> 深盘规则）。故 <b>pan_gap 仍不入门</b>，唯证实 U 型稳健。
+</div>
+
+<h3>表 A0 · 基线对照（无 pan_gap 信号，纯上/下盘）</h3>
+<table>
+<tr><th>策略</th><th>命中率 / ROI（含 95% CI）</th></tr>
+<tr class="base"><td class="lab">上盘 naive_up（基准）</td><td><div class="r1">命中 <b>46.6%</b> <span class="ci">[44.4, 48.7]</span></div><div class="r2 neg">ROI <b>-9%</b> <span class="ci">[-13.1, -4.8]</span> 亏·显著</div></td></tr>
+<tr class="base"><td class="lab">下盘 naive_down（基准）</td><td><div class="r1">命中 <b>50.8%</b> <span class="ci">[48.7, 53]</span></div><div class="r2 pos">ROI <b>+4.3%</b> <span class="ci">[0.1, 8.6]</span> 盈·显著</div></td></tr>
+<tr class="base"><td class="lab">脏场|gap|≥2 上盘基线</td><td><div class="r1">命中 <b>51.6%</b> <span class="ci">[46.3, 56.9]</span></div><div class="r2 neu">ROI <b>0%</b> <span class="ci">[-9.7, 10.2]</span> </div></td></tr>
+</table>
+<div class="foot">CI 说明：命中率 = Wilson 95% 区间；ROI = Bootstrap 3000 次重采样 95% 区间（逐注 P&L）。「盈·显著/亏·显著」= ROI 区间不含 0。</div>
+</div>
+
+<!-- PART B -->
+<div class="card" id="b">
+<h2>B. 洋哥 27 场精选全记录（离线对照）</h2>
+<div class="kpi">
+  <div class="box"><div class="n">27</div><div class="l">总场次</div></div>
+  <div class="box"><div class="n">25红2黑</div><div class="l">命中率 92.6%</div></div>
+  <div class="box"><div class="n">22</div><div class="l">受让(95.5%)</div></div>
+  <div class="box"><div class="n">3 / 2</div><div class="l">平手 / 让球</div></div>
+</div>
+<div class="note">来源：用户 2026-10-20 微信转发截图（2a51e9c0…jpg），已逐行放大核对。第26条备注原文含贬称，已中性化为「日本被造热」，分析口径不变。</div>
+<h3>类型分布</h3>
+<table><tr><th>类型</th><th>场次</th><th>命中</th><th>命中率</th></tr><tr><td>受让</td><td>22</td><td>21</td><td><b>95.5%</b></td></tr><tr><td>让球</td><td>2</td><td>2</td><td><b>100.0%</b></td></tr><tr><td>平手</td><td>3</td><td>2</td><td><b>66.7%</b></td></tr></table>
+<h3>27 场明细</h3>
+<table>
+<tr><th>#</th><th>日期</th><th>联赛</th><th>对阵</th><th>推荐</th><th>比分</th><th>结果</th><th>类型</th><th>判据要点</th></tr>
+<tr><td class="c">1</td><td>2026.4.1</td><td class="lg">国际友谊</td><td><b>挪威vs瑞士</b></td><td class="pk">瑞士+0.5</td><td>0-0</td><td class="win">✓ 红</td><td>受让</td><td class="nt">哈兰德题材高开半球造热挪威，实际合理盘为0.25</td></tr><tr><td class="c">2</td><td>2026.4.1</td><td class="lg">世预赛</td><td><b>波黑vs意大利</b></td><td class="pk">波黑+1</td><td>1-1</td><td class="win">✓ 红</td><td>受让</td><td class="nt">实际合理盘0.75，各种题材高开造热意大利</td></tr><tr><td class="c">3</td><td>—</td><td class="lg">意甲</td><td><b>拉齐奥vs帕尔马</b></td><td class="pk">帕尔马+0.5</td><td>1-1</td><td class="win">✓ 红</td><td>受让</td><td class="nt">竞彩上盘单边连续下降，欧洲标准盘上盘水位上升，上盘过热</td></tr><tr><td class="c">4</td><td>—</td><td class="lg">NBA</td><td><b>马刺vs掘金</b></td><td class="pk">掘金+1.5</td><td>掘金胜</td><td class="win">✓ 红</td><td>受让</td><td class="nt">马刺12连胜，竞彩被打偏2分，亚盘无任何规避热度操盘，上盘热</td></tr><tr><td class="c">5</td><td>—</td><td class="lg">瑞超</td><td><b>奥尔格里特vs马尔默</b></td><td class="pk">奥尔格里特+1</td><td>1-1</td><td class="win">✓ 红</td><td>受让</td><td class="nt">升班马对前赛季冠军，操盘超强队，玩家买入客队热情淋漓尽致但临场依旧回水，上盘大热</td></tr><tr><td class="c">6</td><td>—</td><td class="lg">荷甲</td><td><b>布雷达vs鹿特丹斯巴达</b></td><td class="pk">鹿特丹斯巴达+0.25</td><td>1-1</td><td class="win">✓ 红</td><td>受让</td><td class="nt">联赛倒数打正数，合理盘平手，强队只能给客队散热，竞彩布雷达买入热情，临场无降水</td></tr><tr><td class="c">7</td><td>—</td><td class="lg">意甲</td><td><b>国际米兰vs罗马</b></td><td class="pk">国际米兰-1</td><td>5-2</td><td class="win">✓ 红</td><td>让球</td><td class="nt">基本面最差的国米，遇到暂进欧冠的罗马，理论半一低水，开高一球，下盘变热门</td></tr><tr><td class="c">8</td><td>—</td><td class="lg">英超</td><td><b>米尔沃尔vs诺维奇</b></td><td class="pk">诺维奇+0.25</td><td>1-2</td><td class="win">✓ 红</td><td>受让</td><td class="nt">米尔沃尔积分第二，冲超战意超强，客队无欲无求。上盘资金都买疯了，临场还降盘，热透</td></tr><tr><td class="c">9</td><td>—</td><td class="lg">NBA</td><td><b>老鹰vs尼克斯</b></td><td class="pk">尼克斯+1.5</td><td>尼克斯胜</td><td class="win">✓ 红</td><td>受让</td><td class="nt">老鹰连胜题材较多，3.5是盘口平衡点，临场1.5坚挺，无惧老鹰买入筹码</td></tr><tr><td class="c">10</td><td>—</td><td class="lg">NBA</td><td><b>勇士vs国王</b></td><td class="pk">国王+14.5</td><td>勇士赢5</td><td class="win">✓ 红</td><td>受让</td><td class="nt">竞彩被打到17.5，临场还退盘，勇士过热</td></tr><tr><td class="c">11</td><td>—</td><td class="lg">挪超</td><td><b>奥勒松vs腓特烈斯塔</b></td><td class="pk">奥勒松-0</td><td>2-3</td><td class="lose">✗ 黑</td><td>平手</td><td class="nt">客队在主任心中处热门，临场亚盘维持平手低水，但客队逆转，再遇到还会选择主队</td></tr><tr><td class="c">12</td><td>—</td><td class="lg">英超</td><td><b>曼城vs狼队</b></td><td class="pk">曼城-0</td><td>1-0</td><td class="win">✓ 红</td><td>平手</td><td class="nt">北单赔率被打偏两级的比赛，百里挑一，庄家都不怕，我们更没理由怕，就是踢不过</td></tr><tr><td class="c">13</td><td>—</td><td class="lg">英超</td><td><b>阿森纳vs伯恩茅斯</b></td><td class="pk">伯恩茅斯+1.25</td><td>1-2</td><td class="win">✓ 红</td><td>受让</td><td class="nt">必须要赢的比赛，上盘买入资金巨大，临场最后几分钟降盘，完全与玩家心理相悖，热死</td></tr><tr><td class="c">14</td><td>—</td><td class="lg">英超</td><td><b>曼联vs利兹联</b></td><td class="pk">利兹联+1</td><td>1-2</td><td class="win">✓ 红</td><td>受让</td><td class="nt">合理一球低水，临场一球超低水，导致附加盘的上盘一半过热</td></tr><tr><td class="c">15</td><td>—</td><td class="lg">挪超</td><td><b>布洛马波卡纳vs索尔纳</b></td><td class="pk">布洛马波卡纳+0.5</td><td>2-2</td><td class="win">✓ 红</td><td>受让</td><td class="nt">主队基本面下降很多，客队也没拿到应有的半球低水盘，超过返还率兜底的最大热度保护</td></tr><tr><td class="c">16</td><td>—</td><td class="lg">德甲</td><td><b>勒沃库森vs奥格斯堡</b></td><td class="pk">奥格斯堡+1.5</td><td>1-2</td><td class="win">✓ 红</td><td>受让</td><td class="nt">亚盘和趋势盘完全相反操盘方向，勒沃库森主胜都热死，更别说让球盘了</td></tr><tr><td class="c">17</td><td>—</td><td class="lg">瑞超</td><td><b>尤尔加登vs哈马比</b></td><td class="pk">尤尔加登+0.25</td><td>1-1</td><td class="win">✓ 红</td><td>受让</td><td class="nt">主任2.31-1.92，资金压力完全在客队，亚盘纹丝不动无惧客队筹码，北单热度换算客队大热</td></tr><tr><td class="c">18</td><td>—</td><td class="lg">西甲</td><td><b>奥萨苏纳vs塞维利亚</b></td><td class="pk">奥萨苏纳-0.5</td><td>2-1</td><td class="win">✓ 红</td><td>让球</td><td class="nt">主任资金趋势在客队，庄家反向操盘降主队赔率，北单热度系统客队大热，读秒绝杀拿下</td></tr><tr><td class="c">19</td><td>—</td><td class="lg">荷甲</td><td><b>威廉二世vs福伦丹</b></td><td class="pk">福伦丹+0.25</td><td>1-2</td><td class="win">✓ 红</td><td>受让</td><td class="nt">资金趋势1盘主队2.05降到1.92，很热。二盘主队2.15升到2.32完全不惧主任资金，三盘主队同样大热</td></tr><tr><td class="c">20</td><td>—</td><td class="lg">西甲</td><td><b>皇家马德里vs毕尔巴鄂竞技</b></td><td class="pk">毕尔巴鄂竞技+1</td><td>4-2</td><td class="lose">✗ 黑</td><td>受让</td><td class="nt">总结：一盘盘的比赛，三盘热度偏移增加一个，确保大热数据的准确性</td></tr><tr><td class="c">21</td><td>—</td><td class="lg">挪超</td><td><b>萨普斯堡vs莫尔德</b></td><td class="pk">萨普斯堡+0</td><td>2-1</td><td class="win">✓ 红</td><td>平手</td><td class="nt">一盘莫尔德2.35到2.15，大热。二盘纹丝不动，不设防。三盘莫尔德被打偏到半球中水，热透</td></tr><tr><td class="c">22</td><td>—</td><td class="lg">日职</td><td><b>浦和红钻vs冈山绿雉</b></td><td class="pk">冈山绿雉+0.5</td><td>0-2</td><td class="win">✓ 红</td><td>受让</td><td class="nt">一盘1.87降1.71，二盘1.91升1.95，完全对上盘热度不设防。三盘上盘让到一球中水，热透</td></tr><tr><td class="c">23</td><td>—</td><td class="lg">国际赛</td><td><b>西班牙vs佛得角</b></td><td class="pk">佛得角+2.5</td><td>0-0</td><td class="win">✓ 红</td><td>受让</td><td class="nt">一盘西班牙资金流速达到3球低水，二盘完全不合理，临场降盘。三盘西班牙被打到3.5球，历史罕见</td></tr><tr><td class="c">24</td><td>—</td><td class="lg">国际赛</td><td><b>葡萄牙vs刚果</b></td><td class="pk">刚果+1.5</td><td>1-1</td><td class="win">✓ 红</td><td>受让</td><td class="nt">一盘葡萄牙资金流速被干到2.25球，临场机构根本不管葡萄牙热度。三盘被打偏到2.25球低水，热透</td></tr><tr><td class="c">25</td><td>—</td><td class="lg">国际赛</td><td><b>捷克vs南非</b></td><td class="pk">南非+0.5</td><td>1-1</td><td class="win">✓ 红</td><td>受让</td><td class="nt">一盘竞彩较快（流速半一中水），临场机构对上盘热度不设防。三盘被打偏到一球低水，捷克热透</td></tr><tr><td class="c">26</td><td>—</td><td class="lg">国际赛</td><td><b>日本vs瑞典</b></td><td class="pk">瑞典+0.25</td><td>1-1</td><td class="win">✓ 红</td><td>受让</td><td class="nt">一盘日本半一流速热透，二盘平半临场还一直升水不设防。三盘半一依旧热透 → 日本被造热</td></tr><tr><td class="c">27</td><td>—</td><td class="lg">挪超</td><td><b>莫尔德vs布兰</b></td><td class="pk">布兰+0.25</td><td>1-2</td><td class="win">✓ 红</td><td>受让</td><td class="nt">一盘半球低水（1.95降1.77）热透，二盘平半中水略升水无惧莫尔德热度，三盘半一低水，热透</td></tr>
+</table>
+<div class="foot">判据计数（单场可多标）：预设盘 6 · 北单热度 10 · 临场降盘 4 · 返还率兜底 1 · 365不设防 6 · 三盘显式 9。共性链：①盘竞彩流速热 → ②盘 365 不设防 → ③盘北单被打偏 ≥1 盘级。</div>
+</div>
+
+<!-- PART C -->
+<div class="card" id="c">
+<h2>C. 结论与对账</h2>
+<h3>C1 · pan_gap 是否入门？</h3>
+<p><b>不入门。</b> 证据：①按洋哥符号逻辑反买，两方向 ROI 均 ≤0 且浅开方向显著亏损（留出验证训练 −10.9% / 测试 −14.7% 均显著亏）；②按幅度呈 U 型，但大偏差上盘赢已被引擎 <code>pan_predict</code> 深盘规则覆盖、小偏差下盘盈利只是 naive_down 基线(+4.3%显著)的结构放大，<b>无增量 alpha</b>；③<b>时间外留出验证</b>确认 U 型真实非过拟合，但盈利来源不是「反买偏差」本身；④与项目铁律「先标定再入门」一致，维持观察证据位（ui.js 已显示 <code>exp_hcap vs a0 → 盘分差</code>，标注「观察·未入 PICK 门」）。</p>
+<h3>C2 · 27 场 → 引擎字段映射</h3>
+<table>
+<tr><th>洋哥口径</th><th>引擎实现</th><th>状态</th></tr>
+<tr><td>预设盘/合理盘偏差</td><td><code>exp_hcap</code>/<code>pan_gap</code>/<code>a0</code> 显示盘分差</td><td>✓ 已实现(观察)</td></tr>
+<tr><td>一盘 竞彩资金流速</td><td><code>jc.hotSide</code> + 竞彩初盘走势采集(<code>jc_history.json</code>)</td><td>✓ 已实现(走势采集新启用)</td></tr>
+<tr><td>二盘 365 不设防</td><td><code>yg.pan2.def∈{follow,flat,fade}</code></td><td>✓ 已实现</td></tr>
+<tr><td>三盘 北单被打偏</td><td><code>levDev</code>/<code>levSide</code> 盘级偏差(≥2级=大热第二条)</td><td>✓ 已实现</td></tr>
+<tr><td>反买被造热方</td><td>过热方对面按 <code>p1</code> 映射 上盘/下盘（可上可下）</td><td>✓ 2026-10-24 修正</td></tr>
+<tr><td>仓位/北单小样本</td><td><code>heatUsable</code> 护栏、<code>_bdDirOk</code> 方向一致性</td><td>✓ 已实现</td></tr>
+</table>
+<h3>C3 · 诚实边界</h3>
+<ul>
+<li>27 场为历史样本，<b>不可回测</b>（无当时北单/竞彩快照），仅作方法论校准，不计入任何 ROI 统计。</li>
+<li>pan_gap 回测基于 3 份 bake 快照（cleanN=2089），为<b>事后标定</b>，非样本外验证；上线前仍需留出验证。</li>
+<li>竞彩官方赔率变动极少，<code>jc_history</code> 初→临方向需 cron 跑数小时才显，初期显示「采集已启用·累计中」。</li>
+</ul>
+<div class="foot">本报告为本地自包含 HTML，所有数字来自 <code>panguo_backtest_ci.json</code> 与 <code>yangge_picks_27.json</code>，可离线打开对照。</div>
+</div>
+</div></body></html>
