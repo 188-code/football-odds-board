@@ -41,7 +41,7 @@ td.lg,td.pk,td.nt{text-align:left}
 </style></head><body><div class="wrap">
 <h1>预设盘偏差(pan_gap)回测 + 洋哥 27 场精选 · 离线对照报告</h1>
 <div class="sub">生成时间 2026-10-24T14:29:07 · 数据源 3 份 bake_pack 快照去重合并（cleanN=2089）· 含 Wilson/Bootstrap 95% CI + 时间外留出验证 · 报告本地自包含，可离线打开</div>
-<div class="toc"><a href="#a">A. 预设盘偏差回测(带CI)</a><a href="#b">B. 洋哥 27 场明细</a><a href="#c">C. 结论与对账</a></div>
+<div class="toc"><a href="#a">A. 预设盘偏差回测(带CI)</a><a href="#b">B. 洋哥 27 场明细</a><a href="#c">C. 结论与对账</a><a href="#c4">C4. 小偏差下盘增强评估</a></div>
 
 <!-- PART A -->
 <div class="card" id="a">
@@ -112,7 +112,7 @@ td.lg,td.pk,td.nt{text-align:left}
 <tr><td>5</td><td>417</td><td class="pos">+27.2% <span class="ci">[7.4, 46.6]</span></td><td class="pos">+20.9% <span class="ci">[0.8, 40.9]</span></td></tr>
 </table>
 <div class="verdict" style="border-left-color:#2b6cff">
-  <b>留出验证结论：</b>U 型在测试集仍成立（<code>uShapeHoldsInTest=true</code>），最佳桶 m025_down 训练 <b>+17.1%</b> → 测试 <b>+16.9%</b>，5 折各时段方向全部同向 → <b>U 型是真实结构、非过拟合</b>。
+  <b>留出验证结论：</b>U 型在测试集仍成立（<code>uShapeHoldsInTest=true</code>），最佳桶 m025_down 训练 <b>+17.1%</b> → 测试 <b>+16.9%</b>，5 折各时段方向全部同向 → <b>U 型是真实结构、非过拟合</b>。 另：m025_down 的 +17% 落在引擎<b>中庸盘观望区</b>（pan_gap∈[-0.5,0)），是引擎漏判的下盘结构边缘——已作为<b>观察级增强</b>暴露（见 C4），而非新 PICK 门。
   但盈利来源并非洋哥「反买预设盘偏差」：浅开反买上盘在训练/测试均<b>显著亏损</b>（-10.9% / -14.7%），高开反买下盘亦负。真正可解释的两条已为引擎既有规则——①小偏差下盘的结构性边缘（naive_down 基线 +4.3% 显著）②深盘上盘（=引擎 <code>pan_predict</code> 深盘规则）。故 <b>pan_gap 仍不入门</b>，唯证实 U 型稳健。
 </div>
 
@@ -168,5 +168,15 @@ td.lg,td.pk,td.nt{text-align:left}
 <li>竞彩官方赔率变动极少，<code>jc_history</code> 初→临方向需 cron 跑数小时才显，初期显示「采集已启用·累计中」。</li>
 </ul>
 <div class="foot">本报告为本地自包含 HTML，所有数字来自 <code>panguo_backtest_ci.json</code> 与 <code>yangge_picks_27.json</code>，可离线打开对照。</div>
+<h3>C4 · 小偏差下盘（pan_gap∈[-0.5,0)）作为现有规则增强的评估</h3>
+<div class="note"><b>增量发现</b>：引擎 <code>classifyPan</code> 仅在 pan_gap≤-0.5 判下盘；pan_gap∈[-0.5,0)（中庸盘偏下）判<b>观望</b>。但表 A1/A4 显示该区间买下盘 ROI <b>+17%</b>（训练/测试双样本显著）→ 引擎「观望」区<b>漏判的结构下盘边缘</b>（大偏差上盘已被引擎覆盖，此小偏差下盘尚未被任何引擎规则主动捕获）。</div>
+<table>
+<tr><th>维度</th><th>评估结论</th></tr>
+<tr><td>是否新增 PICK 门？</td><td><b>否</b>。用户明确要求「增强而非新门」，且项目铁律「先标定再入门」——不新增独立下注门。</td></tr>
+<tr><td>增强方式</td><td>在亚盘判定副行对「中庸盘偏下 + 引擎观望」追加<b>观察级提示</b>「中庸盘偏下·结构下盘边缘(+17%·双样本显著·观察)」；不改 dirCode/tier、不进 stakePlan 下注门；最终下注仍由 stakePlan + 标定命中率决定。</td></tr>
+<tr><td>已落地</td><td>ui.js <code>_asiaJudge()</code> 副行（<code>_edgeNote</code>，约 4121 行）。触发条件：<code>pan_gap∈[-0.5,0) 且 dir==='观望'</code>。</td></tr>
+<tr><td>诚实边界</td><td>仅 2089 场事后 + 时间外标定，未跨赛季；中位区间样本量需持续监控；仍<b>观察级、不自动下注</b>。</td></tr>
+</table>
+<div class="foot">此增强是「把已被回测证实的引擎漏判边缘暴露给用户」而非「新增下注信号」，符合项目铁律与用户意图。</div>
 </div>
 </div></body></html>
