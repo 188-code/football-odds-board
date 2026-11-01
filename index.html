@@ -20913,5 +20913,76 @@ try{ window.HT_SETTLE = {"updated": "2026-11-01 18:21", "picks": [{"key": "20261
 /* 纠错系统服务端种子（系统先验，跨用户/设备记忆基线；由复盘 consolidate 更新）*/
 try{ window.__CORR_SEED__ = {"_note": "纠错系统服务端种子（系统先验）。数值来自 analyze() 现有留一法回测（2026-09-04~10，3081 场），作为跨用户/跨设备的系统记忆基线。助手在每次复盘后据此 consolidate 更新本文件并重新部署，使所有访客的看板都能'长记性'。leagues 留空，由各地复盘实时累积。", "total": {"hit": 1834, "total": 3081}, "signals": {"flow": {"hit": 328, "total": 723}, "pan": {"hit": 320, "total": 754}, "kb": {"hit": 25, "total": 90}, "he": {"hit": 0, "total": 0}, "combined": {"hit": 1834, "total": 3081}}, "leagues": {}}; }catch(e){}
 </script><script>window.__APP_TS__=1793557323383;</script>
+<!-- ★ 2026-11-02 本地预览注入：下注模块挂载（无破坏，仅轮询挂载到 #topBoards 顶部） -->
+<script>
+(function(){
+  function esc(s){ if(s==null) return ''; return String(s).replace(/[<>&]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&amp;';}); }
+  function betModuleHTML(B){
+    if(!B){ return '<div id="betModuleHost" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0;font-size:12px;opacity:.7">🏦 下注模块：数据未加载（刷新中或 bet_module.json 缺失）。</div>'; }
+    var se = function(x){ return (x==null?'—':x+'pt'); };
+    var pct = function(x){ return (x==null?'—':(x>=0?'+':'')+x+'%'); };
+    var p = B.portfolio||{};
+    var sig = (p.roi!=null && p.se!=null) ? Math.abs(p.roi)/p.se : null;
+    var h = '<div id="betModuleHost" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0">';
+    h += '<div style="font-weight:800;font-size:15px;margin-bottom:2px">🏦 下注模块 · 总聚合均注总账</div>';
+    h += '<div style="font-size:10.5px;opacity:.75;margin-bottom:8px;line-height:1.6">收集各板块「命中率高、真实 ROI&gt;0」的选场口径 → 同场只下注一次（去重）→ 每注均 ¥'+(B.stake||100)+' 算总账。门槛：'+(B.gate||'')+'。同场方向相反剔除 '+(B.conflict_excluded||0)+' 场。</div>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">';
+    var stat = function(lbl,v,c){ return '<div style="flex:1;min-width:92px;background:'+(c||'rgba(22,163,74,.08)')+';border:1px solid var(--line);border-radius:9px;padding:7px 9px"><div style="font-size:10px;opacity:.7">'+lbl+'</div><div style="font-size:17px;font-weight:800;color:'+(c?'#dc2626':'#15803d')+'">'+v+'</div></div>'; };
+    h += stat('总注数',(p.n||0),null);
+    h += stat('总投入','¥'+((p.staked||0)).toFixed(0),null);
+    h += stat('总盈亏','¥'+((p.profit||0)).toFixed(0),(p.profit||0)>=0?null:'rgba(220,38,38,.08)');
+    h += stat('ROI',pct(p.roi)+' <span style="font-size:10px;opacity:.6">(±'+(p.se||'—')+')</span>',(p.roi||0)>=0?null:'rgba(220,38,38,.08)');
+    h += stat('命中率',(p.hitRate||0)+'%',null);
+    h += '</div>';
+    if(sig!=null){
+      h += '<div style="font-size:10.5px;margin-bottom:8px;'+(sig>=2?'color:#15803d':'color:#b45309')+'">显著性：|ROI|/'+(p.se||'—')+' = <b>'+sig.toFixed(1)+'σ</b> '+(sig>=2?'（显著为正，非噪声）':'（样本尚薄，谨慎）')+' ｜ 终值 ¥'+((p.finalBankroll||0)).toFixed(0)+'</div>';
+    }
+    h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:2px"><thead><tr style="color:var(--muted,#8b98a9);font-size:10.5px;text-align:left"><th style="padding:4px 6px;font-weight:500">板块</th><th style="padding:4px 6px;font-weight:500">状态</th><th style="padding:4px 6px;font-weight:500">n</th><th style="padding:4px 6px;font-weight:500">ROI</th><th style="padding:4px 6px;font-weight:500">命中</th><th style="padding:4px 6px;font-weight:500">±SE</th></tr></thead><tbody>';
+    (B.strategies||[]).forEach(function(s){
+      var badge = s.gated ? '<span style="background:#dcfce7;color:#15803d;padding:1px 6px;border-radius:5px;font-weight:700">纳入</span>' : '<span style="background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:5px;font-weight:700">排除</span>';
+      h += '<tr style="border-top:1px solid var(--line)"><td style="padding:4px 6px;font-weight:600">'+esc(s.id)+'</td><td style="padding:4px 6px">'+badge+'</td><td style="padding:4px 6px">'+(s.n||0)+'</td><td style="padding:4px 6px;font-weight:700;color:'+((s.roi||0)>=0?'#15803d':'#dc2626')+'">'+pct(s.roi)+'</td><td style="padding:4px 6px">'+(s.hitRate==null?'—':s.hitRate+'%')+'</td><td style="padding:4px 6px;opacity:.7">'+se(s.se)+'</td></tr>';
+      if(s.note) h += '<tr><td colspan="6" style="padding:0 6px 5px;font-size:10px;opacity:.6">'+esc(s.note)+'</td></tr>';
+    });
+    h += '</tbody></table>';
+    var t = B.today||{};
+    if(t.count){
+      h += '<div style="font-size:11px;margin-top:8px;padding:6px 8px;background:rgba(22,163,74,.06);border-left:3px solid #16a34a;border-radius:6px">📌 今日可下注候选 <b>'+t.count+'</b> 场（未开赛，已按门槛过滤）。均注 ¥'+(B.stake||100)+' × '+t.count+' = 名义本金 ¥'+((B.stake||100)*t.count).toLocaleString()+'（实际按你资金上限分配）。</div>';
+    }
+    var sp = B.stake_plan||{};
+    if(sp.stake_per_bet){
+      h += '<div style="margin-top:9px;padding:8px 10px;background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.35);border-radius:9px">';
+      h += '<div style="font-weight:800;font-size:13.5px;color:#1d4ed8;margin-bottom:4px">💰 仓位分配表（真实下注）</div>';
+      h += '<div style="font-size:10.5px;line-height:1.7">本金 <b>¥'+sp.bankroll+'</b> ｜ 每注 <b>'+(sp.pct_per_bet*100).toFixed(0)+'%</b> = <b style="color:#15803d">¥'+sp.stake_per_bet+'</b> ｜ 单日封顶 <b>'+(sp.daily_cap_pct*100).toFixed(0)+'%</b> → 最多 <b>'+sp.daily_max_n+'</b> 注</div>';
+      h += '<div style="font-size:10.5px;line-height:1.7">今日候选 <b>'+sp.total_candidates+'</b> 场，按真实ROI降序取前 <b>'+sp.allocated_count+'</b> 注 → 投入 <b>¥'+sp.allocated_stake+'</b> ｜ 预期收益 <b style="color:#15803d">+¥'+sp.expected_profit+'</b>（历史ROI加权，非保证）</div>';
+      var bys = sp.by_strat||{}; var bk = Object.keys(bys);
+      if(bk.length){ h += '<div style="font-size:10px;margin-top:4px;opacity:.85">分板块：'; bk.forEach(function(k){ h += '<span style="margin-right:10px">'+esc(k)+' <b>'+bys[k].n+'注</b> ¥'+bys[k].stake+' 预期+¥'+bys[k].exp+'</span>'; }); h += '</div>'; }
+      var picks = sp.picks||[];
+      if(picks.length){ h += '<div style="font-size:10px;margin-top:4px;opacity:.7">分配明细（前'+Math.min(picks.length,6)+'，按ROI降序）：</div><div style="font-size:9.5px;line-height:1.55;opacity:.8">'; picks.slice(0,6).forEach(function(t){ h += '· ['+esc(t.strat)+'] '+esc(t.home)+' vs '+esc(t.away)+' '+t.side+' @'+t.odd+' (历史ROI '+pct(t.roi)+') ¥'+t.stake+'<br>'; }); h += '</div>'; }
+      h += '</div>';
+    }
+    h += '<div style="font-size:10px;opacity:.55;margin-top:6px;line-height:1.5">⚠ 以上为权威烘焙「全部已结算」均注回测（真实可结算边）；赛前登记前瞻性业绩见「今日可下投」钱板。负边板块已自动排除，不污染总账。</div>';
+    h += '</div>';
+    return h;
+  }
+  var _loaded=null;
+  function load(){
+    if(_loaded) return;
+    try{
+      fetch('./bet_module.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){ _loaded=j; window.BET_MODULE=j; window.DP_STAKE_PLAN = j.stake_plan; mount(); try{ window.dispatchEvent(new Event('betModuleLoaded')); }catch(e){} }).catch(function(e){});
+    }catch(e){}
+  }
+  function mount(){
+    var t=document.getElementById('topBoards'); if(!t) return;
+    var old=document.getElementById('betModuleHost'); if(old) old.remove();
+    var d=document.createElement('div');
+    d.innerHTML = betModuleHTML(_loaded||window.BET_MODULE);
+    while(d.firstChild) t.insertBefore(d.firstChild, t.firstChild);
+  }
+  setInterval(function(){ load(); mount(); }, 3000);
+  if(document.readyState!=='loading'){ load(); mount(); } else document.addEventListener('DOMContentLoaded',function(){ load(); mount(); });
+  // 数据刷新后（render 重建 #topBoards）重新挂载
+  document.addEventListener('DOMNodeInserted', function(e){ if(e&&e.target&&e.target.id==='topBoards'){ load(); setTimeout(mount,50); } });
+})();
+</script>
 </body>
 </html>
