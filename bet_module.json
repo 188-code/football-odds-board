@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-02T02:06:55.045Z",
+  "generated_at": "2026-11-02T02:10:14.583Z",
   "stake": 100,
   "min_n": 15,
   "fee": 0,
@@ -149,7 +149,7 @@
     "count": 254,
     "count_unstarted": 254,
     "count_started": 15,
-    "now_bj": "11-02 10:06",
+    "now_bj": "11-02 10:10",
     "picks": [
       {
         "tid": "2908906",
