@@ -492,6 +492,7 @@
     <button class="sec" id="btnReview" style="color:var(--acc);border-color:var(--acc)" title="完场自动复盘：按日期收集每日赛果，对比模型赛前预测（方向/胜平负概率/价值分/等级）与实际赛果，分层命中率">每日复盘</button>
     <button class="sec" id="btnHtBreak" style="color:#16a34a;border-color:#16a34a" title="半场破蛋(上半场≥1球)：按引擎半场期望进球 P=1−e^(−(hl1+hm1)) 对所有可分析场排名，标注高置信(pBreak≥80%→实际86.9%)破蛋场次">半场破蛋</button>
     <button class="sec" id="btnKb">技法参考</button>
+    <button class="sec" id="btnBetModule" style="color:#e3b341;border-color:#e3b341;font-weight:700" title="下注模块：把各板块命中率高的比赛汇总到一起，给出下注方向 + 均注总账 + 仓位分配（独立面板，点开才显示）">🏦 下注模块</button>
   </div>
   <div class="tierbar" id="tierBar" title="档位由引擎的市场共识闸门给出：t1 = 可出手（ROI +22.15%，真赚）；t2 = 只参考不下注（ROI −30.64%，负 edge）；t0 = 观望·不下注。点任意一档 = 打开复盘明细并只筛这一档。"></div>
 </header>
@@ -20984,5 +20985,35 @@ try{ window.__CORR_SEED__ = {"_note": "纠错系统服务端种子（系统先�
   document.addEventListener('DOMNodeInserted', function(e){ if(e&&e.target&&e.target.id==='topBoards'){ load(); setTimeout(mount,50); } });
 })();
 </script>
+
+
+
+
+<script>
+(function(){
+  function bind(){
+    var b=document.getElementById('btnBetModule');
+    if(!b){ return setTimeout(bind,400); }
+    if(b.__bound) return; b.__bound=1;
+    b.onclick=function(){
+      var m=document.getElementById('betModuleModal');
+      if(!m){
+        m=document.createElement('div');
+        m.id='betModuleModal';
+        m.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.66);display:none;align-items:center;justify-content:center;padding:12px';
+        m.innerHTML='<div style="position:relative;width:96vw;max-width:1240px;height:90vh;background:#0e1116;border:1px solid #2a323d;border-radius:12px;overflow:hidden">'
+          +'<button id="betModuleClose" style="position:absolute;right:10px;top:8px;z-index:2;background:#e3b341;color:#0e1116;border:0;border-radius:8px;padding:5px 12px;font-weight:700;cursor:pointer">关闭 ✕</button>'
+          +'<iframe src="./bet_module.html" style="width:100%;height:100%;border:0"></iframe></div>';
+        document.body.appendChild(m);
+        m.addEventListener('click',function(e){ if(e.target===m) m.style.display='none'; });
+        m.querySelector('#betModuleClose').onclick=function(){ m.style.display='none'; };
+      }
+      m.style.display='flex';
+    };
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
+})();
+</script>
+
 </body>
 </html>
