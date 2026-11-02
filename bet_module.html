@@ -59,6 +59,7 @@ window.BET_MODULE = {"generated_at":"2026-11-01T17:33:58.502Z","stake":100,"min_
   const f = n => (n==null?'—':(n>=0?'+'+n:''+n));
   const money = n => '¥'+(n==null?'—':Number(n).toLocaleString('zh-CN'));
   const pct = n => (n==null?'—':(n>=0?'+'+n:''+n)+'%');
+  const fmtKick = k => (!k || /1970-01-01/.test(k)) ? '时间未定' : k;
   const $ = s => document.querySelector(s);
   $('#gen').textContent = '生成：'+(D.generated_at||'').replace('T',' ').slice(0,19)+' ｜ 门槛：'+(D.gate||'');
   const neg = (D.strategies||[]).filter(s=>!s.gated && s.roi<0).map(s=>s.id+' '+pct(s.roi)).join('、');
@@ -95,7 +96,7 @@ window.BET_MODULE = {"generated_at":"2026-11-01T17:33:58.502Z","stake":100,"min_
 
   const tp = (D.today&&D.today.picks)||[];
   const strats = [...new Set(tp.map(t=>t.strat))];
-  h += '<section><h2>今日可下投候选 <span class="tag">汇集各板块命中口径的未开赛场次 · '+tp.length+' 场</span></h2>';
+  h += '<section><h2>各板块汇集 · 可下投候选 <span class="tag">按板块筛选 · '+tp.length+' 场（验证真值烘焙中 state=0 未开赛场次）</span></h2>';
   h += '<div class="toolbar"><span class="tiny">按板块筛选：</span><select id="fstrat"><option value="">全部</option>'+strats.map(s=>`<option>${s}</option>`).join('')+'</select><span class="tiny" id="cnt"></span></div>';
   h += '<div class="list"><table><thead><tr><th>板块</th><th>联赛</th><th>主队</th><th>客队</th><th>方向</th><th>盘口</th><th>赔率</th><th>历史ROI</th></tr></thead><tbody id="rows"></tbody></table></div>';
   h += '</section>';
@@ -116,9 +117,9 @@ window.BET_MODULE = {"generated_at":"2026-11-01T17:33:58.502Z","stake":100,"min_
   $('#app').innerHTML = h;
 
   function renderRows(filter){
-    const rows = tp.filter(t=>!filter||t.strat===filter);
-    $('#cnt').textContent = '共 '+rows.length+' 场';
-    $('#rows').innerHTML = rows.map(t=>`<tr><td>${t.strat}</td><td>${t.league||'—'}</td><td>${t.home||'—'}</td><td>${t.away||'—'}</td><td>${t.side}</td><td>${t.hcap}</td><td>${t.odd}</td><td class="ok">${pct(t.roi)}</td></tr>`).join('') || '<tr><td colspan="8" class="tiny">无</td></tr>';
+    const rows = tp.filter(t=>!filter||t.strat===filter).slice().sort((a,b)=>(b.roi||0)-(a.roi||0));
+    $('#cnt').textContent = '共 '+rows.length+' 场（按历史ROI降序）';
+    $('#rows').innerHTML = rows.map(t=>`<tr><td>${t.strat}</td><td>${t.league||'—'}</td><td>${t.home||'—'}</td><td>${t.away||'—'}</td><td><b>${t.side}</b></td><td>${t.hcap}</td><td>${t.odd}</td><td class="ok">${pct(t.roi)}</td></tr>`).join('') || '<tr><td colspan="8" class="tiny">无</td></tr>';
   }
   renderRows('');
   $('#fstrat').addEventListener('change', e=>renderRows(e.target.value));
