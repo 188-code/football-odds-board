@@ -1,0 +1,15281 @@
+
+/* ui.js — 足彩实时分析看板（纯前端，直连 m.gqj2.tv，无后端）
+ * 新增：干净队名（来自 /api/get_football_analysis）、历史交锋/积分/排名/伤停、
+ *      工具自动填写结论、以及实时自我纠正（预测→赛果复盘→命中率纠偏）。
+ */
+'use strict';
+/* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
+   「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
+const UI_V = '2026-10-07k-t1live';   // 治「t1 都是进球后才出现」认知偏差：① openTierBoard 打开时自动补分析当前范围未分析场(赛前远场早盘未开→前端不分析→t1 空壳，现打开即补，t1 名单自动生长)；② 档位面板 t1 段加时效真相标注(临场信号固有特性，非马后炮)。铁律不变：纯展示层增强、不动模型数字/门规则。
+/* 源站主机（2026-09-13 实测结论，已据此重排优先级）：
+     · m.gqj2.tv    —— 实战稳定主源。列表/赔率(oddshistorypc)/交锋(analysis) 均稳定 HTTP 200，
+                        且路径**带** /api 前缀。www.gqj2.tv 仅是它的 301 跳转别名。
+     · api.gqj2.tv  —— 新网关，路径**不带** /api 前缀，但网关极不稳定：
+                        同一接口时而返回合法 JSON（却挂 404 状态行），时而返回 <!DOCTYPE> 的 404 页，
+                        赔率接口(oddshistorypc)基本常挂 HTML 404。故仅作降级兜底，不再优先。 */
+const API_TARGET = 'https://api.gqj2.tv';        // 降级兜底源：直连路径需去掉 /api
+const API_TARGET_OLD = 'https://m.gqj2.tv';      // 直连主源（稳定）：保留 /api 前缀
+/* 把内部路径（统一以 /api 开头，便于同源代理转发）转成某直连源的真实 URL */
+function directURL(base, p){
+  const path = String(p);
+  return (base === API_TARGET_OLD) ? (base + path) : (base + path.replace(/^\/api/, ''));
+}
+/* 数据来源：经本地代理 / Netlify 代理 同源访问（/api/*）→ 直连；
+   file:// 直接打开时浏览器跨域会拦截，退回公共 CORS 代理（不稳定，建议用 start.bat 启动本地代理） */
+/* 数据源探测：file:// 直开被 CORS 拦且公共代理常不可用 → 标记 offline，
+   由 offlineAnalyze 用预埋 OFFLINE_PACK 兜底；同源代理(http/部署) → 实时 */
+let SOURCE = { state:'detecting', base:'' };   // state: detecting|online|proxy|offline ; base: ''=同源相对 | null=无源 | 公共代理前缀
+/* 2026-09-19 实测：下列公共 CORS 代理在国内/本机网络均不可达（allorigins/codetabs 超时、
+   corsproxy 返回 401 需付费 key），每次开页白等 ~4s 只拖慢首屏且永远落到 offline。
+   已清空——浏览器直连 gqj2 在国内被墙/不稳，公共代理又全废，离线兜底等于没有。
+   真正能「不依赖本机、不被墙」的实时活路只有 CLOUD_API（Cloudflare Worker / 自有 VPS 反代 gqj2，
+   页面经 probeCloud 走它）。没有 CLOUD_API 时页面如实进入离线快照模式。 */
+const PUBLIC_PROXIES = [];
+/* 移动端列表按「比赛日」缓存：同一天多状态只拉一次（移动端不分状态、一次返回全量） */
+const _MOBILE_LIST_CACHE = {};
+/* 把移动端列表行 c 字段（盘口 JSON 串）转成引擎要的 {asia,eu,bs} 行数组。
+   c["2"]=1X2[主,平,客]  c["3"]=大小球[盘口,大,小]  c["1"]=亚盘[盘口,上,下]。
+   浏览器经 CORS 反射直连 m.gqj2.tv/api/getfootball_list?date= 即可拿到，不依赖电脑/Cloudflare。 */
+function mobileOdds(c){
+  if (!c) return null;
+  let obj;
+  try { obj = (typeof c === 'string') ? JSON.parse(c) : c; } catch(e){ return null; }
+  if (!obj || typeof obj !== 'object') return null;
+  // 防御：gqj2 偶发"值再包一层字符串"，逐项解析兜底
+  const arr = (v)=>{ if (Array.isArray(v)) return v; if (typeof v === 'string'){ try{ const p=JSON.parse(v); return Array.isArray(p)?p:v; }catch(e){ return v; } } return v; };
+  const x1 = arr(obj["2"]), ou = arr(obj["3"]), ah = arr(obj["1"]);
+  if (!Array.isArray(x1) || x1.length < 3) return null;
+  const n = (v)=> (v==null ? '' : v);
+  const eu = [{ a:n(x1[1]), b:n(x1[0]), c:n(x1[2]), d:n(x1[1]), e:n(x1[0]), f:n(x1[2]), change_time:'' }];
+  let bs = [];
+  if (Array.isArray(ou) && ou.length >= 3) bs = [{ a:n(ou[0]), b:n(ou[1]), c:n(ou[2]), d:n(ou[0]), e:n(ou[1]), f:n(ou[2]), change_time:'' }];
+  let asia = [];
+  if (Array.isArray(ah) && ah.length >= 3) asia = [{ a:n(ah[0]), b:n(ah[1]), c:n(ah[2]), d:n(ah[0]), e:n(ah[1]), f:n(ah[2]), change_time:'' }];
+  return { eu: eu, bs: bs, asia: asia };
+}
+/* 云端后端（可选）：由 Cloudflare Worker / 自有 VPS 提供服务端代理，
+   绕过浏览器 CORS 与你本地网络对 gqj2 的拦截，实现「不依赖你电脑」的实时数据源。
+   启用方式：部署 worker.js 后把地址写入 cloud_app/cloud_api.txt（下次刷新自动注入），
+   或在网址后加 ?api=https://你的后端域名 立即生效。留空则回退到直连+公共代理。 */
+const CLOUD_API = (function(){
+  try{
+    const u = new URLSearchParams(location.search).get('api');
+    if (u) return String(u).replace(/\/+$/, '');
+    if (typeof window !== 'undefined' && window.__CLOUD_API__) return String(window.__CLOUD_API__).replace(/\/+$/, '');
+  }catch(e){}
+  return '';
+})();
+function apiURL(p){
+  const b = SOURCE.base;
+  if (b === null) return null;                     // 无可用源 → getOdds/getAnalysis 会抛清晰错误
+  if (b === '') return p;                          // 同源代理（本地 start.bat / 部署版）
+  if (b === '__cloud') return (CLOUD_API || '') + p;   // 云端后端（服务端代理，绕开本地网络拦截）
+  if (b === API_TARGET || b === API_TARGET_OLD) return directURL(b, p);  // 直连源站（经 rateGate 限速）
+  return b + encodeURIComponent(directURL(API_TARGET, p));               // 公共 CORS 代理（兼容保留）
+}
+function updateConn(){
+  const el = $('conn'); if (!el) return;
+  let cls='pill live', txt='';
+  if (SOURCE.state==='online' && SOURCE.base==='__cloud'){ txt='● 实时(云端后端)'; }
+  else if (SOURCE.state==='online'){ txt='● 实时(同源代理)'; }
+  else if (SOURCE.state==='direct'){ txt='● 实时(直连)'; }
+  else if (SOURCE.state==='proxy'){ txt='● 实时(公共代理)'; }
+  else if (SOURCE.state==='offline'){ cls='pill warn'; txt='● 离线模式'; }
+  else { cls='pill warn'; txt='● 连接中…'; }
+  // 三段盘路（初/中/临）+ PPI 已由 WorkBuddy 平台自动化「每 15 分钟·云端」重算并重部署，
+  // 属于平台定时刷新（关机也 24h 更新），不再依赖本机进程，也不再是冻结快照。
+  // 若用户另接了可选云端 Worker（CLOUD_FUSED.ok），则进一步标为「云端Worker」。
+  if (CLOUD_FUSED.ok){ txt += ' ｜ 三段✓云端Worker'; }
+  else { txt += ' ｜ 三段✓平台定时刷新'; }
+  /* 引擎版本戳（engine.js 的 ENGINE_V）：离线快照的结论由某一代引擎算出来，
+     换引擎后旧结论必须重算（见 _merge_analysis.cjs 的版本门）—— 这里显式显示当前版本，
+     免得页面上出现"几代引擎混着看"却查不出原因。 */
+  if (typeof ENGINE_V === 'string' && ENGINE_V) txt += ' ｜ 引擎 ' + ENGINE_V;
+  el.className = cls; el.textContent = txt;
+}
+/* ---------- 数据新鲜度自检 ----------
+   快照是静态文件 + CDN 缓存，用户很可能打开的是几小时前那一版。
+   这里按 BAKE_META.generated 算"数据年龄"并直接写在横幅上：
+     ≤45 分钟  绿/蓝  正常（后台每 15 分钟自动重抓赔率/盘口并重新部署）
+     45~180 分 橙     偏旧，提醒可能拿到 CDN 缓存副本
+     >180 分   红     严重过期，明确提示强制刷新/等待下一轮后台刷新 */
+function bakeAgeMin(){
+  /* ★ 2026-10-13 修复「横幅死显 3 小时前」：原逻辑第一优先 __BAKE_RAW__.generated（来自 bake_data.js），
+     若该文件被浏览器/CDN 缓存为旧版（或页面 session 一直开着未重载），generated 停留在数小时前，
+     而 version.json 的部署时间 __SERVER_TS__（startVersionWatch 每 25s 用 cache:no-store 拉取，永远最新）
+     反而排第二 → 横幅误报严重过期。
+     改为取三者中「最新」的时间戳算年龄：__BAKE_RAW__.generated / BAKE_META.generated / __SERVER_TS__，
+     任一刷新都立即反映，开着 tab 不重载也能跟最新部署，彻底消除缓存旧 bake 造成的误导。 */
+  let best = 0;
+  const cand = [];
+  if (window.__BAKE_RAW__ && window.__BAKE_RAW__.generated) cand.push(window.__BAKE_RAW__.generated);
+  if (BAKE_META && BAKE_META.generated) cand.push(BAKE_META.generated);
+  if (window.__SERVER_TS__) cand.push(window.__SERVER_TS__);
+  for (const c of cand){
+    const t = (typeof c === 'number') ? c : Date.parse(String(c).replace(' ', 'T'));
+    if (isFinite(t)) best = Math.max(best, t);
+  }
+  if (best) return Math.max(0, Math.floor((Date.now() - best) / 60000));
+  return null;
+}
+function ageText(min){
+  if (min == null) return '';
+  if (min < 60) return min + ' 分钟前';
+  const h = Math.floor(min / 60), m = min % 60;
+  return h + ' 小时' + (m ? (m + ' 分钟') : '') + '前';
+}
+function startFreshnessTimer(){
+  if (window.__freshTimer) return;
+  window.__freshTimer = setInterval(() => {
+    const b = $('rtBanner');
+    if (b && b.style.display !== 'none' && typeof __lastBannerTime !== 'undefined')
+      showOfflineBanner(__lastBannerTime);
+  }, 60000);
+}
+/* 三段盘路状态文案（横幅用）
+   主路径：WorkBuddy 平台自动化每 15 分钟云端重算初/中/临三段 + PPI 并重部署（关机也更新）。
+   可选增强：用户自行部署 Cloudflare Worker 后，浏览器额外每 5 分钟合并其 live_fused.json。 */
+function cloudStatusText(){
+  if (CLOUD_FUSED.ok){
+    const g = CLOUD_FUSED.generated ? ageText(Math.max(0, Math.floor((Date.now()-Date.parse(String(CLOUD_FUSED.generated).replace(' ','T')))/60000))) : '';
+    return '初/中/临三段盘路+PPI 由<b>平台自动化每15分钟云端重算</b>（可选云端Worker也已合并，' + (g||'刚刚') + '更新，' + CLOUD_FUSED.count + ' 场）。';
+  }
+  return '初/中/临三段盘路由 <b>WorkBuddy 平台自动化每 15 分钟云端重算并重部署</b>（关机也更新，无需账号/密码）。';
+}
+/* 云端 Worker 三段盘路：浏览器每 5 分钟拉一次 live_fused.json，合并覆盖本地烘焙的 fused，
+   实现「初/中/临三段」也 24h 实时——这是真正不依赖本机 refresh_all.py 的修法。
+   Worker 不可达时静默失败 → 继续用本地烘焙快照，并在横幅诚实标注（不假装实时）。 */
+async function loadCloudFused(){
+  if (!CLOUD_LIVE_URL) return;
+  try{
+    const r = await fetch(CLOUD_LIVE_URL + '/live_fused.json', { mode:'cors', cache:'no-store' });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json();
+    const live = (data && data.live) || {};
+    const raw = (typeof window!=='undefined') ? window.__BAKE_RAW__ : null;
+    if (!raw || !raw.packs) return;
+    let merged = 0;
+    for (const tid in live){
+      const f = live[tid];
+      if (!f || !Array.isArray(f.stages) || !f.stages.length) continue;
+      const pk = raw.packs[tid];
+      if (!pk) continue;
+      const late = f.stages.find(s=>s.label==='late') || f.stages[f.stages.length-1];
+      pk.fused = {
+        agg: late.agg || null,
+        aggBs: late.aggBs || null,
+        stages: f.stages,
+        present: f.present || f.stages.map(s=>s.label),
+        prob: f.prob || null,
+        _hist: true, _cloud: true
+      };
+      merged++;
+    }
+    CLOUD_FUSED = { ok:true, generated: data.generated||null, count:merged, err:null };
+    // 云端三段为 3-stage 方案，覆盖本地 5-stage 元信息使融合条对齐
+    FUSED_META = { weights:{early:1/3,mid:1/3,late:1/3},
+      stages:[{label:'early',cn:'初盘'},{label:'mid',cn:'中盘'},{label:'late',cn:'临盘'}],
+      _cloud:true, generated: data.generated||null };
+    if (merged) render();
+  }catch(e){
+    CLOUD_FUSED = { ok:false, generated:null, count:0, err:e.message };
+  }
+  updateConn();
+  if (typeof __lastBannerTime !== 'undefined' && $('rtBanner') && $('rtBanner').style.display !== 'none')
+    showOfflineBanner(__lastBannerTime);
+}
+function startCloudFusedTimer(){
+  if (window.__cloudFusedTimer || !CLOUD_LIVE_URL) return;
+  window.__cloudFusedTimer = setInterval(() => { loadCloudFused(); }, 5*60*1000);
+}
+/* ★ 2026-10-30 实时欧赔自动刷新（治「赛前死结果·一成不变」）
+   根因：coLive（365/立博/威廉/英特 4 家即时欧赔）存在 an 里，而 an 是烘焙快照；
+        旧逻辑每 5 分钟只刷 loadCloudFused（更新 pk.fused），从不碰 an → 欧赔列永远停在构建那一刻，
+        用户看到的就是「比赛开始才变成死结果」。
+   修法：CVM cron 每 15 分钟重建时产出轻量 colive.json（只含 4 家即时欧赔，几十 KB，gen_index 产出）；
+        前端每 3 分钟拉一次，就地更新 an.coLive，并重渲当前打开的板 → 赛前欧赔跟着动。 */
+window.__coLiveUpdated = '';      // 最近一次成功刷新的时刻（HH:MM，显示用）
+async function refreshCoLive(){
+  try{
+    const r = await fetch('colive.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return 0;
+    const j = await r.json();
+    const items = (j && j.items) || null;
+    if (!items) return 0;
+    let n = 0;
+    const OP = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK : null;
+    for (const tid in items){
+      const cl = items[tid]; if (!cl) continue;
+      const p = OP && OP[tid];
+      if (p && p.an){ p.an.coLive = cl; n++; }
+      try { const bk = window.__BAKE_RAW__; if (bk && bk.packs && bk.packs[tid] && bk.packs[tid].an){ bk.packs[tid].an.coLive = cl; } } catch(e){}
+    }
+    if (!n) return 0;
+    window.__coLiveUpdated = (j && j.updated) ? String(j.updated).slice(11,16) : new Date().toTimeString().slice(0,5);
+    _rerenderCoLiveViews();
+    return n;
+  }catch(e){ return 0; }
+}
+/* 按「当前打开的是哪个板」就地重渲，避免整页 reload（用户最烦闪一下回到顶部） */
+function _rerenderCoLiveViews(){
+  try{
+    const dm = document.getElementById('deepModal');
+    if (dm && dm.classList.contains('show') && typeof deepPlateHTML === 'function'){
+      const dc = document.getElementById('deepContent');
+      const RD = (typeof window !== 'undefined') ? (window.REVIEW_DATA || null) : null;
+      if (dc) dc.innerHTML = deepPlateHTML(RD);      // 深盘板：直接换 innerHTML（快）
+      return;
+    }
+    const pm = document.getElementById('pickModal');
+    if (pm && pm.classList.contains('show') && typeof openPicks === 'function'){ try { openPicks(); } catch(e){} return; }
+    if (typeof rerenderCurrentView === 'function') rerenderCurrentView();
+  }catch(e){}
+}
+function startCoLiveAutoRefresh(){
+  if (window.__coLiveTimer) return;
+  try { refreshOddsTL().then(() => refreshCoLive()); } catch(e){}
+  window.__coLiveTimer = setInterval(() => { try { refreshOddsTL().then(() => refreshCoLive()); } catch(e){} }, 3*60*1000);
+}
+try { setTimeout(startCoLiveAutoRefresh, 12000); } catch(e){}
+let __lastBannerTime = '';
+/* 顶部横幅：实时未连接、正在看离线快照时醒目提示（不再误导用户以为是实时）*/
+/* 2026-10-02 手机瘦身：横幅拆成「一行状态 + 可点开的说明 + 刷新按钮」，窄屏默认只留一行，
+   不再让这坨 3~5 行文字（约 90px）占掉首屏固定区。宽屏行为完全不变。 */
+function toggleBannerMore(){
+  const b = $('rtBanner'); if (!b) return;
+  const open = b.classList.toggle('bmOpen');
+  const btn = b.querySelector('.bmoreBtn'); if (btn) btn.textContent = open ? 'ⓘ 收起' : 'ⓘ 说明';
+}
+/* 窄屏折叠的统计块：手机默认收起，从「☰ 更多」里点开/收起 */
+function toggleSec(id, cls){
+  const e = document.getElementById(id); if (!e) return;
+  e.classList.toggle('hidden');
+  document.body.classList.toggle(cls);
+}
+function applyMobileCollapse(){
+  try{
+    if (window.innerWidth > 720) return;
+    document.body.classList.add('hideSum', 'hideDraw');
+  }catch(e){}
+}
+/* 手机窄屏：顶部工具栏次要按钮收进「☰ 更多」，点一下整行展开（宽屏不受影响，永远直接铺开） */
+function toggleCtrlsAdv(){
+  const c = document.querySelector('.ctrls'); if (!c) return;
+  c.classList.toggle('advOpen');
+  const b = c.querySelector('.advBtn'); if (b) b.textContent = c.classList.contains('advOpen') ? '✕ 收起' : '☰ 更多';
+}
+function showOfflineBanner(t){
+  __lastBannerTime = t;
+  let b = $('rtBanner');
+  if (!b){
+    b = document.createElement('div'); b.id='rtBanner'; b.className='rtBanner';
+    document.body.prepend(b);
+  }
+  const age = bakeAgeMin();
+  let bg = '#c0392b', tip = '';
+  /* ★ 2026-11-03 重新标定：数据是「约每 20-30 分钟滚动刷新的离线快照」（bake 烘焙全量盘口
+     本身就要 15-20 分钟），所以 20 分钟前后都是正常态，不该天天假报警说"后台任务没执行"。
+     真正常警只在 >45 分钟（说明 refresh_all 流水线真的停了）。 */
+  if (age != null && age <= 20){
+    bg = '#1e7e5a';
+    tip = '🟢 <b>数据正常（' + ageText(age) + '）</b>：离线快照约每 20-30 分钟滚动刷新（bake 烘焙全量盘口需 15-20 分钟，故 20 分钟内都属正常）；比分/赛程/即时赔率由浏览器<b>直连源站</b>实时刷新；' + cloudStatusText();
+  } else if (age != null && age <= 45){
+    bg = '#c07a1e';
+    tip = '🟠 <b>数据为离线快照（' + ageText(age) + '）</b>：约每 20-30 分钟滚动更新，属正常现象，无需强刷；要看某场临场逐笔实时盘口，点开单场「拉实时→分析」即可。';
+  } else if (age != null){
+    tip = '🔴 <b>数据严重过期（' + ageText(age) + '）</b>：后台 refresh_all 流水线可能已停，请检查其 Windows 定时任务（足彩看板-数据自动刷新）是否在跑。';
+  } else {
+    tip = '📦 <b>离线快照（数据生成于 ' + t + '）</b>';
+  }
+  b.style.background = bg;
+  b.innerHTML = '<div class="btip" title="' + tip.replace(/"/g,'') + '">' + tip + '</div>'
+    + '<div class="bmore">已内置 <b>' + MATCHES.length + '</b> 场完整赔率+交锋，点任意比赛卡片即可本地分析，<b>无需联网、无需电脑</b>。'
+    + '<br><b>自动更新说明（诚实版）</b>：① 比分/赛程/即时赔率——浏览器直连源站，<b>你关机也每 60 秒刷新</b>，无需任何后端；'
+    + '② 初/中/临<b>三段盘路</b>+庄家盈亏(PPI)——源站禁止浏览器跨域，由 <b>WorkBuddy 平台自动化每 15 分钟云端重算并重部署</b>（关机也 24h 更新，无需你任何账号/密码）。'
+    + (CLOUD_FUSED.ok ? '另已接入可选云端 Worker，三段盘路进一步实时合并。' : '（三段盘路随平台自动化滚动更新，并非固定快照；想要更细的临场逐笔实时可另部署 cloud_bake/ 里的 Worker，非必须。）')
+    + (SOURCE && SOURCE.state === 'direct' ? '' : '如需某场逐笔实时盘口，点开单场「拉实时→分析」即可。')
+    + '</div>'
+    + '<div class="bacts"><button onclick="forceRefreshNow()">⟳ 立即刷新</button>'
+    + ' <span id="rfHint" style="font-size:12px;opacity:.9"></span>'
+    + '<button class="bmoreBtn" onclick="toggleBannerMore()">ⓘ 说明</button></div>';
+  b.style.display = 'block';
+  startFreshnessTimer();
+}
+function hideOfflineBanner(){ const b=$('rtBanner'); if(b) b.style.display='none'; }
+/* 过滤器记忆：自刷新重载前保存，重载后恢复，避免用户筛选丢失 */
+function saveFilters(){
+  try{
+    const o = {};
+    for (const id of ['fDay','fRange','fState','fLg','fSort','fConf','fSearch']){ const e=document.getElementById(id); if(e) o[id]=e.value; }
+    for (const id of ['fJc','fBd','fHt','fDeep','fWash','fOdds','fAuto','rtAuto']){ const e=document.getElementById(id); if(e) o[id]=e.checked; }
+    sessionStorage.setItem('ff_filters', JSON.stringify(o));
+  }catch(e){}
+}
+function restoreFilters(){
+  try{
+    const s = sessionStorage.getItem('ff_filters'); if(!s) return;
+    const o = JSON.parse(s);
+    for (const id of ['fDay','fRange','fState','fLg','fSort','fConf','fSearch']){ const e=document.getElementById(id); if(e && o[id]!=null) e.value=o[id]; }
+    for (const id of ['fJc','fBd','fHt','fDeep','fWash','fOdds','fAuto','rtAuto']){ const e=document.getElementById(id); if(e && o[id]!=null) e.checked=o[id]; }
+  }catch(e){}
+}
+/* 已见版本记录（防无限重载循环，详见 startVersionWatch 内注释）*/
+const __VER_KEY = 'jz_seen_ver';
+function __verSeenGet(){ try { return parseInt(sessionStorage.getItem(__VER_KEY) || '0', 10) || 0; } catch (e) { return 0; } }
+function __verSeenSet(v){ try { sessionStorage.setItem(__VER_KEY, String(v)); } catch (e) {} }
+function __verSeedIfEmpty(){
+  if (__verSeenGet()) return;
+  let v0 = 0;
+  try { v0 = Date.parse(document.lastModified) || 0; } catch (e) {}
+  if (!v0 && BAKE_META && BAKE_META.generated) v0 = Date.parse(String(BAKE_META.generated).replace(' ', 'T')) || 0;
+  if (v0) __verSeenSet(v0);
+}
+/* ★ 2026-10-10 破缓存重载：普通 location.reload() 只重载根 "/"，而 CDN 把根 index.html
+   长缓存，重载拿到的仍是旧 index.html → 旧脚本 URL(?v=旧时间戳) → 旧数据，等于没刷新。
+   改为导航到带唯一 _r= 参数的同源地址，使 CDN/浏览器放弃被长缓存的旧 index.html 与旧资源，
+   拉取本次新部署。ts 用远端版本号保证同部署稳定、不同部署各异。*/
+/* ★ 2026-10-11：整页重载已全面弃用（用户反感"看一半跳回主页"）。reloadFresh 降级为软刷新别名，
+   任何历史调用都不会再整页跳转。真正需要重载代码的场景由用户手动 F5 或下次打开标签完成。 */
+function reloadFresh(ts){
+  try{ softRefreshData(ts); }catch(e){}
+}
+/* ★ 2026-10-10：检测新版本后**不打断用户**地重载——
+   · 若正开着任一模态面板（破蛋/热力图/复盘/明细等），先暂存，等面板关闭再重载，避免整页刷新把用户正在看的面板冲掉（也避免破蛋面板因此「一时新一时旧」）；
+   · 若用户 3 秒内刚操作过（滚动/点按/键入），延迟到空闲再重载，避免打断；
+   · 否则立即重载。重载前已在 reloadFresh 内保存滚动位置，重载后恢复。 */
+window.__lastUserAct = Date.now();
+try{
+  ['mousemove','keydown','scroll','touchstart','click'].forEach(function(ev){
+    document.addEventListener(ev, function(){ window.__lastUserAct = Date.now(); }, { passive:true });
+  });
+}catch(e){}
+function _anyModalOpen(){
+  try{
+    var ids = ['htBreakModal','heatModal','htBreakDetailModal','reviewModal','half500Modal','anaModal','t7Modal'];
+    for (var i=0;i<ids.length;i++){ var m=document.getElementById(ids[i]); if (m && m.classList.contains('show')) return true; }
+    if (document.querySelector && document.querySelector('.modal.show')) return true;
+  }catch(e){}
+  return false;
+}
+/* ★ 2026-10-10：检测到新版 → 优先原地软刷新（不跳页）；软刷新失败才退化为整页重载。
+   软刷新非打断式，故不再做"模态延后/空闲等待"判断。 */
+/* ★ 2026-10-11：检测到新版 → 原地软刷新（绝不整页重载）。
+   只有软刷新真正换到新数据才标记已见版本；失败/数据未变则保持未标记，
+   下一个 25s 轮询周期继续静默尝试，期间页面不跳、不闪。 */
+async function maybeReload(ts, shellChanged){
+  try{
+    const r = await softRefreshData(ts, shellChanged);
+    if (r === true) __verSeenSet(ts);
+    // r==='shell' 时外壳重载已由 scheduleShellReload 处理(已标记 seen)
+  }catch(e){}
+}
+/* ★ 2026-10-10：软刷新替代整页重载后，不再需要"关闭面板后补重载" —— 这里降级为 no-op。
+   旧逻辑会在关闭面板时触发 location.href 重载（即用户最反感的"跳回主页"），现已由 softRefreshData 取代。 */
+function _tryPendingReload(){ /* 软刷新就地换数据，无需关闭面板后补重载 */ }
+/* ★ 2026-10-14：外壳更新智能整页重载（根治「加板块就得手动硬刷新」）。
+   仅当检测到新部署(ts 变化)但 bake_data 未变（即改动落在外壳/逻辑而非数据）时触发——
+   此时软刷新换不了外壳，必须整页 reload 才能加载新 ui.js/engine.js/新按钮。
+   · 不打断：正开面板或 3s 内刚操作 → 延后到面板关闭且空闲再 reload（轮询检测 .modal.show 消失）。
+   · 重载前保存过滤器(saveFilters)与滚动位置(sessionStorage)，reload 后恢复，逼近「不跳页」体验。
+   · 带 ?_r=ts 破 CDN/浏览器对旧 index.html 的長缓存；sessionStorage 跨同源导航保留 → 不触发无限循环。 */
+function scheduleShellReload(ts){
+  if (window.__pendingShellReload){ try{ __verSeenSet(ts); }catch(e){} return; }  // 幂等，避免重复调度
+  try{ __verSeenSet(ts); }catch(e){}   // 先行记账，reload 前锁定 seen
+  try{ saveFilters(); }catch(e){}
+  try{ sessionStorage.setItem('jz_shell_reload_scroll', String(window.scrollY || 0)); }catch(e){}
+  /* ★ 2026-10-15：自动更新可见化 —— 外壳重载前弹绿色浮条，让用户亲眼看到"板子已更新"，
+     根治"部署完却看不到/以为没更新"（实为 GitHub Pages CDN + 浏览器缓存）。 */
+  try{
+    let t=document.getElementById('autoUpdateToast');
+    if(!t){ t=document.createElement('div'); t.id='autoUpdateToast';
+      t.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:99999;background:#16a34a;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.3)';
+      document.body.appendChild(t); }
+    t.textContent='🔄 已更新到最新版，正在刷新…'; t.style.display='block';
+  }catch(e){}
+  const idleAndFree = () => (!_anyModalOpen() && (Date.now() - (window.__lastUserAct || 0) > 3000));
+  const doReload = () => {
+    try{ window.__pendingShellReload = 0; }catch(e){}
+    const base = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
+    location.href = base + '?_r=' + (ts || Date.now()) + (location.hash || '');
+  };
+  if (idleAndFree()){ doReload(); return; }
+  window.__pendingShellReload = ts;
+  const iv = setInterval(() => {
+    if (idleAndFree()){
+      clearInterval(iv);
+      if (window.__pendingShellReload) doReload();
+    }
+  }, 1000);
+}
+
+/* ★ 2026-10-10：原地数据刷新（替代整页重载）——检测到新版快照时，只重拉 bake_data.js 就地换数据并重渲当前视图，
+   绝不 location.href 重载 → 用户正在看的页面（含已打开的面板）完全不变、不跳回主页。
+   · 主页面（无面板）：buildFromFallback 重建 MATCHES + render() 刷新列表，滚动位置保留 → 无跳顶。
+   · 面板打开时：底层 OFFLINE_PACK/MATCHES 已换新，但**不重渲面板 DOM**（保持原样、不闪不跳）；
+     用户关闭面板即见已刷新的主页，重开面板即见新数据。
+   · 失败兜底：拉不到新数据才退化为 reloadFresh（整页重载），保证数据最终能更新。
+   ⚠ 注释禁含闭合 script/body 字面量（gen_index 注入约定）。 */
+let _softBusy = false;
+async function softRefreshData(ts, shellChanged){
+  if (_softBusy) return false;
+  _softBusy = true;
+  try{
+    ts = ts || Date.now();
+    const oldGen = (window.__BAKE_RAW__ && window.__BAKE_RAW__.generated) || 0;
+    // 重拉新快照（带新时间戳破除缓存）
+    await new Promise((res) => {
+      try{
+        const el = document.createElement('script');
+        el.src = 'bake_data.js?_r=' + Date.now();
+        el.async = true;
+        el.onload = res; el.onerror = res;
+        (document.head || document.getElementsByTagName('head')[0]).appendChild(el);
+      }catch(e){ res(); }
+    });
+    // 等待新数据落地（generated 变化），最多 7s
+    let g = (window.__BAKE_RAW__ && window.__BAKE_RAW__.generated) || 0;
+    for (let i=0;i<140 && g === oldGen;i++){ await new Promise(r=>setTimeout(r,50)); g=(window.__BAKE_RAW__&&window.__BAKE_RAW__.generated)||0; }
+    /* ★ 2026-10-14 根治「加板块/改外壳就得手动硬刷新」：
+       若本次调用来自版本戳变化(shellChanged=true)而 bake_data 的 generated 没变
+       → 说明部署改动落在外壳(index.html 内联 ui.js/engine.js/新按钮)、数据没动，
+         软刷新换不了外壳，必须整页重载外壳才生效 → 走 scheduleShellReload(智能避开面板与用户操作)。
+       非版本戳触发(如纯数据场景)仍维持旧语义：视为已是最新。 */
+    if (g === oldGen){
+      if (shellChanged) scheduleShellReload(ts);
+      return true;
+    }
+    if (typeof setupBake === 'function') setupBake();
+    try{ window.__APP_TS__ = ts; }catch(e){}
+    // 明细/统计包复位，下次点开面板时用新时间戳重拉最新明细
+    try{ _detailP = null; window.__BAKE_DETAIL_GZ__ = null; window.__BAKE_DETAIL__ = null; }catch(e){}
+    try{ _statsP = null; window.__HTFT_STATS_GZ__ = null; window.__HTFT_STATS__ = null; }catch(e){}
+    // 重建比赛列表（纯数据，保留既有分析/用户态）
+    if (typeof buildFromFallback === 'function') buildFromFallback();
+    // 重渲当前视图（不重载）
+    rerenderCurrentView();
+    return true;
+  }catch(e){ return true; }   // 任何异常都视为无需重载，绝不跳页
+  finally{ _softBusy = false; }
+}
+function currentOpenModal(){
+  const ids = ['pickModal','htBreakModal','deepModal','heatModal','reviewModal','half500Modal',
+    'htBreakDetailModal','anaModal','t7Modal','ppiModal','htPickModal','halfLawModal','kbModal','tierBoardModal'];
+  for (let i=0;i<ids.length;i++){ const m=document.getElementById(ids[i]); if (m && m.classList.contains('show')) return ids[i]; }
+  return null;
+}
+function rerenderCurrentView(){
+  try{
+    const sy = window.scrollY || 0;
+    if (typeof render === 'function') render();   // 主列表就地重渲（面板打开时也刷新其背后的主页，面板本身不变）
+    // 仅在无面板打开时恢复滚动（面板打开时主页被遮挡，滚动无意义）
+    if (!currentOpenModal()){ try{ window.scrollTo(0, sy); }catch(e){} }
+  }catch(e){}
+}
+
+/* 版本自检：轮询 version.json，若后台已重部署更新版本 → 自动刷新页面（治「刷新 10 次才更新」）*/
+function startVersionWatch(){
+  // 外壳整页重载后恢复滚动位置(与 scheduleShellReload 配对)
+  try{
+    const _rs = parseInt(sessionStorage.getItem('jz_shell_reload_scroll') || '0', 10);
+    if (_rs > 0){ sessionStorage.removeItem('jz_shell_reload_scroll'); setTimeout(() => { try{ window.scrollTo(0, _rs); }catch(e){} }, 80); }
+  }catch(e){}
+  if (window.__verTimer) return;
+  __verSeedIfEmpty();
+  const check = async ()=>{
+    try{
+      const r = await fetch('version.json?_=' + Date.now(), { cache:'no-store' });
+      if (!r.ok) return;
+      const j = await r.json();
+      /* ★ 2026-09-24：球探产物单独热更新 —— 服务端 5 分钟一轮重抓 titan007.js，
+         这里检测到其时间戳变化就就地热替换（不 reload，绝不打断用户当前操作）。 */
+      const ru = (j && j.t7Updated) || '';
+      if (ru && ru !== t7LocalUpdated()){ try{ await pullFreshTitan007(); }catch(e){} }
+      const ts = j && j.ts;
+      /* ★ 2026-10-11：记录服务端最新部署时间，供 bakeAgeMin 兜底实时显示"数据年龄"，
+         即便未触发软刷新（seen 已标记），横幅也能跟随最新部署、不再显示旧构建时间。 */
+      if (ts) window.__SERVER_TS__ = ts;
+      /* ★ 2026-09-17 致命 bug 修复：原判据 version.ts > BAKE_META.generated 恒成立
+         （version.json 写的是流水线当下时刻，BAKE_META 是更早的烘焙时刻）→ 每次加载都判定
+         "有新版"→ reload → 无限重载循环，用户点击的操作被刷新冲掉（表现为"点了也刷新不了"）。
+         改为用 sessionStorage 记住已见版本：只有真正出现新版本才重载一次，重载后版本号一致即停止。*/
+      const seen = __verSeenGet();
+      /* ★ 2026-10-14 根治「加板块/改外壳就得手动硬刷新」：
+         用外壳指纹(version.json.appHash = ui+engine+realtime 三者 sha256 前12位) 与
+         本页内联的 window.__SHELL__ 比对，替代旧版比 ts 的做法——因为自动刷新每轮重烤 bake_data
+         使其 ts/generated 每次都变，旧逻辑「数据未变才重载外壳」永远不触发、等于没根治。
+         外壳指纹只在 ui.js/engine.js/realtime.js 真改时才变，与数据刷新彻底解耦：
+           · 外壳变了 → 直接整页重载外壳(智能避开面板/用户操作)；
+           · 仅数据更新(ts 变但指纹不变) → 仍走软刷数据、不重载外壳。
+         过渡期兜底：若本页是上线指纹机制前的旧外壳(无 window.__SHELL__)，而 version.json 已带
+         appHash，则强制升级到带指纹的新外壳，避免用户这次还得手动硬刷。 */
+      const remoteShell = (j && j.appHash) || '';
+      if (remoteShell){
+        if (window.__SHELL__){
+          if (remoteShell !== window.__SHELL__){ scheduleShellReload(ts || Date.now()); return; }
+        } else {
+          scheduleShellReload(ts || Date.now()); return;   // 过渡期：旧外壳无指纹标记 → 强制升级
+        }
+      }
+      if (ts && ts > seen + 3000){ maybeReload(ts, false); }
+    }catch(e){}
+  };
+  /* 2026-09-17 提频：后台流水线已改为每 5 分钟一轮，自检必须快于/接近它，
+     否则"后台已更新但页面还显示旧版"的窗口最长可达 1 分钟（临盘场景不可接受）。*/
+  window.__verTimer = setInterval(check, 15000);
+  check();
+}
+/* 手动立即刷新（2026-09-17 新增，治「点击也刷新不了」）
+   静态自包含页本身没有同源实时 API，能做的正确动作是：
+   拉后台 version.json 比对版本号 → 有新版立即重载取最新烘焙；没新版则如实告知数据年龄，
+   绝不假装刷新。这样用户点下去永远有明确反馈（旧版无任何提示 → 被当成坏了）。 */
+async function forceRefreshNow(){
+  const hint = document.getElementById('rfHint');
+  const setHint = (s) => { if (hint) hint.textContent = s; };
+  setHint('正在拉取服务端最新数据…');
+  /* ★ 2026-09-24：先热拉最新球探产物（含 vip 多公司亚盘与升/降盘走势），页面不重载即可见效。
+     球探源站 CORS 只放行自家域名，浏览器无法直连 —— 能拿到的就是服务端已抓好的最新产物。 */
+  let t7res = null;
+  try{ t7res = await pullFreshTitan007({ force:true }); }catch(e){}
+  let remoteTs = 0, remoteBuilt = '';
+  const v = await fetchServerVersion();
+  if (v){ remoteTs = v.ts || 0; remoteBuilt = v.built || ''; }
+  __verSeedIfEmpty();
+  const seenTs = __verSeenGet();
+  // ★ 2026-10-14 外壳更新优先：指纹变了直接整页重载外壳（带 ?_r 破缓存），无需比较数据
+  const remoteShell = (v && v.appHash) || '';
+  if (remoteShell && window.__SHELL__ && remoteShell !== window.__SHELL__){
+    __verSeenSet(remoteTs || Date.now());
+    setHint('发现新版界面（' + (remoteBuilt || '') + '），正在重载外壳…');
+    scheduleShellReload(remoteTs || Date.now());
+    return;
+  }
+  if (remoteTs && remoteTs > seenTs + 3000){
+    __verSeenSet(remoteTs);
+    setHint('发现新版快照（' + (remoteBuilt || remoteTs) + '），正在原地刷新（不跳页）…');
+    try{ saveFilters(); }catch(e){}
+    softRefreshData(remoteTs, false);   // 数据更新走软刷新；外壳更新已在上面优先处理
+    return;
+  }
+  if (t7res && t7res.ok && t7res.fresh){
+    setHint('已拉取最新球探数据：' + (t7res.count || 0) + ' 场（vip 亚盘 ' + (t7res.t7Asia || 0)
+      + ' 场），球探更新于 ' + t7AgeText(t7res.updated) + '；后台快照生成于 ' + (remoteBuilt || '—') + '。');
+  } else if (t7res && t7res.ok){
+    setHint('球探数据已是最新（更新于 ' + t7AgeText(t7res.updated || t7LocalUpdated())
+      + '），服务端每 5 分钟重抓一次；后台快照生成于 ' + (remoteBuilt || '—') + '。');
+  } else {
+    setHint('拉取失败：' + ((t7res && t7res.err) || '未知') + '（球探源禁止浏览器直连，只能取服务端已抓好的最新产物）');
+  }
+}
+/* 🔴 2026-10-03 修：静态托管（本看板唯一上线形态）没有同源 /api 后端，这个探测每次刷新都会
+   在控制台打一条 404（用户能看见的红字），而且之前是**每次加载都打**，不是一条。
+   现在：一旦确认同源 /api 返回 404（或超时失败），就置 NO_SAMEORIGIN 标记，之后**永不重试**。
+   注意不能反过来"静态托管一律跳过同源探测"——用户本地 start.bat / 自有 VPS 反代时同源后端是真的存在的，
+   该类来源（localhost、127.0.0.1、自定义后端域名）仍然照常探测。 */
+let NO_SAMEORIGIN = false;
+function isSameOriginApiPlausible(){
+  if (NO_SAMEORIGIN) return false;
+  const h = String(location.hostname || '').toLowerCase();
+  return !(h === 'localhost' || h === '127.0.0.1' || h === '::1');   // 非本机 ⇒ 多半是纯静态，先不打 404
+}
+async function probeBase(b){
+  if (b === '' && !isSameOriginApiPlausible()) return false;
+  const url = b===''
+    ? ('/api/new/getfootball_list?day='+todayStr()+'&state=0')
+    : (b + encodeURIComponent(directURL(API_TARGET, '/api/new/getfootball_list?day='+todayStr()+'&state=0')));
+  try{
+    const r = await fetch(url, { headers:{'Accept':'application/json'}, signal:AbortSignal.timeout(6000) });
+    if (r.status === 404) NO_SAMEORIGIN = true;          // 静态托管：确认没有同源后端，以后不再打这条 404
+    if (!r.ok) return false;
+    const j = await r.json();
+    return !!(j && Array.isArray(j.data));
+  }catch(e){ if (e && /404/.test(String(e.message || ''))) NO_SAMEORIGIN = true; return false; }
+}
+/* 直连源站探测：m.gqj2.tv 稳定回显 Origin（允许跨域，实测均带 ACAO）。
+   关键修正（2026-09-16）：改用【并行探测 + 4s 短超时】，避免串行 10s 超时在网络不可达时
+   把整页卡在"连接中…"近 1 分钟（用户体感"打不开/选日期没反应"）。浏览器能直连即秒连。 */
+async function probeDirect(){
+  // 主源 m.gqj2.tv 与降级源 api.gqj2.tv 并行探测，先成功者胜；单源 4s 超时快速失败
+  const hosts = [API_TARGET_OLD, API_TARGET];
+  const tries = hosts.map(h => (async ()=>{
+    const url = directURL(h, '/api/new/getfootball_list?day=' + todayStr() + '&state=0');
+    try{
+      const r = await fetch(url, { cache:'no-store', credentials:'omit',
+        headers:{ 'Accept':'application/json' }, signal: AbortSignal.timeout(4000) });
+      if (r.ok){ const j = await r.json(); if (j && Array.isArray(j.data)) return h; }
+    }catch(e){}
+    return null;
+  })());
+  try{ return await Promise.any(tries.map(p => p.then(v => v ? v : Promise.reject(new Error('no'))))); }
+  catch(e){ return null; }
+}
+// 公共 CORS 代理探测：静态托管/无同源代理、直连又被 CORS/网络拦截时，最后的实时通路
+async function probeProxy(){
+  const path = '/api/new/getfootball_list?day=' + todayStr() + '&state=0';
+  const tries = PUBLIC_PROXIES.map(px => (async ()=>{
+    const url = px + encodeURIComponent(directURL(API_TARGET, path));
+    try{
+      const r = await fetch(url, { cache:'no-store', headers:{'Accept':'application/json'}, signal: AbortSignal.timeout(4000) });
+      if (r.ok){ const j = await r.json(); if (j && Array.isArray(j.data)) return px; }
+    }catch(e){}
+    return null;
+  })());
+  try{ return await Promise.any(tries.map(p => p.then(v => v ? v : Promise.reject(new Error('no'))))); }
+  catch(e){ return null; }
+}
+// 云端后端探测：服务端代理（Worker/VPS）代拉 gqj2，浏览器只跟它通信（带 CORS），不受本地网络拦截影响
+async function probeCloud(){
+  if (!CLOUD_API) return false;
+  const path = '/api/new/getfootball_list?day=' + todayStr() + '&state=0';
+  try{
+    const r = await fetch(CLOUD_API + path, { cache:'no-store', signal:AbortSignal.timeout(6000) });
+    if (!r.ok) return false;
+    const j = await r.json();
+    return !!(j && Array.isArray(j.data));
+  }catch(e){ return false; }
+}
+async function resolveSources(){
+  // file:// 直开：浏览器跨域必然拦死 → 交给调用方决定（有烘焙数据就走离线）
+  if (location.protocol==='file:'){
+    SOURCE={state:'offline',base:null}; updateConn();
+    return false;
+  }
+  // ① 云端后端（Cloudflare Worker / 自有 VPS，服务端代理）→ 最稳，绕开本地网络拦截
+  if (CLOUD_API && await probeCloud()){ SOURCE={state:'online',base:'__cloud'}; updateConn(); return true; }
+  // ② 同源代理（本地 start.bat / 带代理的部署版）→ 最快、无 CORS、无限流
+  if (await probeBase('')){ SOURCE={state:'online',base:''}; updateConn(); return true; }
+  // ② 直连源站（手机零依赖实时）：主源 api.gqj2.tv → 备用 m.gqj2.tv
+  const h = await probeDirect();
+  if (h){ SOURCE={state:'direct',base:h}; updateConn(); return true; }
+  // ②.5 公共 CORS 代理：静态托管无同源代理、直连又被拦截时的实时通路
+  const ph = await probeProxy();
+  if (ph){ SOURCE={state:'proxy',base:ph}; updateConn(); return true; }
+  // ③ 都不通 → 离线快照
+  SOURCE={state:'offline',base:null}; updateConn();
+  return false;
+}
+const STATES = [0, 1, 2, 3, -1];           // 未开 / 进行中(阶段1/2/3) / 完场  —— 2、3 也是进行中，漏拉会少场
+let MATCHES = [];                          // 当前比赛列表（含分析结果）
+let LEAGUES = [];                          // 联赛下拉
+let timer = null;
+let firstLoad = true;                      // 仅首屏渐进补全队名
+let _baseUpd = '';                         // 最近一次"基础状态文案"（loadMatches/applyFallback 写入）
+function setBaseUpd(t){ _baseUpd = t; const u=$('upd'); if (u) u.textContent = t; }
+
+/* ---------- 离线/烘焙数据（由 gen_index.py 预埋，打开即见）----------
+ * window.__BAKE_RAW__ = { generated, range, matches, packs }（列式打包，省 2/3 体积）
+ * 装配后：FALLBACK_DATA = 比赛列表（今天+明天全量）；OFFLINE_PACK = 逐场赔率+交锋
+ * 手机 file:// 打开 / 静态托管无 /api 代理 时，靠它本地跑引擎，无需任何网络请求 */
+let FALLBACK_DATA = null;
+let OFFLINE_PACK = null;
+let BAKE_META = null;                      // { generated, range } 快照元信息
+let FUSED_META = null;                     // { weights, stages, generated } 三段融合元信息
+let BAKE_READY = false;                    // 是否已装载烘焙数据
+let CLOUD_LIVE_URL = (typeof window !== 'undefined' && window.__CLOUD_LIVE_URL__) ? window.__CLOUD_LIVE_URL__ : '';
+let CLOUD_FUSED = { ok:false, generated:null, count:0, err:null };  // 云端 Worker 三段盘路状态（24h 在线，不依赖本机）
+/* 列式解包：{ "#":[列名], r:[[值...]] } → [{列名:值,...}]（递归） */
+function unpackPack(v){
+  if (Array.isArray(v)) return v.map(unpackPack);
+  if (v && typeof v === 'object'){
+    if (v['#'] && Array.isArray(v.r)){
+      const cols = v['#'];
+      return v.r.map(row => { const o={}; for (let i=0;i<cols.length;i++) o[cols[i]] = unpackPack(row[i]); return o; });
+    }
+    const o = {};
+    for (const k of Object.keys(v)) o[k] = unpackPack(v[k]);
+    return o;
+  }
+  return v;
+}
+/* ★ 2026-10-02：bake_data.js 改成 gzip+base64 异步解压（10MB → 1.7MB 再传）。
+   所以 __BAKE_RAW__ 不再出现在同步执行期，而由 bake_data.js 里的
+   window.__BAKE_RDY__（Promise）在解压完成后才挂上。
+   所有「装配烘焙数据」的调用点必须先 await 这个 Promise，
+   否则 init() 会比解压先跑 → setupBake() 恒 false → 快照静默失效（页面只剩空列表）。 */
+/* ★★ 2026-10-03 修（离线快照静默失效的真凶）：
+   ⚠ 本注释里禁止出现"闭合 body 标签 / 闭合 script 标签"这类字面量：gen_index.py 用
+     out 里的「body 结束标签」替换【全部】出现，注释里的这些字面量会被当成真实闭合标签 →
+     内联脚本块被拦腰截断 → SyntaxError + 后面一整段变成裸 HTML
+     （实测踩到：页面 MATCHES 恒 0、快照永不装配、JS 异常 1 条 SyntaxError）。
+   下面这段只讲结论：ui.js 是【内联】在 HTML 的 body 结束标签之前的，
+   而 bake_data.js 是 async 外链，插在它后面（index 第 9947 行）。
+   → init() 执行时 __BAKE_RAW__ / __BAKE_RDY__ 根本还没挂上（包还在下载），
+     _bakeReady() 立刻 return Promise.resolve(false) → init 里 `.then(ok => { if (ok) setupBake() })`
+     永远拿到 false → setupBake() 一次都不会跑 → OFFLINE_PACK 恒空 → hasPackOdds 0 →
+     离线分析空转、快照兜底失效。旧版「await _bakeReady() 就能等到」的假设在 async 外链下不成立。
+   修法：bake 还没到时不许收摊，登记等待者；由下面的 _bakeWatch 哨兵在包落地时放行（含 8s 硬上限）。 */
+let _bakeWaiters = null;
+function _bakeReady(){
+  try{
+    if (window.__BAKE_RAW__ && window.__BAKE_RAW__.packs) return Promise.resolve(true);
+    if (window.__BAKE_RDY__ && typeof window.__BAKE_RDY__.then === 'function') return window.__BAKE_RDY__;
+    if (window.__BAKE_DECERR__) return Promise.resolve(false);
+    if (!_bakeWaiters) _bakeWaiters = [];
+    return new Promise(res => { _bakeWaiters.push(res); });
+  }catch(e){}
+  return Promise.resolve(false);
+}
+function _fireBakeWaiters(ok){
+  if (!_bakeWaiters) return;
+  const ws = _bakeWaiters; _bakeWaiters = null;
+  for (const r of ws){ try{ r(ok); }catch(e){} }
+}
+/* bake 到达哨兵：盯 8 秒（≈1.7MB 下载 + 解压的余量），落地就补跑 setupBake 并放行等待者。 */
+(function _bakeWatch(){
+  let n = 0;
+  (function tick(){
+    try{
+      if (window.__BAKE_RAW__ && window.__BAKE_RAW__.packs){
+        if (!BAKE_READY){ try{ setupBake(); }catch(e){} }
+        _fireBakeWaiters(BAKE_READY); return;
+      }
+      if (window.__BAKE_RDY__ && typeof window.__BAKE_RDY__.then === 'function'){
+        window.__BAKE_RDY__.then(ok => {
+          if (ok && !BAKE_READY){ try{ setupBake(); }catch(e){} }
+          _fireBakeWaiters(!!BAKE_READY);
+        }).catch(function(){ _fireBakeWaiters(false); });
+        return;
+      }
+      if (window.__BAKE_DECERR__){ _fireBakeWaiters(false); return; }
+    }catch(e){}
+    if (++n < 1200) setTimeout(tick, 50);      // 1200×50ms = 60s：覆盖 3.8MB gzip 快照下载+解压（原 8s 对大文件形同虚设）
+    else {
+      // 60s 兜底：最后再检查一次快照是否已就位（大文件可能刚好下完），避免「超时永久放弃→快照永不渲染」
+      if (window.__BAKE_RDY__ && typeof window.__BAKE_RDY__.then === 'function'){
+        window.__BAKE_RDY__.then(ok => { if (ok && !BAKE_READY){ try{ setupBake(); }catch(e){} } _fireBakeWaiters(!!BAKE_READY); });
+      } else if (window.__BAKE_RAW__ && window.__BAKE_RAW__.packs){
+        if (!BAKE_READY){ try{ setupBake(); }catch(e){} } _fireBakeWaiters(BAKE_READY);
+      } else { _fireBakeWaiters(false); }
+    }
+  })();
+})();
+let _cloudFusedStarted = false;    // 幂等闸：setupBake 可能被调两次（同步+解压完成），定时器只能起一次
+
+/* ★ 2026-10-08 明细懒加载：panlu/htft/breakGoal/score/yg/odds/fused 已拆到 bake_detail.js（不占首屏）。
+   点开比赛/赔率面板（offlineAnalyze / onAnalyze）时才拉，合并回 OFFLINE_PACK[tid] 后原读取点全部照常工作。 */
+var _detailP = null;
+function _decompressDetail(s){
+  return new Promise(function(res, rej){
+    if (!s) return res(false);
+    try{
+      var bin = atob(s), n = bin.length, u = new Uint8Array(n);
+      for (var i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+      new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()
+        .then(function(buf){
+          try { window.__BAKE_DETAIL__ = JSON.parse(new TextDecoder('utf-8').decode(new Uint8Array(buf))); res(true); }
+          catch(e){ res(false); }
+        }).catch(rej);
+    }catch(e){ rej(e); }
+  });
+}
+function _ensureDetail(){
+  if (_detailP) return _detailP;
+  _detailP = new Promise(function(res){
+    var s = window.__BAKE_DETAIL_GZ__;
+    if (s){ _decompressDetail(s).then(res).catch(function(){ res(false); }); return; }
+    var el = document.createElement('script');
+    el.src = 'bake_detail.js?v=' + (window.__APP_TS__ || 0);
+    el.async = true;
+    el.onload = function(){ _decompressDetail(window.__BAKE_DETAIL_GZ__).then(res).catch(function(){ res(false); }); };
+    el.onerror = function(){ res(false); };
+    (document.head || document.getElementsByTagName('head')[0]).appendChild(el);
+  });
+  return _detailP;
+}
+/* ★ 2026-10-29 性能：明细包分片后的「窗口外」补充包（bake_detail_rest.js）。
+   主包 bake_detail.js 只含首屏窗口内场次（今天全量 + 明天<15:00），体积约为原来的 1/3；
+   用户点开窗口外的场次（如历史板里前几天的比赛）时才拉这一片，并合并进 __BAKE_DETAIL__，
+   之后 _mergeDetail 照常工作，调用点无感。 */
+var _detailRestP = null;
+function _decompressDetailRest(s){
+  return new Promise(function(res, rej){
+    if (!s) return res(false);
+    try{
+      var bin = atob(s), n = bin.length, u = new Uint8Array(n);
+      for (var i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+      new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()
+        .then(function(buf){
+          try {
+            var obj = JSON.parse(new TextDecoder('utf-8').decode(new Uint8Array(buf)));
+            window.__BAKE_DETAIL__ = Object.assign(window.__BAKE_DETAIL__ || {}, obj);
+            window.__BAKE_DETAIL_REST_GZ__ = null;    // 用完即弃，别再占内存
+            res(true);
+          } catch(e){ res(false); }
+        }).catch(rej);
+    }catch(e){ rej(e); }
+  });
+}
+function _ensureDetailRest(){
+  if (_detailRestP) return _detailRestP;
+  _detailRestP = new Promise(function(res){
+    var s = window.__BAKE_DETAIL_REST_GZ__;
+    if (s){ _decompressDetailRest(s).then(res).catch(function(){ res(false); }); return; }
+    var el = document.createElement('script');
+    el.src = 'bake_detail_rest.js?v=' + (window.__APP_TS__ || 0);
+    el.async = true;
+    el.onload = function(){ _decompressDetailRest(window.__BAKE_DETAIL_REST_GZ__).then(res).catch(function(){ res(false); }); };
+    el.onerror = function(){ res(false); };
+    (document.head || document.getElementsByTagName('head')[0]).appendChild(el);
+  });
+  return _detailRestP;
+}
+/* 合并某场明细；主包里没有就顺带把 rest 包拉下来再合并（返回 Promise<boolean> 版见 _mergeDetailAsync） */
+async function _mergeDetailAsync(tid){
+  try {
+    if (_mergeDetail(tid)) return true;
+    await _ensureDetailRest();
+    return _mergeDetail(tid);
+  } catch(e){ return false; }
+}
+function _mergeDetail(tid){
+  var d = window.__BAKE_DETAIL__ && window.__BAKE_DETAIL__[tid];
+  if (!d) return false;
+  var p = OFFLINE_PACK && OFFLINE_PACK[tid];
+  if (!p) return false;
+  if (d.an) for (var k in d.an) if (Object.prototype.hasOwnProperty.call(d.an, k)) p.an[k] = d.an[k];
+  if (d.odds) p.odds = d.odds;
+  if (d.fused) p.fused = d.fused;
+  p._detailMerged = true;
+  return true;
+}
+
+/* 🔴 2026-10-05 负结果，勿再试「把 unpackPack 分帧」：
+   曾经把 1222 个包的展开拆成每 60/150 个 yield 一帧，控变量 A/B（手机 390x844、CPU4x、两边都掐掉实时列表、
+   只用 1222 场快照）结果是：longtask 8 条 → 76 条、总阻塞 2057ms → 5959ms、**分析完成 2617ms → 79253ms**。
+   原因是本项目用 headless-new 测，rAF 没有真实合成器，一次帧等待能拖 3~4 秒，21 次 yield 直接把启动拖成 79 秒。
+   同一份构建字符串替换回去（同步版）与分帧版跑同一个探针：同步完胜。故保持同步展开。 */
+/* ★ 2026-10-09 队伍/联赛 HT/FT 历史倾向表懒加载（gen_index 生成 htft_stats.js，点开分析才拉）。
+   用途：stableConsensus 展示「主队领先后保胜率 / 半场平守平率 / 客队落后翻盘率 + 联赛半场守平惯性」，
+   把"队伍级行为"直接亮给用户——这是九态盲猜(天花板 32%)之外的真情报来源（何时该信对角态、何时该防过渡态）。 */
+var _statsP = null;
+function _decompressStats(s){
+  return new Promise(function(res){
+    if (!s) return res(false);
+    try{
+      var bin = atob(s), n = bin.length, u = new Uint8Array(n);
+      for (var i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+      new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()
+        .then(function(buf){
+          try { window.__HTFT_STATS__ = JSON.parse(new TextDecoder('utf-8').decode(new Uint8Array(buf))); res(true); }
+          catch(e){ res(false); }
+        }).catch(function(){ res(false); });
+    }catch(e){ res(false); }
+  });
+}
+function _ensureStats(){
+  if (_statsP) return _statsP;
+  _statsP = new Promise(function(res){
+    var s = window.__HTFT_STATS_GZ__;
+    if (s){ _decompressStats(s).then(res).catch(function(){ res(false); }); return; }
+    var el = document.createElement('script');
+    el.src = 'htft_stats.js?v=' + (window.__APP_TS__ || 0);
+    el.async = true;
+    el.onload = function(){ _decompressStats(window.__HTFT_STATS_GZ__).then(res).catch(function(){ res(false); }); };
+    el.onerror = function(){ res(false); };
+    (document.head || document.getElementsByTagName('head')[0]).appendChild(el);
+  });
+  return _statsP;
+}
+function _normName(n){ return (n||'').replace(/ /g,'').replace(/　/g,''); }
+function _htftStat(name){
+  var S = window.__HTFT_STATS__; if (!S || !name) return null;
+  var k = _normName(name);
+  return S.teamH[k] || S.teamA[k] || null;
+}
+function _leagueStat(name){
+  var S = window.__HTFT_STATS__; if (!S || !name) return null;
+  return S.league[_normName(name)] || null;
+}
+/* 队伍半全场倾向 HTML：给出"领先后保胜 / 半场平守平 / 落后翻盘"与联赛半场守平惯性 */
+function htftTendencyHTML(m){
+  if (!m || !window.__HTFT_STATS__) return '';
+  var h = _htftStat(m.home), a = _htftStat(m.away), lg = _leagueStat(m.league);
+  var parts = [];
+  if (h && h.n >= 5){
+    parts.push('主队主场领先后保胜 <b>'+h.cH[0]+'%</b> · 半场平→全场守平 <b>'+h.cD[1]+'%</b>');
+  }
+  if (a && a.n >= 5){
+    parts.push('客队客场落后翻盘 <b>'+a.cA[2]+'%</b>');
+  }
+  if (lg && lg.n >= 10){
+    parts.push('联赛半场守平惯性 <b>'+lg.ht[1]+'%</b>');
+  }
+  if (!parts.length) return '';
+  return '<span style="color:var(--acc);font-weight:700">倾向</span> <span style="color:var(--mut)">'+parts.join(' ｜ ')+'</span>';
+}
+function setupBake(){
+  try{
+    const raw = (typeof window !== 'undefined') ? window.__BAKE_RAW__ : null;
+    if (!raw || !raw.packs || !raw.matches) return false;
+    OFFLINE_PACK = unpackPack(raw.packs);
+    BAKE_META = { generated: raw.generated, range: raw.range || [] };
+    FUSED_META = raw.fused_meta || null;
+    FALLBACK_DATA = {
+      fetched: raw.generated,
+      today: (raw.range || [])[0] || todayStr(),
+      matches: unpackPack(raw.matches)
+    };
+    BAKE_READY = Object.keys(OFFLINE_PACK).length > 0;
+    // 云端三段盘路：启动即拉一次 + 每 5 分钟续拉（不依赖本机，关机也 24h 在线）
+    // ★ 幂等：解压完成后 init() 可能再调一次 setupBake，这里必须只起一次定时器，否则双轮询
+    if (!_cloudFusedStarted){
+      _cloudFusedStarted = true;
+      loadCloudFused();
+      startCloudFusedTimer();
+    }
+    return BAKE_READY;
+  }catch(e){ console.warn('setupBake failed:', e); return false; }
+}
+/* ★★ 2026-09-17 20:52 推翻旧结论：源站 `_day` 就是【自然日】，不存在"中午 12:00 换日"。
+   决定性证据（比任何推测都硬 —— 用"此刻真正在踢的比赛"定标）：
+     观测时刻 2026-09-17 20:52（北京），烘焙数据里 state=进行中 的 **28 场**，
+     `_day` 清一色是 20260917，match_time 的小时是 19/20/21/22（分布：hh20×14, hh21×12, hh22×1, hh19×1）。
+     → 若 hh>=12 要 -1 天，这些此刻正在踢的比赛会被算成 09-16，荒谬。
+     → 故 **_day + match_time 直接就是真实开赛时刻**，无需任何偏移。
+   旧注释的"01:00 定标"只看过 hh<12 的凌晨场，据此把规则错误外推到 hh>=12 —— 那是**部分证据的过度外推**：
+     凌晨场 hh<12 时，-1 天与恒等两种算法对不上 hh>=12 的下午场，而下午场恰好无人验证。
+     后果严重：每天中午之后，**当天全部午后的比赛都被算成"昨天"**，再被日期筛选剔除 →
+     页面上"进行中"场次恒为 0（实测 stateDist = {0:1657, -1:3}），用户表现为"比赛不见了"。
+   ★ 本函数由此退化为恒等。请勿再凭单一时段的观测定标，必须覆盖全天 24 小时。*/
+function realKickDay(day, hm){
+  return day;   // _day 即自然日，永不做跨日偏移（证据见上）
+}
+/* 2026-09-23 修复：gqj2 移动端列表【忽略 date 参数】且【无 _day/day/date 字段】，
+   每场仅带 match_time(HH:MM，早场恒 "00:00") 与 Unix 时间戳 match_time_int/start_time。
+   此前 m.day 取自被忽略的 date 参数（恒等于 fetchDays[0]），导致三天 fetch 返回同一批全量后
+   所有场 day 被锁死在首 fetch 日 → 第 984 行 daySet 过滤全删 → 只能靠赛前快照(state=0)兜底，
+   表现为「进行中/完场恒为 0、一堆比赛看不到」。现改用时间戳推算北京时真实比赛日，彻底摆脱被忽略的 date。 */
+function tsToBeijingDay(ts){
+  if (!ts) return '';
+  const d = new Date((ts + 28800) * 1000);   // +8h → 北京时
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return '' + y + m + dd;
+}
+/* 真实开赛时间排序键：YYYYMMDDHHMM，字典序即时间序 */
+/* 2026-10-02：把 "MM-DD HH:MM" / "YYYY-MM-DD HH:MM" / "YYYYMMDDHHMM" 统一解析成 Date。
+   初盘时刻（源站最早记录）与开赛时刻都是这种裸字符串，不解析就算不出"初盘距开赛几小时"。 */
+function _ctDate2(s){
+  const t = String(s == null ? '' : s).trim();
+  if (!t) return null;
+  try{
+    let m = t.match(/^(\d{4})-?(\d{1,2})-?(\d{1,2})[\sT]+(\d{1,2}):(\d{2})/);   // 2026-10-01 23:30 / 20261001 2330
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0);
+    m = t.match(/^(\d{1,2})-(\d{1,2})[\sT]+(\d{1,2}):(\d{2})/);               // 10-01 23:30
+    if (m) return new Date(new Date().getFullYear(), +m[1] - 1, +m[2], +m[3], +m[4], 0);
+    m = t.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/);                      // 202610012330 紧凑（kickTs 返回的正是这种）
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0);
+  }catch(e){ return null; }
+  const d = new Date(t); return isNaN(d.getTime()) ? null : d;
+}
+function kickTs(m){
+  const day = m && m.day;
+  let hm = String((m && m.kickoff) || '').slice(-5);
+  if (!/^\d{2}:\d{2}$/.test(hm)) hm = '';
+  if (!day) return String((m && m.kickoff) || '');
+  /* 2026-09-16 修正：m.day 已统一为「自然开赛日」（loadMatches/buildFromFallback 均存 realKickDay 结果），
+     此处若再套一次 realKickDay 会对 12:00 前的早场二次 +1 天（双重跨日），
+     导致早场排序串到次日、临盘新鲜度算出"距开赛 1 天"的荒谬值。故直接使用 m.day。 */
+  return day + (hm || '0000').replace(':', '');
+}
+/* 开赛时间文案：列表接口的 match_time 只有时分（无日期），用烘焙时打的 _day 补出"今天/明天" */
+/* ★ 取回烘焙快照里已算好的引擎结论（_merge_analysis.cjs 写进 packs[tid].an）。
+   2026-10-02 修复：buildFromFallback / loadMatches 装配 MATCHES 时原本把 analysis 一律置 null，
+   导致页面每次刷新都要重算（首屏只跑到 448 场，档位看板 t1 恒为 0）。
+   ⚠ 不能读 packs[tid].analysis —— 那个字段是源站交锋/伤停原文（base/matchrank/battle/injury），
+   不是引擎结论，拿它当结论会让所有场次的 tier 变 undefined、档位看板整片 t0。 */
+function packAnalysis(tid){
+  try{
+    const p = OFFLINE_PACK && OFFLINE_PACK[tid];
+    const a = p && p.an;
+    if (a && !a._fused && p.fused && p.fused.agg && p.fused.aggBs) a._fused = p.fused;
+    /* 2026-10-04 势均力敌观望闸（镜像 engine.js 的 DRAW_WATCH_GATE=0.26）：
+       p.an 是上一轮 CDP 预计算的旧引擎结论，回放时若不补闸门，
+       快照场会绕过新规、继续被旧结论标成可下注。等领域总线批量分析重跑后此处自然被覆盖。 */
+    if (a && a.mk_d != null && a.mk_d >= 0.26){
+      a.evenlyMatched = true;
+      if (a.tier >= 1) a.tier = 0;
+    }
+    /* 🔴 2026-10-05 十五修撤回让球受让门（engine.js 判据符号笔误 net+hcap → net-hcap；
+       正确判据下逐格受让覆盖 44~57%，全线低于 decimal 1.85 盈亏线 54.1%，无 alpha）。
+       p.an 是旧引擎（e 版）预计算的结论，里面带着 asia_dir='受让方'；
+       不清掉的话，页面回放旧快照时（loadMatches/buildFromFallback 走 packAnalysis 分支）
+       仍会向用户展示「受让」下注建议 —— 线上 CDP 实测确实还在显示。 */
+    if (a && (a.asia_dir === '受让方' || a.asia_dir === '让球方')){
+      a.asia_dir = '无方向'; a.asia_cov = null;
+    }
+    /* 🔴 十六修回放闸门（与上面 asia_dir 闸门前例同源）：
+       p.an 是旧引擎预计算的结论，旧大球门线区是 [−∞,2.75]（2.5/1.75/1.5 大球都放行）、
+       小球门 [2.25,3.25]；现行门已收紧（大球只留 2.75、小球 [2.5,3.0] 且整数线禁判）。
+       不清掉的话，loadMatches/buildFromFallback 走 packAnalysis 分支的「快照场」
+       会继续向用户推荐现行引擎根本不会出的大小球方向。线上 CDP 实测抓到 50 场（2.5×37 / 1.75×11 / 1.5×2）。
+       判据与 engine.js 的 _bigOK/_smallOK 逐字对齐；拿不到盘口线（a.ou 缺失）→ 无从验证，一律不下方向。 */
+    if (a && (a.ou_dir === '大球' || a.ou_dir === '小球')){
+      const _lnf = v => (v != null && isFinite(Number(v))) ? Number(v) : null;
+      const _ln = _lnf(a.ou && a.ou.c_line != null ? a.ou.c_line
+                      : (a.ou ? a.ou.o_line : null));
+      const _intL = v => v != null && Math.abs(v - Math.round(v)) < 1e-9;
+      const _ok = (_ln == null) ? false
+        : (a.ou_dir === '大球'
+            ? (_ln >= 2.75 - 1e-9 && _ln <= 3.0 + 1e-9 && !_intL(_ln))
+            : (_ln >= 2.5  - 1e-9 && _ln <= 3.0 + 1e-9 && !_intL(_ln)));
+      if (!_ok) a.ou_dir = '无稳定方向';
+    }
+    /* 🔴🔴 二十九修（2026-10-08）修正：删除了原先「按旧下注门 t1=0.80 把 an.tier 重算」的回放闸门。
+       根因：engine.js 自二十七修起 t1 终局门已降到 **_pPick≥0.72**（PICK_GATE.T1_H/T1_A=0.72），
+       且 an.tier 本就由当前引擎算好（_recalc_bake_an.cjs 用当前 engine.js 重算并写 _ev 戳）。
+       那段 0.80 重门会**把引擎合法给出的 0.72≤mk<0.80 的 t1 整批降到 t2**，
+       导致面板 t1 恒近 0（线上实测：引擎输出 61 个 t1，经此门只剩 mk≥0.80 的 ~13 个，其余被砍）。
+       现 an.tier 以引擎为准，客户端不再用陈旧 0.80 阈值二次裁决。
+       下方 wash 门与浅盘低价值门仍保留（二者与 engine.js 同口径，属冗余但无误的防御）。 */
+    /* 🔴 二十一修回放闸门（第四次同款坑，与上面 asia_dir / ou_dir / pPick 闸门逐条同源）：
+       engine.js 的盘口逆势剔除门**长在终局裁决门内部**（`tier = _washLine ? 2 : 1`）。
+       快照 a.an 是旧引擎结论时，tier===1 的逆势场回放出来仍是「可下注」，
+       而现行引擎会给它 t2（参考不下注）——干净重跑实测逆势组 90.7% vs 非逆势 96.6%，
+       是独立大样本（5063 场 +12.9pp, z=5.08）验证过的低质子池。
+       判据与 engine.js 逐字对齐：wash.kind 为 'line'/'both' 即降 t2（**只降不升**）。 */
+    if (a && a.tier === 1 && a.wash && (a.wash.kind === 'line' || a.wash.kind === 'both')){
+      a.tier = 2;
+    }
+    /* 🔴 二十二修回放闸门（第五次同款坑，同上）：
+       engine.js 的终局门已改为「只降不升」+ tier===1 的必要条件是 `深盘 || 标定命中>=56`
+       （浅盘低价值门 3369 会把不满足者降到 t2）。旧引擎的快照 a.an 里这类场会被升回 tier=1，
+       回放出来就是「文案写着『撤回下注级』、档位却是下注级」的自相矛盾场
+       —— 干净重跑实测 5 场（命中 80.0% vs 同批 t1 96.6%，前/后段同向）。
+       判据逐字对齐 engine.js：_p1c = p1 ?? a0 ?? 0；_deep = |_p1c| >= 1；非深盘且 value_score<56 → 降 t2（只降不升）。 */
+    if (a && a.tier === 1 && !(a.wash && (a.wash.kind === 'line' || a.wash.kind === 'both'))){
+      const _p1cA = (a.p1 != null) ? a.p1 : ((a.a0 != null) ? a.a0 : 0);
+      const _deepA = Math.abs(_p1cA) >= 1;
+      if (!_deepA && a.value_score != null && a.value_score < 56 - 1e-9) a.tier = 2;
+    }
+    return a || null;
+  }catch(e){ return null; }
+}
+function fmtKickoff(day, hm){
+  if (!hm) return '';
+  const t = todayStr();
+  const d = realKickDay(day, hm);            // 跨日修正后再判定"今天/明天"
+  if (d === t) return '今天 '+hm;
+  if (d === shiftDay(t, 1)) return '明天 '+hm;
+  if (d) return d.slice(4,6)+'-'+d.slice(6,8)+' '+hm;
+  return hm;
+}
+/* 用内置烘焙数据装配 MATCHES（纯数据，不触碰 UI 状态），返回是否成功。
+   复用 loadMatches 同一套处理逻辑：cleanLeague/cleanTeam 正常解码 PUA 混淆串 */
+function buildFromFallback(){
+  if (!FALLBACK_DATA || !FALLBACK_DATA.matches || !FALLBACK_DATA.matches.length) return false;
+  const seen = new Set();
+  let all = [];
+  for (const m of FALLBACK_DATA.matches){
+    const tid = m.tournament_id;
+    if (!tid || seen.has(tid)) continue;
+    seen.add(tid);
+    all.push({
+      tid, league: cleanLeague(m), leagueId: m.league_id,
+      home: cleanTeam(m,'home'), away: cleanTeam(m,'away'),
+      homeId: m.home_team_id, awayId: m.away_team_id,
+      homeRaw: m.home_name_zh, awayRaw: m.away_name_zh,   // 原始混淆串（供 PUA 自学习对齐）
+      kickoff: fmtKickoff(m._day, m.match_time), day: realKickDay(m._day, m.match_time) || m._day || '', state: String(m.state),
+      home_score: m.home_score, away_score: m.away_score,
+      odds: null, analysis: packAnalysis(tid), info:null, pred:null, snapshot:true
+    });
+  }
+  // 日期筛选生效（与 loadMatches 一致：静态/离线模式也要尊重 fDay/fRange）
+  {
+    const dl = (typeof dayList === 'function') ? dayList() : null;
+    if (dl && dl.length){ const ds = new Set(dl); all = all.filter(m => ds.has(m.day)); }
+  }
+  if (!all.length) return false;
+  const prev = new Map(MATCHES.filter(x=>x.analysis||x._manual).map(x=>[x.tid,x]));
+  for (const m of all){ const p=prev.get(m.tid); if(p){ m.odds=p.odds; m.analysis=p.analysis; m.info=p.info; m.pred=p.pred; m._manual=p._manual; m.offline=p.offline; m._liveOdds=p._liveOdds; } }
+  MATCHES = mergeTitan007(all);
+  startTitan007Watch();     // titan007.js 若尚未到位，到位后自动补合并（避免"球探没数据"）
+  mergeJingcai((typeof dayList==='function') ? dayList() : null);   // 离线快照路径同样补齐竞彩
+  LEAGUES = [...new Set(all.map(m=>m.league))].sort();
+  return true;
+}
+/* ★ 球探补合并看门狗（2026-09-24）——治"球探数据时有时无"。
+ *
+ * 根因：titan007.js(0.8MB) 作为最后一个 <script src> 挂在 bake_data.js(6.5MB) 之后，
+ *       两者到达顺序由网络决定。若 mergeTitan007 先跑而 window.TITAN007 尚未到位，
+ *       mergeTitan007 会静默原样返回（设计如此）→ 整个列表从此没有 m.t7，
+ *       用户看到的就是"球探的比赛没抓过来"，而刷新一次可能又好了。慢网络/手机端几乎必然命中。
+ *
+ * 修法：起一个短轮询，一旦 window.TITAN007 到位就补一次合并并重渲染。
+ *       幂等：合并前先剔除旧的 _src==='titan007' 项，重复调用不会累积卡片。
+ */
+/* ★ 2026-10-02 按需加载（lazy）：线上没开 gzip，首屏这几个「点开才用」的大包
+   （m7_pack 744K / retro_pack 973K / htft_validate 706K / titan007 507K ≈ 2.9MB 明文）
+   全算首屏流量。gen_index.py 只把它们登记成 window.__DEFER_JS__，
+   ui.js 在这里第一次真正要用（点开档位面板 / 破蛋验证面板 / 球探数据到位 watch）才去拉。
+   ⚠ 用 var + 函数声明：函数声明会 hoist，任何调用点都在定义之后求值，别改成 const 块。 */
+/* ★ 必须惰性读取：ui.js 是内联进 index.html 的，执行时机早于 gen_index 注入的
+   window.__DEFER_JS__ 那一段 —— 顶层一次性求值会得到空对象，之后每次 _loadJs 都静默跳过
+   （实测 _DEFER_MAP 为 {}、M7/RETRO 永远到位不了）。 */
+function _deferMap(){ try { return (window.__DEFER_JS__) || {}; } catch(e){ return {}; } }
+var _DEFER_ST = {};                       // '' | 'loading' | 'done' | 'error'
+function _loadJs(name, cb){
+  try {
+    var st = _DEFER_ST[name];
+    if (st === 'done'){ if (cb) cb(); return; }
+    if (st === 'loading'){ return; }      /* 已在路上：调用方按自己的节奏重渲染即可 */
+    var url = _deferMap()[name];
+    /* 没登记（本机 file://）就当没有，别拦路；但必须落 'error' 状态，
+       否则 _loadJsWait 会一直轮询到超时（曾让 file:// 首屏干等 20s）。 */
+    if (!url){ _DEFER_ST[name] = 'error'; if (cb) cb(); return; }
+    _DEFER_ST[name] = 'loading';
+    var el = document.createElement('script');
+    el.src = url; el.async = true;
+    el.onload  = function(){ _DEFER_ST[name] = 'done';
+      if (cb) { try { cb(); } catch(e){ console.error(e); } } };
+    el.onerror = function(){ _DEFER_ST[name] = 'error';
+      if (typeof console !== 'undefined') console.warn('[lazy] ' + name + ' 加载失败'); };
+    (document.head || document.getElementsByTagName('head')[0]).appendChild(el);
+  } catch(e){ if (typeof console !== 'undefined') console.error(e); }
+}
+/* ★ 2026-10-02 同步等待版：gen_index 把 bake/team_ratings/team_form 都改成 async 外链（并行下载、
+   省掉原来 3.1s 的串行阻塞）。但 engine 内部的 _TEAM_RATINGS/_TEAM_FORM 是**一次性缓存**：
+   首次调 _loadTeamRatings() 时 window.TEAM_RATINGS 还没到 → 缓存空值且不再刷新（!==null 提前 return），
+   结论就永久缺强度先验。所以 init 必须在跑离线批量分析前显式 await 这两个包到位。
+   ⚠ 只对「引擎会锁缓存」的数据包用，别拿它串行化互不相关的东西。 */
+function _loadJsWait(name, ms){
+  return new Promise(function(res){
+    var dl = ms || 20000, t0 = Date.now();
+    (function tick(){
+      var st = _DEFER_ST[name];
+      if (st === 'done' || st === 'error'){ res(st === 'done'); return; }
+      if (Date.now() - t0 > dl){ _DEFER_ST[name] = st || 'error'; res(false); return; }
+      setTimeout(tick, 60);
+    })();
+  });
+}
+/* 跨公司分歧包的手动口子（engine.js:2601 调用点修好前，页面不会自己拉这 1.58MB）。
+   调试/修好后验证用：控制台 __loadCompanyDiv() 触发一次即可；想在离线分析里复活，
+   见 offlineAnalyze 上方注释。 */
+window.__loadCompanyDiv = function(){
+  try{
+    if (!window.__CD_LOADED__ && _deferMap()['company_div']){
+      _loadJs('company_div', function(){ window.__CD_LOADED__ = true; });
+      return false;
+    }
+    return true;
+  }catch(e){ return false; }
+};
+
+async function _awaitTeamData(){
+  try{
+    /* 🔴 2026-10-03 修：这两个包（ratings 633KB + form 418KB）原来**串行** await，
+       首屏第 0 批分析要到 45s 才起步 —— 用户这段时间打开档位看板／主看板全是空的，
+       观感就是"t1 到底有没有做"。改成并行 + 各自 12s 超时（合计 1.05MB，实测 4s 内到位）。 */
+    if (!window.TEAM_RATINGS && _deferMap()['team_ratings']) _loadJs('team_ratings');
+    if (!window.TEAM_FORM    && _deferMap()['team_form'])    _loadJs('team_form');
+    await Promise.all([
+      _loadJsWait('team_ratings', 12000).catch(function(){}),
+      _loadJsWait('team_form',    12000).catch(function(){})
+    ]);
+  }catch(e){ /* 拿不到就走 engine 的空值回退，别拦住首屏 */ }
+}
+
+/* 历史真值包（retro_pack + m7_pack）到位后自动重刷档位面板 —— 轮询最多 120×500ms≈1 分钟 */
+var _truthPoll = 0, _truthN = 0;
+function _ensureTruthPacks(){
+  var need = false;
+  if (!window.RETRO){ _loadJs('retro_pack'); need = true; }
+  if (!window.M7){ _loadJs('m7_pack'); need = true; }
+  if ((need || _truthPoll) && !_truthPoll){
+    _truthN = 0;
+    _truthPoll = setInterval(function(){
+      _truthN++;
+      if ((window.RETRO && window.M7) || _truthN > 120){
+        clearInterval(_truthPoll); _truthPoll = 0;
+        try { TB_VIEW === 'lib' ? m7RenderLib() : renderTierBoard(); } catch(e){ console.error(e); }
+      }
+    }, 500);
+  }
+}
+let _t7WatchTimer = null;
+function startTitan007Watch(maxMs){
+  /* ★ 球探全量包也改成按需：首屏不拉 titan007.js(507K)，这里 watch 一发现有缺口就主动去拉 */
+  if (!window.TITAN007 && _deferMap()['titan007']) _loadJs('titan007');
+  if (_t7WatchTimer) return;
+  const deadline = Date.now() + (maxMs || 15000);
+  _t7WatchTimer = setInterval(function(){
+    if (!window.TITAN007 || !window.TITAN007.matches || !window.TITAN007.matches.length) {
+      if (Date.now() > deadline){ clearInterval(_t7WatchTimer); _t7WatchTimer = null; }
+      return;
+    }
+    if (typeof MATCHES === 'undefined' || !MATCHES || !MATCHES.length) {
+      if (Date.now() > deadline){ clearInterval(_t7WatchTimer); _t7WatchTimer = null; }
+      return;
+    }
+    const hasT7 = MATCHES.some(m => m.t7 && m.t7.has) || MATCHES.some(m => m._src === 'titan007');
+    if (hasT7){ clearInterval(_t7WatchTimer); _t7WatchTimer = null; return; }
+    // 到位了：补合并 + 重渲染（不清空的用户勾选项）
+    MATCHES = mergeTitan007(MATCHES);
+    try { if (typeof fillLeagues === 'function') fillLeagues(); } catch (e) {}
+    try { if (typeof render === 'function') render(); } catch (e) {}
+    if (typeof console !== 'undefined') console.log('[t7watch] 补合并球探 ' + (window.TITAN007.matches.length) + ' 场');
+    clearInterval(_t7WatchTimer); _t7WatchTimer = null;
+  }, 400);
+}
+
+function fallbackTimeText(){
+  return FALLBACK_DATA && FALLBACK_DATA.fetched
+    ? new Date(FALLBACK_DATA.fetched).toLocaleString('zh-CN')
+    : ((FALLBACK_DATA && FALLBACK_DATA.today) || '');
+}
+/* 装载并渲染内置快照。
+   opts.quiet=true → “预载”模式：数据源还在后台探测，不弹离线横幅、不谎报离线，
+   状态显示为「检测数据源…」，避免部署版一打开就吓人一跳的红色横幅。 */
+/* ★ 2026-10-02 改为 async：team_ratings/team_form 外链已 async 化（并行下载），
+   跑离线全量分析前必须 await 这两个包到位，否则 engine 会把空值锁进
+   _TEAM_RATINGS/_TEAM_FORM 一次性缓存 —— 整批结论都缺强度/战绩先验。
+   调用点（enterOfflineMode / loadMatches / init 都在 async 上下文）已同步改成 await。 */
+async function applyFallback(opts){
+  opts = opts || {};
+  try{ if (window.__bootStep) window.__bootStep('⏳ 正在装配比赛列表…', '本地引擎开始逐场计算'); }catch(e){}
+  if (!buildFromFallback()) return false;
+  fillLeagues();
+  resolvePredictions();
+  const fbTime = fallbackTimeText();
+  $('conn').className='pill warn';
+  if (opts.quiet){
+    $('conn').textContent='● 检测数据源…';
+    setBaseUpd('快照预载 · 共'+MATCHES.length+'场 · 正在连接实时源…');
+  } else {
+    $('conn').textContent='● 离线快照';
+    setBaseUpd('离线快照 · 共'+MATCHES.length+'场'+(fbTime?' · 数据生成 '+fbTime:''));
+    showOfflineBanner(fbTime);
+  }
+  renderCap = 400;
+  try{ if (window.__bootStep) window.__bootStep('⏳ 正在渲染看板…', '共' + MATCHES.length + '场，先出当天'); }catch(e){}
+  render();
+  try { if (window.__bootDone) window.__bootDone(); else { const _b = document.getElementById('boot'); if (_b) _b.remove(); } } catch(e){}
+  // 快照已就绪 → 立刻本地批量分析（零网络、约 4s 跑完 500+ 场）。
+  // 这是"打开就有结论"的关键：此前该函数定义了却从未被调用，导致全站"排队中"、Top10 全空。
+  // ★ 2026-10-02 先 await 强度包/战绩包：这两个外链已改成 async（并行下载省首屏时间），
+  //   但 engine 的 _TEAM_RATINGS/_TEAM_FORM 是一次性缓存，晚到就会被锁成空值 → 分析结论永久缺先验。
+  //   await 保证结论与同步版 100% 一致（先到先得在这里反而会出错）。
+  try{ await _awaitTeamData(); }catch(e){}
+  try{ offlineBatchAnalyze(); }catch(e){ console.warn('offlineBatchAnalyze 失败:', e && e.message); }
+  // 首屏已出 → 稍后再补历史包（别和首屏抢带宽；慢线路上这一步能把等待从 40s 压到 2~3s）
+  setTimeout(function(){ try{ startBakeHistLoad(); }catch(e){} }, 800);
+  return true;
+}
+
+/* ★★ 2026-10-29 历史快照懒加载（首屏/历史切分的前端另一半）
+ * 背景：bake 15MB 里 65% 是前两天的历史赔率包，首屏却要全下完才出画面。
+ *   gen_index 现在只把 [今天-1, 今天+3] 打进 bake_data.js，其余进 bake_hist.js。
+ * 这里在首屏渲染完成后 0.8s 再去拉历史包，合并进 __BAKE_RAW__，重跑 setupBake 后
+ * 重建 MATCHES —— 用户看到的是"先出今天的盘口，几秒后全库补齐"，而不是干等 40 秒。
+ * 幂等：__BAKE_HIST_DONE__ 置位后重复调用直接返回；合并只 append，不覆盖已有 pack。 */
+let _histLoadStarted = false;
+function _mergeBakeHist(){
+  const p = window.__BAKE_HIST_RDY__;
+  if (!p) return;
+  Promise.resolve(p).then(function(ok){
+    if (!ok) return;
+    try{
+      if (typeof setupBake === 'function') setupBake();
+      if (typeof buildFromFallback === 'function') buildFromFallback();
+      try{ if (typeof fillLeagues === 'function') fillLeagues(); }catch(e){}
+      try{ if (typeof safeRender === 'function') safeRender(); else render(); }catch(e){}
+      if (typeof console !== 'undefined') console.log('[bake-hist] 历史快照已合并，全库 ' + MATCHES.length + ' 场');
+    }catch(e){ console.warn('[bake-hist] 合并后重建失败:', e && e.message); }
+  });
+}
+function startBakeHistLoad(){
+  if (_histLoadStarted) return;
+  _histLoadStarted = true;
+  try{
+    if (window.__BAKE_HIST_RDY__){ _mergeBakeHist(); return; }
+    const ts = window.__APP_TS__ || '';
+    const s = document.createElement('script');
+    s.src = 'bake_hist.js' + (ts ? ('?v=' + ts) : '');
+    s.async = true;
+    s.onload = _mergeBakeHist;
+    s.onerror = function(){ console.warn('[bake-hist] 历史快照加载失败，当前仅显示首屏窗口'); };
+    document.head.appendChild(s);
+  }catch(e){ console.warn('[bake-hist] 启动失败:', e && e.message); }
+}
+
+/* ---------- 持久化缓存 ---------- */
+const NAME_KEY = 'name_cache_v1';
+const PRED_KEY = 'pred_log_v2';
+
+// ====== 中文标签字典（让 UI 一目了然，不再 WDL / ADH 满天飞）======
+// 胜负平：W=主胜、D=平、L=客胜
+const WDL_LABEL = { W:'主胜', D:'平', L:'客胜' };
+// 半全场九态：前字母=半场结果(H/D/A)、后字母=全场结果(H/D/A)
+const HTFT_LABEL = {
+  HH:'半场主胜/全场主胜', HD:'半场主胜/全场平',   HA:'半场主胜/全场客胜',
+  DH:'半场平/全场主胜',   DD:'半场平/全场平',     DA:'半场平/全场客胜',
+  AH:'半场客胜/全场主胜', AD:'半场客胜/全场平',   AA:'半场客胜/全场客胜'
+};
+function labelWDL(c){ return (c==='W'||c==='D'||c==='L') ? (WDL_LABEL[c]||c) : (c||'—'); }
+function labelHTFT(s){ return HTFT_LABEL[s] || s; }
+// 有效信号（实测加权投票命中项）→ 中文。权重来自 4582 场回测，括号内为该信号历史命中率
+const SIG_LABEL = {
+  's_pan_kb:W': '盘型→主胜(59%)',
+  's_pan:W':    '盘水→主胜(52%)',
+  's_flow:L':   '流向→客胜(44%)',
+  'betfa:W':    '澳客/必发→主胜',
+  'betfa:D':    '澳客/必发→平',
+  'betfa:L':    '澳客/必发→客胜'
+};
+function sigText(a){
+  if (!a) return '';
+  if (a.vote && a.vote.picks && a.vote.picks.length){
+    return ` ｜ 命中信号 ${a.vote.picks.map(k=>SIG_LABEL[k]||k).join('+')} (加权分 ${a.vote.score})`;
+  }
+  const d = (a.dir||'');
+  if (d.indexOf('矛盾')>=0) return ' ｜ 信号方向矛盾→放弃（异向叠加实测低于随机）';
+  if (d.indexOf('偏弱')>=0) return ' ｜ 信号强度不足→观望';
+  if (d.indexOf('不足')>=0) return ' ｜ 无有效临场信号→观望';
+  if (d.indexOf('初盘')>=0) return ' ｜ 仅初盘（无临场）→低置信';
+  return '';
+}
+const PUA_KEY  = 'pua_extra_v1';   // 运行时自学到的新 PUA 码点
+let nameCache = {};                        // teamId -> 干净队名
+let predLog = [];                          // 预测记录（用于复盘）
+let FIN_MAP = {};                          // 完场比分持久化映射（tid -> {hs,as}），用于跨筛选复盘
+const FIN_KEY = 'finish_scores_v1';
+function persistFin(){ try{ localStorage.setItem(FIN_KEY, JSON.stringify(FIN_MAP)); }catch(e){} }
+try { nameCache = JSON.parse(localStorage.getItem(NAME_KEY) || '{}'); } catch(e){}
+try { predLog = JSON.parse(localStorage.getItem(PRED_KEY) || '[]'); } catch(e){ predLog=[]; }
+try { FIN_MAP = JSON.parse(localStorage.getItem(FIN_KEY) || '{}'); } catch(e){ FIN_MAP={}; }
+// 合并运行时自学到的 PUA 码点（覆盖/补充内置表）
+try { Object.assign(PUA_MAP, JSON.parse(localStorage.getItem(PUA_KEY) || '{}')); } catch(e){}
+function persistPua(){ try { localStorage.setItem(PUA_KEY, JSON.stringify(PUA_MAP)); } catch(e){} }
+
+/* ---------- 工具 ---------- */
+function $(id){ return document.getElementById(id); }
+function fmt(x, d=2){ return (x===null||x===undefined||x===''||x==='—') ? '—' : (typeof x==='number' ? x.toFixed(d) : x); }
+function pct(x){ return (x===null||x===undefined) ? '—' : (Number(x)*100).toFixed(1)+'%'; }
+function todayStr(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}`; }
+/* ★ 2026-10-10 方案②：精选/优选面板跟随主列表日期切换。
+   读 #fDay 当前选中值（YYYY-MM-DD → YYYYMMDD），无值则回退 todayStr()。 */
+function panelDay(){ try{ const v=($('fDay')&&$('fDay').value)||''; const d=String(v).replace(/-/g,''); if(/^\d{8}$/.test(d)) return d; }catch(e){} return todayStr(); }
+/* ★ 2026-10-03：跨日场次只印 HH:MM 会撞成"一整排 00:00 看不出先后"（实际跨着两三天）。
+   基准日以外的场次把 MM-DD 补上，**只补非今天**，今天的保持"HH:MM"不变、不占地方。 */
+function timeCell(kick, showToday){
+  try{
+    /* ★ 2026-10-21b：开赛时间未公布（源站恒 "00:00" 或空）的场次，老实标「待定」，
+       不再渲染成 "00:00" 误导用户以为「凌晨零点开赛 / 板面卡在 00:00」。
+       这类场多为 1~3 天后的低级别/杯赛（titan007 尚未放出具体时刻），本就是 TBD。
+       kick.time 可能是纯 "HH:MM" 或 "MM-DD HH:MM"（主列表直接传 m.kickoff）。 */
+    const _raw = (kick && kick.time) || '';
+    const _hm = _raw.match(/(\d{1,2}:\d{2})\s*$/);   // 取末尾 HH:MM
+    const _timeOnly = _hm ? _hm[1] : _raw;
+    const t = (!_raw || _timeOnly === '00:00') ? '待定' : _timeOnly;
+    const d = (kick && (kick.day || kick.kday)) || '';
+    if (!d) return t;
+    if (!showToday && d === todayStr()) return t;
+    return '<span style="color:var(--acc)">' + d.slice(4,6) + '-' + d.slice(6,8) + '</span> ' + t;
+  }catch(e){ return '待定'; }
+}
+function toast(t){ const e=$('toast'); e.textContent=t; e.classList.add('show'); clearTimeout(e._t); e._t=setTimeout(()=>e.classList.remove('show'),1700); }
+function stripTags(s){ return cleanName(s); }
+// 联赛名：league_id 查内置中文表（131 个联赛，干净中文名）→ PUA 解码中文 → 英文缩写
+function cleanLeague(m){
+  if (!m) return '未知联赛';
+  // __LEISU_MAP__ 按 board team_id 建表，联赛信息挂在每队条目上；用本场某队 team_id 反查 leisu 干净联赛名。
+  // 兼容两种对象：原始 bake 行(home_team_id) 与 MATCHES 列表项(homeId)。
+  const htId = (m.home_team_id != null) ? m.home_team_id : m.homeId;
+  const atId = (m.away_team_id != null) ? m.away_team_id : m.awayId;
+  const lt = _leisuOf(htId) || _leisuOf(atId);
+  if (lt && lt.lg && lt.lg.length >= 2){
+    const canon = LEISU_LEAGUE_ALIAS[lt.lg] || lt.lg;
+    return canon;
+  }
+  // ★ 2026-10-27 修复「精选板联赛全是未知联赛」：MATCHES 列表项没有 league_id/league_name_zh，
+  //   只有 buildFromFallback 时已清洗好的 league 字段。直接复用；否则 leagueName() 必然落「未知联赛」。
+  if (m.league && String(m.league).length >= 2 && m.league !== '未知联赛') return m.league;
+  return leagueName(m);
+}
+function cleanTeamName(id){ return nameCache[id] || null; }
+/* ★ 2026-10-26 雷速体育(leisu.com)权威名覆盖：leisu 队名/联赛最准确，gen_index 内联 window.__LEISU_MAP__
+   __LEISU_MAP__ 按 board 的 team_id 索引，每队一条 {n:干净队名, lg:联赛, did:detailId, url}。
+   本函数作为队名唯一出口的"更优先源"，命中则直接返回 leisu 干净中文名（绕过 normTeamName 的 team_id 缓存，
+   避免被 okooo 旧名覆盖）。仅在 leisu 配对成功(team_id 存在)时生效，未配对比赛照常走 normTeamName，零回归风险。 */
+function _leisuOf(tid){
+  if (typeof window === 'undefined' || !window.__LEISU_MAP__) return null;
+  return window.__LEISU_MAP__[String(tid)] || null;
+}
+// leisu 联赛名→本看板规范联赛名（仅收会造成分组冲突的异名，保分组一致；其余直接用 leisu 干净名）
+const LEISU_LEAGUE_ALIAS = { '美职联': '美职业' };
+function cleanTeam(m, side){
+  // ★ 2026-10-21 队名统一：任何面板渲染队名都先走 normTeamName（按 team_id 缓存唯一规范名，
+  //    收口 zh/zht/sb 多写法 + 跨源异名 妙瓦底↔米瓦迪 等），保证主列表/精选/档位板完全一致。
+  const tid = m[side+'_team_id'];
+  const lm = _leisuOf(tid);
+  if (lm && lm.n && lm.n.length >= 2) return lm.n;
+  if (typeof normTeamName === 'function'){
+    const nm = normTeamName(tid, m[side+'_name_zh'], m[side+'_name_zht'], m[side+'_name_sb']);
+    if (nm && nm.length>=2) return nm;
+  }
+  // 兜底：analysis 短名缓存
+  const cached = cleanTeamName(tid);
+  if (cached && cached.length>=2) return cached;
+  // 兜底：PUA 字体反混淆还原
+  const cand = [m[side+'_name_zh'], m[side+'_name_zht'], m[side+'_name_sb']];
+  for (const c of cand){ const s=decodeName(c); if (s.length>=2) return s; }
+  // 兜底：去标签清洗
+  for (const c of cand){ const s=cleanName(c); if (s.length>=2) return s; }
+  // 最终兜底：绝不产出含 undefined 的串。
+  if (tid != null && tid !== '') return (side==='home'?'主':'客') + '#' + tid;
+  return '未知队';
+}
+/* 列表项（MATCHES 的元素）取展示队名：priority = 已解码名 → 原始串现解 → id 缓存。
+   列表项字段是 home/away + homeId/awayId + homeRaw/awayRaw，**没有** home_name_zh，
+   所以对列表项必须用本函数，不能直接调 cleanTeam（那是给原始 bake/live 行用的）。 */
+/* 合并球探(titan007)全量比赛 —— 补齐 gqj2 没有的场次。
+   用户诉求原话："球探的比赛更全，要把它纳入"。
+   2026-09-23 实测推翻旧结论：球探并非"只能靠本机浏览器抓"，其全量比赛是服务端可直连的
+   静态文件（livestatic.titan007.com/vbsxml/bfdata_ut.js），当日 307 场 / 105 联赛，
+   其中相对 gqj2 净增约 29 场（多为次级别、小国联赛、U 系列）。去重键 = 主|客队名。 */
+/* 本金（洋哥"资金管理"）：自传要求"本金每一轮小组赛结束后更新一次"，故由用户自设并持久化。 */
+function bankroll(){
+  try { const v = parseFloat(localStorage.getItem('yg_bankroll') || '0'); return v > 0 ? v : 0; } catch (e) { return 0; }
+}
+function setBankroll(v){
+  try { localStorage.setItem('yg_bankroll', String(parseFloat(v) || 0)); } catch (e) {}
+  try { render(); } catch (e) {}
+}
+/* 出手等级徽章：三条独立问题盘线索合流 → 仓位档（洋哥：90%正常盘投1/20、10%问题盘投1/3） */
+function planPill(a){
+  const p = a && a.plan;
+  if (!p || !p.n) return '';
+  const C = ({ SMALL:'#8b98a9', MID:'#f5c542', PICK:'#f85149' })[p.level] || '#8b98a9';
+  const LBL = ({ SMALL:'小注', MID:'加重', PICK:'精选' })[p.level] || '';
+  const br = bankroll();
+  const amt = br ? ('（' + Math.round(br * p.frac).toLocaleString('zh-CN') + ' 元）') : '';
+  return '<span class="pill" style="color:' + C + ';border-color:' + C + ';font-weight:700" title="'
+    + '出手等级：' + LBL + ' ｜ 命中线索 ' + p.n + ' 条：' + p.signals.join(' + ')
+    + ' ｜ ' + p.note + ' ｜ 仓位仅为本金风险预算，不是命中率承诺">'
+    + '◎ ' + LBL + ' ' + p.stakeText + amt + '</span>';
+}
+function t7HasOdds(m){
+  const t = m.t7;
+  return !!(t && (t.hcap != null || t.ou != null));
+}
+// 球探(titan007)盘口合理性闸门：过滤 6.25 类垃圾值，避免误报双源背离。
+// 大小球合理区间 [1.0, 5.5]；亚盘合理区间 [-3.5, 3.5]（足球盘口极少超出此范围）。
+function t7OddsSane(t){
+  if (!t) return { ou: false, hcap: false };
+  const ouOK = (t.ou == null) || (t.ou >= 1.0 && t.ou <= 5.5);
+  const hcapOK = (t.hcap == null) || (t.hcap >= -3.5 && t.hcap <= 3.5);
+  return { ou: ouOK, hcap: hcapOK };
+}
+/* ===== 球探 vip 盘口 → 引擎可吃的 gqj2 形态（2026-09-24 新建）=====
+   为什么必须有这一层：引擎只认 {asia:[{a..f}], eu:[...], bs:[...]} 三件套（gqj2 逐公司逐时点），
+   而球探 vip 给的是「多公司中位 → 初盘 open 与即时 now」两个快照。没有适配层时，
+   球探独有/双源互补的上千场虽然在列表上显示着真实盘口，点「分析」仍必弹"缺赔率快照"
+   ——这就是用户反复投诉的「球探抓到的场次赔率获取不了，没法分析」的根因。
+   反解链路（用 gqj2 真实欧赔做留出验证，n=527）：
+     GD ≈ 亚盘让球 hcap（小盘 ×1.15，与引擎内部 hcap 拆分口径一致）
+     T  ≈ 大小球 line                    → λ=(T+GD)/2 , μ=(T−GD)/2
+     Poisson/Dixon-Coles 1X2 概率 → × 真实赔付率 0.90 还原成赔率
+   实测精度：去水后三项概率 MAE 合计 0.055（单项约 0.02）、强弱方向一致率 97.8%、
+   赔率对数 RRMS 0.15 ⇒ 足以支撑胜平负/比分/盘路信号。
+   ⚠ 仍是**反解值**而非公司真实报价，故在卡片上明示「球探vip·反解」，不与真欧赔混淆。 */
+const T7_PAY = 0.90;      // 赔付率：实测 gqj2 真实临场欧赔均值 0.901（n=994）
+const _t7cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function t7Lam(hcap, line){
+  let T = Number(line);
+  if (!isFinite(T) || T <= 0) T = 2.5;
+  T = Math.max(1.0, Math.min(6.5, T));
+  let gd = Number(hcap);
+  if (!isFinite(gd)) gd = 0;
+  if (Math.abs(gd) > 0 && Math.abs(gd) <= 0.5) gd *= 1.15;
+  gd = Math.max(-(T - 0.1), Math.min(T - 0.1, gd));      // 保 λ,μ > 0
+  return [ (T + gd) / 2, (T - gd) / 2 ];
+}
+function t7EuRec(ahOpen, ahNow, ouOpen, ouNow){
+  if (!ahNow || ahNow.hcap == null || !isFinite(Number(ahNow.hcap))) return null;
+  const ln = (ouNow && ouNow.line != null && isFinite(Number(ouNow.line))) ? ouNow.line : 2.5;
+  const lo = (ouOpen && ouOpen.line != null && isFinite(Number(ouOpen.line))) ? ouOpen.line : ln;
+  const [l1, m1] = t7Lam(ahNow.hcap, ln);
+  const [l0, m0] = (ahOpen && ahOpen.hcap != null && isFinite(Number(ahOpen.hcap))) ? t7Lam(ahOpen.hcap, lo) : [l1, m1];
+  const pN = dcMatchProb(l1, m1, 8), pO = dcMatchProb(l0, m0, 8);
+  /* ⚠ 必须夹进 validEu 合法域（平赔 [1.5,12]、主客赔 [1.02,60]）：深盘 (±3 球+) 反解出的
+     平赔会到 15~50，直接判无效 → 整场掉回"无欧赔"（实测 526 场里 8 场因此报废）。 */
+  const odd = (p, lo2, hi2) => (p > 0.005) ? _t7cl(+(T7_PAY / p).toFixed(3), lo2, hi2) : hi2;
+  return {
+    a: odd(pN.D, 1.5, 12), b: odd(pN.H, 1.02, 60), c: odd(pN.A, 1.02, 60),   // 临场 (平, 主, 客)
+    d: odd(pO.D, 1.5, 12), e: odd(pO.H, 1.02, 60), f: odd(pO.A, 1.02, 60),   // 初盘 (平, 主, 客)
+    change_time: 'T7-NOW', company_name: '球探vip·反解'
+  };
+}
+function t7OddsPack(m){
+  const t = m && m.t7;
+  if (!t) return null;
+  /* ★ 2026-10-03 兜底（球探路曾经整条断掉，根因是读写两边口径不一致）：
+     mergeTitan007 在 vip 多公司缓存(t7_asia.json/t7_ou.json)缺失时（vip.titan007 主机
+     code=000 抓不到明细，缓存为空），仍把赛程页自带的即时盘口写成**顶层标量**
+     hcap/hwater/awater 与 ou/owater/uwater；而本函数旧代码只读 t.asia / t.ouDetail
+     **对象** → 恒 null → t7Agg null → analyzeMatch 返回 null：253 场"卡片上写着有盘口、
+     勾了只看有盘口也显示、点分析却什么结论都没有"。更阴的是 version.json 的 t7Asia/t7Ou
+     自检指标按同一个错口径统计，恒等于 0，看上去像"球探本来就没数据"，断线无从发现。
+     故：对象缺失时用顶层标量合成单公司快照；初盘=即时（盘路信号退化为"无变动"，
+     s_pan/s_flow 不会误报，因为 a/b/c 与 d/e/f 取同一值）。 */
+  let A = t.asia || null, B = t.ouDetail || null;
+  /* ⚠ 闸门：hcap==0（平手盘）且 ou 缺失时**不许反解**。
+     平手盘 GD=0 → λ=μ，此时再没有大小球线定总进球，t7Lam 会静默用默认 T=2.5
+     造出一副"主客完全对称"的假欧赔（实测样例：真欧赔 d/h/a=3/3.8/2.05 →
+     反解成 3.333/2.466/2.466，强弱被凭空抹平）。宁可这场不反解，也不给对称假结论。 */
+  if (!A) A = (t.hcap != null && t.hwater != null && t.awater != null && (t.ou != null || t.hcap !== 0))
+    ? { now: { hcap: t.hcap, hw: t.hwater, aw: t.awater }, open: null, companies: 1, move: 0, spread: 0 }
+    : null;
+  if (!B) B = (t.ou != null && t.owater != null && t.uwater != null)
+    ? { now: { line: t.ou, ow: t.owater, uw: t.uwater }, open: null, companies: 1, move: 0, spread: 0 }
+    : null;
+  const A0 = (A && A.open) || null, A1 = (A && A.now) || null;
+  const B0 = (B && B.open) || null, B1 = (B && B.now) || null;
+  const asia = [], eu = [], bs = [];
+  if (A1 && A1.hcap != null && isFinite(Number(A1.hcap))
+      && A1.hw != null && A1.aw != null && isFinite(Number(A1.hw)) && isFinite(Number(A1.aw))){
+    const o = (A0 && A0.hcap != null && A0.hw != null && A0.aw != null) ? A0 : A1;
+    // 形态与 gqj2 完全一致：a/b/c=临场(盘口,上水,下水)，d/e/f=初盘
+    asia.push({ a: Number(A1.hcap), b: Number(A1.hw), c: Number(A1.aw),
+                d: Number(o.hcap), e: Number(o.hw), f: Number(o.aw),
+                change_time: 'T7-NOW', company_name: '球探vip·中位(' + (A.companies || 1) + '家)' });
+    const er = t7EuRec(o, A1, B0, B1);
+    if (er) eu.push(er);
+  }
+  if (B1 && B1.line != null && isFinite(Number(B1.line)) && B1.ow != null && B1.uw != null){
+    const o = (B0 && B0.line != null && B0.ow != null && B0.uw != null) ? B0 : B1;
+    bs.push({ a: Number(B1.line), b: Number(B1.ow), c: Number(B1.uw),
+              d: Number(o.line), e: Number(o.ow), f: Number(o.uw),
+              change_time: 'T7-NOW', company_name: '球探vip·中位(' + (B.companies || 1) + '家)' });
+  }
+  if (!asia.length && !bs.length) return null;
+  return { asia, eu, bs };
+}
+/* 球探盘口 → 引擎 agg（含初盘→即时走势，故盘路信号 s_pan/s_flow 正常工作） */
+function t7Agg(m, finished){
+  const pk = t7OddsPack(m);
+  if (!pk) return null;
+  const agg = aggregate(pk.asia, pk.eu, finished);
+  const aggBs = aggregateBs(pk.bs, finished);
+  if (!(agg.c_valid || agg.eu_valid) && !aggBs.c_valid) return null;
+  agg._src = 'titan007_vip';
+  aggBs._src = 'titan007_vip';
+  return { agg, aggBs, pk };
+}
+/* 合并球探(titan007)全量比赛 —— 双源对比 + 补全 gqj2 没有的场次。
+   用户诉求："球探更全，要2个网站的对比，把比赛补全"。
+   改造要点：① 用归一化队名(去空格/括号/中立场标记)建球探查找表，提高 gqj2↔球探 同场配对率；
+            ② 同场 → 把球探真实盘口挂到 m.t7（亚盘/大小球），供卡片「🔭球探盘口」双源对比；
+            ③ 球探独有场次 → 保留其真实盘口（不再 odds:null 丢弃），打 t7only 标，让「只看有盘口」也能显示；
+            ④ 正确解析球探完场状态(-1)与比分。 */
+function mergeTitan007(all){
+  const t7 = window.TITAN007;
+  if (!t7 || !t7.matches || !t7.matches.length) return all;
+  /* ⚠ 2026-09-25 修复（重大）：旧 norm 让双源配对率只有 0.2%（2019 场只配上 5 场）——
+     两边队名的"脏"法完全不同：
+       · gqj2 侧：PUA 字体混淆串 + "[联赛排名]" 后缀（"杰志[香港超3]"）
+       · 球探侧：常被联赛+排名前缀污染（"秋6]蒂华纳"，实测 2363 场里 1589 场含 ']'）
+     旧 norm 既不解码 PUA、也不切 ']' 前缀 → 几乎一场都配不上，后果是：
+       ① gqj2 场次拿不到球探盘口（t7HasOdds 形同虚设 → 用户看到"球探抓到的场没赔率"）
+       ② 同一场比赛在列表里变成两张卡：gqj2 一张 + 球探一张（2150 张"独有"卡，
+          而且这些卡 day='' 没日期、无赔率、不可分析，把正常比赛全淹了）
+     两边各自清洗后对齐 → 配对 5 → 1405 场（69.6%）。 */
+  const _cutTail = s => { const a = [s.indexOf('['), s.indexOf('（'), s.indexOf('(')].filter(i => i > 0); return a.length ? s.slice(0, Math.min.apply(null, a)) : s; };
+  const _cutHead = s => { const i = s.lastIndexOf(']'); return (i >= 0 && i < s.length - 1) ? s.slice(i + 1) : s; };
+  const norm = s => {
+    let t = String(s || '');
+    try { t = (typeof decodeName === 'function') ? decodeName(t) : t; } catch (e) { }   // PUA 反混淆
+    t = t.replace(/\s+/g, '');
+    t = _cutHead(_cutTail(t));            // 去 "[排名]" 后缀、"联赛x]" 前缀
+    t = t.replace(/[\[\]\(\)（）]/g, '');
+    return t.toLowerCase();
+  };
+  const nkey = m => norm(m.home || '') + '|' + norm(m.away || '');
+  const t7map = new Map();
+  for (const r of t7.matches){ const k = nkey(r); if (!t7map.has(k)) t7map.set(k, r); }
+  const exists = new Set(all.map(nkey));
+  let paired = 0, added = 0;
+  const mkT7 = r => {
+    const sraw = (r.scoreRaw || '').split('-');
+    const hs = parseInt(sraw[0]), as = parseInt(sraw[1]);
+    const isDone = (r.stateRaw === '-1') || ((isFinite(hs) && isFinite(as) && hs >= 0 && as >= 0 && r.stateRaw === '-1'));
+    const _sane = t7OddsSane(r);
+    return {
+      has: true,
+      hcap: r.hcap != null ? r.hcap : null, hwater: r.hwater != null ? r.hwater : null, awater: r.awater != null ? r.awater : null,
+      ou: r.ou != null ? r.ou : null, owater: r.owater != null ? r.owater : null, uwater: r.uwater != null ? r.uwater : null,
+      saneOu: _sane.ou, saneHcap: _sane.hcap, suspect: !_sane.ou || !_sane.hcap,
+      // vip 亚盘（多公司中位数 + 初盘→即时走势）：庄家视角核心信号
+      asia: r.asia || null,
+      // vip 大小球（OverDown_n 多公司中位数 + 初盘→即时走势）：补 gqj2 34% 大小球覆盖的缺口
+      ouDetail: r.ouDetail || null,
+      updated: t7.updated, scoreRaw: r.scoreRaw || '', sId: r.t7id
+    };
+  };
+  for (const m of all){
+    const r = t7map.get(nkey(m));
+    if (r){ m.t7 = mkT7(r); paired++; }
+  }
+  /* 球探只给 "09-26 02:30" 这种字符串，没有时间戳 → 补一个。
+     ⚠ 不补的话球探独有场次(2000+ 场)的 start_time 恒为空：
+       按开赛时间排序会全乱、"距开赛还有多久"算不出来、
+       「未开盘(远期) vs 庄家不开盘」也区分不了 —— 用户看到一堆红色"庄家未开盘"
+       就以为是球探抓取失败。kickoff 是北京时，转 UTC 需 -8h；跨年按 >180 天判为明年。 */
+  const kickTs = (rr) => {
+    /* ⚠ kickoff 有两种写法，必须都兼容（实测 2363 场里 2132 场是后者）：
+         实时窗口页 "09-25 00:15"
+         未来赛程页 "09-26 9-26 10:30"   ← 日期重复了一次！
+       只写前一种的正则会让 90% 的球探场次解析失败 → 时间戳为空。 */
+    const mt = /^(\d{1,2})-(\d{1,2})(?:\s+\d{1,2}-\d{1,2})?\s+(\d{1,2}):(\d{2})/.exec(String(rr.kickoff || ''));
+    if (!mt) return null;
+    const y = new Date().getUTCFullYear();
+    let ts = Date.UTC(y, +mt[1] - 1, +mt[2], +mt[3] - 8, +mt[4]);
+    if (ts < Date.now() - 180 * 86400 * 1000) ts = Date.UTC(y + 1, +mt[1] - 1, +mt[2], +mt[3] - 8, +mt[4]);
+    return Math.round(ts / 1000);
+  };
+  /* kickoff 秒 → 北京比赛日 YYYYMMDD。⚠ 不补 day 的话球探独有场次全落在空日期桶里：
+     日期筛选把它们漏不掉（优势）但也无法分组排序、卡片没有日期 → 与 gqj2 场次混排时
+     列表像"多了一堆没日期没赔率的杂比赛"（用户视角的"场次乱了/抓不到"）。 */
+  const kickDay = (sec) => {
+    if (!sec) return '';
+    const d = new Date(sec * 1000 + 8 * 3600e3);
+    const p = n => String(n).padStart(2, '0');
+    return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate());
+  };
+  /* 新注入的球探独有场次必须同样尊重日期筛选：否则 2000+ 场远期赛事会全部塞进默认
+     「今天+明天」列表（它们没有 day 也不会被 gqj2 那一遍 filter 拦住）。 */
+  let dlSet = null;
+  try { const dl = (typeof dayList === 'function') ? dayList() : null; if (dl && dl.length) dlSet = new Set(dl.map(String)); } catch (e) { }
+  let farSkipped = 0;
+  for (const r of t7.matches){
+    const k = nkey(r);
+    if (exists.has(k)) continue;     // 已与 gqj2 同场配对，不重复加成卡片
+    const _kts = kickTs(r);
+    const _day = _kts ? kickDay(_kts) : '';
+    if (dlSet && !dlSet.has(_day)) { farSkipped++; continue; }   // 不在当前日期窗口内 → 不注入（放宽 fRange 即可看到）
+    exists.add(k);
+    const sraw = (r.scoreRaw || '').split('-');
+    const hs = parseInt(sraw[0]), as = parseInt(sraw[1]);
+    const isDone = (r.stateRaw === '-1');
+    all.push({
+      tid: 'T7' + (r.t7id || ''), t7id: r.t7id,
+      league: r.league || '', leagueId: r.sclassId,
+      home: _cutHead(_cutTail(String(r.home || ''))) || r.home,
+      away: _cutHead(_cutTail(String(r.away || ''))) || r.away,
+      homeId: null, awayId: null, homeRaw: r.home, awayRaw: r.away,
+      kickoff: r.kickoff || '', day: _day, state: isDone ? '-1' : '0',
+      start_time: _kts, match_time_int: _kts,
+      home_score: (isDone && isFinite(hs)) ? hs : null,
+      away_score: (isDone && isFinite(as)) ? as : null,
+      odds: null, analysis: null, info: null, pred: null,
+      _src: 'titan007', t7only: true, t7: mkT7(r)
+    });
+    added++;
+  }
+  if (added || paired){ try { console.log('[t7] 双源配对 ' + paired + ' 场 | 球探独有补入 ' + added + ' 场'
+    + (farSkipped ? (' | 日期窗口外暂不显示 ' + farSkipped + ' 场') : '') + ' | 球探总 ' + t7.matches.length + ' 场'); } catch (e) {} }
+  return all;
+}
+
+/* ===== 服务端最新数据「热拉取」（2026-09-24 新增，治「点更新也拿不到最新赔率」）=====
+   为什么不能直接从浏览器抓球探：球探源站响应头 Access-Control-Allow-Origin 只放行
+   https://live.titan007.com → 浏览器端 fetch 必被 CORS 拒绝，前端永远拿不到。
+   但服务端自动化每 5 分钟（球探快通道 refresh_t7_fast.py）/ 30 分钟（vip 亚盘
+   fetch_t7_asia.cjs）抓取后，会重新生成 titan007.js 并重新部署。
+   ⇒ 所以"点更新/点分析"的正确动作是：**加时间戳绕过浏览器/HTTP 缓存**重新拉这份
+     最新产物，就地热替换 window.TITAN007 并重新配对渲染 —— 页面不用重载（不打断操作），
+     却能拿到服务端最近一次抓取的真实盘口（含 vip 多公司亚盘与升/降盘走势）。 */
+let __t7Pulling = null, __t7LastPull = 0;
+function t7LocalUpdated(){ try { return (window.TITAN007 && window.TITAN007.updated) || ''; } catch(e){ return ''; } }
+async function fetchServerVersion(){
+  try{
+    const r = await fetch('version.json?_=' + Date.now(), { cache:'no-store' });
+    if (!r.ok) return null;
+    return await r.json();
+  }catch(e){ return null; }
+}
+/* 就地热替换：先移除上一轮球探独有补入的项、清掉所有已挂 m.t7，再重新配对（幂等） */
+function applyFreshTitan007(){
+  try{
+    for (let i = MATCHES.length - 1; i >= 0; i--){ if (MATCHES[i]._src === 'titan007') MATCHES.splice(i, 1); }
+    for (const m of MATCHES){ m.t7 = null; m.t7only = false; }
+    MATCHES = mergeTitan007(MATCHES);
+    if (typeof render === 'function') render();
+    return true;
+  }catch(e){ try{ console.warn('applyFreshTitan007 err:', e && e.message); }catch(e2){} return false; }
+}
+/* 返回 {ok, fresh(是否真的拉到新数据), updated, count, err, built} */
+async function pullFreshTitan007(opts){
+  opts = opts || {};
+  const now = Date.now();
+  if (__t7Pulling) return __t7Pulling;                       // 并发合并，避免重复拉 800KB
+  if (!opts.force && now - __t7LastPull < 30000){
+    return { ok:true, skipped:true, updated:t7LocalUpdated() };
+  }
+  __t7Pulling = (async ()=>{
+    __t7LastPull = now;
+    let v = null;
+    try{ v = await fetchServerVersion(); }catch(e){}
+    const remoteUpd = (v && v.t7Updated) || '';
+    const localUpd = t7LocalUpdated();
+    // 服务端球探时间戳没变 → 不必重拉大文件，如实回报"已是最新"
+    if (!opts.force && remoteUpd && remoteUpd === localUpd){
+      return { ok:true, fresh:false, updated:localUpd, built:(v && v.built) || '', t7Asia:(v && v.t7Asia) || 0 };
+    }
+    /* ★ 注入方式必须用 <script src>，绝不能用 eval / new Function：
+       页面带 Content-Security-Policy，实测会抛 "Evaluating a string as JavaScript
+       violates the following CSP" → 热拉取静默失败（按钮卡在「拉取中…」）。
+       同源 <script src> 受 CSP 允许，且加时间戳可绕过缓存拿到服务端最新产物。 */
+    const before = t7LocalUpdated();
+    try{
+      await new Promise((resolve, reject)=>{
+        const s = document.createElement('script');
+        s.src = 'titan007.js?_=' + Date.now();
+        s.onload = ()=>resolve();
+        s.onerror = ()=>reject(new Error('脚本加载失败'));
+        try{ document.head.appendChild(s); }catch(e){ reject(new Error('注入失败')); }
+        setTimeout(()=>reject(new Error('加载超时')), 30000);
+      });
+    }catch(e){ return { ok:false, err:(e && e.message) || '加载失败' }; }
+    if (!window.TITAN007 || !window.TITAN007.matches) return { ok:false, err:'无数据' };
+    applyFreshTitan007();
+    const after = t7LocalUpdated();
+    return { ok:true, fresh: after !== before, updated:after, prevUpdated:before,
+             count:window.TITAN007.matches.length, built:(v && v.built) || '', t7Asia:(v && v.t7Asia) || 0 };
+  })();
+  const res = await __t7Pulling;
+  __t7Pulling = null;
+  return res;
+}
+function t7AgeText(upd){
+  if (!upd) return '未知';
+  const t = Date.parse(String(upd).replace(' ', 'T'));
+  if (!isFinite(t)) return String(upd);
+  const min = Math.round((Date.now() - t) / 60000);
+  if (min < 1) return '刚刚';
+  if (min < 60) return min + ' 分钟前';
+  return Math.floor(min / 60) + ' 小时前';
+}
+function displayTeam(m, side){
+  const cands = [
+    m[side],
+    (m[side+'Raw'] ? decodeName(m[side+'Raw']) : null),
+    cleanTeamName(m[side+'Id']),
+    (m['_liveOdds'] && m[side]) ? m[side] : null
+  ];
+  for (const c of cands){
+    if (c && typeof c === 'string' && c.length >= 2 && c.indexOf('undefined') < 0) return c;
+  }
+  return '未知队';
+}
+function isLive(s){ return s==='1'||s==='2'||s==='3'; }
+// 比赛日 → 毫秒（用于信息面"近期状态"新鲜度判定）
+function dayMs(m){ const d=String(m&&m.day||''); return /^\d{8}$/.test(d)?Date.parse(d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8)):null; }
+function stateTag(s){ return { '-1':'完场', '0':'未开', '1':'进行中', '2':'进行中', '3':'进行中' }[s] || s; }
+function dirClass(d){
+  if (!d) return 'G';
+  if (d.indexOf('主胜')>=0) return 'W';
+  if (d.indexOf('客胜')>=0) return 'L';
+  if (d.indexOf('平')>=0) return 'D';
+  const last = d.slice(-1);
+  if (last==='W') return 'W';
+  if (last==='L') return 'L';
+  if (last==='D') return 'D';
+  return 'G';
+}
+/* 快照时刻短标签（如「快照14:51」）：用于比分徽章，避免把烘焙数据当实时比分。
+   背景：快照的 state/比分定格在生成时刻。实测 2026-09-10 14:51 的快照含 3 场"进行中"
+   （09:00/13:30/13:30 开赛），到 22:47 仍渲染成「进行中 0-2」，而比赛早已结束 → 误导。 */
+function snapshotHM(){
+  const f = (typeof FALLBACK_DATA !== 'undefined' && FALLBACK_DATA && FALLBACK_DATA.fetched) || null;
+  if (!f) return '快照';
+  const d = new Date(f);
+  if (isNaN(d.getTime())) return '快照';
+  return '快照' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function scoreBadge(m){
+  /* 快照数据：一律标注为快照时刻，绝不写「进行中」，否则时间冻结的比分会被当成实时 */
+  if (m.snapshot){
+    if (isLive(m.state)) return `<span class="score"><b>${m.home_score??'-'}:${m.away_score??'-'}</b>${snapshotHM()}</span>`;
+    if (m.state==='-1')  return `<span class="score"><b>${m.home_score??0}:${m.away_score??0}</b>完场·${snapshotHM()}</span>`;
+    return `<span class="score"><b>${m.kickoff||'--:--'}</b>开赛</span>`;
+  }
+  if (isLive(m.state)) return `<span class="score"><b>${m.home_score??'-'}:${m.away_score??'-'}</b>进行中</span>`;
+  /* 完场但比分缺失（多为独立注入的竞彩卡，源站没有比分）→ 绝不能显示 0:0，会被当成真实赛果 */
+  if (m.state==='-1' && m.home_score==null && m.away_score==null)
+    return `<span class="score"><b>--:--</b>已结束</span>`;
+  if (m.state==='-1') return `<span class="score"><b>${m.home_score??0}:${m.away_score??0}</b>完场</span>`;
+  return `<span class="score"><b>${m.kickoff||'--:--'}</b>开赛</span>`;
+}
+function sigBadge(s){
+  const m={'上盘受热':'bW','上盘偏冷':'bL','盘水背离·需人工判断':'bK','盘水未动·中性':'bG','N/A·无临场':'bG'};
+  return `<span class="badge ${m[s]||'bG'}">${s}</span>`;
+}
+/* 大小球「价值单」徽标：两侧都可能是价值单（引擎的门控已改非对称：
+   小球侧 op≤35、大球侧 op≥60，中间 35~60 一律不下价值单）。
+   旧版把这两侧写死成"只有小球是价值单"，op≥60 那批会被误标成推荐小球。 */
+function ouValueBadge(a){
+  if (!a.ou_value) return '';
+  const big = a.ou_dir === '大球';
+  const ttl = big
+    ? '价值大球：模型大球概率≥60%（t7 真盘口样本校准：60~65 档实际超过盘口线 58.9%、65+ 档 61.5%，均高于水位换算的盈亏线 52.6%，ROI +7.9%）'
+    : '价值小球：模型大球概率≤35%（小球侧为大众过热的大球侧之对面，历史回测 55.1%~55.6%）';
+  return `<span class="badge bW" title="${ttl}">价值单·置信${a.ou_conf}</span>`;
+}
+
+/* ---------- API ---------- */
+/* 源站（腾讯 EdgeOne）对「密集请求」会拒绝：实测同一秒连发多个请求会 CORS/网络失败，
+   而请求间隔 ≥1.2s 时成功率 100%。直连模式下用全局限速闸门把请求串行化 + 自动重试。 */
+const RATE = { gap: 1200, last: 0, chain: Promise.resolve() };
+function rateGate(fn){
+  const run = async ()=>{
+    const wait = RATE.gap - (Date.now() - RATE.last);
+    if (wait > 0) await new Promise(r=>setTimeout(r, wait));
+    RATE.last = Date.now();
+    return fn();
+  };
+  RATE.chain = RATE.chain.then(run, run);   // 串行：任一失败不阻断后续
+  return RATE.chain;
+}
+async function apiJSON(url, ms=15000, tries){
+  const n = tries || (SOURCE.state==='direct' ? 3 : 1);
+  const once = async ()=>{
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), ms);
+    try{
+      const r = await fetch(url, { signal: ctrl.signal, credentials:'omit', cache:'no-store', headers:{ 'Accept':'application/json' } });
+      let body;
+      try { body = await r.json(); }
+      catch(e){
+        if (!r.ok) throw new Error('HTTP '+r.status);   // 真错误（HTML 404 / 网关错误页）→ 触发重试
+        throw e;                                          // 2xx 但非法 JSON（极少）→ 抛出
+      }
+      // 容错：源站偶发"404 状态行 + 合法 JSON 体"（api.gqj2.tv 网关抖动），
+      // 只要 body 含有效 data（数组或对象）即视为成功，避免把可用数据当失败丢弃
+      if (body && (Array.isArray(body.data) || (body.data && typeof body.data === 'object'))) return body;
+      if (!r.ok) throw new Error('HTTP '+r.status);
+      return body;
+    } finally { clearTimeout(t); }
+  };
+  const gated = SOURCE.state==='direct' ? (()=>rateGate(once)) : once;
+  let last;
+  for (let i=0;i<n;i++){
+    try{ return await gated(); }
+    catch(e){ last=e; if (i<n-1) await new Promise(r=>setTimeout(r, 600*(i+1))); }
+  }
+  throw last;
+}
+/* 列表拉取：**不依赖 SOURCE 探测态**（回到旧版稳定做法——直连固定源）。
+   历史 bug：SOURCE 一旦落到 offline(base=null)，apiURL() 返回 null → getList 恒失败 →
+   页面只剩死快照、永不实时更新。改为按候选通道依次尝试：
+   ① 同源代理 ② 直连双域名(旧版主路径) ③ 公共 CORS 代理；成功即回写 SOURCE 供其它接口复用。 */
+async function getList(day, state){
+  /* 2026-09-20 修复：移动端真路径优先。原 PC 路径 /api/new/getfootball_list?day=&state=
+     移动端根本不认（返回 404/000）→ 所有通道超时 → 回退过期快照（用户看到"数据严重过期"的根源）。
+     移动端真实路径：m.gqj2.tv/api/getfootball_list?date=YYYYMMDD（不分状态、一次返回全量，
+     浏览器经 CORS 反射直连即可，不依赖电脑开机/Cloudflare）。同一比赛日只拉一次并缓存。 */
+  if (!_MOBILE_LIST_CACHE[day]){
+    /* ★ 2026-10-05 修（本轮钉出的接口口径）：
+       实测评出——列表接口 **不认 `date=`、`st=`、`page=`，只认 `day=`**，
+       且 `day=D` 返回的是**北京时间 [D−1 08:00, D 08:00]**（即"北京比赛日 = D−1"）：
+       三连测 day=20261005→北京10-04，day=20261006→北京10-05，day=20261007→北京10-06。
+       而 `date=` 恒返回 UTC 当天 ⇒ 所有 fetchDays 打到**同一个 URL**，5 个比赛日打 5 遍重复请求。
+       现把 `day=` 一起带上（取 D+1 才能命中北京比赛日 D），每个 fetchDay 各打各的、互不重复。
+       ⚠ 即便这个 day 语义哪天又变了也**不会丢场**：loadMatches 的 fetchDays 本来就同时取
+         {D, D−1} 两邻域，邻域互补，任何 ±1 偏移都仍覆盖目标日（详见 loadMatches 注释）。 */
+    const mp = '/api/getfootball_list?date='+day+'&day='+shiftDay(day, 1);
+    const mc = [];
+    /* ★ 2026-10-16 修（实时比分首屏慢）：resolveSources 已确认 CLOUD_API 可用（SOURCE.base==='__cloud'）时，
+       直接把云端后端排在最前——它最快、无 CORS、无限流。否则在静态托管/GitHub Pages 下直连必被 CORS 拦，
+       白白等 12s×2 超时（实测首屏卡 24s 才轮到云端兜底）。仅当云端确实可用才优先，避免无谓等待。 */
+    if (CLOUD_API && SOURCE.base === '__cloud'){
+      mc.push({ url: CLOUD_API + mp, st:'online', base:'__cloud' });
+    }
+    for (const b of [API_TARGET_OLD, API_TARGET])           // 主源 m.gqj2.tv 在前，api.gqj2.tv 兜底
+      mc.push({ url: directURL(b, mp), st:'direct', base:b });
+    for (const c of mc){
+      try{
+        const j = await apiJSON(c.url, 12000, 2);
+        if (j && Array.isArray(j.data) && j.data.length){
+          _MOBILE_LIST_CACHE[day] = j.data;
+          if (SOURCE.state!==c.st || SOURCE.base!==c.base){
+            SOURCE = { state:c.st, base:c.base };
+            try{ updateConn(); if (typeof hideOfflineBanner==='function') hideOfflineBanner(); }catch(e){}
+          }
+          return j.data;
+        }
+      }catch(e){ /* 换下一个源 */ }
+    }
+  } else if (_MOBILE_LIST_CACHE[day]){
+    return _MOBILE_LIST_CACHE[day];
+  }
+  // 兜底：原 PC 路径（部分网络/自托管代理环境可能可用）
+  /* ★ 2026-10-05 同移动端路径的口径修正：接口 `day=D` 实际返回**北京比赛日 D−1**
+     （day=20261005→北京10-04、day=20261006→北京10-05），所以要拿"北京比赛日 D"
+     必须传 day = D+1。与上面移动端 URL 用同一个 shiftDay(day,1) 保持两条通路一致。
+     ⚠ 即使哪天接口语义再变也**不会丢场**：loadMatches 的 fetchDays 同时取 {D, D−1}
+       两个邻域，任一方向偏移都仍覆盖目标日。 */
+  const p = '/api/new/getfootball_list?day='+shiftDay(day, 1)+'&state='+state;
+  const cands = [];
+  if (CLOUD_API) cands.push({ url: CLOUD_API + p, st:'online', base:'__cloud' });  // ① 云端后端（服务端代理，最稳）
+  cands.push({ url:p, st:'proxy', base:'' });                       // ② 同源代理（本地 start.bat）
+  for (const b of [API_TARGET_OLD, API_TARGET])                          // ② 直连（旧版稳定主路径）
+    cands.push({ url: directURL(b, p), st:'direct', base:b });
+  for (const px of PUBLIC_PROXIES)                                       // ③ 公共 CORS 代理兜底
+    cands.push({ url: px + encodeURIComponent(directURL(API_TARGET, p)), st:'proxy', base:px });
+  for (const c of cands){
+    if (!c.url) continue;
+    try{
+      const j = await apiJSON(c.url, 12000, 2);
+      if (j && Array.isArray(j.data)){
+        if (SOURCE.state!==c.st || SOURCE.base!==c.base){
+          SOURCE = { state:c.st, base:c.base };
+          try{ updateConn(); if (typeof hideOfflineBanner==='function') hideOfflineBanner(); }catch(e){}
+        }
+        return j.data;
+      }
+    }catch(e){ /* 换下一个通道 */ }
+  }
+  return [];
+}
+async function getOdds(tid){
+  const url = apiURL('/api/getfootball_oddshistorypc?id='+tid);
+  if (!url) throw new Error('无可用数据源');
+  const j = await apiJSON(url);
+  let data = j && j.data;
+  if (!data) return { asia:[], eu:[], bs:[] };
+  if (Array.isArray(data)) return { asia:[], eu:[], bs:[] };   // 空数组形态
+  return { asia: data.asia||[], eu: data.eu||[], bs: data.bs||[] };
+}
+// 历史交锋/积分/排名/伤停 + 干净队名
+async function getAnalysis(tid){
+  const url = apiURL('/api/get_football_analysis?id='+tid);
+  if (!url) throw new Error('无可用数据源');
+  const j = await apiJSON(url);
+  if (!j || j.code!==200 || !j.data) return null;
+  return j.data;
+}
+function persistNameCache(){ try{ localStorage.setItem(NAME_KEY, JSON.stringify(nameCache)); }catch(e){} }
+// analysis（交锋/排名/伤停）变化慢 → 5 分钟缓存；盘口(odds)则每轮强制重拉，保实时
+const _anaCache = new Map();
+async function getAnalysisCached(tid, maxAgeMs){
+  const c = _anaCache.get(tid);
+  if (c && (Date.now() - c.t) < (maxAgeMs || 300000)) return c.data;
+  const ad = await getAnalysis(tid);
+  _anaCache.set(tid, { t: Date.now(), data: ad });
+  return ad;
+}
+
+/* ---------- 数据加载 ---------- */
+// 日期加减（跨日不漏场）：YYYYMMDD ± N 天
+function shiftDay(s, delta){
+  const y=+s.slice(0,4), m=+s.slice(4,6), d=+s.slice(6,8);
+  const dt=new Date(y, m-1, d); dt.setDate(dt.getDate()+delta);
+  const p=n=>String(n).padStart(2,'0');
+  return `${dt.getFullYear()}${p(dt.getMonth()+1)}${p(dt.getDate())}`;
+}
+function dayList(){
+  // 修复：<input type="date"> 的值是 YYYY-MM-DD（带横线），而 shiftDay/todayStr 用 YYYYMMDD。
+  // 不归一化会导致选日期后 shiftDay 解析出 NaN，日期筛选整体失效（"选今日仍显示昨天"）。
+  const base = ($('fDay').value || '').replace(/-/g, '') || todayStr();
+  const mode = ($('fRange') && $('fRange').value) || 'all';
+  // 'all'=全部（默认：滚动赛程含未来 5 天，今天+明天会漏掉 1500+ 场远期比赛）; '1'=仅当天 ; '2'=今天+明天 ; '3'=前后±1天 ; '5'=前后±2天
+  if (mode === 'all') return null;   // null = 不过滤（所有调用点均已做 null 守卫）
+  if (mode === '2') return [base, shiftDay(base, 1)];
+  const r = parseInt(mode, 10);
+  const half = Math.floor(r/2);
+  const out=[];
+  for (let i=-half; i<=half; i++) out.push(shiftDay(base, i));
+  return out;
+}
+/* 拉取失败但仍有旧数据可显示时，把顶部状态恢复到"当前真实数据源"，避免卡在"加载中…" */
+function restoreConnAfterFail(){
+  const el = $('conn'), upd = $('upd');
+  if (SOURCE.state==='direct'){ el.className='pill live'; el.textContent='● 实时(直连)'; }
+  else if (SOURCE.state==='online'){ el.className='pill live'; el.textContent='● 实时(同源代理)'; }
+  else if (SOURCE.state==='proxy'){ el.className='pill live'; el.textContent='● 实时(公共代理)'; }
+  else { el.className='pill warn'; el.textContent = BAKE_READY ? '● 离线快照' : '✕ 拉取失败'; }
+  if (upd && MATCHES.length) setBaseUpd('刷新失败 · 继续显示上次数据（共'+MATCHES.length+'场）· '+new Date().toLocaleTimeString('zh-CN'));
+}
+/* ===== 竞彩全量补齐（2026-09-16 新增）=====
+   病根（实测量化）：竞彩原先只能靠队名匹配 getJingcai(home,away)，但源站队名是 PUA 混淆串，
+   配出率很低；更致命的是——源站压根没收的竞彩场次（多为早场）永远不会出现。
+   用户侧表现就是"竞彩少了几场 / 好多场没有"。
+   方案三步：
+     ① 主键换成【自然开赛日 + HH:MM】分桶 —— 这两个字段是干净的，完全不受队名 PUA 混淆影响；
+     ② 桶内再用队名(_jcNameEq)消歧，命中则给该场挂上官方竞彩数据（编号+胜平负/让球/比分/半全场/进球数）；
+     ③ 桶内仍无匹配 → 源站确实没有这场，直接注入一张独立竞彩卡，保证"一场不漏"。
+   日期范围：只注入落在当前视图日期内的竞彩行（选今天不该看到昨天），切到那天自然出现。 */
+function _jcHHMM(t){ const s=String(t||'00:00:00'); const mm=s.match(/(\d{2}):(\d{2})/); return mm?(mm[1]+mm[2]):'0000'; }
+function fmtKickoffJC(day, hhmm){
+  const t = todayStr(), d = String(day||'');
+  if (!d) return hhmm;
+  if (d === t) return '今天 '+hhmm;
+  if (d === shiftDay(t,1)) return '明天 '+hhmm;
+  return d.slice(4,6)+'-'+d.slice(6,8)+' '+hhmm;
+}
+function makeJcMatch(j){
+  const day  = String(j.date||'').replace(/-/g,'');
+  const hm   = _jcHHMM(j.time);
+  const hhmm = hm.slice(0,2)+':'+hm.slice(2,4);
+  const n = Number(j.num);
+  return {
+    // tid 必须是纯数字：卡内 onclick="onAnalyze(null,${tid})" 若塞入 'jc_周二006' 这种标识符会直接语法错
+    tid: 900000000 + (isFinite(n) ? n : 0),
+    league: j.league||'', leagueId: null,
+    home: j.home||'', away: j.away||'',
+    homeId:null, awayId:null, homeRaw:null, awayRaw:null,
+    kickoff: fmtKickoffJC(day, hhmm), day: day,
+    /* 开赛状态必须按当前时间推断：此前硬编码 '0'（未开），
+       导致早场（如 00:45 的周三004）到晚上 22 点仍显示"未开" —— 用户据此认为"数据没更新/这场没数据"。 */
+    state: (function(){
+      try{
+        const ko = new Date(day.slice(0,4)+'-'+day.slice(4,6)+'-'+day.slice(6,8)+'T'+hhmm+':00');
+        if (!isFinite(ko)) return '0';
+        const gap = (ko - new Date())/60000;
+        return gap > 0 ? '0' : (gap > -115 ? '1' : '-1');
+      }catch(e){ return '0'; }
+    })(),
+    home_score:null, away_score:null,
+    odds:null, analysis:null, info:null, pred:null,
+    jc: j, __jc: j, jcOnly: true
+  };
+}
+function mergeJingcai(dayScope){
+  try{
+    if (!getJingcaiRows() || !getJingcaiRows().length) return { tagged:0, injected:0, total:0 };
+    const buckets = new Map();
+    for (const m of MATCHES){
+      if (m.jcOnly) continue;
+      const hm = String(m.kickoff||'').slice(-5).replace(':','');
+      const k  = String(m.day||'') + '_' + hm;
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k).push(m);
+    }
+    const scope = (dayScope && dayScope.length) ? new Set(dayScope.map(String)) : null;
+    let tagged = 0, injected = 0;
+    for (const j of getJingcaiRows()){
+      const day = String(j.date||'').replace(/-/g,'');
+      if (!day) continue;
+      if (scope && !scope.has(day)) continue;            // 不在当前日期视图内 -> 切到那天再出现
+      const cand = buckets.get(day + '_' + _jcHHMM(j.time)) || [];
+      let hit = null;
+      for (const m of cand){
+        if (m.jc) continue;                              // 已被其它竞彩行占用，避免重复挂
+        if (_jcNameEq(m.home, j.home) && _jcNameEq(m.away, j.away)){ hit = m; break; }
+      }
+      if (hit){ hit.jc = j; hit.__jc = j; tagged++; }
+      else { MATCHES.push(makeJcMatch(j)); injected++; }
+    }
+    return { tagged: tagged, injected: injected, total: getJingcaiRows().length };
+  }catch(e){ console.warn('mergeJingcai err:', e && e.message); return { tagged:0, injected:0, total:(getJingcaiRows()||[]).length }; }
+}
+async function loadMatches(){
+  const days = dayList();
+  /* "全部"模式 days=null：过滤层不过滤，但实时拉取仍需一个合理窗口（今天-1~+3），
+     否则 fetchDays 为空 → all=[] → 误走"无数据"分支。 */
+  const fetchDays = days
+    ? [...new Set(days.concat(days.map(d=>shiftDay(d,-1))))].sort()
+    : [shiftDay(todayStr(),-1), todayStr(), shiftDay(todayStr(),1), shiftDay(todayStr(),2), shiftDay(todayStr(),3)];
+  $('conn').className='pill warn'; $('conn').textContent='● 加载中…';
+  let all=[];
+  try{
+    /* ★ 2026-10-03 性能修复：原来 fetchDays × STATES(0/1/2/3/-1) 每个组合都调一次 getList，
+       但移动端路径 /api/getfootball_list?date=YYYYMMDD 根本不分 state（一次返回该日**全量**），
+       于是同一天被重复打 5 遍完全相同的 URL —— 实测首屏 4 秒内串行发出 24 次请求、每次 ~1.6s，
+       把 3.5MB 的 bake 下载挤到后面，表现就是"进网站要好几秒、点啥都转圈"。
+       现改为**每个比赛日只打一次**（混合同 seen 去重，多打不会多场），
+       实时覆盖完整性由下面的快照兜底 + 每轮 60s 重试保证，不靠"多打几遍概率性捞全"。 */
+    const tasks=[];
+    for (const d of fetchDays) tasks.push(getList(d, STATES[0]).then(arr=>({d,arr,s:STATES[0]})).catch(()=>({d,arr:[],s:STATES[0]})));
+    // ★ 关键修复（2026-09-17）：快照就绪时给实时拉取加硬超时。
+    //   此前无快照用户网络够不到源站时，getList 每个源要等 12s×2 次 → 整页卡 12~24s 才退回快照，
+    //   表现就是"每次进网站都慢"。现：有快照就 6s 内未拉到即保留快照、标记离线、立即返回，
+    //   实时拉取在后台继续重试（60s 定时器），不影响首屏速度。
+    const NET_CAP = (BAKE_READY && typeof FALLBACK_DATA !== 'undefined' && FALLBACK_DATA) ? 6000 : 20000;
+    let results;
+    try {
+      results = await Promise.race([
+        Promise.all(tasks),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('NET_TIMEOUT')), NET_CAP))
+      ]);
+    } catch (e) {
+      if (e && e.message === 'NET_TIMEOUT' && BAKE_READY) {
+        const fbT = (typeof fallbackTimeText === 'function') ? fallbackTimeText() : '';
+        $('conn').className='pill warn'; $('conn').textContent='● 离线快照';
+        setBaseUpd('离线快照 · 共' + (MATCHES.length||0) + '场 · 数据生成 ' + fbT + '（实时源拉取超时，已用本地快照；网络恢复后自动重试）');
+        showOfflineBanner(fbT);
+        return;   // 快照已由 applyFallback 秒出，直接收尾，不再干等源站
+      }
+      throw e;
+    }
+    // 快照分桶计数：用于精确判断"某分片是真没比赛，还是被限流静默丢场"
+    const snapCount = {};
+    if (BAKE_READY && FALLBACK_DATA && FALLBACK_DATA.matches)
+      for (const m of FALLBACK_DATA.matches){ const k=(m._day||'')+'_'+(m.state!==undefined?m.state:''); snapCount[k]=(snapCount[k]||0)+1; }
+    let failSeg = 0;                                   // 关键分片（未开/进行中/完场）空响应的数量（限流→丢场）
+    const seen = new Set();
+    for (const r of results){
+      if (r.arr.length === 0 && [0,1,-1].includes(r.s) && (snapCount[r.d+'_'+r.s]||0) > 0) failSeg++;   // 该分片快照有数据却拉空 → 大概率限流失败
+      for (const m of r.arr){
+        const tid = m.tournament_id;
+        if (!tid || seen.has(tid)) continue;
+        seen.add(tid);
+        all.push({
+          tid, league: cleanLeague(m), leagueId: m.league_id,
+          home: cleanTeam(m,'home'), away: cleanTeam(m,'away'),
+          homeId:m.home_team_id, awayId:m.away_team_id,
+          homeRaw:m.home_name_zh, awayRaw:m.away_name_zh,   // 原始混淆串（供 PUA 自学习对齐）
+          kickoff: fmtKickoff(tsToBeijingDay(m.match_time_int || m.start_time) || r.d, m.match_time), day: tsToBeijingDay(m.match_time_int || m.start_time) || r.d, state: String(m.state),
+          home_score:m.home_score, away_score:m.away_score,
+          odds: mobileOdds(m.c), analysis: packAnalysis(tid), info:null, pred:null
+        });
+      }
+    }
+    const prev = new Map(MATCHES.filter(x=>x.analysis||x._manual).map(x=>[x.tid,x]));
+    // 注意：_manual（用户手点过）与 offline 必须一并继承——否则 60s 定时刷新重建对象后
+    // "手点过的场次"标记丢失，又会被置信门槛吃掉（表现为"点了就不见"复现）
+    for (const m of all){ const p=prev.get(m.tid); if (p){ m.odds=p.odds; m.analysis=p.analysis; m.info=p.info; m.pred=p.pred; m._manual=p._manual; m.offline=p.offline; m._liveOdds=p._liveOdds; } }
+    /* 保护合并：以【上一轮列表 + 烘焙快照】为底，本次实时拉到的覆盖/补充，拉不到的永久保留，绝不丢场。
+       关键修正：之前仅在"首轮且上轮为空"才用快照兜底，导致实时分片被限速/源站抖动拉空时，
+       那些场次被静默丢弃且后续再也补不回（用户侧表现="点拉取盘口后比赛消失/很多场看不到"）。
+       现改为**每次**都拿快照做底，实时拉空的分片自动从快照回填。 */
+    const fetchedTids = new Set(all.map(m=>m.tid));
+    const baseMap = new Map(MATCHES.map(m=>[m.tid,m]));
+    if (BAKE_READY && FALLBACK_DATA && FALLBACK_DATA.matches){
+      for (const m of FALLBACK_DATA.matches){               // 始终用快照兜底补全：实时拉不到的比赛保留
+        const tid = m.tournament_id;
+        if (!tid || baseMap.has(tid)) continue;
+        baseMap.set(tid, {
+          tid, league: cleanLeague(m), leagueId: m.league_id,
+          home: cleanTeam(m,'home'), away: cleanTeam(m,'away'),
+          homeId: m.home_team_id, awayId: m.away_team_id,
+          homeRaw: m.home_name_zh, awayRaw: m.away_name_zh,
+          kickoff: fmtKickoff(tsToBeijingDay(m.match_time_int || m.start_time) || m._day, m.match_time), day: tsToBeijingDay(m.match_time_int || m.start_time) || m._day || '', state: String(m.state),
+          home_score: m.home_score, away_score: m.away_score,
+          odds:null, analysis: packAnalysis(tid), info:null, pred:null, snapshot:true
+        });
+      }
+    }
+    if (baseMap.size){
+      const appended = [];
+      for (const [tid,bm] of baseMap) if (!fetchedTids.has(tid)) appended.push(bm);
+      if (appended.length) all = all.concat(appended);
+    }
+    // 恢复最近错误标记（调度器把错误存在 realtime.js 的 SCHED.errors，MATCHES 会被本函数重建）
+    if (typeof SCHED !== 'undefined' && SCHED.errors){
+      for (const m of all){ const e = SCHED.errors.get(m.tid); if (e) m._aErr = e; }
+    }
+    // 实时拉取为空（无同源代理 / 直连被 CORS 拦 / 网络不通）→ 回退快照并【按当前日期重组】，
+    // 保证"选日期 / 切范围"在离线模式也立即可用（此前此处直接 return，导致选日期整页不动）。
+    if (!all.length){
+      if (BAKE_READY && buildFromFallback()){
+        renderCap = 400; render();
+        const fbT = fallbackTimeText();
+        $('conn').className='pill warn'; $('conn').textContent='● 离线快照';
+        setBaseUpd('离线快照 · 共'+MATCHES.length+'场 · 数据生成 '+fbT+'（实时源不可达：选日期可查看快照内比赛；要实时请用 start.bat）');
+        showOfflineBanner(fbT);
+        return;
+      }
+      // 快照也不含所选日期（超出烘焙范围）
+      if (BAKE_READY){
+        const rng = (BAKE_META && BAKE_META.range) ? BAKE_META.range.join('~') : '';
+        $('conn').className='pill warn'; $('conn').textContent='● 离线快照';
+        setBaseUpd('快照(生成 '+fallbackTimeText()+')不含所选日期（范围 '+rng+'）；实时源不可达，无法拉取该日比赛');
+        MATCHES = []; render();
+        return;
+      }
+      if (MATCHES.length){ restoreConnAfterFail(); return; }
+      $('conn').className='pill err'; $('conn').textContent='✕ 无数据';
+      toast('实时拉取失败且本地无快照'); return;
+    }
+    // 日期筛选生效（修复：静态/离线部署回填快照不受 fDay/fRange 约束，导致"选今日仍显示昨天"）
+    if (days && days.length){
+      const daySet = new Set(days);
+      all = all.filter(m => daySet.has(m.day));
+    }
+    MATCHES = mergeTitan007(all);
+    startTitan007Watch();   // 同上：titan007.js 晚到时自动补合并
+    mergeJingcai(days);   // 竞彩全量补齐：按「自然开赛日+HH:MM」主键挂载，源站没有的直接注入
+    renderCap = 400;                      // 新数据到达，重置分页渲染
+    LEAGUES = [...new Set(all.map(m=>m.league))].sort();
+    fillLeagues();
+    // 持久化完场比分：即便当前视图按状态/日期筛选掉该场，复盘时仍能从 FIN_MAP 找回
+    for (const m of all){ if (String(m.state)==='-1' && m.home_score!=null && m.away_score!=null) FIN_MAP[m.tid]={hs:m.home_score, as:m.away_score}; }
+    persistFin();
+    resolvePredictions();                 // 赛果复盘
+    hideOfflineBanner();
+    const isDirectSrc = (SOURCE.state==='direct');
+    $('conn').className='pill live';
+    $('conn').textContent = isDirectSrc ? '● 实时(直连)' : '● 实时更新中';
+    const rng = days.length>1 ? `${days[0]}~${days[days.length-1]}` : days[0];
+    setBaseUpd(`更新 ${new Date().toLocaleTimeString('zh-CN')} · ${rng} · 共${all.length}场`
+      + (failSeg ? ` · ⚠️${failSeg}个分片未拉到·已用快照补` : '')
+      + (isDirectSrc ? ' · 比分/状态实时，赔率用快照(点开单场拉最新)' : ''));
+    // 队名已由 PUA 映射表在本地瞬时还原（100% 覆盖），无需再逐场调接口补名
+  }catch(e){
+    // 实时拉取失败 → 尝试离线兜底数据
+    if (await applyFallback()) return;
+    // 兜底也没有 → 显示错误
+    $('conn').className='pill err'; $('conn').textContent='✕ 拉取失败';
+    let msg='数据拉取失败：'+e.message;
+    if (location.protocol==='file:') msg+='（file:// 直开被浏览器跨域拦截，请用 start.bat 启动本地代理）';
+    toast(msg);
+  }
+  // 实时列表到位后，把"新出现且带快照赔率"的场次本地补齐分析（零网络）。
+  // 直连模式下每 60s 触发一次 loadMatches，故必须在此挂载；否则列表刷新一次就回到"排队中"。
+  // ★ 强度包/战绩包是 async 外链，这里也要等到位再算（同上：一次性缓存不能锁成空值）。
+  try{ await _awaitTeamData(); }catch(e){}
+  try{ offlineBatchAnalyze(); }catch(e){ console.warn('offlineBatchAnalyze 失败:', e && e.message); }
+  // 快照补完后，对"快照里没盘口"的场次后台实时补拉（旧版纯实时能分析，新版必须补上这条链路）
+  if (liveCapable()){ setTimeout(()=>{ try{ liveFillMissing(60); }catch(e){} }, 1500); }
+  // 用户有输入焦点时跳过重绘（避免清空正在填的投注占比/搜索）
+  if (typeof safeRender === 'function') safeRender(); else render();
+  try{ showStructDownAlert(); }catch(e){}   // 每次拉新数据后刷新结构下盘角标
+  try{ showFundPlateAlert(); }catch(e){}    // 每次拉新数据后刷新三盘资金·过热板角标
+}
+
+// 渐进式补全队名：异步拉取 analysis 仅取干净队名（节流，避免限流）；遇已缓存则跳过
+let _nameQueue = null;
+function progressiveNameResolve(queue){
+  if (_nameQueue) return;                 // 已有任务在跑
+  _nameQueue = (queue||[]).filter(m=>!cleanTeamName(m.homeId) || !cleanTeamName(m.awayId));
+  if (!_nameQueue.length){ _nameQueue=null; return; }
+  const tick = async ()=>{
+    const m = _nameQueue.shift();
+    if (!m){ _nameQueue=null; render(); return; }
+    if (cleanTeamName(m.homeId) && cleanTeamName(m.awayId)){ setTimeout(tick, 0); return; }
+    try{
+      const ad = await getAnalysis(m.tid);
+      if (ad && ad.base){
+        if (ad.base.home_team_id) nameCache[ad.base.home_team_id]=ad.base.home_team;
+        if (ad.base.away_team_id) nameCache[ad.base.away_team_id]=ad.base.away_team;
+        persistNameCache();
+        const learned = (learnPua(m.homeRaw, ad.base.home_team)||0) + (learnPua(m.awayRaw, ad.base.away_team)||0);
+        if (learned>0) persistPua();
+        const nh = cleanTeamName(m.homeId), na = cleanTeamName(m.awayId);
+        if (nh) m.home=nh; if (na) m.away=na;
+      }
+    }catch(e){}
+    /* ★ 2026-10-04 性能修复：这里原来是 render()（整页 grid.innerHTML 全量重建，realN≈140 张卡）。
+       队名补齐队列几百项 → 几百次全量重建（实测 render() 单次要 200~300ms），
+       主线程被反复占满，页面长时间假死，而且 500ms 一次节流完全被淹没。
+       改为 refreshRendered()：只重建队名真变了的那一两张卡（__sig 判重自动跳过其余），
+       视觉上照样即时更新，开销从 ~260ms 降到 <1ms。队列结束时的收尾仍是一次整页 render()（见下）。 */
+    try{ refreshRendered(); }catch(e){}
+    setTimeout(tick, 500);
+  };
+  tick();
+}
+
+function fillLeagues(){
+  const sel=$('fLg'); const cur=sel.value;
+  const cnt={};
+  for (const m of MATCHES) cnt[m.league]=(cnt[m.league]||0)+1;
+  sel.innerHTML='<option value="">全部联赛</option>';
+  // 按拼音首拼 A→Z 排序，并按首字母分组（手机上更好找）
+  const list = LEAGUES.slice().sort((a,b)=>{
+    const ka=leagueSortKey(a), kb=leagueSortKey(b);
+    return ka<kb ? -1 : (ka>kb ? 1 : 0);
+  });
+  let letter=null, group=null;
+  for (const l of list){
+    const k=leagueSortKey(l);
+    const ch=(k[0]||'#').toUpperCase();
+    if (ch!==letter){
+      letter=ch;
+      group=document.createElement('optgroup');
+      group.label=ch;
+      sel.appendChild(group);
+    }
+    const o=document.createElement('option');
+    o.value=l; o.textContent=`${l} (${cnt[l]||0}场)`;
+    (group||sel).appendChild(o);
+  }
+  sel.value=cur;
+}
+
+/* ---------- 历史交锋回退（7m 真实赛果库，window.H2H_MAP）----------
+ * 引擎 applyInfoPrior 早已写好 历史交锋/排名/伤停 钩子，但线上 bake 的 m.info 永远为空 → 钩子 100% 休眠。
+ * 这里在「无 m.info / 无 battle」时，用 7m 真值库（gen_h2h_map.cjs 建，仿 TEAMCTX 注入）补真实交锋，
+ * 喂给现有钩子（权重0.15, n>=2门）。只补 battle（历史交锋），排名/伤停仍由 m.info 提供（没有则空，符合铁律"绝不改方向"）。
+ * H2H_MAP 异步注入，可能晚于首屏；未就绪时优雅跳过（不影响其它信号）。 */
+function _h2hKey(s){
+  s = (typeof decodeName === 'function') ? decodeName(s) : s;
+  return String(s == null ? '' : s)
+    .replace(/<[^>]+>/g, '').replace(/&#x?[0-9A-Fa-f]+;/g, '')
+    .replace(/[（）()]/g, '').replace(/足球俱乐部/g, '').replace(/\s/g, '').trim();
+}
+// ★ 每队多候选队名（leisu 优先 → normTeamName → board 原始名），归一后择优查 H2H_MAP。
+//   这样 leisu 拼写更接近 7m 时（+1 场）会命中；leisu 与 7m 异名时退回 board 名，绝不退步（避免 212→209）。
+function _h2hCands(m, side){
+  if (!m) return [];
+  // 兼容两种对象：原始 bake 行(home_team_id/home_name_zh) 与 MATCHES 列表项(homeId/home/homeRaw)。
+  const tid = (m[side + '_team_id'] != null) ? m[side + '_team_id'] : m[side + 'Id'];
+  const raw = [];
+  const lm = _leisuOf(tid);
+  if (lm && lm.n) raw.push(lm.n);
+  if (typeof normTeamName === 'function'){
+    const nm = normTeamName(tid, m[side + '_name_zh'], m[side + '_name_zht'], m[side + '_name_sb']);
+    if (nm) raw.push(nm);
+  }
+  raw.push(m[side + '_name_zh'], m[side + '_name_zht'], m[side + '_name_sb']);
+  raw.push(m[side]);                                   // MATCHES 列表项：已解码展示名
+  if (m[side + 'Raw']) raw.push(decodeName(m[side + 'Raw']));
+  const keys = [];
+  for (const n of raw){ const k = _h2hKey(n); if (k && !keys.includes(k)) keys.push(k); }
+  return keys;
+}
+/* 取比赛开赛时刻（毫秒）。兼容 raw 行(match_time_int/start_time) 与 MATCHES 列表项(day+kickoff)。 */
+function _h2hTs(m){
+  if (!m) return 0;
+  let t = Number(m.match_time_int || m.start_time || 0);
+  if (!t && typeof kickTs === 'function'){
+    try { const d = _ctDate2(kickTs(m)); if (d) t = d.getTime(); } catch(e){}
+  }
+  if (!t) return 0;
+  if (t < 1e12) t *= 1000;
+  return t;
+}
+function _h2hInfo(m){
+  try{
+    if (!window.H2H_MAP) return null;
+    const hc = _h2hCands(m, 'home'), ac = _h2hCands(m, 'away');
+    let thk = null, tak = null, arr = null;
+    outer:
+    for (const h of hc){ for (const a of ac){ if (h === a) continue;
+      const pk = h < a ? h + '|' + a : a + '|' + h;
+      const r = window.H2H_MAP[pk];
+      if (r && r.length){ thk = h; tak = a; arr = r; break outer; }
+    } }
+    if (!arr) return null;
+    const t = _h2hTs(m);
+    if (!t) return null;
+    const W5 = 5 * 365.25 * 24 * 3600 * 1000;
+    const prior = arr.filter(r => r[0] < t && (t - r[0]) <= W5).slice(-6);   // 过往、5年内、近6场
+    if (prior.length < 2) return null;              // 与 infoPrior n>=2 门控一致
+    const battle = prior.map(r => ({ home_team: r[1], visiting_team: r[2], home_team_score: r[3], visiting_team_score: r[4], competing_time: r[0] }));
+    return { base: { home_team: thk, away_team: tak }, battle: { battle: battle } };
+  }catch(e){ return null; }
+}
+function _mergeH2h(info, m){
+  if (info && info.battle && info.battle.battle && info.battle.battle.length) return info;
+  const h = _h2hInfo(m); if (!h) return info;
+  if (!info) info = { base: h.base, battle: h.battle };
+  else { info.base = info.base || h.base; info.battle = info.battle || h.battle; }
+  return info;
+}
+// ★ 2026-10-26 透明化：精选/优选板逐场显示「历史交锋是否已纳入模型」。
+//   复用 _h2hInfo(H2H_MAP 7m 真值回退)；有真实交锋史标 W/D/L 战绩，无则按原因如实标注。
+//   ⚠ 仅展示模型实际用到的同一份交锋（与 applyInfoPrior 同源），不作任何新结论。
+//   ★ 2026-10-26 续：徽章分三态——已纳入 / 有史但样本不足(<2场，不进模型) / 7m未收录该对阵史(数据覆盖限制)。
+//     这样「交锋 —」不再像是「没考虑」，而是诚实说明「考虑了、但 7m 真值库没有这对阵的历史」。
+function _h2hStatus(m){
+  if (!window.H2H_MAP) return { state: 'notready' };
+  // ★ 2026-10-27 修复：原实现只认 m.home_name_zh（raw bake 行字段），对 MATCHES 列表项永为空 →
+  //   精选板「交锋」恒显示空。改用与模型完全同源的 _h2hCands 多候选（leisu/规范名/展示名/原始名）。
+  const hc = _h2hCands(m, 'home'), ac = _h2hCands(m, 'away');
+  if (!hc.length || !ac.length) return { state: 'none' };
+  const t = _h2hTs(m);
+  if (!t) return { state: 'notime' };
+  const W5 = 5 * 365.25 * 24 * 3600 * 1000;
+  let thk = null, prior = null;
+  for (const h of hc){ for (const a of ac){
+    if (h === a) continue;
+    const pk = h < a ? h + '|' + a : a + '|' + h;
+    const arr = window.H2H_MAP[pk];
+    if (arr && arr.length){
+      const pr = arr.filter(r => r[0] < t && (t - r[0]) <= W5).slice(-6);
+      if (pr.length && (!prior || pr.length > prior.length)){ prior = pr; thk = h; }
+    }
+  } }
+  if (!prior || !prior.length) return { state: 'none' };
+  let w=0,d=0,l=0;
+  for (let i=0;i<prior.length;i++){
+    // [dm,hk,ak,hs,as]；按「本场主队」视角统计 W/D/L（历史该场主队是否就是本场主队）
+    const homeIsMe = (prior[i][1] === thk);
+    const myG = homeIsMe ? prior[i][3] : prior[i][4];
+    const opG = homeIsMe ? prior[i][4] : prior[i][3];
+    if (myG > opG) w++; else if (myG < opG) l++; else d++;
+  }
+  if (prior.length >= 2) return { state: 'ok', w:w, d:d, l:l, n:prior.length };
+  return { state: 'sparse', w:w, d:d, l:l, n:prior.length };
+}
+function _h2hBadge(x){
+  try {
+    let m = (x && x.m) || null;
+    // ★ 2026-10-27 修复：MATCHES 列表项没有 home_name_zh。原逻辑 `if (!m || !m.home_name_zh) return '交锋 —'`
+    //   会让精选板永远显示空「交锋 —」。现改为：有 m 直接用（_h2hStatus 已兼容列表项 home/away/homeId），
+    //   否则按 tid 回查 MATCHES；再兜底用行自身 home/away。
+    if (!m && x && x.tid && typeof MATCHES !== 'undefined'){
+      const f = MATCHES.find(function(y){ return y && String(y.tid) === String(x.tid); }); if (f) m = f;
+    }
+    if (!m && x && (x.home || x.away)) m = x;
+    if (!m) return '<span style="color:var(--mut);font-size:10.5px">交锋 —</span>';
+    const st = _h2hStatus(m);
+    if (st.state === 'notready') return '<span style="color:var(--mut);font-size:10.5px">交锋 ·载入中…</span>';
+    if (st.state === 'ok'){
+      return '<span style="font-size:11px" title="模型已纳入：近5年直接交锋 ≥2 场，经 applyInfoPrior(权重0.15) 参与方向修正。">交锋 '
+        + '<b style="color:var(--grn)">'+st.w+'</b>/<b style="color:var(--yel)">'+st.d+'</b>/<b style="color:var(--red)">'+st.l+'</b>'
+        + ' <span style="font-size:10px;color:var(--mut)">('+st.n+'场·已纳入)</span></span>';
+    }
+    if (st.state === 'sparse'){
+      return '<span style="font-size:11px" title="7m 真值库有此对阵，但近5年直接交锋仅 '+st.n+' 场，低于模型 n≥2 门控，未纳入方向修正（避免小样本噪声）。">交锋 '
+        + '<b style="color:var(--grn)">'+st.w+'</b>/<b style="color:var(--yel)">'+st.d+'</b>/<b style="color:var(--red)">'+st.l+'</b>'
+        + ' <span style="font-size:10px;color:#c08a3e">('+st.n+'场·样本不足)</span></span>';
+    }
+    // none / notime：数据覆盖限制，诚实标注
+    return '<span style="color:var(--mut);font-size:10.5px" title="已查 7m 历史真值库（4.2万对阵 / 6.0万场）：该对阵无近5年直接交锋记录，模型未使用历史交锋信号（符合铁律：无数据不编造）。">交锋 — ·7m未收录</span>';
+  } catch(e){ return '<span style="color:var(--mut);font-size:10.5px">交锋 —</span>'; }
+}
+
+/* ---------- 分析 ---------- */
+// 战意功能已移除（2026-10-26）：动机信号不可靠且易误导，不再参与模型。
+// 保留占位函数使 8 处调用点无需改动，统一返回 null。
+function autoZy(){ return null; }
+
+/* ===== 临场自动刷新（2026-09-16 新增）=====
+   痛点实证：preferSnapshot() 让直连/离线模式一律优先用烘焙快照赔率，快照定格在某个时刻，
+   于是 00:00 开赛的场次其临盘是几小时前的早/中盘数据（用户实测 21:46）。
+   而 analyzeMatch(m, force) 的快照分支只在该场没有快照赔率时才走网络 —— 有快照时手点也不拉实时。
+   解法：临场窗口（距开赛 <=120min）内的场次，绕过快照优先分支，直接 getOdds() 拉真实时盘口重算。
+        本地 Node 访问 gqj2 不可达（返回 HTML 拦截页），仅浏览器内可直连，
+        故必须走前端刷新这条路，而不是重建烘焙管线。
+   节流：每轮限量，避免触发源站限流。 */
+function kickoffGapMin(m){
+  const ts = kickTs(m);
+  if (!/^\d{12}$/.test(ts)) return null;
+  const ko = new Date(+ts.slice(0,4), +ts.slice(4,6)-1, +ts.slice(6,8), +ts.slice(8,10), +ts.slice(10,12));
+  return Math.round((ko - new Date())/60000);
+}
+/* 是否「远期未开盘」：距开赛 > 24h 且任何源都没盘口 → 庄家几乎肯定还没放盘。
+   用于把这类场与「临近开赛仍无盘口（真低级别/不开盘）」区分开，避免对远期场
+   挂「拉实时→分析」骗点击（点了必失败，用户误以为抓取失败）。时间缺失时不判远期。 */
+function isFarFuture(m){
+  const g = kickoffGapMin(m);
+  if (g == null) return false;
+  return g > 1440;
+}
+async function analyzeWithLiveOdds(m){
+  const od = await getOdds(m.tid);
+  const len = x => x ? (Array.isArray(x) ? x.length : 0) : 0;
+  if (!od || !(len(od.asia) || len(od.eu) || len(od.bs))) throw new Error("源站无实时盘口");
+  const ppi = loadPPI(m.tid);
+  const agg = aggregate(od.asia, od.eu, m.state==="-1");
+  const aggBs = aggregateBs(od.bs, m.state==="-1");
+  const zy = autoZy(m.tid, m.league, m.home, m.away);
+  let a = analyze(agg, zy, aggBs, ppi, m.tid, m.home, m.away, leagueName(m));
+  /* 自我纠错功能已按用户要求下线（浏览器端纠偏样本永远<10，原逻辑本就是空转） */
+  m.odds = od; m.analysis = a; m.offline = false; m._liveOdds = true; m._aErr = null;
+  return { a: a, odds: od };
+}
+async function refreshNearKickoff(maxN){
+  maxN = maxN || 6;
+  try{
+    if (typeof MATCHES === "undefined" || !MATCHES.length) return 0;
+    const cand = [];
+    for (const m of MATCHES){
+      if (m.jcOnly) continue;
+      const st = String(m.state);
+      if (st !== "0" && !isLive(st)) continue;
+      if (m._liveOdds) continue;
+      const g = kickoffGapMin(m);
+      if (g == null || g > 120 || g < -20) continue;
+      cand.push({ m: m, g: g });
+    }
+    // 优先「还没开赛且最快开赛」的场次；已开赛(g<0)排后面 —— 临场价值才是最大的
+    cand.sort((x,y)=>{
+      const xp = x.g >= 0 ? 0 : 1, yp = y.g >= 0 ? 0 : 1;
+      if (xp !== yp) return xp - yp;
+      return Math.abs(x.g) - Math.abs(y.g);
+    });
+    const pick = cand.slice(0, maxN);
+    let done = 0;
+    for (const it of pick){
+      try{ await analyzeWithLiveOdds(it.m); done++; }
+      catch(e){ try{ console.warn("临场刷新失败 tid=" + it.m.tid, e && e.message); }catch(e2){} }
+    }
+    return done;
+  }catch(e){ try{ console.warn("refreshNearKickoff err:", e && e.message); }catch(e2){} return 0; }
+}
+async function analyzeMatch(m, force){
+  // 快照优先（离线预览 / 直连模式）：用内置烘焙数据本地跑引擎，零/少网络请求
+  // 例外：直连模式 + force + **该场没有快照赔率**（新冒出的场次）→ 才走网络拉最新
+  // （有快照时即便用户手点也先秒出结果：直连下单场拉网要 ~9s 且易被限流，体验是"点了打不开"）
+  /* 实时源可用 + 用户手点(force) → 一律先拉实时盘口（临场赔率才是庄家最新意图），
+     拉不到再自动回退快照（见下方 catch 分支）。旧版即纯实时，故新版不能再"有快照就永不拉网"。 */
+  if (preferSnapshot() && !(liveCapable() && force) && !m.odds){   // 已带实时盘口(列表 c 字段)→ 批量也走实时，不退回过期快照
+    const off = offlineAnalyze(m);
+    if (off){
+      m.analysis = off.a; m.info = off.info; m.odds = null; m.offline = true; m._aErr = null; m._jcOfficial = !!off._jcOfficial;
+      return { a:off.a, info:off.info, pred:null, offline:true };
+    }
+    if (SOURCE.state==='offline') throw new Error('本场无内置快照数据（烘焙时该场暂无赔率）');
+    // 直连模式：批量场景绝不逐场拉网（限速 1.2s + 会触发源站限流），无快照即跳过；
+    // 只有用户主动点开单场（force=true）才走下面的实时拉取
+    throw new Error('本场无内置快照赔率（直连模式不批量拉取，可点开单场单独拉最新）');
+  }
+  const ppi = loadPPI(m.tid);
+  // 缓存分支：非强制（用户手点分析第二次 / 只改了占比）时复用已缓存盘口，避免重复拉网
+  // force=true（实时调度器）→ 跳过此分支，强制重拉最新盘口，实现真·实时赔率更新
+  if (!force && m.analysis && m.odds){
+    // 已分析过：用已缓存盘口重算（含最新投注占比 PPI），避免重复拉网
+    const od = m.odds;
+    const agg = aggregate(od.asia, od.eu, m.state==='-1');
+    const aggBs = aggregateBs(od.bs, m.state==='-1');
+    const zy = autoZy(m.tid, m.league, m.home, m.away);
+    let a = analyze(agg, zy, aggBs, ppi, m.tid, m.home, m.away, leagueName(m));
+    /* 自我纠错功能已按用户要求下线（浏览器端纠偏样本永远<10，原逻辑本就是空转） */
+    if (m.info) a = applyInfoPrior(a, m.info, dayMs(m));   // 信息面先验(伤停/状态/排名/交锋)
+    else { const hi = _h2hInfo(m); if (hi){ a = applyInfoPrior(a, hi, dayMs(m)); m.info = hi; } }   // 回退：7m 真实交锋
+    m.analysis = a;
+    if (m.info){ m.info.summary = summarizeInfo(m.info, agg, zy, {model:null, aggBs, a}); }
+    if ((m.state==='0'||isLive(m.state)) && m.pred){ const pick=finalAnswerDir(a); m.pred.dir=pick; m.pred.conf=Math.round(a.conf||0); m.pred.value=Math.round(a.value_score||0); m.pred.signals={flow:a.s_flow,pan:a.s_pan,kb:a.s_pan_kb,he:a.s_he,combined:a.dir,final:pick}; m.pred.gn=a.grade_net; m.pred.gt=a.grade_tier; m.pred.day=m.day||null; recordPrediction(m.pred); }
+    return {a, info:m.info, pred:m.pred};
+  }
+  let od;
+  try{
+    if (m.odds){                       // 列表已带实时盘口(移动端 c 字段)→ 直接复用，零额外网络，批量即实时
+      od = m.odds;
+    } else {
+      /* ★ 硬超时（2026-09-17）：apiJSON 单次虽有 6s 超时，但多源探测 + 重试会叠加成几十秒，
+         用户端表现就是按钮一直转圈。整次拉取封顶 10 秒，超时直接走下面的快照回退分支。 */
+      od = await Promise.race([
+        getOdds(m.tid),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('拉取实时盘口超时（10 秒）')), 10000))
+      ]);
+    }
+    /* 关键：源站对"没有盘口的场次"返回 code=199 + data 空，getOdds 不会抛错，
+       只会给出 {asia:[],eu:[],bs:[]}。若直接拿空盘口进引擎，会算出"势均力敌·无参考"这类
+       看起来像结论的垃圾结果（比"不可分析"更坑）。故在此判空并当失败处理 → 回退快照/明确报错。 */
+    const _n = (x)=> x ? (Array.isArray(x) ? x.length : 0) : 0;
+    if (!(_n(od && od.asia) || _n(od && od.eu) || _n(od && od.bs)))
+      throw new Error('源站该场暂无盘口（未开盘 / 青年队·友谊赛·低级别）');
+  }catch(e){
+    const off = offlineAnalyze(m);
+    if (off){
+      m.odds = null; m.analysis = off.a; m.info = off.info; m.offline = true; m._jcOfficial = !!off._jcOfficial;
+      toast('已用本地缓存分析（离线·非实时）：'+m.home+' vs '+m.away);
+      return { a:off.a, info:off.info, pred:null, offline:true };
+    }
+    throw new Error('本场暂时无法分析：' + (e && e.message ? e.message : '无实时盘口')
+      + '，且本地快照也没有该场赔率（多为未开盘/青年队·友谊赛·低级别赛事）。');
+  }
+  const agg = aggregate(od.asia, od.eu, m.state==='-1');
+  const aggBs = aggregateBs(od.bs, m.state==='-1');
+  const zy = autoZy(m.tid, m.league, m.home, m.away);
+  let a = analyze(agg, zy, aggBs, ppi, m.tid, m.home, m.away, leagueName(m));
+  /* 自我纠错功能已按用户要求下线（浏览器端纠偏样本永远<10，原逻辑本就是空转） */   // 用纠偏模型调校置信
+
+  // 三段融合始终挂载：即便走实时盘口，也把烘焙的早/中/临融合底板叠加到分析结果上，
+  // 保证「早场/中场/临场 综合分析」面板在实时模式下也稳定显示（不再因 force 跳过 offlineAnalyze 而消失）
+  { const _pk = OFFLINE_PACK && OFFLINE_PACK[m.tid];
+    if (_pk && _pk.fused && _pk.fused.agg && _pk.fused.aggBs) a._fused = _pk.fused; }
+  // 无烘焙融合底板（纯直播场次）→ 用当前实时盘口合成单段"临场(实时)"融合，面板不依赖本地烘焙
+  ensureFused(a, m, agg, aggBs);
+
+  let info=null;
+  try{
+    /* 批量且用列表实时盘口：跳过已死的 PC 交锋接口(getAnalysis 走 oddshistorypc，浏览器不可达)，
+       避免每场 10s 超时把批量分析拖垮；信息面(info)仅为增强项，核心盘口已实时。 */
+    const ad = (force && m.odds) ? await getAnalysisCached(m.tid, 300000)
+             : force ? await getAnalysis(m.tid)
+             : null;
+    if (ad && ad.base){
+      if (ad.base.home_team_id) nameCache[ad.base.home_team_id]=ad.base.home_team;
+      if (ad.base.away_team_id) nameCache[ad.base.away_team_id]=ad.base.away_team;
+      persistNameCache();
+      // 运行时自学习：用精确队名反解新的 PUA 码点（源站新增字形时自动补表）
+      const learned = (learnPua(m.homeRaw, ad.base.home_team)||0) + (learnPua(m.awayRaw, ad.base.away_team)||0);
+      if (learned>0) persistPua();
+      const nh=cleanTeamName(m.homeId), na=cleanTeamName(m.awayId);
+      if (nh) m.home=nh; if (na) m.away=na;
+      info = { base:ad.base, matchrank:ad.matchrank, battle:ad.battle, injury:ad.injury };
+      info = _mergeH2h(info, m);              // 补 7m 真实交锋（ad 无 battle 时）
+      a = applyInfoPrior(a, info, dayMs(m));   // 信息面先验：伤停/近期状态/排名/交锋 → 保守置信调整(不改方向)
+      info.summary = summarizeInfo(ad, agg, zy, {model:null, aggBs, a});
+    }
+  }catch(e){}
+  m.odds=od; m.analysis=a; m.info=info;
+  /* 必须清掉"离线·缓存"标记：该场可能先被 offlineBatchAnalyze 用快照算过(offline=true)，
+     此时走了实时盘口就要纠正标记，否则卡片一直挂着"离线·缓存"误导用户（实测发现）。 */
+  m.offline=false; m._liveOdds=true; m._aErr=null;
+
+  // 记录/更新预测（未开/进行中皆记录，含观望场 dir='—'）——保证每场都入档→可复盘；实时分析每轮刷新
+  let pred = m.pred || null;
+    if (m.state==='0' || isLive(m.state)){
+    const pick = finalAnswerDir(a);
+    if (!pred){
+      pred = { tid:m.tid, league:m.league, home:m.home, away:m.away, kickoff:m.kickoff,
+               dir:pick, conf:Math.round(a.conf||0), value:Math.round(a.value_score||0),
+               grade:a.grade||null, info_adj:a.info_adj||null, pay_agg:a.pay_agg!=null?a.pay_agg:null, mx:a.mx!=null?a.mx:null,
+               p1x2:{W:a.mk_h||0, D:a.mk_d||0, L:a.mk_a||0},
+               gn:a.grade_net, gt:a.grade_tier, day:m.day||null,
+               deep: !!(deepHcap(a) && deepHcap(a) >= DEEP_HCAP_THR),
+               signals:{flow:a.s_flow, pan:a.s_pan, kb:a.s_pan_kb, he:a.s_he, combined:a.dir}, time:Date.now(), status:'open' };
+      m.pred = pred;
+    } else {
+      pred.dir = pick; pred.conf = Math.round(a.conf||0); pred.value = Math.round(a.value_score||0);
+      pred.grade = a.grade||null; pred.info_adj = a.info_adj||null; pred.pay_agg = a.pay_agg!=null?a.pay_agg:null; pred.mx = a.mx!=null?a.mx:null;
+      pred.p1x2 = {W:a.mk_h||0, D:a.mk_d||0, L:a.mk_a||0};
+      pred.gn = a.grade_net; pred.gt = a.grade_tier; pred.day = m.day||null;
+      pred.deep = !!(deepHcap(a) && deepHcap(a) >= DEEP_HCAP_THR);
+      pred.signals = {flow:a.s_flow, pan:a.s_pan, kb:a.s_pan_kb, he:a.s_he, combined:a.dir};
+    }
+    recordPrediction(pred);
+  }
+  return {a, info, pred};
+}
+/* 本场在烘焙包里是否有"真盘口"：空对象 {asia:[],eu:[],bs:[]} 也是 truthy，
+   必须逐条判空，否则会把"源站未开盘"的场次算出一堆假信号污染汇总统计 */
+function hasPackOdds(tid){
+  const p = OFFLINE_PACK && OFFLINE_PACK[tid];
+  if (!p) return false;
+  if (p._hasOdds) return true;   // ★ 2026-10-08 拆包标记：odds 已拆到 bake_detail，存在即视为有赔率（无需等懒加载）
+  const o = p.odds;
+  if (!o) return false;
+  // 兼容两种存储：① 原始数组 odds.asia=[...] ② 列式压缩 odds.asia={#:[...],r:[...]}
+  const len = (x) => x ? (Array.isArray(x) ? x.length : (x.r ? x.r.length : (x['#'] ? x['#'].length : 0))) : 0;
+  return !!(len(o.asia) || len(o.eu) || len(o.bs));
+}
+/* 是否处于「可现场拉实时盘口」的状态（直连源站 / 公共代理已通）。
+   关键：不要因为"烘焙快照里没有这场"就把按钮判死 —— 列表既然能实时拉到，说明网络是通的，
+   单场 getOdds 一样能拉。旧版（纯实时）就是每场现场拉，所以旧版没有"一堆不可分析"。 */
+function liveCapable(){
+  const s = SOURCE && SOURCE.state;
+  return s === 'direct' || s === 'proxy' || s === 'online';
+}
+/* 是否「可分析」：① 有 gqj2 欧洲盘口包 ② 挂了竞彩官方胜平负/让球赔率 ③ 球探抓到真实盘口 ④ 实时源可用。
+   之前竞彩卡因只有官方赔率、无 gqj2 盘口包，被判「不可分析」→ 100% 不可点（用户核心投诉）。
+   2026-09-16 再修：实时模式下缺快照 ≠ 不可分析，允许点「拉实时→分析」现场取盘口（失败再提示）。
+   ⚠ 2026-09-24 再修（用户反复投诉"球探获取的场次赔率获取不了，没法分析"）：
+     原判据漏了球探(titan007)源。球探独有的场次（gqj2 根本没有这场）一律被判 false，
+     onAnalyze 开头就拦下弹"本场缺赔率快照…无法分析" —— 但实测手动跑引擎**能出结论**
+     （坦桑尼亚U20 vs 苏丹U20 → dir=W conf=65）。即 UI 把能分析的误判成不能分析。 */
+function isAnalyzable(m){
+  if (hasPackOdds(m.tid) || jcHasOdds(m) || t7HasOdds(m)) return true;
+  return liveCapable();
+}
+/* 离线降级分析：file:// 或沙盒预览下无法访问实时接口时，
+   用预埋 OFFLINE_PACK（完整赔率+交锋）本地跑引擎；引擎自动接入 BETFA_DATA 真实占比 */
+function offlineAnalyze(m){
+  /* ★ 2026-10-08 拆包：odds/fused/an明细已挪到 bake_detail。明细加载就绪后先合并回 OFFLINE_PACK，
+     原读取点（pack.odds / pack.fused / pack.analysis 各字段）全部照常工作。初始批量分析入口
+     offlineBatchAnalyze 会在跑前 await _ensureDetail() 并全量合并，故首屏分析不会因拆包而漏算。 */
+  if (window.__BAKE_DETAIL__){
+    if (!_mergeDetail(m.tid)){
+      /* ★ 2026-10-29：窗口外场次的明细在 rest 包（2.98MB）里。
+         ⚠ 首屏批量分析会遍历**全部**场次，若这里直接拉 rest，等于分片白做（又变回 3MB 首屏）。
+         故：本次分析照常用主包跑（首屏标量 KEEP_AN 已足够出档位/方向），
+         rest 只在**浏览器空闲时后台补一次**，补到后后续分析自动更完整。
+         用户手动点开某场走 onAnalyze → _mergeDetailAsync，会当场等 rest，不影响体验。 */
+      try {
+        if (!window.__restScheduled){
+          window.__restScheduled = true;
+          var _rp = function(){ try { _ensureDetailRest(); } catch(e){} };
+          if (window.requestIdleCallback) window.requestIdleCallback(_rp, { timeout: 20000 });
+          else setTimeout(_rp, 8000);
+        }
+      } catch(e){}
+    }
+  }
+  /* ★ 2026-10-02 跨公司分歧（company_div.js 1.58MB 明文）**不再自动拉**。
+     上版本挂在「跑第一次离线分析」时拉，可 init() 的离线批量分析必然跑 → 首屏照样下载这 1.58MB，
+     而它实测命中率 0.0%（engine.js:2601 getCompanyDiv(agg.tid) 传的字段 aggregate() 根本没给，
+     且 company_div.cjs 读的旧 bake pack 键 3xxxxxx 与页面 compact bake 278xxxxx 不通）——
+     拉了只是白解析 1.58MB 死 JSON。
+     复活方式：等 engine 调用点修好后，把 window.__loadCompanyDiv() 挂回这里即可。 */
+  if (hasPackOdds(m.tid)){
+    const pack = OFFLINE_PACK[m.tid];
+    const od = pack.odds;
+    const ppi = loadPPI(m.tid);
+    const zy = autoZy(m.tid, m.league, m.home, m.away);
+    let a, agg, aggBs;
+    // 三段融合优先：用早/中/临盘加权融合出的 agg 直接分析（比单一时点更贴庄家轨迹）
+    if (pack.fused && pack.fused.agg && pack.fused.aggBs){
+      agg = pack.fused.agg; aggBs = pack.fused.aggBs;
+      a = analyze(agg, zy, aggBs, ppi, m.tid, m.home, m.away, leagueName(m));
+      a._fused = pack.fused;                 // 供 panluBlock 展示早/中/临盘融合状态
+    } else {
+      agg = aggregate(od.asia, od.eu, m.state==='-1');
+      aggBs = aggregateBs(od.bs, m.state==='-1');
+      a = analyze(agg, zy, aggBs, ppi, m.tid, m.home, m.away, leagueName(m));
+      ensureFused(a, m, agg, aggBs);          // 无早/中盘历史 → 合成单段"临场(实时)"融合面板
+    }
+    /* 自我纠错功能已按用户要求下线（浏览器端纠偏样本永远<10，原逻辑本就是空转） */
+    let info = null;
+    const ad = pack.analysis;
+    if (ad && ad.base){
+      info = { base:ad.base, matchrank:ad.matchrank, battle:ad.battle, injury:ad.injury };
+      info = _mergeH2h(info, m);              // 补 7m 真实交锋（ad 无 battle 时）
+      a = applyInfoPrior(a, info, dayMs(m));   // 信息面先验：伤停/近期状态/排名/交锋 → 保守置信调整(不改方向)
+      info.summary = summarizeInfo(ad, agg, zy, {model:null, aggBs, a});
+      const nh = cleanTeamName(m.homeId), na = cleanTeamName(m.awayId);
+      if (nh) m.home = nh; if (na) m.away = na;
+    }
+    return { a, info };
+  }
+  // 竞彩官方赔率兜底：gqj2 盘口包缺失时，用官方胜平负直接进引擎（修复「竞彩卡100%缺赔率·不可分析」）
+  const jc = jcOf(m);
+  const jagg = jc ? buildJcAgg(jc) : null;
+  if (jagg){
+    const zy = autoZy(m.tid, m.league, m.home, m.away);
+    let a = analyze(jagg, zy, null, null, m.tid, m.home, m.away, leagueName(m));
+    /* 自我纠错功能已按用户要求下线（浏览器端纠偏样本永远<10，原逻辑本就是空转） */
+    a._jcOfficial = true;   // 标记：分析基于竞彩官方赔率（非 gqj2 欧洲盘），展示时注明来源
+    ensureFused(a, m, jagg, null);
+    return { a, info:null, _jcOfficial:true };
+  }
+  /* ③ 球探(titan007) vip 盘口兜底（2026-09-24 新建，治用户核心投诉「球探场没法分析」）：
+        球探独有一千余场 + 双源互补场次此前唯一的下场就是 return null → 卡片判定「不可分析」。
+        现在用 vip 亚盘/大小球反解出的 agg 直接进引擎，出真正的方向/盘路/比分结论。 */
+  const t7g = t7Agg(m, m.state === '-1');
+  if (t7g){
+    const zy = autoZy(m.tid, m.league, m.home, m.away);
+    let a = analyze(t7g.agg, zy, t7g.aggBs, loadPPI(m.tid), m.tid, m.home, m.away, leagueName(m));
+    a._t7vip = true;                       // 标记来源，卡片明示「球探vip·反解」
+    a._t7Co = (m.t7 && m.t7.asia && m.t7.asia.companies) || 0;
+    ensureFused(a, m, t7g.agg, t7g.aggBs);
+    return { a, info:null, _t7vip:true };
+  }
+  return null;
+}
+/* 是否处于"离线快照模式"：无实时数据源，但有内置烘焙数据 */
+function isOfflineMode(){ return SOURCE.state === 'offline' && BAKE_READY; }
+/* 快照优先：离线 / 直连模式下，默认用内置烘焙数据秒出全量分析。
+   原因：直连源站受频率限制（≥1.2s/请求），463 场赔率全量拉要 9 分钟，不现实；
+   因此直连模式 = "列表/比分/状态实时 + 赔率分析用快照"，用户点开单场时才拉实时赔率。 */
+function preferSnapshot(){ return BAKE_READY && (SOURCE.state==='offline' || SOURCE.state==='direct'); }
+/* 离线全量分析：本地引擎、零网络 → 一次性把"有赔率的比赛"全部算完
+   （用 30ms 切片 + 分批 render，避免手机上长时间白屏/卡顿）
+   ★ 2026-09-17 优化：未开赛(state 0)且开赛最近的场次优先分析（用户正要看的），
+     首屏限量 FRONT_CAP 场，其余后台续算——避免"快照分析特别慢"整页干等。 */
+let _obaRunning = false;                   // 防重入：60s 定时刷新会反复触发
+let _obaPending = false;                   // 批量被锁占用时记下"还有场要补算"，当前批结束自动续跑
+let _obaRest = null;                       // 后台续算的剩余队列
+let _obaLastRender = 0;                    // 快照分析过程重渲染节流时间戳
+function _obaThrottledRender(){            // 每 ~350ms 才就地刷新一次已渲染卡，消除"每 30ms 分块就整页重渲染"的抖动
+  const now = Date.now();
+  if (now - _obaLastRender >= 350){ _obaLastRender = now; try{ refreshRendered(); }catch(e){} }
+}
+async function offlineBatchAnalyze(){
+  if (!BAKE_READY) return;
+  if (_obaRunning){ _obaPending = true; return; }   // 防重入：但记下待补算，当前批结束自动续跑（修复竞彩注入场被首轮漏算）
+  _obaRunning = true;
+  /* ★ 2026-10-08 拆包：首屏已把 odds/fused/an明细挪到 bake_detail。初始批量分析必须在分析前把明细
+     合并回 OFFLINE_PACK，否则 offlineAnalyze 读不到 odds → 全站分析恒为 null。这里一次性拉取并合并，
+     之后 450 场首屏 + 后台补算都能直接走快照分析（页面已先渲染卡片，仅分析结论在明细到达后填充）。 */
+  try { await _ensureDetail(); var _dm = window.__BAKE_DETAIL__ || {}; for (var _t in _dm) _mergeDetail(_t); }
+  catch(e){ console.warn('[detail] 合并失败，快照分析可能缺 odds:', e && e.message); }
+  try { await _ensureStats(); } catch(e){}
+  /* 看门狗（2026-09-19 修复死锁）：旧版 step/continueRest 一旦在某步抛未捕获异常，
+     链就断了、_obaRunning 永远停在 true → 之后每次刷新都 if(_obaRunning) return 直接退出，
+     全站只剩首批 ~106 场被分析、其余再也不算（用户侧"一堆分析不了"主因之一）。
+     现用 try/finally 保证每步出错也继续排下一轮，并加 45s 强制解锁兜底。 */
+  const _wd = setTimeout(() => { try{ finish(); }catch(e){} }, 45000);   // 看门狗：45s 强制解锁并续跑待补算
+  const finish = () => {
+    try{ clearTimeout(_wd); }catch(e){}
+    _obaRunning = false;
+    // 完场预测快照写完后立即比对实际比分（幂等）：把刚分析的完场自动纳入复盘统计
+    try{ resolvePredictions(); }catch(e){ console.warn('复盘比对失败:', e && e.message); }
+    // 批量分析收尾：刷新盘口档位栏（按 理论/实际 净变化 分档计数）——否则栏内各档计数停在早期空值
+    try{ renderGradeBar(); }catch(e){ console.warn('renderGradeBar 收尾失败:', e && e.message); }
+    if (_obaPending){ _obaPending = false; setTimeout(() => { try{ offlineBatchAnalyze(); }catch(e){} }, 60); }
+  };
+  // 完场也纳入：烘焙已为完场抓赔率，赛后仍需复盘（原先 filter 掉完场，导致完场后"没数据"）
+  // 覆盖三类可分析场次：① gqj2 盘口包 ② 竞彩官方赔率(只有 had/hhad，无 gqj2 包) ③ 列表已带实时盘口(m.odds)
+  // 旧版只认 ① → 竞彩场被整批排除，必须点开单场才分析（用户侧"一堆分析不了"主因之二）。
+  const todo = MATCHES.filter(m => !m.analysis && (hasPackOdds(m.tid) || jcHasOdds(m) || m.odds || t7HasOdds(m)));
+  // 优先级：未开赛(state 0) > 其他；同档按开赛时间升序（最近的先算，先看到结论）
+  const ksec = m => { const k = (m.kickoff||'').replace(/[^0-9]/g,''); return k ? +k : 9e15; };
+  todo.sort((a,b) => ((a.state==='0'?0:1) - (b.state==='0'?0:1)) || (ksec(a)-ksec(b)));
+  const FRONT_CAP = 450;                    // 首屏先算这些（约等于一屏可见量），其余后台补
+  const front = todo.slice(0, FRONT_CAP);
+  _obaRest = todo.slice(FRONT_CAP);
+  const total = todo.length;
+  if (!total){ finish(); return; }
+  const skipped = MATCHES.length - total;  // 无任何赔率的场次（多为未开盘/青年队）→ 诚实标注
+  let i = 0;
+  const analyzeOne = (m) => {
+    const off = offlineAnalyze(m);          // ① 盘口包 / ② 竞彩官方赔率回退
+    if (off){ m.analysis = off.a; m.info = off.info; m.offline = true; m._jcOfficial = !!off._jcOfficial; }
+    // ③ 列表已带实时盘口(m.odds，移动端 c 字段)→ 直接进引擎（零网络，批量即实时）
+    else if (m.odds){
+      try{
+        const agg = aggregate(m.odds.asia, m.odds.eu, m.state==='-1');
+        const aggBs = aggregateBs(m.odds.bs, m.state==='-1');
+        const zy = autoZy(m.tid, m.league, m.home, m.away);
+        let a = analyze(agg, zy, aggBs, loadPPI(m.tid), m.tid, m.home, m.away, leagueName(m));
+        /* 自我纠错功能已按用户要求下线（浏览器端纠偏样本永远<10，原逻辑本就是空转） */
+        ensureFused(a, m, agg, aggBs);        // 直播场次也挂三段融合面板（轻量直连）
+        m.analysis = a; m.offline = false; m._liveOdds = true; m._aErr = null;
+      }catch(e){ m._aErr = '实时盘口分析失败: ' + e.message; }
+    }
+    // ★ 完场自动复盘补全：烘焙已为完场抓赔率（含初/中/临三段），赛后必须也把模型预测快照固化进 predLog，
+    //   否则只有用户在赛前/进行中打开看板分析过的场能复盘，赛前没看的完场永远进不了 predLog（“自动复盘”名不副实）。
+    //   offlineBatchAnalyze 在 applyFallback（离线）与 loadMatches（实时）后都会跑 → 离线+实时两条路径全覆盖。
+    //   m._predDone 防重复写入（recordPrediction 本身按 tid 去重，这里是额外保险，避免反复重建对象）。
+    if (m.state==='-1' && m.analysis && !m._predDone){
+      try{
+        const a = m.analysis;
+        const pick = finalAnswerDir(a);
+        const pred = m.pred || { tid:m.tid, league:m.league, home:m.home, away:m.away, kickoff:m.kickoff, time:Date.now() };
+        pred.dir = pick; pred.conf = Math.round(a.conf||0); pred.value = Math.round(a.value_score||0);
+        pred.grade = a.grade||null; pred.p1x2 = {W:a.mk_h||0, D:a.mk_d||0, L:a.mk_a||0};
+        pred.gn = a.grade_net; pred.gt = a.grade_tier; pred.day = m.day||null;
+        pred.deep = !!(deepHcap(a) && deepHcap(a) >= DEEP_HCAP_THR);
+        pred.signals = {flow:a.s_flow, pan:a.s_pan, kb:a.s_pan_kb, he:a.s_he, combined:a.dir};
+        pred.status = 'open';
+        m.pred = pred; m._predDone = true;
+        recordPrediction(pred);
+      }catch(e){ console.warn('完场 pred 写入失败:', e && e.message); }
+    }
+  };
+  const step = () => {
+    try{
+      const t0 = Date.now();
+      while (i < front.length && Date.now() - t0 < 30){
+        const m = front[i++];
+        try{ analyzeOne(m); }
+        catch(e){ m._aErr = '离线分析失败: ' + e.message; }
+      }
+      const done = MATCHES.filter(m=>m.analysis).length;
+      const restN = (_obaRest ? _obaRest.length : 0);
+      $('upd').textContent = (i < front.length)
+        ? `${_baseUpd?_baseUpd+' · ':''}快照分析 ${i}/${front.length}（首屏）…`
+        : (restN ? `${_baseUpd?_baseUpd+' · ':''}首屏分析完成，后台补算 ${restN} 场…`
+                 : `${_baseUpd?_baseUpd+' · ':''}快照分析完成，共 ${MATCHES.length} 场 / 已分析 ${done} 场${skipped?`（${skipped} 场无赔率·未开盘）`:''}`);
+      _obaThrottledRender();
+    } finally {
+      if (i < front.length) setTimeout(step, 0);
+      else if (_obaRest && _obaRest.length){
+        // 首屏算完 → 让 UI 喘口气，再后台补算剩余场次
+        setTimeout(continueRest, 1500);
+      } else { finish(); toast(`快照分析已就绪：${MATCHES.filter(m=>m.analysis).length} 场完成${skipped?`（${skipped} 场无赔率·未开盘）`:''}`); }
+    }
+  };
+  function continueRest(){
+    try{
+      const t0 = Date.now();
+      let j = 0;
+      while (j < _obaRest.length && Date.now() - t0 < 30){
+        const m = _obaRest[j++];
+        if (m.analysis) continue;
+        try{ analyzeOne(m); }
+        catch(e){ m._aErr = '离线分析失败: ' + e.message; }
+      }
+      _obaRest = _obaRest.slice(j);
+      const done = MATCHES.filter(m=>m.analysis).length;
+      $('upd').textContent = `${_baseUpd?_baseUpd+' · ':''}后台补算中…剩余 ${_obaRest.length} 场 / 已分析 ${done} 场`;
+      _obaThrottledRender();
+    } finally {
+      if (_obaRest.length) setTimeout(continueRest, 0);
+      else { finish(); toast(`快照分析已就绪：共 ${MATCHES.filter(m=>m.analysis).length} 场完成`); }
+    }
+  }
+  step();
+}
+/* 进入离线快照模式：装配烘焙数据 → 建列表 → 本地跑全量分析 */
+async function enterOfflineMode(){
+  if (!(await applyFallback())) return false;
+  try{ renderSummary(); }catch(e){}
+  // 快照全量分析已在 applyFallback 内触发（离线/直连都秒出结论，不再要求用户手点）
+  return true;
+}
+/* 投注占比（来自澳客/必发截图）：主/平/客，0-100，存为小数(0-1)供真 PPI=占比×赔率 */
+function loadPPI(tid){
+  try{ const p=JSON.parse(localStorage.getItem('ppi_'+tid)||'{}');
+    if (p.W==null && p.D==null && p.L==null) return null;
+    const toPct=v=> v==null?null:(v>1?v/100:v);   // 兼容百分号直接输入
+    return { W:toPct(p.W), D:toPct(p.D), L:toPct(p.L) };
+  }catch(e){ return null; }
+}
+function savePPI(tid){
+  const w=$('ppiw'+tid).value, d=$('ppid'+tid).value, l=$('ppil'+tid).value;
+  const o={ W: w===''?'':Number(w), D: d===''?'':Number(d), L: l===''?'':Number(l) };
+  if ((o.W==='' && o.D==='' && o.L==='') || (Number(o.W||0)+Number(o.D||0)+Number(o.L||0))>100.5){
+    toast('投注占比需填主/平/客，且合计≤100'); return;
+  }
+  localStorage.setItem('ppi_'+tid, JSON.stringify(o));
+  $('ppis'+tid).textContent=`已存:主${o.W}/平${o.D}/客${o.L}`;
+  toast('投注占比已存，点“刷新分析”算真 PPI');
+}
+
+/* 解析单行的 主/平/客 占比（兼容 标签/无标签/%/小数 多种写法），返回小数(0-1)或 null
+   关键：澳客格式「主胜 99186 … 70.50%」中 主 紧跟的是成交量，必须取「标签之后第一个 %」才算必发比例，不能取标签后第一个数字。 */
+function parsePctLine(line){
+  const num = s=>+s>1 ? +s/100 : +s;          // >1 视为百分号
+  // 收集所有带 % 的数（记录位置，用于标签定位）
+  const pctAll = [];
+  let pm; const pre = /(\d+(?:\.\d+)?)\s*%/g;
+  while ((pm = pre.exec(line))) pctAll.push({ v:num(pm[1]), pos:pm.index });
+  const findAfter = (label)=>{
+    const i = line.indexOf(label);
+    if (i<0) return null;
+    const sub = pctAll.filter(p=>p.pos>i);
+    return sub.length ? sub[0].v : null;       // 标签后第一个 % = 该选项必发比例
+  };
+  // 1) 标签式（按位置取各标签后第一个 %）—— 正确区分 必发比例 vs 99家平均
+  const w = findAfter('主'), d = findAfter('平'), l = findAfter('客');
+  if (w!=null && d!=null && l!=null) return { W:w, D:d, L:l };
+  // 2) 仅 % 数（无标签）：取前三个
+  if (pctAll.length>=3) return { W:pctAll[0].v, D:pctAll[1].v, L:pctAll[2].v };
+  // 3) 小数式：0.xx 三个（仅取 ≤1 的真小数，避免把 70.5 的 ".5" 误当 0.5）
+  const dec = (line.match(/\b\d+\.\d+\b/g)||[]).map(Number).filter(v=>v>0 && v<=1);
+  if (dec.length>=3) return { W:dec[0], D:dec[1], L:dec[2] };
+  // 4) 兜底：任意三个 0-100 的数
+  const any = (line.match(/\d+(?:\.\d+)?/g)||[]).map(Number).filter(v=>v>0 && v<=100);
+  if (any.length>=3) return { W:num(any[0]), D:num(any[1]), L:num(any[2]) };
+  return null;
+}
+/* 批量导入：按队名匹配当前比赛，写入真 PPI（投注占比），并重算已分析场 */
+async function applyBatchPPI(){
+  const txt = $('ppiBatch').value || '';
+  const lines = txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if (!lines.length){ $('ppiMsg').textContent='请先粘贴数据'; return; }
+  let matched=0; const unmatched=[];
+  for (const m of matches){
+    const hn = (m.home||'').trim(), an = (m.away||'').trim();
+    if (!hn || !an) continue;
+    // 优先：同一行含两队名；其次：含主队名 或 含客队名
+    const line = lines.find(l=>l.includes(hn) && l.includes(an))
+              || lines.find(l=>l.includes(hn))
+              || lines.find(l=>l.includes(an));
+    if (!line) continue;
+    const p = parsePctLine(line);
+    if (!p){ unmatched.push(line); continue; }
+    localStorage.setItem('ppi_'+m.tid, JSON.stringify({W:p.W, D:p.D, L:p.L}));
+    matched++;
+    if (m.odds) await analyzeMatch(m);   // 已分析过→用真实占比重算
+  }
+  render();
+  $('ppiMsg').textContent = `已匹配 ${matched} 场并应用真 PPI` + (unmatched.length?`，${unmatched.length} 行未解析`:'');
+  if (unmatched.length) console.log('批量占比未解析行:', unmatched);
+  toast(`批量占比：匹配 ${matched} 场`);
+}
+function openPpi(){ $('ppiModal').style.display='flex'; }
+function closePpi(){ $('ppiModal').style.display='none'; }
+
+/* ---------- 自我纠正 ---------- */
+function recordPrediction(pred){
+  const i = predLog.findIndex(p=>p.tid===pred.tid);
+  if (i>=0){ predLog[i]=Object.assign(predLog[i], pred); } else { predLog.push(pred); }
+  try{ localStorage.setItem(PRED_KEY, JSON.stringify(predLog)); }catch(e){}
+}
+function resolvePredictions(){
+  let changed=false;
+  for (const p of predLog){
+    if (p.status==='done') continue;
+    let hs=null, as=null;
+    const m = MATCHES.find(x=>String(x.tid)===String(p.tid));
+    if (m && String(m.state)==='-1' && m.home_score!=null && m.away_score!=null){ hs=m.home_score; as=m.away_score; }
+    else if (FIN_MAP[p.tid]){ hs=FIN_MAP[p.tid].hs; as=FIN_MAP[p.tid].as; }   // 当前视图不含该完场时，从持久化映射找回
+    if (hs==null || as==null) continue;
+    const actual = actualDir(hs, as);
+    if (!actual) continue;
+    if (p.dir==='—'){ p.status='done'; p.actual=actual; p.hit=null; changed=true; continue; } // 观望场：标记完成，不计入命中率
+    const hit = (p.dir===actual);
+    p.status='done'; p.actual=actual; p.hit=hit; p.score=`${hs}:${as}`;
+    changed=true;
+  }
+  if (changed){
+    try{ localStorage.setItem(PRED_KEY, JSON.stringify(predLog)); }catch(e){}
+    const doneReal = predLog.filter(p=>p.status==='done' && p.hit!=null);
+    const hits = doneReal.filter(p=>p.hit).length;
+    const r = doneReal.length ? Math.round(hits/doneReal.length*100) : 0;
+    // ★ 2026-10-09 T1 真实命中接复盘：按「让球深盘 / 浅盘」分组命中率，
+    //   验证 8449 场真值校准的「让球深=热门实」在当前实盘是否兑现（让球深盘命中应显著高于浅盘）。
+    const deepG = doneReal.filter(p=>p.deep);
+    const shallowG = doneReal.filter(p=>!p.deep && p.grade!=null);
+    const rateOf=(arr)=> arr.length ? Math.round(arr.filter(x=>x.hit).length/arr.length*100)+'%' : '—';
+    window._REVIEW_GROUPS = {
+      all:{ n:doneReal.length, rate:rateOf(doneReal) },
+      deep:{ n:deepG.length, rate:rateOf(deepG) },          // 让球深盘(热门方向)
+      shallow:{ n:shallowG.length, rate:rateOf(shallowG) },  // 浅盘/非深盘
+    };
+    const _g = window._REVIEW_GROUPS;
+    toast(`已复盘 ${doneReal.length} 场，综合命中率 ${r}% ｜ 让球深盘 ${_g.deep.n}场${_g.deep.rate} · 浅盘 ${_g.shallow.n}场${_g.shallow.rate}`);
+  }
+}
+/* ---------- 完场自动复盘视图（2026-09-23 新增）----------
+   独立于「自我纠错」弹窗：专注展示所有已完赛场次的「预测 vs 实际」对照 + 分层命中率。
+   数据来自 predLog（含赛前没手动打开看板的完场——offlineBatchAnalyze 已补全快照）。
+   打开时先幂等跑一次 resolvePredictions() 确保最新完场已比对。 */
+function closeReview(){ $('reviewModal').classList.remove('show'); }
+/* ★ 2026-10-25：结构下盘·现算函数（兼容旧烘焙 an：旧 an 无 structDown 字段，故现算）。
+   模块级，供 triFlowHTML(_asiaJudge) 与 tierBadgeCardSoft 共用。
+   标定窗口 pan_gap∈[-0.4,-0.13) 且引擎判下盘/观望 + 提质门禁(欧赔分歧≥0.2 或 浅盘|h|<0.5)。CVM权威2649完场真实回溯：
+   实际盘比欧赔预期浅 0.13~0.4 盘 → 下盘(受让)易兑现，命中 66.3% / ROI +31.6% / 95%CI[22.7,40.5] 显著。
+   独立样本池、独立于破绽反买框架、不碰 t1 终局门 0.72。返回常量对象供展示/下注推荐复用。 */
+function _structDown(a){
+  if (!a || a.pan_gap == null || !isFinite(+a.pan_gap)) return null;
+  const g = +a.pan_gap;
+  // 窗口 + 盘口方向；但排除「模型挺让球方(dirCode=W)」与「t1 终局门已触发(tier=1)」两段反向必死（回测 44%/28% 命中）
+  // ★ 2026-11-02 提质：窗口下限收到 -0.4，并叠加 提质门禁(欧赔分歧≥0.2 或 浅盘|h|<0.5)，与优选精选列表同源
+  if (!(g >= -0.4 && g < -0.13 && _sdQualityGate(a))) return null;
+  const _dc = (a.dirCode || '—');
+  const _t1 = (a.tier != null ? a.tier : (a.grade_tier != null ? a.grade_tier : ''));
+  if (_dc === 'W' || String(_t1) === '1') return null;
+  if (a.pan_predict === '下盘' || a.pan_predict === '观望') {
+    // ★ 2026-11-02 临场重判：据盘中 dp/dh 加"临场确认/维持/待确认"档，标定值随档位说明
+    const lj = sdLiveRejudge(a);
+    return { hit:66.3, roi:31.6, n:484, ciLo:22.7, ciHi:40.5, frac:0.25, lo:-0.4, hi:-0.13,
+      verdict: lj.verdict || 'pending', tag: lj.tag || '临场待确认', color: lj.color || '#94a3b8',
+      reason: lj.reason || '', dp: lj.dp, dh: lj.dh };
+  }
+  return null;
+}
+function closeHeat(){ const m=document.getElementById('heatModal'); if(m) m.classList.remove('show'); _htStopDrainIfAlone(); }
+/* ---------- 洋哥式热度榜（2026-09-24 新增）----------
+   照《洋哥自传》核心：盘赔=庄家对投注分布的提前预测；"大热必死"必须量化。
+   本榜用真实资金热度（北单赔率池真值 → PPI 代理 → 欧赔隐含）对所有可投注场排名，
+   标注「大热必死/与庄共舞/正常盘」判定，并对已完场给出「站对面」调用是否命中。
+   直接回应"为什么别人网站能显示热度最大=中国VS阿联酋 结果命中"——本榜顶部即最热场次。 */
+/* ---------- 卡片上的 t0/t1/t2 档位徽章（2026-10-01 加）----------
+   原先只有 tier===1/2 才在综合行打印「可下注/参考」pill，tier0（观望·弃注）什么都不打 →
+   卡片上出现信息黑洞：用户根本不知道这场被判到了哪一档，也搜不到 t0。
+   现在三档一律显式打印编号 + 口径，鼠标悬停给出 ROI 实测（t1 +22.15% / t2 −30.64% / t0 不下注）。 */
+function tierBadgeCard(a){
+  const t = a && a.tier;
+  if (t == null) return '';                       // 未分析（无 agg）→ 不打，避免噪声
+  if (t === 1) return `<span class="badge bT1" title="tier1 · 可出手（下注级）：与市场临场 fav 同向、所选方向市判概率 _pPick≥0.72、且非盘口逆势。本层口径是「单选对撞」（引擎给的唯一方向＝实际赛果）。二十八修（真实初盘，2026-10-08）全量重跑实测：6656 场里引擎肯给方向（W/L）的 761 场 → t1 <b>298 场 / 89.9%</b>（逐日 73%~100%、均值 91.2%，跨 18 天稳定同向，非单日撑起）。构成 = {_pPick≥0.72} ∩ {非盘口逆势} ∩ {有方向}，剔除部分全部落 t2；其中 88 场 mk<0.80 是必发/澳客资金通道提级的强信号场（仍属高命中池）。⚠ 上方「历史演进」栏（0.70门88.1% / 0.80门95.2% / 七修96.1% / 二十二修97.0%等）全部建立在「初盘=临盘」污染口径上（2026-10-08 前），属假象，待真实初盘下重基线。真实初盘下 0.72 门 = <b>89.9%(n=298)</b>。别拿档位面板上方「三档历史战绩横评」的数来比——横评统计的是「赛果落进 Top5 候选」，是另一套指标，两个数不同源。唯一能押钱的一层。">t1 可出手</span>`;
+  if (t === 2) return `<span class="badge bT2" title="tier2 · 只参考不下注：与 t1 同源、只给方向。⚠ 本层内部在修正引擎下结构已变（2026-10-06 拆的「两批」不再成立）：①「t1 剔除档」——_pPick≥0.72 但盘口逆势（临场往 fav 反方向调）的场，59 场实测 <b>91.5%</b>，质量接近 t1、只是略逊，看好可小注；②旧「温吞盘」（_pPick 0.72~0.80 非逆势）在修正引擎下已<b>归零</b>——这些场或被资金通道提进 t1、或落 t0，不再独立成批。合计 63 场 90.5%。ROI 硬检验待补（fund_log 不含赔率快照，硬算即造假）。">t2 参考</span>`;
+  return `<span class="badge bG" title="tier0 · 观望不下注（引擎无结论 / 与市场 fav 反向 / 平局观察 / 浅盘诱上被撤回）。不计入命中分母，也不下注——2026-10-01 起市场共识闸门把反向自研信号全部压到这一档。">t0 观望</span>`;
+}
+/* ★ 2026-10-25：tier 软信号微调层（不触终局门 0.72）。
+   现算（_structDown，与 _asiaJudge 的 _edgeNote 同源）：pan_gap∈[-0.4,-0.13) 且引擎判下盘/观望 + 提质门禁 → 结构下盘。
+   该窗口 CVM权威2649完场真实回溯：命中 66.3% / ROI +31.6% / 95%CI[22.7,40.5] 显著。
+   仅作附加徽章贴在档位徽章旁（绿框·可下注级软信号）；tier 值(1/2/0)、conf、dir_、终局门(0.72)、stakePlan 一律不变。
+   ⚠ 现算而非读 an.structDown：看板读的是已烘焙 an，旧烘焙无该字段；pan_gap/pan_predict 已在烘焙 an 内。 */
+function tierBadgeCardSoft(a){
+  const base = tierBadgeCard(a);
+  if (!base) return '';
+  const sd = _structDown(a);
+  if (!sd) return base;
+  /* ★ 2026-11-02 临场重判角标：据盘中 dp/dh 区分「临场确认(强) / 临场维持(平) / 临场待确认(数据未齐)」。
+     数据支撑见 sdLiveRejudge 注释：有实质变动(留出 75.7%/+50.4%) > 无变动(61.5%/+19.5%) > 基线(68.5%/+33.8%)，
+     所有方向桶均正 → 只做"确认/维持"两档，不做"撤"（撤会误杀好单）。 */
+  const _vt = sd.verdict === 'strong'
+    ? '<span style="display:inline-block;margin-left:2px;padding:1px 5px;border-radius:6px;font-size:10px;background:#0f3a22;border:1px solid #2faa6a;color:#5fd49a" title="临场重判·强确认：盘口/水位实质变动(｜dp｜='+(sd.dp!=null?Math.abs(sd.dp).toFixed(2):'—')+' ｜dh｜='+(sd.dh!=null?Math.abs(sd.dh).toFixed(2):'—')+')，市场在参与 → 结构下盘更易兑现(CVM留出 75.7%/+50.4%, n=111)。'+esc(sd.reason||'')+'">🟢临场确认</span>'
+    : (sd.verdict === 'normal'
+        ? '<span style="display:inline-block;margin-left:2px;padding:1px 5px;border-radius:6px;font-size:10px;background:#1e2a3a;border:1px solid #64748b;color:#94a3b8" title="临场重判·维持：盘路无实质变动(｜dp｜<0.05 且 ｜dh｜<0.05)，市场无参与 → 维持基线判定(CVM留出 61.5%/+19.5%, n=123，仍正)。'+esc(sd.reason||'')+'">⚪临场维持</span>'
+        : '<span style="display:inline-block;margin-left:2px;padding:1px 5px;border-radius:6px;font-size:10px;background:#1e2a3a;border:1px solid #64748b;color:#94a3b8" title="临场重判·待确认：盘路数据未齐(缺初盘/临场帧)，先维持基础判定，待数据到位自动升级。'+esc(sd.reason||'')+'">⏳临场待确认</span>');
+  return base + '<span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:6px;font-size:11px;background:#10241a;border:1px solid #2faa6a;color:#5fd49a" title="结构下盘（可下注级软信号·提质）：pan_gap∈[-0.4,-0.13) 且引擎判下盘/观望 + 提质门禁(欧赔分歧≥0.2 或 浅盘|h|<0.5)，实际盘比欧赔预期浅 → 下盘(受让)易兑现。标定命中 '+sd.hit+'% / ROI +'+sd.roi+'% / 95%CI['+sd.ciLo+','+sd.ciHi+']（n='+sd.n+'·显著）。独立样本池·不参与 tier 终局门(0.72)/stakePlan 下注判定，但可进精选优选「结构下盘」子表。">🟢结构下盘 +'+sd.roi+'%·可下注</span>' + _vt;
+}
+/* 2026-10-04：势均力敌诚实降格（★ 只改展示层，不动引擎 conf 门限——门限都已验证过）
+   起因：retro_full 5042 场回测发现 draw_prob∈[0.25,0.32) 这一段是**全库最大的虚高区**。
+   共 1768 场（占可下注池近半）全被判成 t1/t2，可实测方向命中只有 44.5%，
+   比全库 t1/t2 基准 54.4% 低 10pp；其中 conf≥66 的 903 场也只有 49.3%（全库同 conf 档 54.6%）。
+   这一段本质是"三选一接近均势"：该段最佳单挑（多数时候是市场 fav）仅 ~36~41%，
+   模型 44.5% 只是略优于最佳单挑 ⇒ 没有可下注的额外 alpha。
+   模型在低平局段（draw_prob<0.25，n=2099）才有真 alpha：命中 62.6%。
+   所以这一段不能跟低平局段共用"可出手"的说服力 → 如实打标，别让用户当高置信重仓。 */
+function midCallBadge(a, m){
+  /* 口径对齐引擎闸门：a.evenlyMatched = 市场临场隐含平局率 mk_d≥0.26（engine.js 势均力敌观望闸）。
+     这一段 5042 场回测里是**全库最大的虚高区**：模型命中 41.1%，而该段最佳单挑上限仅 40.0%
+     ⇒ alpha +1.1pp，没有任何可下注的信息；实测命中率随 mk_d 单调塌陷
+     （<0.20→74.2%｜.20~.22→64.4%｜.22~.24→57.5%｜.24~.26→53.4%｜.26~.28→46.4%｜.28~.30→40.0%｜≥.30→37.1%，每桶 n≥210）。
+     因此引擎已把整段降到 t0 观望：剩余下注池 n=2448 命中 62.1%（原 n=3928、54.7%，+7.4pp）。
+     徽章只在"本来可下注、现在被降级"的场上打，让降格可见、别误以为漏了场。 */
+  if (!a || !a.evenlyMatched) return '';
+  const demoted = (a.tier === 0);
+  return '<span class="badge bEQ" title="势均力敌·已降 t0 观望：市场隐含平局率 ' + (drawProb(m)!=null?Math.round(drawProb(m)*100)+'%':'—')
+    + '，该段 5042 场回测最佳单挑上限仅 40.0%、模型 41.1%（alpha +1.1pp，无额外信息），命中率随平局率单调塌陷至 37%。'
+    + (demoted ? '引擎已把这类场降为「观望不下注」，方向仍可看，但别投钱：这样剩余下注池命中率从 54.7% 提到 62.1%。'
+               : '该场走的是其他通道仍留在可下注池，注意它不是这个区间的典型样本。') + '">势均力敌</span>';
+}
+// ★ 2026-10-16（回应"到底是哪一方热"）：统一"热方"口径，使"哪一方热"与"档位(hotIdx)"同源。
+//   必发(澳客)源：热方 = hotSideIdx（澳客官方冷热指数最热方，与 hotIdx 同源 → 驱动档位）；
+//   北单源：热方 = heatSide（北单占比最高方，北单无单独冷热指数）；兜底：hotSideIdx||heatSide。
+function hotSideOf(yg){
+  if (!yg) return null;
+  if (yg.heatSrc === 'betfa' && yg.hotSideIdx) return yg.hotSideIdx;
+  if (yg.heatSrc === 'beidan' && yg.heatSide) return yg.heatSide;
+  return yg.hotSideIdx || yg.heatSide || null;
+}
+  /* 拥挤提示触发后的「动作建议」（结合模型方向 + 引擎价值分 value_score）：
+     21 场真实热源回测已证伪"大热必死"——过热方胜率≈盘口隐含，不机械反买也不追高；
+     故这里只给中性、可执行的提示，绝不自动下注。 */
+  function heatActionHint(side, a){
+    const vs = (a && a.value_score != null) ? Math.round(a.value_score) : null;
+    if (!a || !a.dir || a.dir === '—' || a.dir === 'D') return { t:'无模型方向·勿重仓', vs };
+    if (a.dir === side) return { t:(vs != null && vs >= 56 ? '模型同向·可小注顺势' : '模型同向·轻仓顺势'), vs };
+    return { t:'拥挤且模型反向·回避', vs };
+  }
+function heatVerdict(yg, a){
+  if (!yg) return { tag:'—', cls:'bG', call:null, callTxt:'' };
+  const tier = heatBucket(yg);
+  const side = hotSideOf(yg);                        // ★ 2026-10-16：统一热方（与 hotIdx 同源）
+  const sideTxt = side ? labelWDL(side) : '';
+  const pref = (sideTxt && (tier==='hot'||tier==='mid'||tier==='small'||tier==='normal')) ? (sideTxt+'·') : '';
+  /* 分档判定（不再"每次都是大热"模糊说法）；判定明写"哪一方 + 什么档"。
+     正式过热 = 极端拥挤陷阱档：该方已被买满、赔率无价值，列为【最需警惕·默认反买观察档】。
+     注意：10-17 全量 9 场正式过热，过热方 4 胜 3 平 2 负（赢球率≈赔率隐含概率）——"过热=必输"是误区，故不为无脑反买，
+     而为"数据门控反买"：模型方向与过热方反向→果断反买（即用户要的"过热方赢不了档"）；模型同向→仅轻仓顺势。
+     中热/正常热顺市场热度梯度递减。 */
+  if (tier === 'hot'){
+    if (side === 'D'){
+      const call = (a && a.dir && (a.dir==='W'||a.dir==='L')) ? a.dir : null;
+      return { tag: pref+'正式过热·防平提示', cls:'bW', call, callTxt: call ? ('方向 '+labelWDL(call)) : '防平·不清晰' };
+    }
+    const _ah = heatActionHint(side, a);
+    const _vsTxt = _ah.vs != null ? ('｜价值分' + _ah.vs) : '';
+    const _agree = a && a.dir && a.dir === side;
+    // ★ 五十修（2026-10-18）：正式过热=极端拥挤陷阱档。过热方"赢不了"不是恒真（10-17 全量 9 场过热方 4 胜 3 平 2 负，赢球率≈隐含概率），
+    //   故不为"无脑反买"，而为"默认反买观察档"：模型方向与过热方反向→果断反买；同向→仅轻仓顺势。数据门控，避免系统性反买大热门致亏。
+    const _tag = _agree ? (pref+'正式过热·拥挤·轻仓顺势') : (pref+'正式过热·陷阱·反买');
+    const _cls = _agree ? 'bW' : 'bK';
+    return { tag: _tag, cls:_cls, call:null, callTxt:'过热方('+sideTxt+')'+_ah.t+_vsTxt };
+  }
+  if (tier === 'mid'){   // 中热：偏热·谨慎，顺势不反向
+    return { tag: pref+'中热·偏热谨慎', cls:'bD', call:(a&&a.dir)||null, callTxt:(a&&a.dir)?('方向 '+labelWDL(a.dir)):'—' };
+  }
+  if (tier === 'small'){ // 小热：微热·顺势
+    return { tag: pref+'小热·顺势', cls:'bK', call:(a&&a.dir)||null, callTxt:(a&&a.dir)?('方向 '+labelWDL(a.dir)):'—' };
+  }
+  if (yg.isWater) return { tag:'吃水盘·不分析', cls:'bG', call:null, callTxt:'纯运气·观望' };
+  if (yg.problemPan) return { tag:'问题盘', cls:'bK', call:(a&&a.dir)||null, callTxt:(a&&a.dir)?('方向 '+labelWDL(a.dir)):'—' };
+  /* ★ 2026-10-16e：正常热档内再分「偏冷」（真实资金低于公平胜率）——避免"正常热·超买−16.7pt"自相矛盾。
+     偏冷 = 该方被资金冷落（潜在价值侧），提示关注而非顺势追热。 */
+  if ((yg.heatExcess != null && yg.heatExcess <= -3) || (yg.hotIdx != null && yg.hotIdx < 0))
+    return { tag: pref+'偏冷·价值侧', cls:'bL', call:(a&&a.dir)||null, callTxt:(a&&a.dir)?('方向 '+labelWDL(a.dir)+'·该方被冷落'):'该方被资金冷落' };
+  if (yg.danceDir && yg.danceDir!=='—') return { tag:'与庄共舞', cls:'bH', call:yg.danceDir, callTxt:'站 '+labelWDL(yg.danceDir) };
+  return { tag: pref+'正常热·顺势', cls:'bG', call:(a&&a.dir)||null, callTxt:(a&&a.dir)?('方向 '+labelWDL(a.dir)):'—' };
+}
+function heatBucket(yg){
+  if (!yg) return 'normal';
+  if (yg.heatTier) return yg.heatTier;   // ★ 2026-10-16：以引擎统一资金热度分档为准（正式过热/中热/小热/正常热）
+  // 兜底（旧缓存/无 heatTier 的场）
+  if (yg.isHot){
+    if (yg.heatExcess!=null && yg.heatExcess>=25) return 'hot';      // 正式过热
+    return 'mid';                                                    // 中热
+  }
+  if (yg.heatShare!=null && yg.heatShare>=40) return 'small';         // 小热
+  return 'normal';                                                   // 正常热
+}
+function heatKick(m){
+  const kt = kickTs(m);
+  if (/^\d{12}$/.test(kt||'')){
+    return { day: kt.slice(0,8), time: kt.slice(8,10)+':'+kt.slice(10,12) };
+  }
+  /* ★ 2026-10-09c：开赛时间兜底。仅取 match_time(HH:MM) 在早场/缺字段时恒为 "00:00" 或空，
+     导致清单/破蛋面板「时间」列空白、用户看不到几点开赛。
+     补一路：从 match_time_int（Unix 秒/毫秒均有）反推北京时 HH:MM，确保时间列必有值。 */
+  let time = String(m.match_time||'').slice(0,5);
+  if ((!time || time === '00:00') && (m.match_time_int || m.start_time)){
+    try {
+      let sec = Number(m.match_time_int || m.start_time);
+      if (sec > 1e12) sec = Math.floor(sec / 1000);
+      const d = new Date(sec * 1000 + 8 * 3600e3);
+      const hh = String(d.getUTCHours()).padStart(2, '0');
+      const mm = String(d.getUTCMinutes()).padStart(2, '0');
+      time = hh + ':' + mm;
+    } catch (e) { /* 保留原值 */ }
+  }
+  return { day: String(m._day||''), time };
+}
+/* ★ 2026-10-03 性能：点开面板时**先补算到画面出得来**（限时 ms），剩下的扔后台分批排空、排完自动重渲。
+   原先是「一次性把没分析的场次全跑完再渲染」——2000+ 场逐个 offlineAnalyze，
+   实测 openHtBreak 卡 700~1600ms、openHeat 卡 650ms+，用户体感就是"点了半天没反应"。
+   拆开后：点开 ≤120ms 出画面，补算在后台跑（每批 200ms），跑完自动刷新面板（幂等重渲）。 */
+let _htRest = [];                    // 后台待补算队列（模块级，跨次打开复用）
+let _htAbort = false;                // 面板关闭后中止后台补算，避免主线程被持续占用（"关不掉/卡机"根因）
+/* ★ 2026-10-09 卡死修复②：分析失败的场次若不加标记，会永远留在 needAna 里 ——
+   renderHtBreak 每次重渲都把它重新塞进 _htRest，_htDrain 排空后又重渲本面板，
+   形成 renderHtBreak ↔ _htDrain 的无限乒乓（主线程被 100% 钉住）。
+   这里给失败场次计数，超过 2 次直接拉黑，不再参与补算。 */
+function _htAnalyze(list, ms){
+  const t0 = Date.now(); let i = 0;
+  for (; i < list.length; i++){
+    const m = list[i];
+    if (m._anaTried != null && m._anaTried >= 2) continue;   // 已拉黑
+    try {
+      const off = offlineAnalyze(m);
+      if (off && off.a){ m.analysis = off.a; m._anaTried = 0; }
+      else { m._anaTried = (m._anaTried || 0) + 1; }
+    } catch(e){ m._anaTried = (m._anaTried || 0) + 1; m._aErr = '离线分析失败: ' + (e && e.message); }
+    if (Date.now() - t0 >= ms) break;      // 时间到，剩下的是没跑完的（已分析的会被 filter 跳过）
+  }
+  return list.slice(i);
+}
+function _htDrain(){
+  if (_htAbort || !_htRest || !_htRest.length){ _htRest = []; return; }   // 面板已关 → 立刻停，不再占主线程
+  try {
+    _htRest = _htAnalyze(_htRest, 80);          // 单次占用 200ms→80ms，显著降低卡顿感
+    if (_htRest.length) setTimeout(_htDrain, 120); // 间隔 30→120ms，给主线程喘息、保证交互可响应
+    else {
+      _htRest = [];
+      /* 后台补算跑完：只重渲「当前还开着」的分析面板，绝不再把**已关闭**的面板顶回来。 */
+      if (_htBreakShown()) renderHtBreak();
+      else if (document.getElementById('heatModal') && document.getElementById('heatModal').classList.contains('show')) openHeat();
+      else { _htAbort = true; }   // 两个分析面板都关了 → 确认补算彻底停
+    }
+  } catch(e){ _htRest = []; }
+}
+/* 半破 / 热力图 共用同一 _htRest/_htDrain 后台补算队列。
+   关闭任一面板时，仅当两个面板**都**已关闭才真正中止补算，避免误杀另一个还开着的面板。
+   调用方须先 remove('show')，本函数只看「剩余还开着」的状态。 */
+function _htStopDrainIfAlone(){
+  try{
+    const hb=document.getElementById('htBreakModal');
+    const hm=document.getElementById('heatModal');
+    const hbOpen = hb && hb.classList.contains('show');
+    const hmOpen = hm && hm.classList.contains('show');
+    if (!hbOpen && !hmOpen){ _htAbort = true; _htRest = []; }
+  }catch(e){}
+}
+function buildBetList(){
+  /* 合成"今日可下注清单"：把三条有真值校准 edge 的信号（让球深盘·热门实 / 热度双确认 / 破蛋强档）
+     聚合成一张按 edge 排序的当日清单，并给建议仓位。
+     数据源：OFFLINE_PACK[tid].an（点开时已 merge），heatSignal/breakGoal/grade_hcap_a/dirCode。 */
+  const out = [];
+  const today = panelDay();
+  for (const m of MATCHES){
+    const tid = m.tid;
+    const p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[tid] : null;
+    const a = p ? p.an : null;
+    if (!a || !a.dirCode || a.dirCode === 'D') continue;   // 只看有明确方向的（W/L）
+    const day = heatKick(m).day;
+    if (day !== today) continue;                              // 只列当天
+    const hS = a.heatSignal || {};
+    const bg = a.breakGoal || {};
+    const hc = a.grade_hcap_a != null ? a.grade_hcap_a : null;
+    // --- 三条 edge 信号 ---
+    // ① 让球深盘（|hcap|≥0.8）且热门方==模型方向：8449 场校准主让≥0.8→主胜66~71%、客让≥0.8→客胜60~63%
+    const deep = (hc != null && Math.abs(hc) >= 0.8);
+    const deepSide = deep ? (hc > 0 ? 'W' : 'L') : null;
+    const deepHit = deep && deepSide === a.dirCode;   // 深盘热门方 == 模型方向 → 方向一致可下
+    // ② 热度双信号确认（让球深 + 临场移动/热门门），heatSignal.strength≥2 且 dir==模型方向
+    const heatOk = (hS.strength >= 2) && (hS.dir === a.dirCode);
+    // ③ 破蛋强档（pBreak≥80，上半场≥1球 85%）—— 这是"上半场破蛋"市场信号，非胜平负方向信号
+    const brkStrong = (bg.tier === 'strong');
+    const nEdge = (deepHit?1:0) + (heatOk?1:0) + (brkStrong?1:0);
+    if (nEdge === 0) continue;   // 三条 edge 一条都没打到的不下清单
+    // ★ 2026-10-09 复盘实算校准（7816 完场真值）：方向命中阶梯 c0=55% / c1(仅深盘)=81.7% / c2=70% / c3(深+热+破全中)=53%
+    //   —— "叠越多 edge 越准"是**伪前提**：三信号全中的强队场 W 方向仅 41.9%（大热拥挤陷阱，价值被吃光）。
+    //   故仓位逻辑**反转**：深盘单信号(无大热确认)是最硬方向(81.7%)，给高仓；深盘+热度双确认=拥挤陷阱，压到警示仓。
+    const crowded = deepHit && heatOk;          // 强队深盘 + 大热确认 = 拥挤交易陷阱
+    const deepOnly = deepHit && !heatOk;        // 强队深盘 · 无大热确认 = 最硬方向
+    // --- 建议仓位（按"方向质量"而非 edge 数）---
+    let stake = 0.5;
+    if (deepHit) stake = 1.5;                   // 深盘单信号是最硬方向(81.7%)
+    if (brkStrong) stake += 0.5;                // 破蛋强档(不同市场)温和正面
+    if (heatOk && !deepHit) stake += 0.25;      // 非深盘的热度确认：样本小，温和
+    if (crowded) stake = 0.5;                   // 拥挤陷阱：压到最低警示仓
+    stake = Math.min(2, +stake.toFixed(1));
+    const confPct = a.conf != null ? a.conf : (a.value_score != null ? a.value_score : null);
+    out.push({
+      tid, day, time: heatKick(m).time, league: cleanLeague(m),
+      home: displayTeam(m,'home'), away: displayTeam(m,'away'),
+      dir: a.dirCode, dirTxt: labelWDL(a.dirCode),
+      deep: deep, deepHit, heatOk, brkStrong, crowded, deepOnly,
+      nEdge, stake, confPct,
+      hS, bg,
+      basis: hS.basis ? hS.basis.join(' · ') : '',
+      pBreak: bg.pBreak != null ? bg.pBreak : null
+    });
+  }
+  // ★ 排序按"方向质量"（仓位）降序：深盘单信号浮顶、拥挤陷阱沉底，而非按 edge 数
+  out.sort((x,y)=> (y.stake - x.stake) || ((y.confPct||0)-(x.confPct||0)) || String(x.time||'').localeCompare(String(y.time||'')));
+  return out;
+}
+function betListHTML(){
+  const list = buildBetList();
+  if (!list.length) return '<p class="note">当天暂无触发任何一条 edge 信号（让球深盘·热门实 / 热度双确认 / 破蛋强档）的有方向场次——宁可不下，不硬凑。看下方热度榜全量。</p>';
+  const edgeTag = (x) => {
+    let s = '';
+    if (x.deepHit) s += '<span class="badge bW">深盘热门实</span> ';
+    if (x.heatOk) s += (x.crowded ? '<span class="badge bW">大热谨慎</span> ' : '<span class="badge bK">热度双确认</span> ');
+    if (x.brkStrong) s += '<span class="badge bN">破蛋强档</span> ';
+    return s || '<span class="badge bG">无</span>';
+  };
+  const rows = list.map(x => {
+    const posTxt = x.stake >= 2.5 ? '<b style="color:var(--acc)">重注 ' + x.stake + 'u</b>'
+      : (x.stake >= 1.5 ? '<b style="color:var(--yel)">中注 ' + x.stake + 'u</b>'
+      : '轻注 ' + x.stake + 'u');
+    return `<tr>
+      <td>${timeCell({day:x.day,time:x.time},false)}</td>
+      <td>${x.league}</td>
+      <td><b>${x.home}</b> vs <b>${x.away}</b></td>
+      <td><b style="color:${x.dir==='W'?'var(--acc)':x.dir==='L'?'var(--yel)':'var(--mut)'}">${x.dirTxt}</b></td>
+      <td>${edgeTag(x)}</td>
+      <td title="edge 命中数（深盘热门实/热度双确认/破蛋强档）">${x.nEdge}/3</td>
+      <td>${posTxt}</td>
+      <td onclick="onAnalyze(event,'${x.tid}')" style="cursor:pointer;color:var(--acc)">明细</td>
+    </tr>`;
+  }).join('');
+  const nDeep = list.filter(x=>x.deepHit).length;
+  const nHeat = list.filter(x=>x.heatOk).length;
+  const nBrk  = list.filter(x=>x.brkStrong).length;
+  return `<div style="margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)">
+     <b style="color:var(--acc)">📋 今日可下注清单</b>
+     <span style="font-size:12px;color:var(--mut)">　触发任一 edge 信号的当日有方向场：共 <b>${list.length}</b> 场（深盘热门实 ${nDeep} · 热度双确认 ${nHeat} · 破蛋强档 ${nBrk}）</span>
+   </div>
+   <table class="htab"><thead><tr>
+     <th>时间</th><th>联赛</th><th>对阵</th><th>方向</th><th>edge 信号</th><th>edge数</th><th>建议仓位</th><th>明细</th>
+   </tr></thead><tbody>${rows}</tbody></table>
+   <p class="note">仓位依据（7816 完场真值复盘校准，已反向校准）：<b>深盘单信号（无大热确认）是最硬方向 81.7%</b>，给高仓；<b>深盘+热度双确认＝拥挤交易陷阱</b>（三信号全中方向仅 53%，其中强队 W 方向 41.9%——散户全压强队、价值被吃光），压到警示仓 0.5u 并标「大热谨慎」；破蛋强档(pBreak≥80·上半场≥1球 85%)是不同市场、温和正面。⚠ 旧版"叠越多 edge 加仓到 3u"已被数据证伪（全中反而最差），现改按方向质量(仓位)排序。封顶 2u。仅参考，非投资建议。</p>`;
+}
+/* ★ 2026-10-09 新增：纯深盘筛选视图
+   动机：信号组合实盘验证证明——让球深盘单信号(无大热确认)方向命中 81.7%，是全模型最硬的方向池；
+   一旦叠加"热度双确认"，三信号全中反而砸到 53%（强队 W 方向仅 41.9%，大热拥挤陷阱）。
+   故单独拎出"强队深盘·方向一致"池，彻底剔除纯热度干扰，按"让球越深越硬"排序。 */
+/* ★ 2026-10-15 透明化：统一赛事来源判定（竞彩/北单/国际），三盘板/精选/纯深盘共用，
+   杜绝"非北单=竞彩"式臆造标签。判定优先级：m.jc(mergeJingcai 主键挂标) → BD_ROWS 北单表名匹配 → 国际。
+   仅依赖 m.jc 与 globalThis.BD_ROWS（均已验证 ui.js 可访问），不依赖任何臆造字段。 */
+function _matchSource(m){
+  if (!m) return '国际';
+  if (m.jc) return '竞彩';
+  /* ★ 2026-10-21：旧代码直接取 m.home_name_zh（okooo PUA 字体混淆串，"&#xe...;"），
+     与北单 BD_ROWS 的干净中文名永远对不上 ⇒ 北单徽章几乎从不显示。改走规范化队名/联赛名。 */
+  const h = displayTeam(m, 'home') || '';
+  const a = displayTeam(m, 'away') || '';
+  const lg = cleanLeague(m) || '';
+  const bd = (globalThis.BD_ROWS && globalThis.BD_ROWS.length) ? globalThis.BD_ROWS : [];
+  const norm = s => String(s||'').replace(/<[^>]+>/g,'').replace(/&#xe[0-9a-f]+;/gi,'').replace(/\s/g,'');
+  const hn = norm(h), an = norm(a), lgN = norm(lg);
+  for (const r of bd){
+    const rh = norm(r.home), ra = norm(r.away), rl = norm(r.league||'');
+    if (rl === lgN && ((hn.startsWith(rh) || rh.startsWith(hn)) && (an.startsWith(ra) || ra.startsWith(an)))) return '北单';
+  }
+  return '国际';
+}
+function _srcBadge(m){
+  const s = _matchSource(m);
+  if (s === '竞彩') return '<span style="font-size:10px;color:#ff7a3c;border:1px solid #ff7a3c;border-radius:4px;padding:0 3px;margin-left:3px">竞彩</span>';
+  if (s === '北单') return '<span style="font-size:10px;color:#3a8ee6;border:1px solid #3a8ee6;border-radius:4px;padding:0 3px;margin-left:3px">北单</span>';
+  return '<span style="font-size:10px;color:#8b98a9;border:1px solid #8b98a9;border-radius:4px;padding:0 3px;margin-left:3px">国际</span>';
+}
+function buildDeepPlate(){
+  const out = [];
+  const today = panelDay();
+  for (const m of MATCHES){
+    const tid = m.tid;
+    const p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[tid] : null;
+    const a = p ? p.an : null;
+    if (!a || !a.dirCode || a.dirCode === 'D') continue;   // 只看有明确方向（W/L）
+    const day = heatKick(m).day;
+    if (day !== today) continue;                              // 只列当天
+    const hS = a.heatSignal || {};
+    const bg = a.breakGoal || {};
+    const ygw = a.yg || {};
+    const hc = a.grade_hcap_a != null ? a.grade_hcap_a : null;
+    const deep = (hc != null && Math.abs(hc) >= 0.8);         // 让球深盘（|hcap|≥0.8）
+    if (!deep) continue;                                      // 只收深盘
+    const deepSide = hc > 0 ? 'W' : 'L';
+    const deepHit = deepSide === a.dirCode;                   // 深盘热门方==模型方向
+    if (!deepHit) continue;                                   // 只收"方向一致"的深盘（反向深盘不在本池）
+    const heatOk = (hS.strength >= 2) && (hS.dir === a.dirCode);   // 欧赔派生"市场热门"确认（盘口深+临盘fav≥60%两票）
+    const brkStrong = (bg.tier === 'strong');
+    // ★ 2026-10-14 修正（回应"热度无资源为何标大热"）：把"拥挤"拆成两层，消除与「大热方/热度系数」列(heatUsable)的矛盾
+    const realHot = !!ygw.heatUsable && (ygw.isHot || ygw.isHotWarn);  // 北单/必发真实资金超买确认（真·大热，每日仅极少场）
+    const mktHot = heatOk && !realHot;                                 // 仅欧赔派生盘口热门（不依赖真实资金）
+    const crowded = heatOk;                                            // 拥挤 = 盘热或真大热（仅供对照警示）
+    const confPct = a.conf != null ? a.conf : (a.value_score != null ? a.value_score : null);
+    /* ★ 2026-10-29：预计球数（与精选优选板同源）= Dix-Coles 期望总进球 λ+μ。每场可读读数，非定点比分。 */
+    const _sc = a.score || {};
+    const _lam = _sc.lambda != null ? +_sc.lambda : null;
+    const _mu  = _sc.mu != null ? +_sc.mu : null;
+    const expT = (_lam != null && _mu != null) ? (_lam + _mu) : null;
+    /* ★ 2026-10-13 深盘大热明细（用户："大热指主队还是客队、热度系数多高"）：
+       大热方 = 与档位同源：必发源=澳客冷热指数最热方(hotSideIdx) / 北单源=占比最高方(heatSide)（非让球方！）
+       热度系数 = 该方真实资金占比 − 其公平胜率（欧赔隐含），= yg.heatExcess（单位 pp，可正可负）
+       档位：≥15pt 大热必死（洋哥案例①标定 +15.54）；≥8pt 大热预警（案例②+9pt）；否则温和。 */
+    out.push({
+      /* ★ 2026-10-31 修复（回应"一堆比赛结束不会回补赛果分析"）：深盘板比分格原来用 matchPhase(m)，
+         它带「开赛超 3.5h 即判 fin」的时间启发式 → 当 bake 数据滞后（完场但 state 还没刷成 -1）时，
+         会把 state=0/0:0 的未确认场误判为「已完场」→ tbScoreCell 拒真赛果 → 整片显示"完场·比分待源站回补"，
+         误导用户以为丢数据。改与档位板一致用 tbPhaseOf(m)：只认显式 state==='-1'（含 110min+有进球兜底），
+         不靠时间回退；未确认完场的场一律回退为「未开赛/进行中」占位，绝不谎报"待回补"。 */
+      tid, m, ph: tbPhaseOf(m), day, time: heatKick(m).time, league:cleanLeague(m),
+      home: displayTeam(m,'home'), away: displayTeam(m,'away'),
+      dir: a.dirCode, dirTxt: labelWDL(a.dirCode),
+      hcap: hc, heatOk, brkStrong, crowded, realHot, mktHot,
+      confPct, pBreak: bg.pBreak != null ? bg.pBreak : null,
+      basis: hS.basis ? hS.basis.join(' · ') : '',
+      // ——— 大热方 / 热度系数明细（见上注释）———
+      heatSide: ygw.heatSide || null,                 // 'W'=主队 | 'D'=平局 | 'L'=客队 | null=无真实资金源
+      heatShare: ygw.heatShare != null ? ygw.heatShare : null,        // 大热方真实资金占比 %
+      heatFair: ygw.fairProb != null ? ygw.fairProb : null,           // 大热方公平胜率 %（欧赔隐含）
+      heatExcess: ygw.heatExcess != null ? ygw.heatExcess : null,     // 热度系数 pp = heatShare − heatFair
+      hotSideIdx: ygw.hotSideIdx || null,                             // ★ 2026-10-16：澳客冷热指数最热方（与档位同源）
+      hotIdx: (ygw.hotIdx!=null?ygw.hotIdx:null),                     // 澳客冷热指数（档位依据）
+      bfPct: (ygw.bf && ygw.bf.pct) ? ygw.bf.pct : null,              // [W,D,L] 必发投注占比%
+      heatIsHot: !!ygw.isHot, heatIsWarn: !!ygw.isHotWarn,            // ≥15pt / ≥8pt 档位
+      heatSrc: ygw.heatSrc || null,                                   // 'beidan' | 'betfa' | 'ppi' | 'na'
+      heatUsable: !!ygw.heatUsable,
+      heatUnbeaten: ygw.unbeatenShare != null ? ygw.unbeatenShare : null,   // 热门方+平 合计资金占比（洋哥"不败资金"口径）
+      expT: expT,                                                       // ★ 预计球数（期望总进球 λ+μ）
+      coLive: a.coLive || null,                                         // ★ 2026-10-30 365/立博/威廉/英特 4家实时欧赔
+      ea: _euAsiaGap(a),                                                // ★ 2026-11-03 《足球财富》欧亚转换诊断
+      trail: panluTrail(a),                                             // ★ 2026-11-03 《足球财富》盘路演变(初→临)
+      comboTier: a.comboTier || null                                    // ★ 2026-11-03 合成方向分级（赛前冻结·防马后炮）
+    });
+  }
+  /* ★ 2026-10-10 改：默认按「开赛时间」升序（用户要看先后，且时间列已带日期）；
+     深盘质量(|hcap|)与 conf 降为同刻兜底的次键。排序键用真时间戳 YYYYMMDDHHMM，
+     避免 "9:05" 被字符串比较排到 "10:00" 之后。 */
+  out.sort((x,y)=> String(_pickTimeKey(x)).localeCompare(String(_pickTimeKey(y)))
+                   || (Math.abs(y.hcap)-Math.abs(x.hcap))
+                   || ((y.confPct||0)-(x.confPct||0)));
+  return out;
+}
+/* ★ 2026-10-10：纯深盘视图的比分就地刷新（30s 一拍，只替换 [data-pscore] 格，不整块重渲、不顶滚动）。
+   与精选面板 _pickScoreTick 同口径，但行注册表独立（_deepRows），互不干扰。 */
+let _deepPoll = null, _deepRows = {};
+function _deepScoreTick(){
+  try{
+    _relinkRowM(_deepRows);
+    const root = document.getElementById('deepContent');
+    if (!root) return;
+    const els = root.querySelectorAll('[data-pscore]');
+    for (let i = 0; i < els.length; i++){
+      const el = els[i], tid = el.getAttribute('data-pscore'), x = _deepRows[tid];
+      if (!x) continue;
+      try{ const html = _pickScoreCell(x); if (el.innerHTML !== html) el.innerHTML = html; }catch(e){}
+    }
+  }catch(e){}
+}
+/* ★ 2026-10-30 实时欧赔 4 家（365/立博/威廉/英特）单元格：显示各家常赔率+主胜变化箭头。
+   coLive 结构 { 'Bet365':{o:{h,d,a}|null,c:{h,d,a}}, '立博':{...}, ... } */
+function _coLiveCell(x){
+  const cl = x.coLive || x.a_coLive;
+  if (!cl) return '<span style="color:var(--mut);font-size:11px">无4家欧赔<br><span style="font-size:10px">（数据源未覆盖）</span></span>';
+  const _m = (v, o, name, col) => {
+    if (v == null) return '';
+    const d = (o != null && v != null) ? +(v - o).toFixed(2) : null;
+    const arrow = (d == null || Math.abs(d) < 0.02) ? '' : (d < 0 ? '<span style="color:#16a34a;font-size:9px">▼</span>' : '<span style="color:#e54545;font-size:9px">▲</span>');
+    return `<div style="font-size:10.5px;line-height:1.5"><span style="opacity:.7">${name}</span> <b>${+v.toFixed(2)}</b>${arrow}${d!=null&&Math.abs(d)>=0.02?`<span style="font-size:9px;color:${d<0?'#16a34a':'#e54545'}">${d>0?'+':''}${d.toFixed(2)}</span>`:''}</div>`;
+  };
+  const rows = [];
+  for (const co of ['Bet365','立博','威廉希尔','Interwette']){
+    const v = cl[co]; if (!v || !v.c) continue;
+    const o = v.o || null;
+    rows.push(_m(v.c.h, o?o.h:null, co==='Bet365'?'365':(co==='立博'?'立博':(co==='威廉希尔'?'威廉':'英特')), '#f97316'));
+  }
+  if (!rows.length) return '<span style="color:var(--mut);font-size:11px">无4家欧赔</span>';
+  return '<div style="font-size:10px;line-height:1.35">' + rows.join('') + '</div>';
+}
+/* ★ 2026-11-03 逐家亚盘「初盘→临场·升降盘/水」迷你视图（用户："只看一家？全看啊"）。
+   从 OFFLINE_PACK[tid].odds.asia 抽 365/立博/威廉/英特 4 家各自的：
+   亚盘盘口 初→临 + 升降盘(±)、主/客水 初→临 + 升降水(±)。缺该公司亚盘则标"—"。
+   与欧赔4家(_coLiveCell)并列，构成"全公司盘口(欧+亚)升降"完整视图。 */
+function _coAsiaCoreCell(tid){
+  try{
+    const OP = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK : null;
+    const p = (OP && tid) ? OP[tid] : null;
+    const od = p && p.odds ? p.odds : null;
+    const asia = (od && Array.isArray(od.asia)) ? od.asia : null;
+    if (!asia || !asia.length) return '<span style="color:var(--mut);font-size:11px">无亚盘<br><span style="font-size:10px">（源站未覆盖）</span></span>';
+    const hcapNum = function(s){
+      const t = String(s == null ? '' : s).replace(/\s/g, '').replace(/−/g, '-');
+      if (!t) return null;
+      const m = t.match(/^(-?)([\d.]+)\/(\d+\.?\d*)$/);
+      if (m) return (m[1] === '-' ? -1 : 1) * ((parseFloat(m[2]) + parseFloat(m[3])) / 2);
+      const n = parseFloat(t); return isFinite(n) ? n : null;
+    };
+    const _okA = function(hc, u, l){ return hc !== null && isFinite(hc) && Math.abs(hc) <= 4.5 && u >= 0.5 && u <= 1.5 && l >= 0.5 && l <= 1.5; };
+    const _okOpen = function(x){ const h = hcapNum(x.d), u = +x.e, l = +x.f; return h !== null && isFinite(h) && isFinite(u) && isFinite(l) && _okA(h, u, l); };
+    const _okCur = function(x){ const h = hcapNum(x.a), u = +x.b, l = +x.c; return h !== null && isFinite(h) && isFinite(u) && isFinite(l) && _okA(h, u, l) && (u + l) >= 1.55 && (u + l) <= 2.10; };
+    const _grp = function(arr){ const g = {}; (arr||[]).forEach(function(x){ const k = String(x.company_id != null ? x.company_id : ''); if (!k) return; (g[k]=g[k]||[]).push(x); }); return g; };
+    const _byT = function(rows, okFn, first){ if (!rows || !rows.length) return null; const by = rows.slice().sort(function(p,q){ return String(p.change_time||'').localeCompare(String(q.change_time||'')); }); if (first){ for (const r of by){ if (okFn(r)) return r; } } else { for (let i=by.length-1;i>=0;i--){ if (okFn(by[i])) return by[i]; } } return null; };
+    const gA = _grp(asia);
+    const CO = [ ['8','Bet365','365'], ['9','威廉希尔','威廉'], ['4','立博','立博'], ['19','Interwette','英特'] ];
+    const _mv = function(d){ if (!isFinite(d) || Math.abs(d) < 0.005) return '<span style="color:var(--mut)">→0</span>'; return '<span style="color:'+(d>0?'var(--red)':'var(--grn)')+';font-weight:700">'+(d>0?'↑':'↓')+Math.abs(d).toFixed(2)+'</span>'; };
+    const capT = function(v){ return (v > 0 ? '+' : '') + v.toFixed(2); };
+    const rows = CO.map(function(c){
+      const arr = gA[c[0]]; if (!arr || !arr.length) return '';
+      const f = _byT(arr, _okOpen, true), l = _byT(arr, _okCur, false);
+      if (!f && !l) return '';
+      const fo = f ? [hcapNum(f.d), +f.e, +f.f] : null, lo = l ? [hcapNum(l.a), +l.b, +l.c] : null;
+      let foTag = '', loTag = '';
+      if (!fo && !lo) return '';
+      if (!fo){ fo = lo.slice(); foTag = '<span style="color:var(--amb);font-size:8px">初缺</span>'; }
+      if (!lo){ lo = fo.slice(); loTag = '<span style="color:var(--amb);font-size:8px">临缺</span>'; }
+      const dh = +(lo[0]-fo[0]).toFixed(2), du = +(lo[1]-fo[1]).toFixed(2), dl = +(lo[2]-fo[2]).toFixed(2);
+      const hi = (c[0] === '8');
+      return `<div style="font-size:10px;line-height:1.4;${hi?'color:var(--blu);font-weight:600':'color:var(--txt)'}"><span style="opacity:.7">${hi?'⭐':''}${c[2]}</span> <b>${capT(fo[0])}</b>→<b>${capT(lo[0])}</b> ${_mv(dh)}${foTag||loTag?` <span style="font-size:8px;color:var(--amb)">${foTag}${loTag}</span>`:''}<br><span style="color:var(--mut);font-weight:400;font-size:9.5px">主水 ${fo[1].toFixed(2)}→${lo[1].toFixed(2)} ${_mv(du)} · 客水 ${fo[2].toFixed(2)}→${lo[2].toFixed(2)} ${_mv(dl)}</span></div>`;
+    }).filter(Boolean).join('');
+    if (!rows) return '<span style="color:var(--mut);font-size:11px">无亚盘4家</span>';
+    return `<div style="font-size:9.5px;color:#e0a030;font-weight:700;margin-bottom:2px">亚盘·逐家 盘口/水位 初→临</div>` + rows;
+  }catch(e){ return '<span style="color:var(--mut);font-size:11px">—</span>'; }
+}
+/* ★ 2026-11-03 逐家欧赔「主/平/客 初→临·升降」迷你视图（与 _coAsiaCoreCell 同构，组成欧+亚完整对照）。
+   从 OFFLINE_PACK[tid].odds.eu 抽 365/立博/威廉/英特 4 家各自的：主/平/客 初→临 + 主胜/客胜升降(±)。
+   欧赔字段：d=平、e=主、f=客（初盘）；a=平、b=主、c=客（临场）。有效域 _ok3(平∈[1.5,12], 主/客∈[1.02,60])。
+   与亚盘视图并列，构成"全公司 欧赔+亚盘 升降"完整对照。 */
+function _coEuCoreCell(tid){
+  try{
+    const OP = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK : null;
+    const p = (OP && tid) ? OP[tid] : null;
+    const od = p && p.odds ? p.odds : null;
+    const eu = (od && Array.isArray(od.eu)) ? od.eu : null;
+    if (!eu || !eu.length) return '<span style="color:var(--mut);font-size:11px">无欧赔<br><span style="font-size:10px">（源站未覆盖）</span></span>';
+    const _ok3 = function(p3, q, r){ return p3 >= 1.5 && p3 <= 15 && q >= 1.02 && q <= 25 && r >= 1.02 && r <= 25; };
+    const _okOpen = function(x){ const p3 = [+x.d, +x.e, +x.f]; return p3.every(function(v){ return isFinite(v); }) && _ok3(p3[0], p3[1], p3[2]); };
+    const _okCur = function(x){ const q = [+x.a, +x.b, +x.c]; return q.every(function(v){ return isFinite(v); }) && _ok3(q[0], q[1], q[2]); };
+    const _grp = function(arr){ const g = {}; (arr||[]).forEach(function(x){ const k = String(x.company_id != null ? x.company_id : ''); if (!k) return; (g[k]=g[k]||[]).push(x); }); return g; };
+    const _byT = function(rows, okFn, first){ if (!rows || !rows.length) return null; const by = rows.slice().sort(function(p,q){ return String(p.change_time||'').localeCompare(String(q.change_time||'')); }); if (first){ for (const r of by){ if (okFn(r)) return r; } } else { for (let i=by.length-1;i>=0;i--){ if (okFn(by[i])) return by[i]; } } return null; };
+    const gE = _grp(eu);
+    const CO = [ ['8','Bet365','365'], ['9','威廉希尔','威廉'], ['4','立博','立博'], ['19','Interwette','英特'] ];
+    const _mv = function(d){ if (!isFinite(d) || Math.abs(d) < 0.005) return '<span style="color:var(--mut)">→0</span>'; return '<span style="color:'+(d>0?'var(--red)':'var(--grn)')+';font-weight:700">'+(d>0?'↑':'↓')+Math.abs(d).toFixed(2)+'</span>'; };
+    const rows = CO.map(function(c){
+      const arr = gE[c[0]]; if (!arr || !arr.length) return '';
+      const f = _byT(arr, _okOpen, true), l = _byT(arr, _okCur, false);
+      if (!f && !l) return '';
+      const fo = f ? [+f.e, +f.d, +f.f] : null, lo = l ? [+l.b, +l.a, +l.c] : null;   // [主,平,客]
+      let foTag = '', loTag = '';
+      if (!fo && !lo) return '';
+      if (!fo){ fo = lo.slice(); foTag = '<span style="color:var(--amb);font-size:8px">初缺</span>'; }
+      if (!lo){ lo = fo.slice(); loTag = '<span style="color:var(--amb);font-size:8px">临缺</span>'; }
+      const dH = +(lo[0]-fo[0]).toFixed(2), dD = +(lo[1]-fo[1]).toFixed(2), dA = +(lo[2]-fo[2]).toFixed(2);
+      const hi = (c[0] === '8');
+      return `<div style="font-size:10px;line-height:1.4;${hi?'color:var(--blu);font-weight:600':'color:var(--txt)'}"><span style="opacity:.7">${hi?'⭐':''}${c[2]}</span> <b>${fo[0].toFixed(2)}</b>→<b>${lo[0].toFixed(2)}</b> ${_mv(dH)}${foTag||loTag?` <span style="font-size:8px;color:var(--amb)">${foTag}${loTag}</span>`:''}<br><span style="color:var(--mut);font-weight:400;font-size:9.5px">平 ${fo[1].toFixed(2)}→${lo[1].toFixed(2)} ${_mv(dD)} · 客 ${fo[2].toFixed(2)}→${lo[2].toFixed(2)} ${_mv(dA)}</span></div>`;
+    }).filter(Boolean).join('');
+    if (!rows) return '<span style="color:var(--mut);font-size:11px">无欧赔4家</span>';
+    return `<div style="font-size:9.5px;color:#e0a030;font-weight:700;margin-bottom:2px">欧赔·逐家 主/平/客 初→临</div>` + rows;
+  }catch(e){ return '<span style="color:var(--mut);font-size:11px">—</span>'; }
+}
+/* ★ 2026-10-30 精选/计划板取实时欧赔：优先行内 an，回退离线包 OFFLINE_PACK[tid].an.coLive
+   （refreshCoLive 每 3 分钟就地更新这两处，所以重渲后即为最新值）。 */
+function _coLiveOf(x){
+  try{
+    if (!x) return null;
+    if (x.a && x.a.coLive) return x.a.coLive;
+    if (x.coLive) return x.coLive;
+    const OP = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK : null;
+    const p = (OP && x.tid) ? OP[x.tid] : null;
+    return (p && p.an && p.an.coLive) ? p.an.coLive : null;
+  }catch(e){ return null; }
+}
+/* ★ 2026-10-30 赔率/让盘轨迹（odds_timeline.json）
+   · CVM 每 15 分钟对未开赛场追加一帧（盘口/水位/4家欧赔有变化才写）；开赛即 frozen，永不再追加
+     → 复盘看到的就是"赛前最后定格"，不会被赛后数据漂移污染。
+   · 前端每 3 分钟拉一次，行内显示：365主胜 首→末（含变化量）+ 亚盘盘口 首→末 + 帧数与时间跨度。 */
+window.__ODDS_TL__ = window.__ODDS_TL__ || { items:{}, frozen:{}, updated:'' };
+async function refreshOddsTL(){
+  try{
+    const r = await fetch('odds_timeline.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return 0;
+    const j = await r.json();
+    if (j && j.items) window.__ODDS_TL__ = { items: j.items||{}, frozen: j.frozen||{}, updated: j.updated||'' };
+    return Object.keys(window.__ODDS_TL__.items || {}).length;
+  }catch(e){ return 0; }
+}
+function _tlCell(tid){
+  try{
+    const T = window.__ODDS_TL__ || {};
+    const seq = (T.items||{})[String(tid)];
+    if (!seq || !seq.length) return '';
+    const fz = (T.frozen||{})[String(tid)];
+    const fh = (f) => { if (f.c && f.c['Bet365'] && f.c['Bet365'].c && f.c['Bet365'].c.h != null) return +f.c['Bet365'].c.h; return (f.o && f.o[0] != null) ? +f.o[0] : null; };
+    const seqH = seq.map(fh).filter(v => v != null);
+    let h = '';
+    let a = null, b = null, _tag = '';
+    if (seqH.length >= 2){ a = seqH[0]; b = seqH[seqH.length-1]; }
+    else {
+      /* 只有一帧（刚进入抓取窗口）：用该帧自带的"初盘 o vs 现盘 c"给出变化，避免一片空白 */
+      const f = seq[seq.length-1];
+      if (f.c && f.c['Bet365'] && f.c['Bet365'].o && f.c['Bet365'].c){
+        a = +f.c['Bet365'].o.h; b = +f.c['Bet365'].c.h; _tag = '初→现';
+      }
+    }
+    if (a != null && b != null){
+      const d = +(b - a).toFixed(2);
+      const col = Math.abs(d) < 0.02 ? 'var(--mut)' : (d < 0 ? '#16a34a' : '#e54545');
+      h += '<div style="font-size:9.5px;line-height:1.35">365主 <b>'+a.toFixed(2)+'</b>→<b>'+b.toFixed(2)+'</b> <span style="color:'+col+'">'+(d>0?'+':'')+d.toFixed(2)+'</span>'+(_tag?' <span style="font-size:9px;opacity:.7">'+_tag+'</span>':'')+'</div>';
+    }
+    /* 让盘：多帧看首→末；单帧则用帧内 p0(初盘) → p(现盘) */
+    let fp = seq[0].p, lp = seq[seq.length-1].p, _ptag = '';
+    if (seq.length < 2 && seq[seq.length-1].p0 != null){ fp = seq[seq.length-1].p0; _ptag = '初→现'; }
+    if (fp != null && lp != null && Math.abs(+lp - +fp) >= 0.01){
+      const dd = +(+lp - +fp).toFixed(2);
+      h += '<div style="font-size:9.5px;line-height:1.35">让盘 '+(+fp).toFixed(2)+'→'+(+lp).toFixed(2)+' <b style="color:'+(dd>0?'var(--red)':'var(--grn)')+'">'+(dd>0?'↑':'↓')+Math.abs(dd).toFixed(2)+'</b>'+(_ptag?' <span style="font-size:9px;opacity:.7">'+_ptag+'</span>':'')+'</div>';
+    }
+    const t0 = (seq[0].t||'').slice(5,16), t1 = (seq[seq.length-1].t||'').slice(5,16);
+    h += '<div style="font-size:9px;color:var(--mut);line-height:1.35">'+(fz ? '🔒开赛定格 · ' : '')+'📈'+seq.length+'帧 '+t0+'→'+t1+'</div>';
+    return h;
+  }catch(e){ return ''; }
+}
+/* 行内单元格的 hover 提示：完整逐帧（时刻 / 让盘@水位 / 4家主胜），最新在最上，供复盘细看 */
+function _tlTitleText(tid){
+  try{
+    const T = window.__ODDS_TL__ || {};
+    const seq = (T.items||{})[String(tid)];
+    if (!seq || !seq.length) return '';
+    const fz = (T.frozen||{})[String(tid)];
+    const _c = (f, co) => (f.c && f.c[co] && f.c[co].c && f.c[co].c.h != null) ? (+f.c[co].c.h).toFixed(2) : '—';
+    const lines = seq.slice().reverse().map(f =>
+      String(f.t||'').slice(5) + '  让盘 ' + (f.p!=null ? (+f.p).toFixed(2) : '—') + '@' + (f.h!=null ? (+f.h).toFixed(2) : '—')
+      + '  |  365 ' + _c(f,'Bet365') + '  立博 ' + _c(f,'立博') + '  威廉 ' + _c(f,'威廉希尔') + '  英特 ' + _c(f,'Interwette'));
+    return (fz ? '🔒已开赛·抓取定格（此后不再更新）\n' : '⏳赛前持续抓取中（每15分钟一帧，仅变化才记录）\n')
+      + '逐帧轨迹（最新在上）：\n' + lines.join('\n');
+  }catch(e){ return ''; }
+}
+/* 明细弹窗里的完整轨迹表：逐帧列出 时刻 / 盘口+水位 / 365 / 立博 / 威廉 / 英特（主胜） */
+function _tlTable(tid){
+  try{
+    const T = window.__ODDS_TL__ || {};
+    const seq = (T.items||{})[String(tid)];
+    if (!seq || !seq.length) return '<p class="note" style="font-size:11px">暂无赔率轨迹（该场尚未进入抓取窗口或已清理）。</p>';
+    const fz = (T.frozen||{})[String(tid)];
+    const _v = (f, co) => (f.c && f.c[co] && f.c[co].c && f.c[co].c.h != null) ? (+f.c[co].c.h).toFixed(2) : '—';
+    const rows = seq.slice().reverse().map(f => '<tr>'
+      + '<td style="font-size:10.5px;white-space:nowrap">'+String(f.t||'').slice(5)+'</td>'
+      + '<td style="font-size:10.5px">'+(f.p!=null?(+f.p).toFixed(2):'—')+(f.h!=null?' <span style="opacity:.7">@'+(+f.h).toFixed(2)+'</span>':'')+'</td>'
+      + '<td style="font-size:10.5px">'+_v(f,'Bet365')+'</td>'
+      + '<td style="font-size:10.5px">'+_v(f,'立博')+'</td>'
+      + '<td style="font-size:10.5px">'+_v(f,'威廉希尔')+'</td>'
+      + '<td style="font-size:10.5px">'+_v(f,'Interwette')+'</td></tr>').join('');
+    return '<div style="font-size:11px;color:var(--mut);margin:4px 0">'+(fz?'🔒 <b>已开赛·抓取定格</b>（此后不再更新，供复盘）：':'⏳ 赛前持续抓取中（每15分钟一帧，有变化才记录）：')+'共 '+seq.length+' 帧</div>'
+      + '<table class="htab"><thead><tr><th>时刻</th><th>让盘@水位</th><th>365主</th><th>立博主</th><th>威廉主</th><th>英特主</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }catch(e){ return ''; }
+}
+
+/* ★ 2026-10-30 让球趋势复盘（用户："优选精选看完赛比赛，综合分析赛前让球趋势、赔率变化，找规律"）
+   · 数据 = bake_pack 完场 + 引擎 an（a0/h0 初盘、p1/h1 临场、pan_type/pan_predict、o0h/o1h 欧赔）
+   · 逐场对账：赛前让球趋势（盘口变化 dp / 水位变化 dh / 欧赔主队概率变化 dP）→ 最终赛果
+   · 只收近 3 天完场，按开赛时间倒序；无让球趋势的场标「无趋势」 */
+function _hcapTrendHTML(){
+  try{
+    const OP = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK : {};
+    const today = new Date(); const todayN = +today.toISOString().slice(0,10).replace(/-/g,'');
+    const _d = [];   // 近3天
+    for (const m of MATCHES){
+      if (String(m.state) !== '-1') continue;   // 只收已完场
+      const a = OP[m.tid] && OP[m.tid].an; if (!a) continue;
+      const a0=+a.a0, p1=+a.p1, h0=+a.h0, h1=+a.h1;
+      if (!isFinite(a0)||!isFinite(p1)||p1===0||!isFinite(h0)||!isFinite(h1)) continue;
+      const day = heatKick(m).day;
+      if (!day) continue;
+      const dn = +String(day).replace(/-/g,'');
+      if (todayN - dn > 3) continue;
+      const upSide = p1 > 0 ? 'W' : 'L';
+      const dp = +(p1 - a0).toFixed(2), dh = +(h1 - h0).toFixed(2);
+      const o0h=+a.o0h, o1h=+a.o1h;
+      let dP=null;
+      if (isFinite(o0h)&&isFinite(o1h)&&o0h>1&&o1h>1) dP=+((1/o1h)-(1/o0h)).toFixed(4);
+      /* 让球方（上盘）赢盘结算 */
+      const margin = (upSide==='W') ? (m.hs-m.as) : (m.as-m.hs);
+      const give = (upSide==='W') ? p1 : -p1;
+      let net=null;
+      if (Math.abs(give*4 - Math.round(give*4)) < 1e-6){
+        const frac=Math.abs(give)%1;
+        if (Math.abs(frac-0.25)<1e-6||Math.abs(frac-0.75)<1e-6){ const n1=margin-(give-0.25),n2=margin-(give+0.25); net=((n1>0?1:n1===0?0:-1)+(n2>0?1:n2===0?0:-1))/2; }
+        else { const nt=margin-give; net=nt>0?1:nt===0?0:-1; }
+      }
+      _d.push({ m, a, dp, dh, dP, upSide, upTxt:(upSide==='W'?'主':'客')+'让'+Math.abs(p1).toFixed(2),
+        p1, h1, a0, h0, ty:a.pan_type||'—', pred:a.pan_predict||'—', gap:a.pan_gap!=null?+(+a.pan_gap).toFixed(2):null,
+        net, hs:m.hs, as:m.as, day });
+    }
+    if (!_d.length) return '';
+    _d.sort((x,y)=> String(y.day).localeCompare(String(x.day)));
+    const _up = _d.filter(x=>x.net===1).length, _lose=_d.filter(x=>x.net===-1).length, _push=_d.filter(x=>x.net===0).length;
+    const _n = _up+_lose+_push;
+    const _rate = _n ? Math.round(_up/_n*1000)/10 : 0;
+    const rows = _d.slice(0,60).map(x=>{
+      const dptxt = x.dp>0.1?'<b style="color:#e54545">升盘+'+x.dp.toFixed(2)+'</b>':(x.dp<-0.1?'<b style="color:#16a34a">降盘'+x.dp.toFixed(2)+'</b>':(Math.abs(x.dp)<=0.1?'<span style="color:var(--mut)">不变</span>':''));
+      const dhtxt = x.dh>0.05?'<b style="color:#e54545">升水+'+x.dh.toFixed(2)+'</b>':(x.dh<-0.05?'<b style="color:#16a34a">降水'+x.dh.toFixed(2)+'</b>':(Math.abs(x.dh)<=0.05?'<span style="color:var(--mut)">不变</span>':''));
+      const dptxt2 = x.dP!=null?(x.dP>0.03?'<b style="color:#e54545">主热+'+Math.round(x.dP*100)+'</b>':(x.dP<-0.03?'<b style="color:#16a34a">主冷'+Math.round(x.dP*100)+'</b>':'<span style="color:var(--mut)">平</span>')):'—';
+      const netTxt = x.net===1?'<b style="color:#16a34a">让球方赢盘</b>':(x.net===-1?'<b style="color:#e54545">让球方输盘</b>':(x.net===0?'<span style="color:#b45309">走盘</span>':'—'));
+      const predTxt = x.pred==='上盘'?'<b style="color:#16a34a">上盘</b>':(x.pred==='下盘'?'<b style="color:#e54545">下盘</b>':(x.pred==='观望'?'<span style="color:#b45309">观望</span>':'—'));
+      return `<tr>
+        <td>${x.day.slice(5)}</td><td>${cleanLeague(x.m)}</td>
+        <td><b>${displayTeam(x.m,'home')}</b> vs <b>${displayTeam(x.m,'away')}</b></td>
+        <td>${x.upTxt}</td><td>${x.ty} → ${predTxt}</td>
+        <td>${dptxt}</td><td>${dhtxt}</td><td>${dptxt2}</td>
+        <td><b>${x.hs}:${x.as}</b></td><td>${netTxt}</td>
+      </tr>`;
+    }).join('');
+    return `
+    <div style="margin:14px 0 4px;padding:10px 12px;border:1px solid #2faa6a;border-radius:10px;background:rgba(47,170,106,.05)">
+      <div style="font-weight:800;color:#5fd49a;margin-bottom:3px">📊 让球趋势复盘（已完赛 · 近3天 ${_n} 场 · 让球方赢盘率 ${_rate}%）</div>
+      <div style="font-size:11px;color:var(--mut);line-height:1.6;margin-bottom:6px">
+        逐场对照：<b>赛前让球趋势</b>（盘口变化 初→临 / 水位变化 初→临 / 欧赔主队概率变化）→ <b>最终赛果</b>。让球方=上盘（临场盘口 p1&gt;0 主队让 / p1&lt;0 客队让）。
+        <span style="color:#e54545">升盘/升水=庄家调高让球/上盘赔（防上盘）</span>、<span style="color:#16a34a">降盘/降水=调低（诱上盘）</span>。
+        规律（738 场回测）：<b style="color:#16a34a">中庸盘·下盘+升水 68.7%/+31.8%</b>、<b style="color:#16a34a">浅盘·上盘 61.1%/+23.6%</b>、<b style="color:#16a34a">深盘·下盘+升水 68.1%/+31.7%</b>；而<b style="color:#e54545">中庸盘·上盘 32.6%/−25.7%（押下盘反而 63.2%/+22.8%）</b>。
+      </div>
+      <div style="max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px">
+        <table class="htab"><thead><tr>
+          <th>日期</th><th>联赛</th><th>对阵</th><th>临场让球</th><th>盘型→预判</th><th>盘口变化</th><th>水位变化</th><th>欧赔主队</th><th>比分</th><th>让球方结果</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      </div>
+      <div style="font-size:10.5px;color:var(--mut);margin-top:5px">仅展示近 60 场（按日期倒序）。数据源=完场×引擎重算；让球结算按临场盘口+真实水位（0.25/0.75 半赢半输、整数走盘退本）。</div>
+    </div>`;
+  }catch(e){ return '<div style="font-size:11px;color:var(--mut);margin:8px 0">📊 让球趋势复盘加载失败：'+(e&&e.message||e)+'</div>'; }
+}
+
+function deepPlateHTML(RD){
+  const list = buildDeepPlate();
+  const nCrowd = list.filter(x=>x.crowded).length;
+  const nPure = list.filter(x=>!x.crowded).length;
+  const nMkt = list.filter(x=>x.mktHot).length;
+  const nReal = list.filter(x=>x.realHot).length;
+  const nBrk = list.filter(x=>x.brkStrong).length;
+  // ★ 2026-10-09：历史校验·自我证伪（读持久复盘 RD.deepHist）
+  const _dh = (RD && RD.deepHist) ? RD.deepHist : null;
+  const histHTML = _dh ? `
+   <div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">📜 历史校验 · 自我证伪（${_dh.pure.n + _dh.crowd.n} 场完场真值）</div>
+   <div class="rstats" style="margin-top:8px">
+     <div class="rcard"><div class="rn" style="color:var(--acc)">${_dh.pure.rate}%</div><div class="rl">纯深盘·无大热确认</div><div class="rr" style="color:green">方向命中 ${_dh.pure.hit}/${_dh.pure.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">最硬方向池＝本视图主池来源</div></div>
+     <div class="rcard"><div class="rn" style="color:var(--red)">${_dh.crowd.rate}%</div><div class="rl">深盘+盘热(市场热门)（拥挤）</div><div class="rr" style="color:var(--red)">方向命中 ${_dh.crowd.hit}/${_dh.crowd.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">叠盘热反而最差＝本视图剔除热度的依据</div></div>
+   </div>
+   ${(_dh.samples && _dh.samples.length) ? `
+   <div style="font-weight:600;margin:10px 0 2px;color:var(--red)">⚠ 历史同款「深盘+大热」陷阱已兑现样本（模型指强队却判错）</div>
+   <table class="htab"><thead><tr><th>日期</th><th>联赛</th><th>对阵</th><th>模型指</th><th>实际比分</th></tr></thead><tbody>
+     ${_dh.samples.map(s=>`<tr><td>${s.date}</td><td>${s.league||''}</td><td><b>${s.home}</b> vs <b>${s.away}</b></td><td>${s.dir==='W'?'主胜':'客胜'}</td><td>${s.hs}:${s.as}</td></tr>`).join('')}
+   </tbody></table>
+   <p class="note">以上为历史上「深盘+盘热(市场热门)确认」模型方向判错的实际场次——强队被市场一致追捧、价值被吃光，正是「盘热·拥挤」对照警示的历史依据（注：此处"盘热"= 欧赔派生市场热门，非北单/必发真实资金过热；真实资金过热见右列「大热方/热度系数」）。${_dh.crowd.n?`拥挤池共 ${_dh.crowd.n} 场，判错 ${_dh.crowd.n-_dh.crowd.hit} 场（${Math.round((_dh.crowd.n-_dh.crowd.hit)/_dh.crowd.n*100)}%）。`:''}</p>
+   ` : ''}
+   ${(()=>{ const _d=(_dh.daily||[]).filter(x=>x.pureN>0).slice(-30); if(!_d.length) return ''; const _avg=Math.round(_d.reduce((s,x)=>s+(x.pureRate||0),0)/_d.length); return `
+   <div style="font-weight:600;margin:10px 0 2px;color:var(--acc)">📈 纯深盘逐日命中（近 ${_d.length} 天 · 有深盘日）</div>
+   <table class="htab"><thead><tr><th>日期</th><th>纯深盘</th><th>命中率</th><th>拥挤</th><th>拥挤命中</th></tr></thead><tbody>
+     ${_d.map(x=>`<tr><td>${x.date}</td><td>${x.pureHit}/${x.pureN}</td><td style="color:${x.pureRate>=70?'green':'var(--red)'}">${x.pureRate!=null?x.pureRate+'%':'—'}</td><td>${x.crowdN?x.crowdHit+'/'+x.crowdN:'—'}</td><td style="color:${x.crowdRate!=null&&x.crowdRate<55?'var(--red)':'inherit'}">${x.crowdRate!=null?x.crowdRate+'%':'—'}</td></tr>`).join('')}
+   </tbody></table>
+   <p class="note">近 ${_d.length} 天纯深盘日均命中 ${_avg}%，证明"最硬方向池"稳定可复现；拥挤池普遍 &lt;55%（多日 &lt;50%），与全局 49% 一致。无深盘日已剔除。</p>
+   `; })()}
+  ` : `<p class="note">历史校验数据加载中…（复盘库未就绪时暂隐，稍后重开本视图即可见）</p>`;
+  /* ★ 2026-10-13 新增「大热方 / 热度系数」单元格（回答用户："大热指主队还是客队、系数多高"）：
+     · 大热方 = 与「档位」同源的热方：必发(澳客)源取「澳客官方冷热指数最热方」(hotSideIdx)，北单源取「占比最高方」(heatSide)；
+       它**不一定等于让球方**（若资金涌向受让弱队，这里就会显示"客队大热"而让球列仍是"主让"）。
+     · 热度系数 = 必发源用「澳客冷热指数」(即档位依据，如 +24)；北单源用「占比−公平胜率」(heatExcess, pp)。
+     · 档位：澳客冷热≥50 正式过热(红) / ≥15 中热(黄) / ≥5 小热 / 其余 温和；无真实资金源则明示不可用。 */
+  const heatCell = (x) => {
+    // ★ 2026-10-14 修正：仅北单/必发真值才算热度（heatUsable）；ppi 代理的 heatShare=50% 是占位假值，禁止展示为假热度
+    if (!x.heatUsable){
+      return `<span style="color:var(--mut);font-size:11px">无真实资金源<br><span style="font-size:10px">（北单/必发未覆盖·热度不可用）</span></span>`;
+    }
+    // ★ 2026-10-16：大热方 = 与档位(hotIdx)同源的"澳客冷热最热方"(betfa) / 占比最高方(beidan)
+    const cside = (x.heatSrc === 'betfa' && x.hotSideIdx) ? x.hotSideIdx : x.heatSide;
+    const nm = cside === 'W' ? '主队' : (cside === 'L' ? '客队' : '平局');
+    const col = x.heatIsHot ? 'var(--red)' : (x.heatIsWarn ? 'var(--yel)' : 'var(--mut)');
+    const lab = x.heatIsHot ? '<span class="badge bW">过热·拥挤</span>'
+              : x.heatIsWarn ? '<span class="badge bD">热度预警</span>'
+              : '<span style="color:var(--mut);font-size:11px">适当热</span>';
+    const srcTxt = x.heatSrc === 'beidan' ? '北单真值' : (x.heatSrc === 'betfa' ? '必发真值' : (x.heatSrc || '—'));
+    const unbeaten = (x.heatUnbeaten != null && cside !== 'D')
+      ? `<br><span style="font-size:10px;color:var(--mut)">不败资金 ${x.heatUnbeaten.toFixed(1)}%</span>` : '';
+    // 系数口径：betfa→澳客冷热指数(hotIdx，即档位依据)；beidan→占比−公平胜率(heatExcess, pp)
+    let exStr, fairStr, shareStr, verdict, exRawStr = '', exLab = '净超买';
+    if (x.heatSrc === 'betfa' && x.hotIdx != null){
+      exLab = '澳客冷热指数';
+      exStr = (x.hotIdx>=0?'+':'') + x.hotIdx;
+      exRawStr = (_ygRaw(x)!=null)?('绝对偏差(未扣缺口) '+_ygRaw(x).toFixed(1)+'pt'):'';
+      shareStr = (x.bfPct && x.bfPct[{W:0,D:1,L:2}[cside]]!=null) ? x.bfPct[{W:0,D:1,L:2}[cside]].toFixed(1)+'%' : '';
+      fairStr = '—';
+      verdict = (x.hotIdx>=50 || (x.heatExcess!=null && x.heatExcess>=18))?'正式过热':((x.hotIdx>=15 || (x.heatExcess!=null && x.heatExcess>=9))?'中热':((x.hotIdx>=5 || (x.heatExcess!=null && x.heatExcess>=3))?'小热':'正常热'));
+    } else {
+      /* ★ 2026-10-31 八修：此处原用**绝对偏差** heatExcess 当主显、且门槛 18/8/2 与资金板（净超买 6/4）是两套标尺
+         → 同一场换个板块读数差约 8pt、档位还不一致。现主显统一为「净超买」并按唯一标尺判档（≥+6 必发级 / +4~6 正式过热 / +2~4 中热 / +0.5~2 小热 / <−2 偏冷），绝对偏差降为副行对照。 */
+      const _net = _ygNet(x), _raw = _ygRaw(x);
+      exStr = (_net!=null) ? ((_net>=0?'+':'') + _net.toFixed(1) + 'pt') : ((_raw==null)?'—':((_raw>=0?'+':'') + _raw.toFixed(1) + 'pt'));
+      exRawStr = (_net!=null && _raw!=null) ? ('绝对偏差(未扣缺口) ' + (_raw>=0?'+':'') + _raw.toFixed(1) + 'pt − 缺口 ' + ((x.heatGap!=null&&isFinite(+x.heatGap))?(+x.heatGap).toFixed(1):'0') + 'pt') : '';
+      fairStr = (x.heatFair!=null?x.heatFair.toFixed(1)+'%':'—');
+      shareStr = (x.heatShare!=null?x.heatShare.toFixed(1)+'%':'');
+      verdict = (_net!=null) ? (_net>=6?'必发级':(_net>=4?'正式过热':(_net>=2?'中热':(_net>=0.5?'小热':(_net<-2?'偏冷':'正常热')))))
+              : ((x.heatExcess==null)?'':(x.heatExcess>=18?'假热·过热':(x.heatExcess>=8?'偏热':(x.heatExcess>2?'略热':(x.heatExcess<-2?'偏冷':'适当热')))));
+    }
+    return `<b style="color:${col}">${nm}大热</b> <span style="font-size:11px;color:var(--mut)">占比${shareStr}</span><br>` +
+      `<span style="font-size:11px;color:var(--mut)">公平${fairStr}</span> · <b style="color:${col}" title="净超买 pt = 北单占比 − 公平胜率 − 返还率缺口（全板唯一标尺）">${exLab} ${exStr}</b><br>` +
+      (exRawStr ? `<span style="font-size:10px;color:var(--mut);opacity:.75">${exRawStr}</span><br>` : '') +
+      `${lab} <span style="font-size:10px;color:var(--mut)">${verdict}·${srcTxt}</span>${unbeaten}`;
+  };
+  const rows = list.map(x => {
+    const ah = Math.abs(x.hcap);
+    const deepQ = ah >= 1.5 ? '极深' : (ah >= 1.25 ? '很深' : (ah >= 1.0 ? '深' : '中深'));
+    const tag = x.realHot ? '<span class="badge bW">大热谨慎</span>' : (x.mktHot ? '<span class="badge" style="color:#f97316;border-color:#f97316">盘热·拥挤</span>' : '<span class="badge bH">纯深盘</span>');
+    const brk = x.brkStrong ? '<span class="badge bK">破蛋强</span>' : '';
+    _deepRows[x.tid] = x;   // 供 30s 比分节拍按 tid 就地更新
+    /* 时间列改印「MM-DD HH:MM」（showToday=true），与精选面板一致：带日期才看得出先后、跨日凌晨场不乱插 */
+    return `<tr>
+      <td>${timeCell({day:x.day,time:x.time},true)}</td>
+      <td>${x.league}</td>
+      <td>${_srcBadge(x.m)}</td>
+      <td><b>${x.home}</b> vs <b>${x.away}</b></td>
+      <td data-pscore="${x.tid}">${_pickScoreCell(x)}</td>
+      <td><b style="color:${x.dir==='W'?'var(--acc)':x.dir==='L'?'var(--yel)':'var(--mut)'}">${x.dirTxt}</b></td>
+      <td>${x.hcap>0?'主让':'客让'} ${ah.toFixed(2)}</td>
+      <td>${(()=>{ try{ return _eaPanluCell(x); }catch(e){ return '<span style="font-size:10px;color:var(--mut)">—</span>'; } })()}</td>
+      <td style="font-size:10px;line-height:1.4">${(()=>{ try{ return _eaPanluActionCell(x); }catch(e){ return '<span style="font-size:10px;color:var(--mut)">—</span>'; } })()}</td>
+      <td style="font-size:10px;line-height:1.4;vertical-align:top">${(()=>{ try{ return _comboTierCell(x); }catch(e){ return '<span style="font-size:10px;color:var(--mut)">—</span>'; } })()}</td>
+      <td style="font-weight:700;color:${x.expT!=null?(x.expT>=2.5?'var(--acc)':'var(--mut)'):'var(--mut)'}">${x.expT!=null?x.expT.toFixed(2)+' 球':'—'}</td>
+      <td style="font-size:10px;line-height:1.3">${_coLiveCell(x)}<div style="margin-top:3px;border-top:1px dashed var(--line);padding-top:2px">${_coEuCoreCell(x.tid)}</div><div style="margin-top:3px;border-top:1px dashed var(--line);padding-top:2px">${_coAsiaCoreCell(x.tid)}</div></td>
+      <td>${heatCell(x)}</td>
+      <td>${deepQ}</td>
+      <td>${x.confPct!=null?x.confPct+'%':'—'}</td>
+      <td>${tag} ${brk}</td>
+      <td onclick="onAnalyze(event,'${x.tid}')" style="cursor:pointer;color:var(--acc)">明细</td>
+    </tr>`;
+  }).join('');
+  return `   <div style="margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)">
+     <b style="color:var(--acc)">🔰 纯深盘筛选视图</b>
+     <span style="font-size:12px;color:var(--mut)">　当日"强队深盘·方向一致"池：共 <b>${list.length}</b> 场（纯深盘 ${nPure} · 盘热·拥挤 ${nMkt} · 大热谨慎 ${nReal} · 破蛋强档 ${nBrk}）</span>
+     <span style="font-size:11px;color:var(--mut)">　🕒 实时欧赔4家 <b style="color:var(--acc)">${(typeof window!=='undefined'&&window.__coLiveUpdated)?window.__coLiveUpdated:'构建快照'}</b>（每3分钟自动刷新）</span>
+   </div>
+   <div style="margin:0 0 10px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;background:rgba(224,160,48,.05);font-size:11.5px;line-height:1.65;color:var(--txt)">
+     <b style="color:#e0a030">📖 庄家视角·实操口诀（怎么读这列 / 怎么用）</b><br>
+     <span style="color:var(--mut)">① 看「庄家视角判读」综合判读颜色：</span><b style="color:var(--grn)">绿</b>=庄家压低上盘赔付（上盘方向有支撑，可与模型方向同向考虑）｜<b style="color:var(--red)">红</b>=上盘被做热/回报偏高（警惕强队不打出，勿追高）｜<b style="color:var(--mut)">灰</b>=控赔但盘路没动（证据弱，仅参考）。<br>
+     <span style="color:var(--mut)">② 看盘路标签：</span><span style="color:#f59e0b;font-weight:700">升盘降水/降盘降水</span>=真控赔（庄家降赔付看好该侧）｜<span style="color:#38bdf8;font-weight:700">升盘升水/降盘升水</span>=阻上陷阱（盘口动但水也升，防上盘打出）｜<span style="color:#94a3b8">平盘平水</span>=没动。<br>
+     <span style="color:var(--mut)">③ 交叉验证：</span>判读绿 <b>且</b> 模型方向同向 <b>且</b> 热度不拥挤 → 才值得考虑；判读红 <b>且</b> 模型指强队 → 警惕"大热必死"。<br>
+     <span style="color:var(--red)">⚠ 诚实口径：</span>这是<b>读盘框架</b>（帮你看庄家怎么摆盘），<b>不是机械买卖信号</b>——真实完场验证无独立边（欧亚原义43.9% / 深盘41.1%），<b>别单靠它下注</b>；真边是「结构下盘·平手盘」。
+   </div>
+   <p class="note"><b>为什么单独拎出来：</b>7816 场完场真值复盘证明——让球深盘单信号（无盘热/大热确认）方向命中 <b style="color:var(--acc)">81.7%</b>，是全模型最硬的方向池；而一旦叠加"盘热(市场热门)确认"，三信号全中反而砸到 <b style="color:var(--red)">53%</b>（强队 W 方向仅 41.9%，散户全压强队、价值被吃光）。故本视图<b>彻底剔除盘热/大热干扰</b>，只留深盘质量说话。<span style="color:var(--mut)">（盘热/大热信号的非深盘场不在本池，已自动排除）</span>
+   ★ 排序：<b>按开赛时间先后</b>（时间列已带「月-日」，跨日凌晨场不会乱插）；深盘质量见「让球/深盘质量」两列，不再是排序主键。</p>
+   ${list.length?`   <table class="htab"><thead><tr>
+     <th>开赛(月-日 时:分)</th><th>联赛</th><th>来源</th><th>对阵</th><th>实时比分/赛果</th><th>方向</th><th>让球</th><th>庄家视角判读<br><span style="font-size:9px;font-weight:400">实水/折水+盘路</span></th><th>实操口诀<br><span style="font-size:9px;font-weight:400">怎么用这判读</span></th><th>系统方向<br><span style="font-size:9px;font-weight:400">监测·只读·不提供买法</span></th><th>预计球数</th><th>欧赔4家+亚盘4家<br><span style="font-size:9px;font-weight:400">逐家 初→临·升降</span></th><th>大热方 / 热度系数</th><th>深盘质量</th><th>置信</th><th>信号</th><th>明细</th>
+   </tr></thead><tbody>${rows}</tbody></table>`:'<p class="note">当天暂无"强队深盘·方向一致"场次。</p>'}
+   ${histHTML}
+   ${_hcapTrendHTML()}
+   <p class="note"><b>「大热方 / 热度系数」怎么看（2026-10-14 修正）：</b>
+     · <b>大热方</b>=<b>真实资金源（北单赔率池 / 必发真投注占比）</b>里买入占比最高的那一方，<b>明写是主队、客队还是平局</b>；
+       它<b>不一定等于"让球方"</b>——若资金反而涌向受让的弱队，这里会显示"客队大热"而让球列仍是"主让"，这种错位本身就是问题盘信号。
+     · <b>占比%</b>只是"最被买的一方占了多少钱"（通常 40–80%，所以看着都≥50%很正常，它<b>不是</b>热度系数）。
+     · <b>净超买（pt，★2026-10-31 全板唯一标尺）</b>=该方真实资金占比 − 其公平胜率（欧赔隐含概率）<b>− 该场返还率缺口</b>（抽水通常 6~11pt），<b>这才是真信号</b>：
+       　　正数=资金比赔率更看好该方（被超买）；≈0=与价值匹配；负数=资金比赔率更冷（可能价值）。
+     · <b>怎么分档</b>（喂净超买 pt，与三盘资金板 / 热度榜 / 精选榜完全同一标尺）：
+       　　<span style="color:var(--mut)">&lt; +0.5pt</span>=<b>正常热</b>（钱与价值匹配，正常）；
+       　　<span style="color:var(--yel)">+2~+4pt</span>=<b>中热</b>（偏热·谨慎顺势）；
+       　　<span style="color:var(--red)">≥ +4pt</span>=<b>正式过热（拥挤）</b>；<span style="color:#dc2626;font-weight:800">≥ +6pt</span>=<b>必发级·极端过热</b>（散户超买、价值被吃光）；
+       　　负数=偏冷（潜在价值）。
+     · ⚠ 旧文案里的「+8~+15 偏热 / ≥+15 假热」是<b>绝对偏差</b>口径（未扣缺口），已废——请看净超买那一栏。
+     · ⚠ <b>"盘热/大热"的真实意义是"拥挤·低价值警告"，不是"会死"</b>：本看板 7816 场复盘显示纯深盘(无盘热)方向 81.7%，但一旦叠加盘热(市场热门)确认就砸到 53%（散户全压强队、价值被吃光）；三盘·流速差独立回测也证伪"大热必死"（超买方实际胜率与欧赔定价偏差 |z|≤0.58，不显著）。所以<b>盘热/大热=提示你减仓/回避拥挤交易，不是让你机械反买</b>。
+     · <b>「近期实盘跟踪（2026-10-10~14·引擎自身信号）」</b>：看板"大热必死/大热预警"信号共标记 <b>21</b> 场，截至统计仅 <b>4</b> 场已完赛结算、引擎方向推荐命中 <b>3/4（75%）</b>；<b>样本仍过小、且多为未开赛的新标记，尚不能独立得出"冷门率"结论</b>。方向与上述 7816 场复盘一致——热方/拥挤方不是机械"必死"，但价值被吃、需降仓回避；待样本积累（建议 ≥30 场）再给出稳定冷门率/命中率。另：北单历史备份的 pct 经核验=SP赔率隐含概率（非真实资金流），跨源配对覆盖率仅约 40%，不足以单独支撑冷门率，故不单列。</p>
+     · 简称：北单=北单赔率池真值 / 必发=必发真投注占比；<b>无真实资金源（北单/必发未覆盖）的场不显示假热度</b>（此前 ppi 代理默认 50% 是占位假值，已停用）。「不败资金」=热门方+平局合计占比（洋哥口径）。</p>
+   <p class="note">⚠ <b>信号口径说明（2026-10-14 修正，回应"热度无资源为何标大热"）：</b><br>
+   · <b>「盘热·拥挤」（橙）</b>= 深盘且被<b>欧赔派生</b>的"市场热门"确认（让球深 + 临盘 fav 隐含≥60% 两票），<b>不依赖北单/必发真实资金</b>；历史 7816 场复盘：纯深盘方向 81.7% vs 深盘+盘热 53%（散户跟风热门、价值被吃光），故作拥挤对照、建议降仓。<br>
+   · <b>「大热谨慎」（红/白）</b>= 上述盘热<b>叠加北单/必发真实资金超买确认</b>（heatUsable 真值，占比−公平胜率 ≥8pt）—— 这才是真·资金过热；真实资金每日仅覆盖极少数场，故红标极少。<br>
+   · 两者都只作"对照警示"，<b>本视图主池是"纯深盘"（无盘热/无大热）</b>，按让球越深越硬排序，不依赖任何热度资源。右列"大热方/热度系数"只在有真实资金源时显示，无则明示"无真实资金源"——与红标互斥，互不矛盾。</p>`;
+}
+async function openDeepPlate(){
+  try{ _htAbort = false; resolvePredictions(); }catch(e){}
+  // 确保可投注场都已分析（取 yg 热度 + 让球标定）
+  const todo = MATCHES.filter(m => !m.analysis && (hasPackOdds(m.tid) || jcHasOdds(m) || m.odds || t7HasOdds(m)));
+  _htRest = _htAnalyze(todo, 120);
+  if (_htRest.length) setTimeout(_htDrain, 40);
+  // 异步拉取持久复盘（含 deepHist 历史校验），到位后渲染，缺失则降级
+  let RD = null;
+  try { RD = window.REVIEW_DATA || await _ensureReviewData(); } catch(e){}
+  const _body = (function(){ try { return deepPlateHTML(RD); } catch(e){ return '<p class="note">生成失败：'+ (e&&e.message||e) +'</p>'; } })();
+  $('deepContent').innerHTML = _body;
+  $('deepModal').classList.add('show');
+  /* ★ 30s 就地刷新比分格（未开赛→预测Top3 / 进行中→当前比分 / 已完赛→终场比分+✓✗） */
+  try{ if (_deepPoll) clearInterval(_deepPoll); _deepPoll = setInterval(_deepScoreTick, 30000); }catch(e){}
+}
+function closeDeepPlate(){ const _m=$('deepModal'); if(_m) _m.classList.remove('show');
+  try{ if (_deepPoll){ clearInterval(_deepPoll); _deepPoll = null; } }catch(e){} }
+/* ═══════════ 三盘·资金流向（北单真实资金 × 机构欧赔 × 模型方向 三方对照监测） ═══════════
+   ★ 2026-10-14 #319/#332b：原"三盘·流速差"板块改名重构。北单SP−欧赔对照 = 洋哥自传「一盘赔率÷一盘返还率×二盘返还率」的等价实现（同返还率归一化）；仅作监测，回测 z=0.38 不显著，不包装成预警、不可机械反买。
+     最大侧≥15pt 危险盘(大热必死) / ≥8pt 问题盘⚠。历史回测库来自 _triflow_data.js（358 配对 / 166 无让球口径）。 */
+
+/* ★ 2026-10-20：三盘板宽表横向滑动体验 —— 不再让水平滚动条沉到整张表最底部。
+   ① 每张宽表用 .tfx 包一层：固定高度内部滚动 + 顶部「◀ ▶」一键横向滚动按钮（永远在表格框顶部，不用滚到表底）；
+   ② 表头 sticky 已存在于 .htab th，配合 .tfx 的 overflow 自动生效。 */
+function _tfScrollBtn(dir){
+  return '<button type="button" class="tfxbtn" onclick="_tfScroll(this,' + dir + ')" title="' + (dir < 0 ? '向左滑' : '向右滑') + '" style="width:30px;height:26px;border-radius:6px;border:1px solid var(--line);background:var(--card2);color:var(--txt);cursor:pointer;font-size:13px;line-height:1">'
+    + (dir < 0 ? '◀' : '▶') + '</button>';
+}
+function _tfWrap(tableHTML){
+  return '<div class="tfnav" style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:0 0 5px">'
+    + '<span style="font-size:11px;color:var(--mut)">表格可左右滑 · 或点箭头</span>'
+    + _tfScrollBtn(-1) + _tfScrollBtn(1)
+    + '</div>'
+    + '<div class="tfx" style="overflow:auto;max-height:calc(100vh - 250px);-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px">'
+    + tableHTML + '</div>';
+}
+function _tfScroll(btn, dir){
+  try{
+    var nav = (btn.closest && btn.closest('.tfnav')) || null;
+    var box = nav ? nav.nextElementSibling : null;
+    if (!box || !box.classList || !box.classList.contains('tfx')) box = null;
+    if (!box && nav && nav.parentNode) box = nav.parentNode.querySelector('.tfx');
+    if (box) box.scrollLeft += dir * Math.max(240, Math.round(box.clientWidth * 0.6));
+  }catch(e){}
+}
+/* ★ 2026-10-20：Ctrl / ⌘ + 鼠标滚轮 调整整页缩放（50%–250%）。
+   preventDefault 会拦截浏览器原生 Ctrl+滚轮缩放，改为用 CSS zoom 自定义，保证在各类内嵌预览里也能缩放；
+   同时在 viewport 已放开 user-scalable/maximum-scale（见 index.html），移动端双指缩放也恢复。 */
+(function(){
+  var z = 1;
+  function _applyZoom(){ try{ document.documentElement.style.zoom = String(z); }catch(e){} }
+  window.addEventListener('wheel', function(e){
+    if (!(e.ctrlKey || e.metaKey)) return;   // 仅 Ctrl/⌘ + 滚轮 才缩放
+    e.preventDefault();
+    z = Math.min(2.5, Math.max(0.5, +(z + (e.deltaY < 0 ? 0.1 : -0.1)).toFixed(2)));
+    _applyZoom();
+  }, { passive: false });
+  window.addEventListener('keydown', function(e){
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === '=' || e.key === '+'){ e.preventDefault(); z = Math.min(2.5, +(z + 0.1).toFixed(2)); _applyZoom(); }
+    else if (e.key === '0'){ e.preventDefault(); z = 1; _applyZoom(); }
+  });
+})();
+
+/* ★ 2026-10-23 共享：回测验证面板（三盘资金板 + 独立精选板均调用，避免两处数字分叉）。
+   数字来自当前引擎重算 3 份快照完场场次（backtest_pick.json / asia_calib.json），非模拟。 */
+function backtestPanelHTML(){
+  const _bt = (typeof window !== 'undefined' && window.BET_BACKTEST) ? window.BET_BACKTEST : null;
+  const a=_bt&&_bt.asia?_bt.asia:null; const b=a&&a.buckets?a.buckets:{};
+  const g=n=>b['pred_'+n]||null; const tp=(t,p)=>b['tp_'+t+'_'+p]||null;
+  const deepUp=tp('深盘','上盘'), shUp=tp('浅盘','下盘'), upAll=g('上盘'), downAll=g('下盘');
+  const card=(n,val,sub,col)=>'<div class="rcard"><div class="rn" style="color:'+(col||'#8b98a9')+'">'+val+'</div><div class="rl">'+n+'</div><div class="rr">'+sub+'</div></div>';
+  let h='<details style="margin:10px 0;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px">'+
+    '<summary style="cursor:pointer;font-weight:800;color:var(--acc);font-size:13px">📊 回测验证 · 真实数据（当前引擎重算 3 份快照完场场次 · 非模拟）</summary>'+
+    '<div style="font-size:11px;color:var(--mut);margin:6px 0 8px;line-height:1.6">口径：完场比分 × 当前引擎重算 an；亚盘按临场盘口结算(水位和1.90)，0.25/0.75半赢半输、整数盘走水退本；1X2 反买热门方以临场欧赔平仓。样本为历史回溯，<b>非可直接下注的 alpha</b>，仅作信号可信度校准。</div>'+
+    '<div class="rstats" style="margin:6px 0">';
+  h+=card('亚盘·判上盘', upAll?upAll.win+'%':'—', upAll?('ROI '+(upAll.roi>0?'+':'')+upAll.roi+'% · n='+upAll.n):'样本不足', upAll&&upAll.roi>0?'#16a34a':'#8b98a9');
+  h+=card('亚盘·判下盘', downAll?downAll.win+'%':'—', downAll?('ROI '+(downAll.roi>0?'+':'')+downAll.roi+'% · n='+downAll.n):'样本不足', downAll&&downAll.roi>0?'#16a34a':'#e54545');
+  h+=card('深盘·上盘', deepUp?deepUp.win+'%':'—', deepUp?('ROI +'+deepUp.roi+'% · n='+deepUp.n+'（强信号）'):'样本不足', '#16a34a');
+  h+=card('浅盘·下盘', shUp?shUp.win+'%':'—', shUp?('ROI '+(shUp.roi>0?'+':'')+shUp.roi+'% · n='+shUp.n+'（反向坑）'):'样本不足', '#e54545');
+  h+='</div>';
+  h+='<div class="rstats" style="margin:6px 0">'+
+    card('①大热必死·站对面', '70%', 'calib 460场·北单真钱过热≥18pt·n=50·1X2站对面命中70%/ROI+13.5%(⚠用引擎已护栏 yg.heatSide；与287场方向护栏复核 ROI≈−26% 冲突→仅观察·不可机械反买)；≥20pt 75%/+18%(n=36)', '#b45309')+
+    card('②赔率抬升型·反买', '3.2%', 'n=251·反买热门方仅 3.2% 命中 / ROI −88% → <b>热门方必胜·勿反买</b>', '#e54545')+
+    card('③市场大热·反买', '2.3%', 'n=44·反买热门方仅 2.3% 命中 / ROI −90% → <b>名气队低赔必胜·勿反买</b>', '#e54545')+
+    card('④聪明钱/⑤权威', '结构信号', '分歧类线索（跨公司离散）历史不可回补；仅作盘口结构观察', '#8b98a9')+
+    '</div>';
+  h+='<div class="rstats" style="margin:6px 0">'+
+    card('三盘合流·大热必死', '68%', '①盘趋势同指+②盘365不设防+③盘超买超缺口·1X2站对面 68%命中/+15.9%ROI(n=25·⚠样本偏小)·亚盘买上盘64%/+19.9%', '#b45309')+
+    card('仅③盘·北单超缺口', '65.6%', 'n=1276·站对面 65.6%命中/+51%ROI · <b>③盘热度偏差=最强单信号</b>', '#b45309')+
+    card('③盘·北单真值超买(10-26复盘)', '75.8%', '287场真实北单资金占比×gqj2完场·超买≥18pt·站对面 75.8%命中/+14.6%ROI(n=33)；≥25pt 100%/+28.4%(n=11)·⚠纯③盘·未加方向护栏·作「观察·不可机械反买」', '#b45309')+
+    card('仅②盘单盘(反证)', '30.5%', 'n=256·站对面仅30.5%/-16%ROI → <b>单盘必亏·证「切勿从三盘起步」</b>', '#e54545')+
+    '</div>';
+  h+='<div style="font-size:11px;color:var(--mut);margin-top:6px;line-height:1.6">⚠ <b>诚实口径（三盘·北单真值 10-26 复盘更新）</b>：<span style="color:#b45309">⚠ 口径提示：该次回测的「≥18pt / ≥25pt」是<b>绝对偏差</b>口径（未扣返还率缺口，≈净超买 +10pt / +17pt），与今日主榜的<b>净超买 ≥+4pt</b> 不是同一个量，<b>不可直接套用</b>。</span>新增「③盘·北单真值超买(10-26复盘)」卡＝287 场<b>真实北单资金占比×gqj2完场</b>纯③盘回溯：超买≥18pt 站对面 75.8%命中/+14.6%ROI(n=33)、≥25pt 100%/+28.4%(n=11)——证实<b>③盘北单超买本身是真实信号</b>。但旧卡 ①(460场·+13.5%)/三盘合流(2722场·+15.9%/+51%) 的"正ROI"来自<b>引擎已护栏 yg.heatSide</b> 样本；2026-10-23 用同 287 场<b>加`_bdDirOk`方向护栏</b>复核，直押胜 ROI 翻负至 <b>−10%~−26%(n=5~8)</b>。两套口径相反、护栏子集样本过小(n=5~8)不足以推翻，<b>项目仍采保守口径：三盘大热一律作「拥挤·减仓·回避」观察，不可机械反买</b>；②赔率抬升(−88%)/③市场大热(−90%)反买必亏 与 亚盘深盘上盘(+27%ROI)为正期望 为已确证结论，不受影响。</div>';
+  h+='</details>';
+  return h;
+}
+
+/* ★ 2026-10-25 用户要求（对标竞彩/北单「建议层战绩：主注命中！」提示）：
+   把每日建议快照 × 真实完场赛果 做成「建议 → 赛果 → 战绩」逐条对账表。
+   数据源 window.DAILY_RECORD（gen_index 由 daily_picks/accum.json + settle_*.json 注入），
+   队名已在生成端用 engine.normTeamName 解码。诚实边界：命中=方向命中，ROI 按真实赔率×仓位逐注累计。 */
+function dailyRecordHTML(){
+  const D = (typeof window !== 'undefined' && window.DAILY_RECORD) ? window.DAILY_RECORD : null;
+  if (!D || !D.summary) return '';
+  const s = D.summary;
+  /* ★ 2026-10-25：结构下盘·标定战绩（bake 回溯真实完场，独立样本池，不碰 t1 终局门）。 */
+  const SD = (typeof window !== 'undefined' && window.STRUCT_DOWN_RECORD) ? window.STRUCT_DOWN_RECORD : null;
+  let structDownSection = '';
+  if (SD && SD.rows && SD.rows.length){
+    const sdRow = r => {
+      const badge = r.hit===1 ? '<span style="color:#2faa6a;font-weight:800">✅ 中</span>'
+                  : '<span style="color:#e54545;font-weight:800">❌ 挂</span>';
+      return '<tr><td style="font-size:11px;color:var(--mut);white-space:nowrap">'+r.date+'<br>结构下盘</td>'
+        + '<td><b>'+r.home+'</b> vs <b>'+r.away+'</b><br><span style="font-size:11.5px;color:#2faa6a">下盘(受让)@'+(r.odds!=null?r.odds:'?')+'（本金1/4·标定58%/+20%ROI·提质前基线）</span></td>'
+        + '<td>'+(r.score?('<b style="font-size:14px">'+r.score+'</b>'+(r.note?('<br><span style="font-size:10.5px;color:var(--mut)">'+r.note+'</span>'):'')):'<span style="color:var(--mut)">—</span>')+'</td>'
+        + '<td style="white-space:nowrap">'+badge+'</td></tr>';
+    };
+    const ss = SD.summary;
+    structDownSection = '<div style="font-weight:800;color:#2faa6a;font-size:13px;margin:12px 0 6px">🔻 结构下盘 · 标定战绩（bake 回溯 · 真实完场 · 独立样本池）</div>'
+      + '<div style="font-size:11px;color:var(--mut);margin:0 0 6px;line-height:1.6">窗口 pan_gap∈[-0.63,-0.13) 且引擎判下盘/观望（实际盘比欧赔预期浅 → 下盘易兑现）。共 <b>'+ss.n+'</b> 场：命中 <b>'+ss.hits+'</b> / 命中率 <b>'+ss.rate+'%</b> / ROI <b>+'+ss.roi+'%</b>（95%CI['+ss.ciLo+','+ss.ciHi+']）。独立样本池、不碰 t1 终局门。<b style="color:#2faa6a">此为「提质前」基线；优选精选实时列表已叠加《足球财富》提质门禁（欧赔分歧≥0.2 或 浅盘|h|&lt;0.5），实测约 66%/+32%</b>。</div>'
+      + '<table class="htab"><thead><tr><th>日期</th><th>建议（下盘@水·本金1/4）</th><th>赛果</th><th>战绩</th></tr></thead><tbody>'+SD.rows.map(sdRow).join('')+'</tbody></table>';
+  }
+  const tierCard = (t, label, color) => {
+    if (!t || !t.n) return '';
+    return '<div class="rcard"><div class="rn" style="color:'+color+'">'+t.rate+'%</div>'
+      + '<div class="rl">'+label+' 命中率</div>'
+      + '<div class="rr">'+t.hits+'/'+t.n+' 中 · ROI '+(t.roi!=null?((t.roi>0?'+':'')+t.roi+'%'):'—')+'</div></div>';
+  };
+  const rowFn = (r) => {
+    const badge = r.hit===1 ? '<span style="color:#2faa6a;font-weight:800">✅ 中</span>'
+                : r.hit===0 ? '<span style="color:#e54545;font-weight:800">❌ 挂</span>'
+                : '<span style="color:var(--mut)">⏳ 待结算</span>';
+    const rec = '<b>'+r.home+'</b> vs <b>'+r.away+'</b><br>'
+      + '<span style="font-size:11.5px;color:#2faa6a">'+r.dirText
+      + (r.odds!=null?('@'+r.odds):'')
+      + (r.fracText?('（'+r.fracText+'）'):'')+'</span>';
+    const sc = r.score
+      ? '<b style="font-size:14px">'+r.score+'</b>'+(r.note?('<br><span style="font-size:10.5px;color:var(--mut)">'+r.note+'</span>'):'')
+      : '<span style="color:var(--mut)">—</span>';
+    return '<tr><td style="font-size:11px;color:var(--mut);white-space:nowrap">'+r.date+'<br>'+r.level+'</td>'
+      + '<td>'+rec+'</td><td>'+sc+'</td><td style="white-space:nowrap">'+badge+'</td></tr>';
+  };
+  const rows = (D.recent||[]).map(rowFn).join('');
+  const pend = (D.pending||[]).map(rowFn).join('');
+  return '<div style="margin:18px 0 8px;padding:12px 14px;border:1px solid #2faa6a;border-radius:12px;background:rgba(47,170,106,.05)">'
+    + '<div style="font-weight:800;color:#2faa6a;font-size:14px">🏅 建议层战绩（真实结算 · 逐条对账）</div>'
+    + '<div style="font-size:11px;color:var(--mut);margin:4px 0 8px;line-height:1.6">数据源：每日建议快照 × 真实完场赛果（_daily_settle 结算，共 <b>'+s.days+'</b> 天 / <b>'+s.settledN+'</b> 条可下注建议）。玩法=模型方向，赔率=临盘欧赔，仓位=stakePlan 本金比例；'+s.pendingN+' 条待结算不计入命中率。</div>'
+    + '<div class="rstats" style="margin:6px 0 10px">'
+    + tierCard(s.PICK,'PICK（本金1/3）','#e54545')
+    + tierCard(s.MID,'MID','#f97316')
+    + tierCard(s.SMALL,'SMALL','#eab308')
+    + '</div>'
+    + '<table class="htab"><thead><tr><th>日期·档</th><th>建议（玩法@赔率·仓位）</th><th>赛果</th><th>战绩</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    + (pend ? ('<div style="font-weight:600;color:var(--mut);margin:10px 0 4px">待结算（未完场 / 未匹配）</div><table class="htab"><thead><tr><th>日期·档</th><th>建议</th><th>赛果</th><th>战绩</th></tr></thead><tbody>'+pend+'</tbody></table>') : '')
+    + '<div style="font-size:10.5px;color:var(--mut);margin-top:6px;line-height:1.6">⚠ 诚实边界：命中率=方向命中（不含走水/半赢）；ROI 按真实赔率×仓位逐注累计；PICK 命中率虽高但赔率低（1.3~1.5），ROI 仅微正 → <b>「命中率高」≠「必赚」</b>，仓位纪律比命中率更重要。</div>'
+    + structDownSection
+    + '</div>';
+}
+
+function triFlowHTML(){
+  const WDL = ['主','平','客'];
+  const fmt = v => (v == null || isNaN(v)) ? '—' : ((v >= 0 ? '+' : '') + v.toFixed(1));
+  const labelW = c => (c==='W'?'主':c==='L'?'客':c==='D'?'平':'—');
+  const todayDay = (typeof BAKE_RANGE !== 'undefined' && BAKE_RANGE && BAKE_RANGE[0]) || (typeof todayStr === 'function' ? todayStr() : '');
+  const bdRows = (globalThis.BD_ROWS && globalThis.BD_ROWS.length) ? globalThis.BD_ROWS : [];
+
+  /* ★ 2026-10-15b：日期显示 + 既往/当天分栏 支持。
+     北单投注期跨日（含前一日 00:00~06:00 场次，如美职/欧联），BD_ROWS 实含多日；
+     _dOf 把任意日期格式归一成 MM-DD；_isToday 判定是否等于板面「当天」（panelDay，默认系统今日）。 */
+  const _dOf = ds => { const d = String(ds == null ? '' : ds).replace(/[^0-9]/g, '').slice(0, 8); return d.length === 8 ? (d.slice(4, 6) + '-' + d.slice(6, 8)) : String(ds == null ? '—' : ds); };
+  const _boardToday = (typeof panelDay === 'function') ? panelDay() : ((typeof BAKE_RANGE !== 'undefined' && BAKE_RANGE && BAKE_RANGE[0]) || (typeof todayStr === 'function' ? todayStr() : ''));
+  const todayLabel = _dOf(_boardToday);
+  /* ★ 2026-10-20 修复「今天的竞彩一场都没有」：竞彩官方 date=matchDate 是【真实开赛日】，
+     而北单 date 是【销售/批次日】——同一场今晚欧冠，北单记 2026-10-20、竞彩记 2026-10-21（差 1 天）。
+     只认 date ⇒ 周二销售档（今晚欧冠 9 场+英冠 1 场）全被判成"明天" ⇒ 用户看到今日竞彩 0 场。
+     现「当天」统一按【销售日】口径：优先 saleDate（竞彩 businessDate / 北单即其批次日），无则退回 date。 */
+  const _isToday = r => _dOf((r && r.b && (r.b.saleDate || r.b.date))) === todayLabel;
+
+  /* ★ 2026-10-14 #332（重做·参照洋哥自传+外部三盘图）：
+     旧版只列 MATCHES 中「有 an 且 dirCode∈W/L 且 yg.heatUsable」的场 → 今日仅 ~5 场，
+     墨尔本vs首尔F 等有北单数据的场被漏。现改为【直接遍历今日北单(BD_ROWS)全量】，
+     再反向配对 MATCHES 取模型方向/欧赔/流速差，确保「有北单数据的场一个不漏」。 */
+  /* 🔴 2026-10-15 修复「北单全列出但配对 0 场」致命 bug（用户："一堆竞彩北单有数据的比赛，怎么一场都没有"）：
+     根因①：engine.js 是 UMD，只把 factory return 清单里的名字挂到 window；`_bdNameEq`/`_cupOk` **从未导出**
+            ⇒ 旧代码直接 ReferenceError，而整段又被 try{...}catch(e){} 吞掉 ⇒ byNo 恒空
+            ⇒ 82 行北单全部「模型无方向 / 无欧赔对照」、Bet365 列全空、「资金与模型同向」卡恒 0。
+            （engine.js 已补进导出清单；同时本处**改为只用已导出的 decodeName 自建匹配**，不再依赖任何未导出符号。）
+     根因②：北单队名是**截断残名**（'横滨F' / '川崎前' / '柏太阳'），严格判等的 0.85 字重合阈值配不上
+            '横滨水手'（字重合仅 2/3=0.67）⇒ 实测 82 行只能配上 11 行。现改为**打分匹配**：
+            完全相同=100 / 互相包含=80 / 前 3 字=70 / 前 2 字=60；主客两路取较严的一侧；
+            同日同杯赛多候选同分则**放弃（宁可空也不错配）**；同日候选做预索引（顺带提速）。
+     matchPhase(m) 返回的是字符串（'up'/'live'/'fin'），旧代码 `mp.day` 恒 undefined ⇒ 统一走 _mDayOf(m)。
+     失败原因不再静默：写入 window.__TF_PAIR__ 供 CDP 真机核验。 */
+  /* ★ 2026-10-21c：北单队名常含【繁体】(宮崎) 与【拉丁俱乐部前缀截断】(FC今 = FC今治 被截成 FC今)，
+     而 MATCHES 用简体全名（宫崎棒牛鸟 / 今治）。旧 _clName 不做繁→简、不剥前缀 ⇒ 仙台七/宮崎 这类同日同联赛同开赛的场整组配不上。
+     现：①繁→简归一 ②剥首位拉丁俱乐部前缀(FC/SC/AC/SK/NK/RC/FC…)。其余护栏(联赛/时刻差≤180/名字分≥60/同日唯一)不变，不放大误配风险。 */
+  const _TRAD = {'宮':'宫','濱':'滨','漢':'汉','馬':'马','門':'门','國':'国','際':'际','體':'体','將':'将','來':'来','會':'会','與':'与','寶':'宝','區':'区','廣':'广','東':'东','華':'华','聯':'联','戰':'战','隊':'队','義':'义','陽':'阳','遠':'远','雲':'云','島':'岛','縣':'县','愛':'爱','倫':'伦','頓':'顿','維':'维','蘭':'兰','達':'达','費':'费','諾':'诺','亞':'亚','歐':'欧','蘇':'苏','勝':'胜','圖':'图','團':'团','實':'实','學':'学','監':'监','處':'处','報':'报','電':'电','腦':'脑','劍':'剑','橋':'桥','墾':'垦','專':'专','廠':'厂','廳':'厅','衛':'卫','顯':'显','靈':'灵','準':'准','歷':'历','慶':'庆','應':'应','書':'书','負':'负','貝':'贝','車':'车','軍':'军','農':'农','萬':'万','發':'发','開':'开','關':'关','興':'兴','樂':'乐','長':'长','鳥':'鸟','魚':'鱼','鳳':'凤','龍':'龙','龜':'龟','麥':'麦','經':'经','網':'网','試':'试','證':'证','認':'认','話':'话','語':'语','讀':'读','體':'体','醫':'医','園':'园','藝':'艺','對':'对','總':'总','結':'结','統':'统','絕':'绝','級':'级','線':'线','組':'组','終':'终','習':'习','備':'备','復':'复','製':'制','則':'则','創':'创','動':'动','勞':'劳','勢':'势','單':'单','賣':'卖','買':'买','運':'运','過':'过','進':'进','連':'连','這':'这','說':'说','講':'讲','許':'许','評':'评','課':'课','誰':'谁','銀':'银','銅':'铜','鐵':'铁','錢':'钱','鐘':'钟','錯':'错','際':'际','飲':'饮','養':'养','驚':'惊','驗':'验','館':'馆','點':'点','熱':'热','環':'环','營':'营','產':'产','畫':'画','異':'异','當':'当','會':'会','參':'参','戲':'戏','擊':'击','擇':'择','斷':'断','時':'时'};
+  const _tradToSimp = s => { let o=''; for (const ch of String(s||'')) o += _TRAD[ch] || ch; return o; };
+  /* ★ 2026-10-21d：中文译音异字归一（索菲亚/索非亚、艾/埃 等纯音译噪声）。
+     仅收录【音译噪音】级互换，绝不收录会改变语义的字；配合 age/league/time/唯一性 护栏，不会放大误配。 */
+  /* ★ 2026-10-21e：补 埃↔伊（埃斯卡→伊斯卡尔德斯 这类音译异字，no=85 漏配根因）。
+     单向 埃→伊 即够（北单残名 埃斯卡 归一为 伊斯卡尔德斯，与 MATCHES 全名匹配）；伊→埃 不收，避免反向制造假匹配。 */
+  const _VARIANT = {'菲':'非','艾':'埃','埃':'伊'};
+  const _variantNorm = s => { let o=''; for (const ch of String(s||'')) o += _VARIANT[ch] || ch; return o; };
+  const _clName = s => { try{ const d = (typeof decodeName === 'function') ? decodeName(s) : s; let t = _variantNorm(_tradToSimp(String(d == null ? '' : d).replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g,''))); return t.replace(/^(FC|SC|AC|SK|NK|RC|FK|SV|TSV|CD|CF|NK)\s*/i, ''); }catch(e){ return ''; } };
+  /* 🔴 2026-10-21 修复「三盘资金实时比分完全错误」（用户截图：费内巴 vs 布拉格 显示 1:3、沙巴巴 vs 多特蒙 显示 0:2）：
+     真因 = 北单「费内巴 vs 布拉格」(欧冠一队·10-21 00:45) 被**名字打分**配到了
+            「费内巴切U19 vs 布拉格斯拉维亚U19」(欧联U19·10-20 19:00)，而旧打分**完全不看开赛时间**，
+            于是把青年队的终场 1:3 当成一队比分渲染出来（沙巴巴 0:2 同理 = 沙巴巴库U19）。
+     三道护栏：①青年/女足层级必须一致（U19 绝不配一队）②开赛时刻差 ≤180 分钟（北单与 okooo 有 0~150 分钟漂移，
+     但 U19 与本场差 5h45m 直接被挡）③同联赛同时刻剩余唯一候选才认。 */
+  const _ageTag = s => {
+    const t = String(s || '').toUpperCase().replace(/\s/g, '');
+    const u = t.match(/U-?(1[5-9]|2[0-3])/);
+    if (u) return 'U' + u[1];
+    if (/女/.test(t)) return 'WOM';
+    return '';
+  };
+  /* 联赛名归一：只剥尾部「杯/联赛」与括号注释，保留「欧冠/欧联/欧协联」区别，绝不把欧联并成欧。 */
+  /* ★ 2026-10-21e：联赛别名归一（配对用）。欧联↔欧罗巴杯 源站写法不统一（北单"欧联" vs titan007"欧罗巴杯"），
+     旧 _lgKey 剥离"杯"后缀后仍"欧联"≠"欧罗巴" → 漏配。现归一为"欧罗巴"。只收有证据的对子，不碰 PUA_MAP。 */
+  const _LG_ALIAS = { '欧联':'欧罗巴', '欧罗巴联赛':'欧罗巴' };
+  const _lgKey = s => { let t = String(s || ''); t = _LG_ALIAS[t] || t; return t.replace(/[（(].*?[)）]/g, '').replace(/(杯|联赛)$/,'').replace(/\s/g,''); };
+  const _lgOk = (a, b) => { const A = _lgKey(a), B = _lgKey(b); if (!A || !B) return true; return A === B || A.includes(B) || B.includes(A); };
+  /* 开赛时刻差（分钟）：北单 time 与 okooo match_time 常有 0~150 分钟漂移（南美/美职场次实测差 55~145 分钟），
+     故不能按 HHMM 硬等；用「日期(±1天) + 时刻」算绝对分钟差，差 0 最可信。
+     注意北单 date=销售日，真实开赛可能次日，故允许跨 1 天比较。 */
+  const _hhmmMin = t => { const s = _jcHHMM(t); return (+s.slice(0,2))*60 + (+s.slice(2,4)); };
+  const _dayNum = ds => { const s = String(ds == null ? '' : ds).replace(/[^0-9]/g,''); return s.length === 8 ? Date.UTC(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8))/60000 : NaN; };
+  const _kickDelta = (m, b) => {
+    const bd = _dayNum(b && b.date), md = _dayNum(m && _mDayOf(m));
+    const bm = _hhmmMin(b && b.time), cm = _hhmmMin(m && (m.kickoff || m.match_time));
+    if (!isFinite(bd) || !isFinite(md) || !isFinite(bm) || !isFinite(cm)) return 99999;
+    const d = Math.abs((md - bd) + (cm - bm)) % 1440; return Math.min(d, 1440 - d);
+  };
+  const _nameScore = (full, bd) => {
+    const f = _clName(full), g = _clName(bd);
+    if (!f || !g) return 0;
+    if (_ageTag(f) !== _ageTag(g)) return 0;   // ★ 青年队/女足 vs 一队绝不互配（本次比分错误的直接元凶）
+    if (f === g) return 100;
+    if (f.length >= 2 && g.length >= 2 && (f.includes(g) || g.includes(f))) return 80;
+    if (g.length >= 3 && f.startsWith(g.slice(0,3))) return 70;
+    /* ★ 2026-10-21c：北单截断为 1~2 字（FC今→今 截自 FC今治 / 埃斯卡 截自 埃斯卡尔）时，原规则要求 g.length>=2 才能做子串匹配，
+       导致"今"⊂"今治"这类 1 字截断永远配不上。现补：g 为 1~2 字且 f 较长且 f 含 g → 70。
+       配合 pass2 的 联赛/时刻差≤180/同日唯一 护栏，不会放大误配。 */
+    if (g.length === 1 && /[一-龥]/.test(g) && f.length >= 2 && f.includes(g)) return 70;
+    if (f.length >= 2 && g.length >= 2 && f.slice(0,2) === g.slice(0,2)) return 60;
+    return 0;
+  };
+  const _pairScore = (c, b) => {
+    const s1 = Math.min(_nameScore(c.h, b.home), _nameScore(c.a, b.away));
+    const s2 = Math.min(_nameScore(c.h, b.away), _nameScore(c.a, b.home));
+    return s1 > s2 ? s1 : s2;
+  };
+  /* MATCHES 开赛日（YYYYMMDD）：_day / day 为 8 位串，统一去分隔符后比。 */
+  const _mDayOf = m => String((m && (m._day || m.day)) || '').replace(/[^0-9]/g,'').slice(0,8);
+
+  const byNo = {};
+  let _pairErr = null, _tmIdx = null;
+  try {
+    /* ★ 2026-10-14 #332b：按「每条北单行各自日期」配对 —— 北单本期投注包含次日 00:00~06:00 的场次
+       （如美职/欧联/欧协联），它们与今日比赛同属一个投注期。用单一 todayDay 过滤会把次日场次整批漏掉。
+       现改为：同日预索引 MATCHES，逐行按 b.date 配对，确保本期北单一个不漏。 */
+    const _byDay = {};
+    for (const m of MATCHES){
+      const md = _mDayOf(m); if (!md) continue;
+      const lg = cleanLeague(m);
+      (_byDay[md] = _byDay[md] || []).push({ m, h: displayTeam(m,'home'), a: displayTeam(m,'away'), cup: String(lg).includes('杯') });
+    }
+    /* ★ 2026-10-15 修复「配对窗口方向反了→北单几乎全配不上」：CDP 真机核验发现北单按开赛日录入（欧联凌晨场记 2026-10-15），
+       但这些场在赛事库 MATCHES 里 day 是 20261016（实际开赛日 +1）。旧逻辑只往 bd.date−1 找（_prevDay）→ 永远错过真实赛事。
+       现改为 [bd.date−1, bd.date, bd.date+1] 三天窗口（北单与 MATCHES 日期口径差 ±1 天均覆盖）。同日同杯赛 + 打分唯一性已防误配。 */
+    const _shiftDay = (ds, off) => { try{ const dt = new Date(+ds.slice(0,4), +ds.slice(4,6)-1, +ds.slice(6,8)); dt.setDate(dt.getDate()+off); const p = dt.getFullYear()*10000+(dt.getMonth()+1)*100+dt.getDate(); return String(p); }catch(e){ return ''; } };
+    const _prevDay = ds => _shiftDay(ds,-1);
+    const _nextDay = ds => _shiftDay(ds,+1);
+    /* ★ 2026-10-20 「竞彩桥接」——放在名字打分**之前**、最高优先级（CDP 实测名字打分会把利物浦/波尔图
+       配错到别的场、且 byNo 已占用后桥接被跳过 ⇒ 只认出 5/10 场）：
+       挂了竞彩(m.jc)的 MATCHES 自带**干净的竞彩官方队名**（无 okooo 字体图标残名问题），
+       且竞彩与北单同场开赛 HHMM 完全一致 —— 「同 HHMM + 竞彩队名打分唯一(≥60)」即可信配对，
+       今晚 03:00 七场欧冠同刻开赛也能靠队名分开（巴黎圣⊂巴黎圣曼=80 / 利物浦=利物浦=100）。
+       配不上的（如北单"布拉格"vs竞彩"斯拉维亚"译名不同）自动落入下方名字打分兜底。 */
+    const _jcMs = MATCHES.filter(m => m && m.jc);
+    for (const b of bdRows){
+      if (!b.time) continue;
+      let best = null, bs = 0, second = 0;
+      for (const m of _jcMs){
+        if (_jcHHMM(m.jc.time) !== _jcHHMM(b.time)) continue;
+        const s = _pairScore({ h: String(m.jc.home||''), a: String(m.jc.away||'') }, b);
+        if (s > bs){ second = bs; bs = s; best = m; }
+        else if (s > second) second = s;
+      }
+      if (best && bs >= 60 && bs > second) byNo[b.no] = best;
+    }
+    for (const b of bdRows){
+      const d0 = String(b.date || '').replace(/[^0-9]/g,'');
+      if (!d0) continue;
+      const cand = (_byDay[d0] || []).concat(_byDay[_prevDay(d0)] || [], _byDay[_nextDay(d0)] || []);
+      if (!cand.length) continue;
+      const bCup = String(b.league || '').includes('杯');
+      let best = null, bs = 0, second = 0;
+      for (const c of cand){
+        /* ★ 2026-10-21：①杯赛标记只在"一边杯赛一边联赛"时才强制联赛名可比（欧冠 vs 欧冠杯 允许，
+           南俱杯 vs 南美杯 双方都是杯赛也放行；英甲/英冠这类同层联赛不再被一刀切掉）；
+           ②开赛时刻差必须 ≤180 分钟 —— U19 场次差 5h45m 直接被挡，南美场次的 55~145 分钟漂移仍能配上。 */
+        if (c.cup !== bCup && !_lgOk(c.m.league, b.league)) continue;
+        if (_kickDelta(c.m, b) > 180) continue;
+        const s = _pairScore(c, b);
+        if (s > bs){ second = bs; bs = s; best = c.m; }
+        else if (s > second) second = s;
+      }
+      if (best && bs >= 60 && bs > second) byNo[b.no] = best;
+    }
+    /* ★ 2026-10-21 新增：同联赛 + 同开赛时刻 + 剩余唯一未被占用 → 认。
+       解决跨源译名完全对不上、但同期同联赛同开赛时刻只剩一场的（如北单「沙巴巴」= okooo「萨巴赫」）。
+       必须先排除已被认领的场，否则两个候选都会被判"不唯一"而全部放弃。 */
+    for (const b of bdRows){
+      if (byNo[b.no]) continue;
+      const d0 = String(b.date || '').replace(/[^0-9]/g,'');
+      if (!d0) continue;
+      const bHH = _jcHHMM(b.time), blg = _lgKey(b.league);
+      if (!bHH || bHH === '0000' || !blg) continue;
+      const claimed = {};
+      for (const k in byNo){ if (byNo[k] && byNo[k].tid != null) claimed[String(byNo[k].tid)] = true; }
+      const cand = MATCHES.filter(m => {
+        if (!m || claimed[String(m.tid)]) return false;
+        const md = _mDayOf(m);
+        if (md !== d0 && md !== _prevDay(d0) && md !== _nextDay(d0)) return false;
+        if (_jcHHMM(m.kickoff) !== bHH) return false;
+        const mlg = _lgKey(m.league);
+        return !!mlg && (mlg === blg || mlg.includes(blg) || blg.includes(mlg));
+      });
+      if (cand.length === 1) byNo[b.no] = cand[0];
+    }
+    /* 兜底：名字全失配时用「开赛日+HHMM」主键（与竞彩主键同口径），仅当该键**唯一命中**才认。 */
+    for (const b of bdRows){
+      if (byNo[b.no] || !b.date || !b.time) continue;
+      if (!_tmIdx){
+        _tmIdx = {};
+        for (const m of MATCHES){
+          const ks = String((typeof kickTs === 'function' ? kickTs(m) : '') || '');
+          if (/^\d{12}$/.test(ks)){ const k = ks.slice(0,8) + '_' + ks.slice(8,12); (_tmIdx[k] = _tmIdx[k] || []).push(m); }
+        }
+      }
+      /* ★ 2026-10-20 修复「今晚欧冠配不上、竞彩只认出 4/10 场」：
+         北单 date 是【销售/批次日】，凌晨场真实开赛在北京时间【次日】（如北单 10-20 00:45 → 实为 10-21 00:45 开踢），
+         而 _tmIdx 主键用的是 MATCHES 的 kickTs（真实开赛日+HHMM）⇒ 只试 d0 永远错过。现同时试 d0 与 d0+1 两天。 */
+      const _hh = _jcHHMM(b.time);
+      const _d0 = String(b.date).replace(/[^0-9]/g,'');
+      let c2 = _tmIdx[_d0 + '_' + _hh];
+      if (!(c2 && c2.length === 1)){
+        const c3 = _tmIdx[_nextDay(_d0) + '_' + _hh];
+        if (c3 && c3.length === 1) c2 = c3;
+      }
+      /* ★ 2026-10-21：唯一命中还须联赛同名 —— 否则"该时刻全站只有一场"会把完全不同的赛事硬配
+         （本次 U19 事故的次要通道：深夜 00:45 只剩 2 场时若无联赛校验仍有误配风险）。 */
+      if (c2 && c2.length === 1){
+        const _blg = _lgKey(b.league), _mlg = _lgKey(c2[0].league);
+        if (!_blg || !_mlg || _mlg === _blg || _mlg.includes(_blg) || _blg.includes(_mlg)) byNo[b.no] = c2[0];
+      }
+    }
+  } catch(e){ _pairErr = String((e && e.message) || e); }
+  try { window.__TF_PAIR__ = { bd: bdRows.length, paired: Object.keys(byNo).length, err: _pairErr }; } catch(e){}
+  try { const _mp={}; for(const k in byNo){ const v=byNo[k]; if(v&&v.tid!=null&&String(k).indexOf('F')!==0) _mp[k]=v.tid; } window.__TF_BYNO__=_mp; window.__TF_ALLBYNO__=byNo; } catch(e){}
+
+  /* ★ 2026-10-20 修复「今日比赛不见了」：okooo bjdc 被服务端 405 封锁 → beidan.json 停更（只剩昨日）；
+     且竞彩官方接口当前只返 周二(10-21)/周三(10-22) 销售档，今日(周一 10-20)竞彩档已结 → 今日两真实资金源双双缺失。
+     增补「回退源」：遍历今日「有模型方向(W/L)」的全部比赛，直接配对到自身 MATCHES（模型方向+欧赔来自 OFFLINE_PACK；
+     北单资金列诚实标「无真实资金源」）。真竞彩(m.jc)场仍标"竞彩"，其余标"模型回退"，口径诚实不伪称有资金。
+     北单/竞彩任一恢复后自动优先展示其增强版（回退源不覆盖真实数据）。 */
+  const _fallbackBs = [];
+  /* ★ 2026-10-23 口径收紧（回应"三盘板是否只抓竞彩和北单"）：
+     旧逻辑无条件给"今日有模型方向"的未覆盖场补行 → 北单正常的交易日照样会混入非竞彩/非北单场，
+     与"本板只收北单+竞彩"的口径自相矛盾（2026-10-20 定的硬门只加在优选段，回退源漏了）。
+     现规则：① 有竞彩(m.jc) → 收；② 无竞彩时，**仅当今日北单为 0 场**（真·源中断，如 okooo 405 封锁）才允许
+     「模型回退」补位；北单正常则一律不收，杜绝野鸡场污染资金流向板。 */
+  const _bdTodayN = (function(){ try { return bdRows.filter(_isToday).length; } catch(e){ return 0; } })();
+  try {
+    const _MM = (typeof MATCHES !== 'undefined') ? MATCHES : null;
+    const _PK = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK : null;
+    if (_MM && _PK && _MM.length){
+      const _covered = {}; for (const k in byNo){ const _m = byNo[k]; if (_m && _m.tid != null) _covered[String(_m.tid)] = true; }
+      /* ★ 2026-10-20：回退源窗口扩到「今晚/明晨」——竞彩周二销售档的比赛真实开赛在北京时间次日凌晨
+         （MATCHES 里 _day = today+1），但销售日就是今天。只按 _day==today 过滤会把今晚欧冠整批漏掉。
+         放行条件：该场挂着竞彩(m.jc) 且该竞彩行的**销售日** == 今天。无 jc 的场仍严格限定 _day==今天，防野鸡场污染。 */
+      for (const m of _MM){
+        const md = String((m && (m._day || m.day)) || '').replace(/[^0-9]/g,'').slice(0,8);
+        if (md !== todayDay){
+          const _jcs = (m && m.jc) ? (m.jc.saleDate || m.jc.date) : null;
+          if (!(_jcs && _dOf(_jcs) === todayLabel)) continue;
+        }
+        const tid = (m.tid != null) ? String(m.tid) : (m.tournament_id != null ? String(m.tournament_id) : null);
+        if (!tid || _covered[tid]) continue;
+        /* ★ 2026-10-23：北单今日有数据 → 必须挂竞彩才收；只有北单今日为 0 场（源中断）才放开为「模型回退」。 */
+        if (!m.jc && _bdTodayN > 0) continue;
+        const pk = _PK[tid];
+        const dc = pk && pk.an ? (pk.an.dirCode || null) : null;
+        if (dc !== 'W' && dc !== 'L') continue;   // 只取明确模型方向
+        // ★ 2026-10-20：剔除青年队/预备队/二队等纯垃圾场（U17/U18/U19/U20/U21/U23/青年/预备/Reserve/B队），
+        //   这些既非北单/竞彩、也无真实投注意义，混入回退源只会污染；真实一队小联赛保留（模型确有方向）。
+        const _lgRaw = String(m.league_name_zh || m.league || '');
+        const _hnRaw = (typeof displayTeam === 'function') ? displayTeam(m,'home') : (m.home || '');
+        const _anRaw = (typeof displayTeam === 'function') ? displayTeam(m,'away') : (m.away || '');
+        const _youth = (_lgRaw + ' ' + _hnRaw + ' ' + _anRaw).replace(/<[^>]+>/g,'');
+        if (/U1[789]|U2[0-3]|青年|预备|Reserve|B队|二队|女足|女子|女队|学院|Academy|Women/i.test(_youth)) continue;
+        // ★ 2026-10-20 修正：今日两真实资金源双双缺失（北单 okooo 405 封锁 / 竞彩官方只返 10-21·10-22 档、今日档已结）
+        //   → 放开 m.jc 限制：今日全部有模型方向(W/L)的真实一队场次都进主表回退，明确标"无真实资金源"，口径诚实。
+        const _b = {
+          no: 'F' + tid,
+          date: todayDay.slice(0,4) + '-' + todayDay.slice(4,6) + '-' + todayDay.slice(6,8),
+          time: (m.time || (m.kickoff ? String(m.kickoff).replace(/^\S+\s+/,'').slice(-5) : '') || '00:00'),
+          league: cleanLeague(m),
+          home: (typeof displayTeam === 'function') ? displayTeam(m,'home') : (m.home || ''),
+          away: (typeof displayTeam === 'function') ? displayTeam(m,'away') : (m.away || ''),
+          sp: null, pct: null, _fallback: true, src: (m.jc ? '竞彩' : '模型回退')
+        };
+        byNo['F' + tid] = m;            // 直接配对到 MATCHES 自身（m.tid → OFFLINE_PACK）
+        _fallbackBs.push(_b);
+      }
+    }
+  } catch(e){ try{ window.__TF_FB_ERR__ = String((e && e.message) || e); }catch(_){} }
+  /* ★ 本期北单 = 注入的 BD_ROWS 全量（即 okooo 当前投注期，跨 10-14/10-15 两日），不再按单一系统日期截断；
+     叠加今日回退源（北单源缺失时填补今日空白）。 */
+  let todayBei = bdRows.slice().concat(_fallbackBs);
+  /* ★ 2026-10-21b：无开赛时间的北单行（okooo 未放出时刻）排序键用 '99:99' 落到列表最末，
+     不再因回退 '00:00' 而整簇挤在顶部、看起来「卡在凌晨 00:00」。显示仍走 timeCell/待定口径。 */
+  todayBei.sort((x,y)=> String(x.time||'99:99').replace(':','').localeCompare(String(y.time||'99:99').replace(':','')));
+
+  function _basis(r){
+    const parts = [];
+    if (r.pct){
+      const hi = r.pct.indexOf(Math.max.apply(null, r.pct));
+      parts.push('北单真实资金最热=<b>'+WDL[hi]+'</b> '+r.pct[hi]+'%');
+      /* ★ 2026-10-31 八修：「超公平 Xpt」= 绝对偏差（未扣返还率缺口），与资金板/热度榜的净超买不是同一个量 → 改名并并列净超买 */
+      if (r.heatExcess!=null){
+        const _n = _ygNet(r.yg || r);
+        parts.push(_n!=null ? ('净超买 <b>'+(_n>0?'+':'')+_n.toFixed(1)+'pt</b>（绝对偏差 '+fmt(r.heatExcess)+'pt − 缺口 '+fmt((r.gap!=null?r.gap:0))+'pt）')
+                            : ('绝对偏差(未扣缺口) '+fmt(r.heatExcess)+'pt'));
+      }
+    }
+    if (r.tf){
+      const mi = ['W','D','L'].indexOf(r.tf.maxSide);
+      parts.push('北单−欧赔(同返还率对照)最大背离=<b>'+WDL[mi]+'</b> '+fmt(r.tf.maxFlow)+'pp'+(r.gap!=null?('·缺口'+r.gap+'%'+(r.tf.maxFlow>r.gap?'·已超·大热判定':'')):'')+'');
+    } else if (r.sp){
+      parts.push('北单SP '+r.sp.join('/')+'（无欧赔对照）');
+    }
+    if (r.levDev!=null) parts.push('盘级偏差(胜赔估算·洋哥盘级表)=<b>'+(r.levDev>0?'+':'')+r.levDev+'级</b>'+(Math.abs(r.levDev)>=0.5?'·≥2级(0.5)洋哥大热':(r.gap!=null?'·缺口'+r.gap+'%':''))+(r.levSide?('('+labelW(r.levSide)+'造热)'):''));
+    else if (r.gap!=null) parts.push('该场返还率缺口 '+r.gap+'%（洋哥大热阈值）');
+    if (r.flowAnom) parts.push('⚠流速异常·竞彩强lean'+labelW(r.flowAnom.side)+'(+'+r.flowAnom.jcPP.toFixed(1)+'pp)但365临盘仅动'+r.flowAnom.euMove.toFixed(1)+'%·问题盘嫌疑');
+    if (r.dir && r.dir!=='D') parts.push('模型看<b>'+labelW(r.dir)+'</b>'+(r.conf!=null?('·conf'+r.conf):''));
+    else if (r.dir==='D') parts.push('模型看平');
+    else if (r.bdDir) parts.push('北单SP公平概率偏向<b>'+labelW(r.bdDir)+'</b>'+(r.bdFair?('（'+r.bdFair.join('/')+'%·返还率'+r.spR+'%）'):'')+'（无模型方向·北单自有盘口）'+(r.bdHotPct&&r.bdHotPct!==r.bdDir?('；资金热'+labelW(r.bdHotPct)+'背离'):''));
+    else parts.push('模型无方向');
+    if (r.plan && r.plan.signals && r.plan.signals.length) parts.push('洋哥线索：'+r.plan.signals.join('、'));
+    /* ★ 2026-10-21 洋哥②二盘设防（观察期信号·纯赔率走势即可算，不依赖资金源）：
+       一盘=全市场流速（降幅最大方 初→临 中位变动），≤-0.13=大热；二盘=Bet365 同侧变动，
+       跟随(≤-0.05)=设防 / 反向升水(≥+0.03)=不设防→大热必死确认。 */
+    const p2 = (r.yg && r.yg.pan2) || null;
+    if (p2 && p2.verdict && p2.verdict !== 'calm'){
+      const _vTxt = { fade: '<b style="color:#e54545">365反向不设防·大热必死确认(站对面)</b>',
+                      follow: '<b style="color:#16a34a">365跟随降水·设防(承认热度·反买谨慎)</b>',
+                      flat: '<b style="color:#f97316">365按兵不动·观望</b>',
+                      no365: '<span style="color:var(--mut)">365缺席·无法判设防</span>' }[p2.verdict] || '';
+      parts.push('二盘设防：一盘<b>'+labelW(p2.side)+'</b>单边降'+Math.abs(p2.mktDv).toFixed(2)+'(洋哥大热线0.13)'
+        + (p2.b365Dv != null ? ('·365同侧'+(p2.b365Dv > 0 ? '+' : '')+(+p2.b365Dv).toFixed(2)) : '') + ' → ' + _vTxt + '<span style="color:var(--mut)">（观察期）</span>');
+    }
+    /* ★ 2026-10-21 洋哥④深盘+1级修正：实盘|盘口|≥1且热方=让球方，判定档已按 eff（原始+7.5pt）。 */
+    const _dh = (r.yg && r.yg.deepHeat) || null;
+    if (_dh && _dh.deep && _dh.adjPt && _dh.eff != null)
+      parts.push('深盘修正+1级：超买判定按 <b>'+fmt(_dh.eff)+'pt</b>（原始'+fmt(_dh.eff-_dh.adjPt)+'pt·一球盘热度偏移+1）');
+    return parts.join('；');
+  }
+  function _verdict(r){
+    const clues = (r.plan && r.plan.signals) || [];
+    // ★ 真实热度门：仅 heatUsable（北单/必发真资金源）才认 heatExcess；代理 ppi 假占位(50%)一律屏蔽，杜绝国际野鸡场谎报大热。
+    const h = _heatInfo(r);                   // ★ 2026-10-16e：统一热度口径（档位+热方同源）
+    const he = h.heatExcess;
+    const mf = r.tf ? r.tf.maxFlow : null;
+    if (h.usable && h.tier === 'hot'){ const hsTxt=_sideTxt(h.side); return {t:(hsTxt?hsTxt+'·':'')+'正式过热·过热提示', c:'#e54545', ic:'🔴'}; }
+    if (clues.length>=3) return {t:'精选(PICK)·问题盘合流', c:'#e54545', ic:'🔴'};
+    // ★ 洋哥铁律（file5 L199「切勿从三盘起步」）：大热必死=三盘合流。③盘(北单超缺口/盘级偏差) 必须 + ①盘趋势同指 + ②盘365不设防 才判"站对面"；③盘单独只作监测，不机械反买。
+    const _y = r.yg || {};
+    const _p2 = _y.pan2 || null;
+    const _hs = (r.tf && r.tf.maxSide) || _y.heatSide || null;
+    const _sideOk = _hs && (
+      (_p2 && _p2.side && _p2.side === _hs) ||
+      (_y.jc && _y.jc.hotSide && _y.jc.hotSide === _hs));
+    const _noDef = _p2 && (_p2.def==='flat' || _p2.def==='fade');   // 二盘365按兵不动/反升 = 不设防 = 异常确认
+    const _plateHot = (mf!=null && r.gap!=null && mf > r.gap) || (r.levDev!=null && Math.abs(r.levDev)>=0.5);
+    if (_plateHot && _hs){
+      const hsTxt=_sideTxt(_hs);
+      /* ★ 2026-10-29 修（用户"这个板块到底改正了没有"）：③盘信号必须建立在**真实资金源**上。
+         实测 AC米兰vs博洛尼亚：heatSrc='ppi'（澳客合成热度）→ _heatInfo.usable=false，但 mf(北单−欧赔流速
+         17.3pp) > gap(6.5) 仍让它走进本分支 → 输出可动作的「客胜·③盘超买·待②盘365设防确认」，
+         而同一行的「资金热度」列却写着「无真实资金源」——两张嘴说话。
+         ★ 判据必须与「资金热度」列 _heatCell 完全同源（只看 h.usable，绝不看 r.heatUsable：
+         行级 heatUsable=!!(pct||yg.heatUsable) 在有北单占比时恒 true，拦不住 ppi 合成热度）。
+         代理 ppi 值不能当真信号：此处显式降级为「仅监测·非信号」，杜绝合成数驱动方向。 */
+      if (!h.usable){
+        return {t:(hsTxt?hsTxt+'·':'')+'③盘代理值·无真实资金源·仅监测(非信号)', c:'#8b98a9', ic:'⚪'};
+      }
+      if (_sideOk && _noDef) return {t:(hsTxt?hsTxt+'·':'')+'三盘合流·大热必死(站对面观察)', c:'#e54545', ic:'🔴'};
+      if (_sideOk) return {t:(hsTxt?hsTxt+'·':'')+'③盘超买·待②盘365设防确认', c:'#f97316', ic:'🟠'};
+      return {t:(hsTxt?hsTxt+'·':'')+'③盘信号·待①盘趋势+②盘365合流确认·非独立信号', c:'#8b98a9', ic:'⚪'};
+    }
+    if (mf!=null && mf>=15) return {t:'北单−欧赔背离偏大（同率对照·仅监测·非信号）', c:'#8b98a9', ic:'⚪'};
+    if (clues.length>=2) return {t:'优选(MID)·两线合流', c:'#f97316', ic:'🟠'};
+    if (h.usable && h.tier === 'mid'){ const hsTxt=_sideTxt(h.side); return {t:(hsTxt?hsTxt+'·':'')+'中热·偏热预警', c:'#f97316', ic:'🟠'}; }
+    if (h.usable && h.side && r.dir && r.dir!=='D' && h.side===r.dir && h.tier==='normal') return {t:'模型与资金同向·可参考', c:'#16a34a', ic:'🟢'};
+    if (clues.length>=1) return {t:'小注(SMALL)·一线线索', c:'#eab308', ic:'🟡'};
+    if (r.dir==='D') return {t:'模型看平·无强信号', c:'#8b98a9', ic:'⚪'};
+    if (!r.dir) return r.bdDir ? {t:'北单SP公平概率偏向'+labelW(r.bdDir)+(r.bdFair?('('+r.bdFair.join('/')+'%·返'+r.spR+'%)'):'')+'·北单自有盘口', c:'#6aa0ff', ic:'🔵'} : {t:'仅北单数据·模型无方向', c:'#8b98a9', ic:'⚪'};
+    return {t:'正常盘·无破绽', c:'#8b98a9', ic:'⚪'};
+  }
+
+  /* ★ 2026-10-20 最终下注方向（数据驱动重标定）：
+     旧逻辑用 conf>=50 放行为主胜/客胜 → 全量 6175 场回测命中率仅 57.3%、ROI -19.7%（必亏）。
+     回测结论：模型偏好侧胜率随「标定命中率 value_score」单调升，仅 ≥0.70 → 79.6%命中/+4%ROI(盈利)；
+     0.65-0.70 → 72%命中但 -3.5%ROI(亏)；<0.65 必亏。且模型对市场的 edge 97% 为负（市场永远更聪明）。
+     ⇒ 硬门槛：value_score≥70 才给正式推荐(S/A/B)，60-69 降级「研究参考·边缘(不下注)」，<60 观望。
+     方向只建立在模型真实有 edge 的高信心端 + 真实资金 heatUsable 同向确认；让球盘口线(38%)已证伪 edge 不作为主方向。
+     正式过热(≥25pt 真实超买)仍标"提示"（不机械反买也不追高，拥挤·看赔率价值）。 */
+  function _finalBet(r){
+    const h = _heatInfo(r);
+    const he = h.heatExcess;
+    const lm = r.lm;
+    const expTot = (lm && isFinite(lm.lam + lm.mu)) ? lm.lam + lm.mu : null;
+    // ★ 2026-10-20 数据回测门槛：标定命中率 value_score（引擎 recalibValue 诚实命中率）。
+    //   全量 6175 场回测(gzip 解析 hslice11)：模型偏好侧胜率随概率单调升，仅 ≥0.70 → 79.6%命中/+4%ROI(盈利)；
+    //   0.65-0.70 → 72%命中但 -3.5%ROI(亏)；<0.65 必亏。故 ≥70 才给正式推荐，66-69 降级研究参考，<66 观望。
+    const vScore = (r.valueScore != null) ? r.valueScore : (r.conf != null ? r.conf : 0);
+    /*      ① 热度档前置（★ 2026-10-16e 统一口径 _heatInfo，与「资金热度」列同源，绝不两张嘴说话）：
+       正式过热(hot) → 拥挤提示（中性·看赔率价值，不机械反买也不追高）；中热(mid) → 偏热谨慎（顺势减仓）；
+       小热(small)/正常热(normal) → 落到下方模型方向分支。所有档位一律点名「哪一方热」。 */
+    if (h.usable && h.tier === 'hot'){
+      const hs = h.side || null;
+      const hsTxt = _sideTxt(hs) || '?';
+      const _idx = hs ? ['W','D','L'].indexOf(hs) : -1;
+      const pctTxt = (r.pct && _idx >= 0) ? (r.pct[_idx] + '%') : null;
+      const srcTxt = h.betfa ? '必发(澳客冷热指数)' : '北单(超买pt)';
+      const altTxt = h.altSide ? ('；另·占比最高方=' + _sideTxt(h.altSide) + (pctTxt ? ('（' + pctTxt + '）') : '')) : '';
+      const bet = hsTxt + '·正式过热·提示';
+      const note = '热方=' + hsTxt + '（' + srcTxt + (h.val ? ('·' + h.val) : '') + '）·拥挤低价值' + altTxt;
+      return { bet, tier:'HOT', side:hs, c:'#e54545', ic:'🔴', note };
+    }
+    if (h.usable && h.tier === 'mid'){
+      const hs = h.side || null, hsTxt = _sideTxt(hs) || '?';
+      const dTxt = (r.dir && r.dir !== 'D') ? _sideTxt(r.dir) : null;
+      const bet = hsTxt + '·中热·偏热谨慎';
+      const note = '热方=' + hsTxt + '（' + (h.betfa ? '必发(澳客冷热指数)' : '北单(超买pt)') + (h.val ? ('·' + h.val) : '') + '）'
+                 + (dTxt ? ('；模型方向=' + dTxt + (r.conf != null ? ('·conf' + r.conf) : '')) : '；模型无清晰方向')
+                 + (dTxt && dTxt === hsTxt ? '·资金与模型同向(顺势减仓)' : (dTxt ? '·资金与模型不同向(谨慎)' : ''));
+      return { bet, tier:'MIDH', side:hs, c:'#f97316', ic:'🟠', note };
+    }
+    if (h.usable && h.tier === 'small'){
+      const hs = h.side || null, hsTxt = _sideTxt(hs) || '?';
+      const note = '热方=' + hsTxt + '·仅微热（' + (h.betfa ? '必发(澳客冷热指数)' : '北单(超买pt)') + (h.val ? ('·' + h.val) : '') + '）·顺势不反向';
+      if (r.dir !== 'W' && r.dir !== 'L') return { bet:hsTxt + '·小热·顺势', tier:'SMALLH', side:hs, c:'#eab308', ic:'🟡', note };
+      // ★ 2026-10-20：小热 + 模型方向，仅当标定命中率≥70 才给正式方向，否则降级研究参考（不下注）
+      if (vScore >= 70){
+        const side = r.dir, sideTxt = side === 'W' ? '主胜' : '客胜';
+        const confirmed = (r.heatUsable && r.heatSide === side && (he == null || he < 25));
+        const triAgree = (r.tf && r.tf.maxSide === side && r.tf.maxFlow >= 8);
+        const clues = (r.plan && r.plan.signals) || [];
+        let tier = 'B'; if (confirmed && (triAgree || clues.length >= 2)) tier = 'S'; else if (confirmed || triAgree || clues.length >= 1) tier = 'A';
+        let goal = ''; if (expTot != null){ if (expTot >= 3.2) goal = ' · 大2.5/3.5球'; else if (expTot >= 2.6) goal = ' · 大2.5球'; else if (expTot < 1.9) goal = ' · 小球'; }
+        const _note = (confirmed ? '真实资金同向' : '模型方向') + (triAgree ? '+北单−欧赔同向' : '') + (clues.length ? ('+' + clues.length + '线线索') : '') + '·标定命中' + vScore + '%' + goal;
+        return { bet: sideTxt, tier, side, c:(side === 'W' ? 'var(--red)' : 'var(--grn)'), ic: tier === 'S' ? '🔥' : (tier === 'A' ? '✅' : '🟡'), note:'模型方向·' + sideTxt + '；' + note + '；' + _note };
+      }
+      const _t = (r.dir === 'W') ? '主胜' : '客胜';
+      return { bet:_t + '·研究参考', tier:'REF', side:r.dir, c:'#8b98a9', ic:'⚪', note:'模型方向·' + _t + '·标定命中率'+vScore+'%(<70·边缘·不下注)；' + note };
+    }
+    // ★ 2026-10-25：结构下盘（盘口结构正信号·独立样本池·不碰 t1 终局门 0.72）。
+    //   与洋哥破绽反买框架正交：不靠"问题盘"，靠"实际盘比欧赔预期浅 → 下盘(受让)易兑现"。
+    //   仅当该场非 PICK 破绽、非正式过热(HOT)/中热(MID)时，给独立「结构下盘」推荐（亚盘下盘/受让方·本金1/4）。
+    const _aSd = r.a || null;
+    const _sd = _structDown(_aSd);
+    if (_sd && r.structDown && !(r.plan && r.plan.level === 'PICK') && !(h.usable && (h.tier === 'hot' || h.tier === 'mid'))){
+      const _upW = (_aSd && _aSd.h1 != null && isFinite(+_aSd.h1)) ? +_aSd.h1 : null;
+      const _downW = (_upW != null) ? +(2 - _upW).toFixed(2) : null;
+      const _w = (_downW != null && _downW > 1.01) ? ('@' + _downW.toFixed(2)) : '';
+      const _pg = (_aSd && _aSd.pan_gap != null && isFinite(+_aSd.pan_gap)) ? Math.abs(+_aSd.pan_gap).toFixed(2) : '?';
+      return { bet:'下盘(受让)' + _w, tier:'STRUCT_DOWN', side:null, c:'#2faa6a', ic:'🟢',
+        note:'结构下盘：实际盘比欧赔预期浅 ' + _pg + ' 盘 → 下盘易兑现；标定 ' + _sd.hit + '%命中/ROI+' + _sd.roi + '%(n=' + _sd.n + ',95%CI[' + _sd.ciLo + ',' + _sd.ciHi + '])·独立样本·本金1/4·不碰t1终局门' };
+    }
+    // ② 模型有明确胜负方向（真 edge）—— ★ 2026-10-20 数据门槛：仅标定命中率≥70 给正式推荐
+    if (r.dir === 'W' || r.dir === 'L'){
+      const side = r.dir, sideTxt = side === 'W' ? '主胜' : '客胜';
+      if (vScore >= 70){
+        const confirmed = (r.heatUsable && r.heatSide === side && (he == null || he < 25));
+        const triAgree = (r.tf && r.tf.maxSide === side && r.tf.maxFlow >= 8);
+        const clues = (r.plan && r.plan.signals) || [];
+        let tier = 'B'; if (confirmed && (triAgree || clues.length >= 2)) tier = 'S'; else if (confirmed || triAgree || clues.length >= 1) tier = 'A';
+        let goal = '';
+        if (expTot != null){
+          if (expTot >= 3.2) goal = ' · 大2.5/3.5球';
+          else if (expTot >= 2.6) goal = ' · 大2.5球';
+          else if (expTot < 1.9) goal = ' · 小球';
+        }
+        const note = (confirmed ? '真实资金同向' : '模型方向') + (triAgree ? '+北单−欧赔同向' : '') + (clues.length ? ('+' + clues.length + '线线索') : '') + '·标定命中' + vScore + '%' + goal;
+        return { bet: sideTxt, tier, side, c: side === 'W' ? 'var(--red)' : 'var(--grn)', ic: tier === 'S' ? '🔥' : (tier === 'A' ? '✅' : '🟡'), note };
+      }
+      if (vScore >= 60) return { bet:sideTxt + '·研究参考', tier:'REF', side, c:'#8b98a9', ic:'⚪', note:'模型方向·标定命中率'+vScore+'%(60-69·边缘·长期略负EV·不下注)' };
+      return { bet:'观望', tier:'—', side:null, c:'#8b98a9', ic:'⚪', note:'模型方向·标定命中率仅'+vScore+'%(<60·长期负EV·放弃)' };
+    }
+    // ③ 模型看平
+    if (r.dir === 'D') return { bet:'平局观望', tier:'—', side:'D', c:'#8b98a9', ic:'⚪', note:'模型看平·无强方向' };
+    // ④ 无模型方向：退守北单SP公平概率偏向（北单自有盘口）
+    if (r.bdDir && r.bdDir !== 'D'){
+      const sideTxt = r.bdDir === 'W' ? '主胜(北单盘)' : '客胜(北单盘)';
+      return { bet: sideTxt, tier:'C', side:r.bdDir, c:'#6aa0ff', ic:'🔵', note:'无模型·按北单SP公平概率偏向' };
+    }
+    return { bet:'无明确方向', tier:'—', side:null, c:'#8b98a9', ic:'⚪', note:'无模型/北单方向·放弃' };
+  }
+
+  const rows = todayBei.map(b => {
+    const m = byNo[b.no] || null;
+    const tid = m ? m.tid : null;
+    const p = (tid && typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[tid] : null;
+    const a = p ? p.an : null;
+    const yg = a ? (a.yg || {}) : {};
+    const plan = a ? (a.plan || null) : null;
+    const lm = (a && a.score && a.score.lambda != null && a.score.mu != null) ? { lam: +a.score.lambda, mu: +a.score.mu } : null;
+    const sp = (Array.isArray(b.sp) && b.sp.length===3) ? b.sp : null;
+    const pct = (Array.isArray(b.pct) && b.pct.length===3) ? b.pct : null;
+    const dir = a ? (a.dirCode || null) : null;
+    const conf = a ? Math.round(a.conf||0) : null;
+    let fairProb = (yg.fairProb!=null) ? yg.fairProb : null;
+    if (fairProb==null && a && a.mk_h!=null && a.mk_d!=null && a.mk_a!=null){
+      const mx = Math.max(a.mk_h, a.mk_d, a.mk_a); fairProb = +(mx*100).toFixed(1);
+    }
+    /* ★ 2026-10-18 二次精修：北单−欧赔差值改用洋哥 file1 178/180 行精确公式。
+       洋哥原话："北单赔率返还率是100%…将三项赔率乘以365的返还率即可…上盘方向偏差=(1/换算赔率 − 1/365同侧赔率)×100"。
+       具体重算在下方「euR 声明之后」统一进行（此处 euR 尚未初始化，提前引用会触发 TDZ 致整板"生成失败"）。 */
+    let tf = null;
+    let heatExcess = (yg.heatExcess!=null) ? yg.heatExcess : null;
+    let heatSide = yg.heatSide || null;
+    if (pct){
+      const hi = pct.indexOf(Math.max.apply(null, pct));
+      if (heatSide==null) heatSide = ['W','D','L'][hi];
+      if (heatExcess==null && fairProb!=null) heatExcess = +(pct[hi] - fairProb).toFixed(1);
+    }
+
+    /* ★ 2026-10-15 新增：三盘返还率（定价干净度）—— 直接回答洋哥「一盘赔率÷一盘返还率×二盘返还率」
+       里的「返还率」到底是什么数、各盘差多少。
+       R = 1/Σ(1/赔率) = 公平赔率的倒数；抽水(赚赔) = 1−R。R 越高 = 抽水越低 = 定价越干净。
+       北单赔率池≈99.7%(近乎零Margin) / Bet365欧赔≈94% / 竞彩官方≈88%。 */
+    const _pay3 = (o) => { if(!o) return null; const v = o.filter(x=>x!=null && +x>1).map(Number); if(v.length!==3) return null; const s = v.reduce((b2,x)=>b2+1/x,0); return s>0 ? +(100/s).toFixed(2) : null; };
+    const spR   = _pay3(sp);
+    const euR0  = a ? _pay3([a.o0h, a.o0d, a.o0a]) : null;
+    const euR1  = a ? _pay3([a.o1h, a.o1d, a.o1a]) : null;
+    const euR   = euR1 || euR0 || ((a && a.payout!=null) ? +(a.payout*100).toFixed(2) : null);
+    const aggR  = (a && a.pay_agg!=null) ? +(a.pay_agg*100).toFixed(2) : null;
+    /* ★ 2026-10-18 二次精修（续）：洋哥 file1 178/180 行精确重算北单−欧赔差值（euR 已初始化，此处无 TDZ）。
+       北单(100%返)×365R=同基准；各侧 dev=(1/conv − 1/365同侧)×100；
+       大热 = maxDev > 返还率缺口(1−365R) 或 盘级偏差≥0.5(2级)。ui 端重算为权威口径，覆盖引擎预烤值（若有）。 */
+    if (sp && a && euR != null){
+      const oco = (a.o1h!=null&&a.o1d!=null&&a.o1a!=null) ? [a.o1h,a.o1d,a.o1a]
+               : (a.o0h!=null&&a.o0d!=null&&a.o0a!=null) ? [a.o0h,a.o0d,a.o0a] : null;
+      if (oco && oco.every(v=>v>1)){
+        const R = euR/100;                                                       // 365 返还率（小数）
+        const conv = sp.map(v => +((v * R).toFixed(2)));                         // 北单(100%) → 365 同返还率（洋哥：×365R）
+        const dev = conv.map((c,i) => +(((1/c) - (1/oco[i])) * 100).toFixed(1)); // 洋哥精确偏差(各侧)
+        const P = sp.map(v=>1/v); const Ps=P.reduce((b,x)=>b+x,0); const Pp=P.map(v=>+(v/Ps*100).toFixed(1));
+        const q = oco.map(v=>1/v); const qs=q.reduce((b,x)=>b+x,0); const Q=q.map(v=>+(v/qs*100).toFixed(1));
+        const maxIdx = dev.indexOf(Math.max.apply(null, dev));
+        const minIdx = dev.indexOf(Math.min.apply(null, dev));
+        tf = { conv:conv, dev:dev, P:Pp, Q:Q, flow:dev,
+               maxSide:['W','D','L'][maxIdx], maxFlow:dev[maxIdx],
+               minSide:['W','D','L'][minIdx], minFlow:dev[minIdx],
+               sp:sp.slice(), isDanger:dev[maxIdx]>=15, isWarn:dev[maxIdx]>=8, recomputed:true, yangge:true };
+      }
+    }
+    if (!tf && yg.triFlow) tf = yg.triFlow;   // 兜底：仅当 ui 端无法重算(缺365盘)时回退引擎预烤（旧口径）
+    let jcR = null, jcRow = null;
+    try {
+      /* ★ 2026-10-15 竞彩柱稳定显示：
+         旧逻辑只用 getJingcai(队名) 模糊匹配 —— 北单/盘口是残名、竞彩是干净名 → 残名对不上就整列隐藏。
+         现改为「开赛日+HHMM」主键优先（与 mergeJingcai 同口径，已实测确认 8 场），残名再也拦不住竞彩柱：
+           ① 首选 m.jc（mergeJingcai 按主键挂上的竞彩数据，最稳，不依赖队名）
+           ② 兜底：用北单行自己的 date+time 在 JC_ROWS 里按主键找（竞彩/北单同一场开赛时间相同）
+           ③ 最后兜底：原名字匹配（覆盖无开赛时间信息的极端情况） */
+      if (m && m.jc) jcRow = m.jc;
+      if (!jcRow && typeof getJingcaiRows === 'function' && b.date && b.time){
+        /* ★ 2026-10-20：北单 date 是销售日，竞彩 date 是真实开赛日（凌晨场差 1 天）⇒ 候选窗口扩到 d0 与 d0+1。
+           ★ 同时修复「同刻错配」：此前唯一命中(===1)直接采信 —— 但竞彩某时刻只有 1 场、北单同刻 N 场时
+           （如今晚 02:45：竞彩仅狼队 1 场、北单英甲英乙 20+ 场），北单同刻场全部被错配成竞彩 ⇒ 整列误标。
+           现在**任何命中都必须过队名校验**（_jcNameEq 双向），宁漏配不错配。 */
+        const _d0k = String(b.date).replace(/-/g,'');
+        const _hh = _jcHHMM(b.time);
+        const _keyOf = d => d + '_' + _hh;
+        const _dt = new Date(+_d0k.slice(0,4), +_d0k.slice(4,6)-1, +_d0k.slice(6,8));
+        _dt.setDate(_dt.getDate()+1);
+        const _nk = String(_dt.getFullYear()*10000 + (_dt.getMonth()+1)*100 + _dt.getDate());
+        const _cands = getJingcaiRows().filter(j => {
+          const k = String(j.date||'').replace(/-/g,'') + '_' + _jcHHMM(j.time);
+          return k === _keyOf(_d0k) || k === _keyOf(_nk);
+        });
+        for (const j of _cands){ if (_jcNameEq(b.home, j.home) && _jcNameEq(b.away, j.away)){ jcRow = j; break; } }
+        if (!jcRow) for (const j of _cands){ if (_jcNameEq(b.home, j.away) && _jcNameEq(b.away, j.home)){ jcRow = j; break; } }
+      }
+      if (!jcRow && typeof getJingcai === 'function'){
+        const _jh = m ? displayTeam(m,'home') : b.home, _ja = m ? displayTeam(m,'away') : b.away;
+        jcRow = getJingcai(_jh, _ja);
+      }
+      if (jcRow && jcRow.had) jcR = _pay3([jcRow.had.h, jcRow.had.d, jcRow.had.a]);
+    } catch(e){}
+    /* ★ 2026-10-15 #扩展升级：北单方向口径 —— 从「资金最热侧」升级为「北单SP归一化公平概率」。
+       北单是博彩池(pari-mutuel)，SP 即真实派彩赔率；1/sp 为各向隐含概率，Σ(1/sp)=北单返还率，
+       归一化后得北单自有「公平概率」分布，取最大者为北单盘口方向（比单纯看资金最热更严谨、且自带返还率信息）。
+       仍保留资金最热侧 bdHotPct 用于「资金↔SP公平」背离监测。 */
+    let bdDir = null, bdFair = null, bdHotPct = null;
+    if (sp){
+      const P = sp.map(v => 1/(+v||0)).filter(x => isFinite(x) && x > 0);
+      if (P.length === 3){
+        const S = P[0]+P[1]+P[2];
+        if (S > 0){ bdFair = P.map(x => +(x/S*100).toFixed(1)); bdDir = ['W','D','L'][bdFair.indexOf(Math.max.apply(null, bdFair))]; }
+      }
+    }
+    if (pct){ const hi = pct.indexOf(Math.max.apply(null, pct)); bdHotPct = ['W','D','L'][hi]; if (!bdDir) bdDir = bdHotPct; }
+    /* ★ 2026-10-15c 完场比分：北单源 beidan.json 本身不带比分，故只从「配对到的 MATCHES(m)」或
+       持久化 FIN_MAP[tid] 取——即「可三方对照」那批有 tid 的场能拿到；仅北单无 tid 的残场无数据源，诚实留空。
+       必须卡 state==='-1'(完场) 才认，否则未开赛场 home_score 常为 0 会误判。 */
+    let finScore = null;
+    if (m && String(m.state)==='-1' && m.home_score!=null && m.away_score!=null && isFinite(+m.home_score) && isFinite(+m.away_score)) finScore = { hs:+m.home_score, as:+m.away_score };
+    else if (tid && typeof FIN_MAP!=='undefined' && FIN_MAP[tid] && isFinite(FIN_MAP[tid].hs) && isFinite(FIN_MAP[tid].as)) finScore = FIN_MAP[tid];
+    /* ★ 洋哥 file2/file1 盘级偏差 + 返还率缺口(动态大热阈值) + file3 资金流速异常：
+       ① 北单SP换算到365同返还率(北单R≈100%→×365R)后，由"胜赔"估盘口级(0.25=1盘级，洋哥盘级表)，
+          与365同法估盘口级相减 = 盘级偏差。洋哥大热第二条判据：偏差≥2级(0.5) 即可能大热。
+       ② 返还率缺口 = 1−365R = 洋哥大热第一条判据阈值（北单−欧赔差值>缺口即可能大热，非固定15%）。
+       ③ 资金流速异常：竞彩(无人工操盘)强lean某方，但365临盘几乎未跟随 → 异常（问题盘嫌疑·捷克vs南非）。 */
+    const _e0 = a ? [a.o0h,a.o0d,a.o0a].map(Number) : null;
+    const _e1 = a ? [a.o1h,a.o1d,a.o1a].map(Number) : null;
+    const _eu = (_e1&&_e1.every(v=>isFinite(v)&&v>1)) ? _e1 : ((_e0&&_e0.every(v=>isFinite(v)&&v>1))?_e0:null);
+    let levDev = null, levSide = null;
+    if (sp && _eu && euR != null){
+      const _conv = sp.map(v => v * (euR/100));   // 北单 R=100% → 同基准(365R)
+      /* 洋哥 file2《盘级换算详解》胜赔→亚盘盘级表（0=平手，0.25=1盘级）：
+         ≥2.35=平手(未碰让球线)｜2.10–2.35=平半｜1.80–2.10=半球(2.0-2.09高/1.9-2.0中/1.8-1.9低)｜
+         1.70–1.80=半一｜1.60–1.70=一球｜1.50–1.60=一球/球半｜1.40–1.50=球半｜1.30–1.40=球半/两球｜1.20–1.30=两球｜1.10–1.20=两球/两球半｜<1.10=两球半+ */
+      const _lvl = w => (
+        w>=2.35 ? 0.00 :
+        w>=2.10 ? 0.25 :
+        w>=1.80 ? 0.50 :
+        w>=1.70 ? 0.75 :
+        w>=1.60 ? 1.00 :
+        w>=1.50 ? 1.25 :
+        w>=1.40 ? 1.50 :
+        w>=1.30 ? 1.75 :
+        w>=1.20 ? 2.00 :
+        w>=1.10 ? 2.25 : 2.50);
+      const _dH = _lvl(_conv[0]) - _lvl(_eu[0]);
+      const _dA = _lvl(_conv[2]) - _lvl(_eu[2]);
+      // 取"被造热"的一侧：北单盘口比365更深(正值) → 该方过热。优先取最大正偏差(热方)；若无正偏差则取最大(≤0=无热)。
+      const _cand = [ { s:_dH>0?'W':(_dH<0?'L':null), v:_dH }, { s:_dA>0?'L':(_dA<0?'W':null), v:_dA } ];
+      const _pos = _cand.filter(c=>c.v>0);
+      const _pick = _pos.length ? _pos.reduce((a,b)=>b.v>a.v?b:a) : _cand.reduce((a,b)=>b.v>a.v?b:a);
+      levDev = +(_pick.v).toFixed(2);
+      levSide = _pick.s;
+    }
+    const gap = (euR != null) ? +(100 - euR).toFixed(2) : null;
+    let flowAnom = null;
+    if (jcRow && jcRow.had && _e0 && _e1){
+      const _jc = [jcRow.had.h, jcRow.had.d, jcRow.had.a].map(Number);
+      if (_jc.every(v=>isFinite(v)&&v>1) && _eu){
+        const _n3 = o => { const P=o.map(v=>1/v); const S=P.reduce((x,y)=>x+y,0); return P.map(v=>v/S*100); };
+        const _pp3 = (m,b) => m.map((v,i)=>v-b[i]);
+        const _jcPP = _pp3(_n3(_jc), _n3(_eu));
+        const _side = _jcPP.reduce((bi,v,i,arr)=>Math.abs(v)>Math.abs(arr[bi])?i:bi,0);
+        const _jcMax = Math.abs(_jcPP[_side]);
+        const _euMove = Math.max.apply(null, _e1.map((v,i)=>Math.abs((v-_e0[i])/_e0[i]*100)));
+        if (_jcMax >= 5 && _euMove < 4) flowAnom = { side:['W','D','L'][_side], jcPP:_jcMax, euMove:_euMove };
+      }
+    }
+    return { b, m, tid, sp, pct, dir, conf, valueScore: (a ? Math.round(a.value_score||0) : 0), fairProb, tf, heatExcess, heatSide, yg, plan, a, lm, spR, euR0, euR1, euR, aggR, jcR, jcRow, bdDir, bdFair, bdHotPct,
+             heatSrc: yg.heatSrc || null, heatTier: yg.heatTier || null, hotIdx: (yg.hotIdx != null ? yg.hotIdx : null), hotSideIdx: yg.hotSideIdx || null,
+             heatUsable: !!(pct || yg.heatUsable), finScore, levDev, levSide, gap, eu:_eu, flowAnom,
+             /* ★ 2026-10-20：来源徽章——按「已定位到的竞彩行 jcRow」判定（比只看 m.jc 覆盖面广：
+                北单→MATCHES 配对失败但竞彩行已按主键/名字定位的场，同样能标"竞彩"）；
+                其次有北单真实 SP/占比=北单；再退回行自带 src。 */
+             src: (jcRow || (m && m.jc)) ? '竞彩' : ((b && (Array.isArray(b.sp) || Array.isArray(b.pct))) ? '北单' : ((b && b.src) || null)) };
+  });
+
+  let nSame=0,nFake=0,nDiv=0,nBdDir=0;
+  for (const r of rows){
+    const _h = _heatInfo(r);
+    if (r.dir && r.dir!=='D' && _h.side && _h.side===r.dir && (_h.tier==='normal'||_h.tier==='small')) nSame++;
+    if (_h.usable && _h.tier==='hot') nFake++;
+    if (r.dir && r.dir!=='D' && _h.side && _h.side!==r.dir && (_h.heatExcess||0)>0) nDiv++;
+    if (r.bdDir && !r.dir) nBdDir++;
+  }
+  /* ★ 2026-10-19：三盘板自有命中率统计（本期北单覆盖场·实时复算方向命中，仿优选面板截图样式）。
+     口径：只取「有明确模型方向(W/L，排除 D/—/空)」且「已完赛」的本期北单场；
+     完场实际方向 act 取自 r.finScore（FIN_MAP/配对 MATCHES state=-1）或 r.m 实时终场；比 dir 与 act 命中。
+     同时按「资金与模型同向 / 背离」切分（复用 _heatInfo），验证本板核心论点（同向更靠谱、背离反向风险）。 */
+  function _triHitStat(){
+    const all=[], same=[], div=[];
+    for (const r of rows){
+      const d = r.dir;
+      if (!d || (d!=='W' && d!=='L')) continue;            // 只要明确模型方向
+      let act=null;
+      if (r.finScore && isFinite(r.finScore.hs) && isFinite(r.finScore.as))
+        act = (r.finScore.hs>r.finScore.as?'W':(r.finScore.hs<r.finScore.as?'L':'D'));
+      else if (r.m && String(r.m.state)==='-1' && r.m.home_score!=null && r.m.away_score!=null && isFinite(+r.m.home_score) && isFinite(+r.m.away_score))
+        act = ((+r.m.home_score)>(+r.m.away_score)?'W':((+r.m.home_score)<(+r.m.away_score)?'L':'D'));
+      if (act==null) continue;                              // 未完赛→不计
+      const hit = (d===act)?1:0;
+      all.push(hit);
+      const _h=_heatInfo(r);
+      if (_h.usable && _h.side && _h.side===d && (_h.tier==='normal'||_h.tier==='small')) same.push(hit);
+      else if (_h.usable && _h.side && _h.side!==d && (_h.heatExcess||0)>0) div.push(hit);
+    }
+    const f=a=>({n:a.length, hit:a.filter(x=>x).length, rate:a.length?Math.round(a.filter(x=>x).length/a.length*100):null});
+    return { all:f(all), same:f(same), div:f(div) };
+  }
+  /* ★ 2026-10-19b：全样本方向命中（所有联赛·已完赛·模型有W/L方向）。
+     三盘板只覆盖北单，而当前北单完场为0→本期卡恒空；但全库已完赛且有方向的有数百场，
+     这部分才是模型方向准确率的真实校准，独立于「仅北单」口径。 */
+  function _triHitStatAll(){
+    const PK = (typeof OFFLINE_PACK!=='undefined')?OFFLINE_PACK:(typeof packs!=='undefined'?packs:null);
+    const MM = (typeof MATCHES!=='undefined')?MATCHES:null;
+    if(!MM||!PK||!MM.r) return {n:0,hit:0,rate:null};
+    const HDR=MM['#'], M=MM.r, si=HDR.indexOf('state'), hi=HDR.indexOf('home_score'), ai=HDR.indexOf('away_score'), ti=1;
+    const all=[];
+    for(let i=0;i<M.length;i++){
+      const row=M[i]; const st=row[si];
+      if(st!==-1 && st!=='-1') continue;
+      const pk=PK[String(row[ti])];
+      if(!pk||!pk.an) continue;
+      const d=pk.an.dirCode;
+      if(d!=='W' && d!=='L') continue;
+      const hs=+row[hi], as=+row[ai];
+      if(!isFinite(hs)||!isFinite(as)) continue;
+      const act=(hs>as)?'W':((hs<as)?'L':'D');
+      all.push((d===act)?1:0);
+    }
+    const f=a=>({n:a.length,hit:a.filter(x=>x).length,rate:a.length?Math.round(a.filter(x=>x).length/a.length*100):null});
+    return f(all);
+  }
+  const _triHS = _triHitStat();
+  const _triAll = _triHitStatAll();
+  const _hitCard = (rate,hit,n,color,label,note) => '<div class="rcard"'+(rate!=null&&rate>=70?' style="border-color:'+color+'"':'')+'>'+
+    '<div class="rn" style="color:'+(rate==null?'var(--mut)':color)+'">'+(rate==null?'—':rate+'%')+'</div>'+
+    '<div class="rl">'+label+'</div>'+
+    '<div class="rr" style="color:'+(rate==null?'var(--mut)':'green')+'">'+(n?('方向命中 '+hit+'/'+n):'样本不足')+'</div>'+
+    '<div style="font-size:11px;opacity:.7;margin-top:3px">'+note+'</div></div>';
+  const stat = '<div class="rstats" style="margin:14px 0">' +
+    '<div class="rcard"><div class="rn" style="color:var(--acc)">' + rows.length + '</div><div class="rl">本期北单覆盖</div><div class="rr">含跨日投注期·全量列出</div></div>' +
+    '<div class="rcard"><div class="rn" style="color:#16a34a">' + nSame + '</div><div class="rl">资金与模型同向</div><div class="rr">无背离·可参考</div></div>' +
+    '<div class="rcard"><div class="rn" style="color:#e54545">' + nFake + '</div><div class="rl">正式过热档</div><div class="rr">澳客冷热≥50 或 超买≥15pt(洋哥大热标准)·拥挤提示（中性·非倒灶预警·看赔率价值）</div></div>' +
+    '<div class="rcard"><div class="rn" style="color:#f97316">' + nDiv + '</div><div class="rl">模型↔资金背离</div><div class="rr">资金热反向·盯盘</div></div>' +
+    '<div class="rcard"><div class="rn" style="color:#6aa0ff">' + nBdDir + '</div><div class="rl">北单SP公平概率方向</div><div class="rr">无模型·北单盘口信号</div></div>' +
+  '</div>';
+  /* ★ 2026-10-19：命中率统计段（仿优选面板截图：大百分比 + 方向命中 X/Y + 标定说明），追加在覆盖统计之后。 */
+    /* ★ 2026-10-19b：命中率段改为始终渲染（不再整段隐藏）。本期北单卡若样本为0显示「样本不足」；
+     新增「全样本校准」卡=本快照所有联赛已完赛且模型有W/L方向的方向命中（真实可算，不依赖北单完场）。 */
+  /* ★ 2026-10-23：命中率段口径纠偏（回应"三盘资金命中率接近零"质疑）。
+     真相：①本板"命中率"实为【模型方向校准率】——模型 W/L 预测与赛果 W/L 的吻合度，不是下注胜率；
+     ②资金流向(北单/必发)只在【模型无方向(dirCode=—)的拥挤场】点亮，本身不构成方向预测，
+       故资金子集【无方向可校准】→ 结构性显示"—"（非 0%，是没样本）；
+     ③今日北单卡为当日小样本(仅已完赛+W/L方向)，易显 0%/100% 噪声，须明确标注"完赛后更新"；
+     ④唯一可量化校准是"全样本"卡(本快照所有联赛·已完赛·模型有方向)。故重排：全样本置首为主卡，
+       今日三卡降级为"小样本·完赛后更新"，并加方法论注：本板为监测(非交易信号)，资金=拥挤提示非方向信号。 */
+  const _triHitHTML = (
+    '<div style="margin:6px 0 2px;font-weight:700;color:var(--acc)">🎯 模型方向校准率<span style="font-weight:400;font-size:11px;opacity:.6;margin-left:6px">（非下注胜率 · 方向命中 · 全样本）</span></div>' +
+    '<div class="rstats" style="margin:6px 0 6px">' +
+      _hitCard(_triAll.rate, _triAll.hit, _triAll.n, 'var(--acc)', '全样本校准·方向命中', '本快照所有联赛·已完赛·模型有W/L方向·唯一可量化校准') +
+      _hitCard(_triHS.all.rate, _triHS.all.hit, _triHS.all.n, '#6aa0ff', '本期北单·方向命中', '今日小样本·仅已完赛+有方向·完赛后更新') +
+      _hitCard(_triHS.same.rate, _triHS.same.hit, _triHS.same.n, 'var(--grn)', '本期·资金同向命中', '今日小样本·完赛后更新') +
+      _hitCard(_triHS.div.rate, _triHS.div.hit, _triHS.div.n, 'var(--red)', '本期·背离命中', '今日小样本·完赛后更新') +
+    '</div>' +
+    '<div style="font-size:11px;opacity:.7;line-height:1.6;margin:0 0 12px;border-left:3px solid var(--acc);padding:4px 8px">' +
+      '★ 本板为<b>资金流向监测（非交易信号）</b>。"校准率"指<b>模型方向</b>与赛果的吻合度，<b>不代表下注胜率</b>。' +
+      '资金流向（北单/必发）仅标记<b>拥挤·减仓</b>提示，本身<b>不构成方向预测</b>——故资金子集无方向可校准，恒显示"—"（非 0%）。' +
+      '板内回测铁证：随机反买一边天然赢 66.7%（数学必然）；"大热必死"各档 |z|≤0.58 不显著；纯深盘方向 81.7%，叠加盘热砸到 53%。<b>资金部分无机械可套利 alpha</b>。' +
+    '</div>'
+  );
+
+  /* ★ 2026-10-15 #refcard：按用户提供的参考软件截图重做「单场三盘对照卡」（点每行「对照卡」展开）。
+     参考图架构：① 竞彩官方胜平负 ② Bet365（含初盘→临盘赔率走势线）③ 北单SP + 真实占比，
+     底部「盘速差对照」双栏 —— 显式展示洋哥公式「一盘赔率 ÷ 一盘返还率 × 二盘返还率」的换算赔率
+     （参考图实例：竞彩初盘 1.76 ÷ 0.8856 × 0.9475 = 1.8830）与各盘对 365 的概率差(pp)。 */
+  /* ★ 2026-10-29 性能修复：对照卡改为「点开才生成」。
+     旧版每一行都预先渲染一张隐藏的 _tfCard（三盘板整表实测 28,089 个 DOM 节点，
+     其中绝大多数是用户根本不会点开的隐藏对照卡）→ 打开面板要 300ms、之后整页重排都被拖慢。
+     现在 <tr id="tfcard_i"> 只留空壳，首次点开时才把内容写进去。 */
+  window.__tfCardFn = _tfCard;                 // 函数声明提升，此处已可用
+  window.__tfCardData = window.__tfCardData || {};
+  window.__tfToggle = function(i){
+    const el = document.getElementById('tfcard_'+i); if(!el) return;
+    if (el.style.display === 'none'){
+      try {
+        const td = el.firstElementChild;
+        if (td && el.getAttribute('data-built') !== '1'){
+          const r = (window.__tfCardData||{})[i];
+          td.innerHTML = (r && typeof window.__tfCardFn === 'function')
+            ? window.__tfCardFn(r)
+            : '<span class="note">对照卡数据不可用（面板已重渲染，请重新点开）</span>';
+          el.setAttribute('data-built','1');
+        }
+      } catch(e){ console.warn('对照卡生成失败', e && e.message); }
+      el.style.display = '';
+    } else el.style.display = 'none';
+  };
+  const _tfRow2 = (k,v) => '<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0"><span style="color:var(--mut);font-size:11.5px">'+k+'</span><span style="font-size:12px;text-align:right">'+v+'</span></div>';
+  const _tfNorm3 = o => { const P=o.map(v=>1/v); const S=P.reduce((a,b)=>a+b,0); return P.map(v=>+(v/S*100).toFixed(1)); };
+  const _tfPP = (mine, base) => mine.map((v,i)=>+(v-base[i]).toFixed(1));
+  function _tfSpark(o0,o1){
+    const W=210,H=56,P=7, cols=['#3a8ee6','#e54545','#36c275'];
+    const all=o0.concat(o1), mn=Math.min.apply(null,all), mx=Math.max.apply(null,all), rng=(mx-mn)||1;
+    const y=v=>H-P-((v-mn)/rng)*(H-2*P);
+    let s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    s+='<line x1="'+P+'" y1="'+(H-P)+'" x2="'+(W-P)+'" y2="'+(H-P)+'" stroke="var(--line)" stroke-width="1"/>';
+    o0.forEach((v,i)=>{ s+='<line x1="'+P+'" y1="'+y(v).toFixed(1)+'" x2="'+(W-P)+'" y2="'+y(o1[i]).toFixed(1)+'" stroke="'+cols[i]+'" stroke-width="2"/>'; s+='<circle cx="'+P+'" cy="'+y(v).toFixed(1)+'" r="2.6" fill="'+cols[i]+'"/><circle cx="'+(W-P)+'" cy="'+y(o1[i]).toFixed(1)+'" r="2.6" fill="'+cols[i]+'"/>'; });
+    return s+'</svg>';
+  }
+  function _tfCard(r){
+    const jc = (r.jcRow && r.jcRow.had) ? [r.jcRow.had.h, r.jcRow.had.d, r.jcRow.had.a].map(Number) : null;
+    const jcOk = jc && jc.every(v=>isFinite(v)&&v>1);
+    const e0 = r.a ? [r.a.o0h,r.a.o0d,r.a.o0a].map(Number) : null;
+    const e1 = r.a ? [r.a.o1h,r.a.o1d,r.a.o1a].map(Number) : null;
+    const e0ok = e0 && e0.every(v=>isFinite(v)&&v>1), e1ok = e1 && e1.every(v=>isFinite(v)&&v>1);
+    const eu = e1ok ? e1 : (e0ok ? e0 : null);
+    const sp = (r.sp && r.sp.every(v=>+v>1)) ? r.sp.map(Number) : null;
+    const bridgeR = (r.euR!=null) ? r.euR/100 : (r.jcR!=null ? r.jcR/100 : (r.spR!=null ? r.spR/100 : null));
+    const bridgeName = (r.euR!=null) ? 'Bet365' : (r.jcR!=null ? '竞彩' : '北单');
+    const euP = eu ? _tfNorm3(eu) : null;
+    const bdPP = r.tf ? r.tf.flow : (sp && euP ? _tfPP(_tfNorm3(sp), euP) : null);
+    const jcPP = (jcOk && euP) ? _tfPP(_tfNorm3(jc), euP) : null;
+    const _oddsTrio = (o,hi) => '<div style="display:flex;gap:5px;text-align:center">'+['胜','平','负'].map((t,i)=>'<div style="flex:1;background:rgba(127,127,127,.08);border-radius:6px;padding:3px 0"><div style="font-size:10px;color:var(--mut)">'+t+'</div><b style="font-size:13.5px'+(hi===i?';color:var(--acc)':'')+'">'+(isFinite(o[i])?o[i].toFixed(2):'—')+'</b></div>').join('')+'</div>';
+    const _tfPanel = (title, color, inner) => '<div style="background:rgba(127,127,127,.05);border:1px solid var(--line);border-radius:8px;padding:8px;min-width:0"><div style="font-size:11.5px;font-weight:700;color:'+color+';margin-bottom:5px">'+title+'</div>'+inner+'</div>';
+    const bdHi = r.bdDir==='W'?0:r.bdDir==='D'?1:2;
+    const colJC = _tfPanel('① 竞彩官方（胜平负）','#ff7a3c',
+      jcOk ? _oddsTrio(jc) + (r.jcR!=null?'<div style="font-size:11px;color:var(--mut);margin-top:4px">返还率 <b style="color:#ff7a3c">'+r.jcR+'%</b></div>':'')
+           : '<div style="font-size:11.5px;color:var(--mut)">本场无竞彩数据</div>');
+    const colEU = _tfPanel('② Bet365 欧赔（基准·同率换算桥）','#3a8ee6',
+      (e0ok||e1ok) ? (_oddsTrio(e1ok?e1:e0) + ((e0ok&&e1ok)?('<div style="margin-top:5px">'+_tfSpark(e0,e1)+'</div><div style="font-size:10px;color:var(--mut)">蓝=胜 红=平 绿=负 · 初盘→临盘连线</div>'):'<div style="font-size:10px;color:var(--mut);margin-top:4px">仅单时点盘（无走势）</div>') + (r.euR!=null?'<div style="font-size:11px;color:var(--mut);margin-top:4px">返还率 <b style="color:#3a8ee6">'+r.euR+'%</b></div>':''))
+      : '<div style="font-size:11.5px;color:var(--mut)">无欧赔（该场未进模型池）</div>');
+    const colBD = _tfPanel('③ 北单（SP池·真实资金）','#36c275',
+      sp ? _oddsTrio(sp,bdHi) + (r.pct?'<div style="font-size:11px;color:var(--mut);margin-top:4px">真实占比 '+r.pct.map(x=>x+'%').join(' / ')+'</div>':'') + (r.spR!=null?'<div style="font-size:11px;color:var(--mut)">返还率 <b style="color:#36c275">'+r.spR+'%</b></div>':'')
+         : '<div style="font-size:11.5px;color:var(--mut)">无北单SP</div>');
+    const _tfSide = (name,color,odds,RowR,pp,isBridge) => {
+      if(!odds) return _tfPanel(name,color,'<div style="font-size:11.5px;color:var(--mut)">缺数据</div>');
+      const conv = (!isBridge && RowR!=null && bridgeR!=null) ? odds.map(v=>+(v/(RowR/100)*bridgeR).toFixed(3)) : null;
+      const pr = _tfNorm3(odds);
+      return _tfPanel(name,color,
+        _tfRow2('原始赔率', odds.map(v=>v.toFixed(2)).join(' / ')) +
+        (RowR!=null?_tfRow2('该盘返还率', RowR+'%'):'') +
+        (conv?_tfRow2('换算→'+bridgeName+'同率', '<b style="color:var(--acc)">'+conv.join(' / ')+'</b>'):'') +
+        _tfRow2('归一直观概率', pr.map(v=>v+'%').join(' / ')) +
+        (pp?_tfRow2('对365概率差', pp.map(v=>'<span style="color:'+(v>=15?'#e54545':v>=8?'#f97316':v<=-8?'#16a34a':'var(--mut)')+'">'+(v>0?'+':'')+v.toFixed(1)+'pp</span>').join(' / ')):'')
+      );
+    };
+    const diffPanel = '<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:8px 0">' +
+      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px">' +
+        '<b style="font-size:12.5px">盘速差对照 · 同返还率换算（一盘赔率 ÷ 一盘返还率 × 二盘返还率）</b>' +
+        '<span style="font-size:11px;color:var(--mut)">基准盘 = '+bridgeName+(r.euR!=null?(' · 返还率 '+r.euR+'%'):'')+'</span>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+        _tfSide('一盘·竞彩 → '+bridgeName,'#ff7a3c',jcOk?jc:null,r.jcR,jcPP,(r.euR==null&&r.jcR!=null)) +
+        _tfSide('三盘·北单 → '+bridgeName,'#36c275',sp,r.spR,bdPP,(r.euR==null&&r.jcR==null)) +
+      '</div>' +
+      (r.levDev!=null ? '<div style="font-size:11.5px;margin:4px 0 0">盘级偏差(由胜赔估算·洋哥盘级表 0.25=1级)：<b style="color:'+(Math.abs(r.levDev)>=0.5?'#e54545':Math.abs(r.levDev)>=0.25?'#f97316':'var(--mut)')+'">'+(r.levDev>0?'+':'')+r.levDev.toFixed(2)+' 级</b>'+(r.levSide?('('+labelW(r.levSide)+'被造热)'):'')+(Math.abs(r.levDev)>=0.5?' · <b style="color:#e54545">≥2级(0.5)·洋哥大热判定</b>':'')+(r.gap!=null?(' · 该场返还率缺口 '+r.gap+'%'):'')+'</div>' : '') +
+      (r.flowAnom ? '<div style="font-size:11.5px;margin:4px 0 0;color:#e54545">⚠ 资金流速异常 · 竞彩强lean'+labelW(r.flowAnom.side)+'(+'+r.flowAnom.jcPP.toFixed(1)+'pp) 但 Bet365 临盘仅动 '+r.flowAnom.euMove.toFixed(1)+'%（纹丝不动接受更快资金冲击）→ 问题盘嫌疑（洋哥·捷克vs南非）</div>' : '') +
+      '</div>';
+    /* ★ 2026-10-31 八修：「热度超公平 Xpt」= 绝对偏差（未扣缺口）→ 改名并并列净超买，避免与资金板数字打架 */
+    const _hotNet = _ygNet(r.yg || r);
+    const hotStr = (r.tf?('北单−365最大背离 <b style="color:'+(r.tf.maxFlow>=15?'#e54545':r.tf.maxFlow>=8?'#f97316':'var(--txt)')+'">'+fmt(r.tf.maxFlow)+'pp('+WDL[['W','D','L'].indexOf(r.tf.maxSide)]+')</b>'):'') + ((r.heatExcess!=null)?((r.tf?' · ':'')+(_hotNet!=null?('净超买 <b>'+(_hotNet>0?'+':'')+_hotNet.toFixed(1)+'pt</b>（绝对偏差 '+fmt(r.heatExcess)+'pt − 缺口 '+fmt((r.gap!=null?r.gap:0))+'pt）'):('绝对偏差(未扣缺口) <b>'+fmt(r.heatExcess)+'pt</b>'))):'');
+    const payStrip = '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--mut);border-top:1px dashed var(--line);padding-top:6px;margin-top:2px"><b>返还率</b>' +
+      (r.jcR!=null?'<span style="color:#ff7a3c">竞彩 '+r.jcR+'%</span>':'') +
+      (r.euR!=null?'<span style="color:#3a8ee6">Bet365 '+r.euR+'%</span>':'') +
+      (r.spR!=null?'<span style="color:#36c275">北单 '+r.spR+'%</span>':'') +
+      (r.euR!=null?'<span>抽水(1−R)·365 '+(100-r.euR).toFixed(2)+'%</span>':'') +
+      (r.euR!=null&&r.spR!=null?'<span>北单−365返还率差 <b style="color:var(--acc)">'+(r.spR-r.euR).toFixed(2)+'pp</b></span>':'') +
+    '</div>';
+    return '<div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:6px 0">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">' +
+        '<div><span style="background:rgba(127,127,127,.12);border-radius:4px;padding:1px 7px;font-size:11px;margin-right:7px">'+(r.b.league||'')+'</span><b style="font-size:14px">'+(r.b.home||'')+' vs '+(r.b.away||'')+'</b> <span style="color:var(--mut);font-size:11.5px">'+(r.b.date||'')+' '+(r.b.time && r.b.time!=='00:00' ? r.b.time : '待定')+'</span></div>' +
+        '<div style="font-size:12px">'+(hotStr||'')+'</div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:8px;margin:8px 0">'+colJC+colEU+colBD+'</div>' +
+      diffPanel + payStrip +
+    '</div>';
+  }
+
+  /* ★ 2026-10-16（回应"热度提示在哪里 / 既往比赛热度提示在哪里"）：三盘·资金流向板独立的「资金热度」列。
+     每场显眼徽章：正式过热(红)/中热(橙)/小热(黄)/正常热(灰)/无真实资金源(灰字)，并点名"哪一方热"(主胜/平/客胜)+数值。
+     betfa(必发/澳客)源→澳客冷热指数(档位依据)；北单源→占比−公平胜率(超买pt)。当天与既往两段共用 _rowHTML，故一并覆盖。 */
+  /* ★ 2026-10-16e：热度口径唯一入口 _heatInfo(r) —— 彻底消除「哪一方热」与「什么档」两张嘴说话，
+     也消除 triFlowHTML 内裸引用 yg 导致的 ReferenceError（旧版在 _finalBet 里写了未声明的 yg → 整板"生成失败"）。
+     口径：必发/澳客源以「澳客冷热指数」定档+定方(hotIdx 最大者)；北单源以「超买pt = 占比−公平胜率」定档+定方。
+     分档：hot 正式过热 / mid 中热 / small 小热 / normal 正常热（与热度榜、深盘板、复盘完全同源）。 */
+  /* ══════════════════════════════════════════════════════════════════════════════
+     ★ 2026-10-23 新增「亚盘判定（上盘/下盘）」—— 回应"三盘板是否按 亚盘判定×欧盘判定×精选 的框架走、能否推上/下盘"
+     数据全部取引擎**已经算好**的 an 字段（不新增任何抓取）：
+       p1 = 临场让球盘口（正值 = 主队让球 = 主队为上盘）  h1 = 临场上盘水位
+       a0/h0 = 初盘盘口/上盘水位          pan_gap = 盘分差（实际初盘 − 欧赔换算的预期盘，洋哥"问题盘"判据）
+       pan_type = 秦俑十大盘型            pan_predict = 盘型预判（上盘/下盘/观望，rules 见 engine KB.pan_types）
+     判定换算：上盘 = 让球方（p1>0→主队，p1<0→客队）；下盘 = 受让方。
+     ⚠ 诚实边界（asia_calib.json，1047 场干净样本 / 8 天，按真实水位结算）：
+       · 判「上盘」n=434 赢盘 59.4% / ROI **+16.1%**（CI 54.8~64.1，盈亏线 52.8%）—— 方向性明确
+       · 判「下盘」n=613 赢盘 49.1% / ROI −4.9%（CI 45.1~53.1，**无 edge**）
+       · 盘型分层：深盘·上盘 n=186 66.7%/+27.4% ｜ 示弱盘·上盘 n=132 58.3%/+16.4% ｜
+                    浅盘·下盘 n=156 36.5%/**−25.8%（明确反向坑）** ｜ 妥协盘·上盘 n=68 44.1%/−11.3%
+       · 判废档：|盘分差|≥2 的 337 场（亚盘让球方向与欧赔预期盘差 2 球以上）多为源数据主客错位，
+         该档实测 32.9% 赢盘 / −31.3% → 面板直接标「判废」，不给上/下盘。
+       · 仅 8 天窗口、未跨赛季，**不是可直接下注的 alpha**，是"盘口层读数 + 一致性交叉"，故本列不进口袋、
+         不改 精选/最终下注（最终下注仍由 stakePlan + 标定命中率决定）。
+     ══════════════════════════════════════════════════════════════════════════════ */
+  /* ★ 2026-10-25：结构下盘·现算函数（兼容旧烘焙 an：旧 an 无 structDown 字段，故现算）。
+     已提升为模块级函数（_structDown，见 tierBadgeCardSoft 上方），供 triFlowHTML 与 tierBadgeCardSoft 共用。 */
+  function _asiaJudge(r){
+    const a = (r && r.a) || {};
+    const num = v => (v == null || v === '' || isNaN(+v)) ? null : +v;
+    const p1 = num(a.p1), h1 = num(a.h1), a0 = num(a.a0), h0 = num(a.h0);
+    const gap = num(a.pan_gap);
+    const ty = a.pan_type || '';
+    const pred = a.pan_predict || null;
+    if (p1 == null && a0 == null) return { ok:false, kind:'none', txt:'无亚盘数据', sub:'引擎无临场盘口' };
+    const line = (p1 != null ? p1 : a0);
+    /* 判废：盘分差≥2 球 → 亚盘让球方向与欧赔预期盘严重矛盾（实测多为源数据主客错位） */
+    if (gap != null && Math.abs(gap) >= 2)
+      return { ok:false, kind:'void', txt:'判废·主客矛盾', sub:'盘分差 ' + (gap > 0 ? '+' : '') + gap.toFixed(2) + '（≥2球）', gap };
+    if (!line) return { ok:false, kind:'none', txt:'平手盘·无上下盘', sub:'让球 0', gap };
+    const upSide = line > 0 ? 'W' : 'L';
+    const upTxt = (upSide === 'W' ? '主' : '客') + '让' + Math.abs(line).toFixed(2).replace(/0$/, '');
+    const dir = (pred === '上盘' || pred === '下盘') ? pred : '观望';
+    const side = dir === '上盘' ? upSide : (dir === '下盘' ? (upSide === 'W' ? 'L' : 'W') : null);
+    const sideTxt = side ? (side === 'W' ? '主队' : '客队') : null;
+    const dp = (p1 != null && a0 != null) ? +(p1 - a0).toFixed(2) : null;
+    const dh = (h1 != null && h0 != null) ? +(h1 - h0).toFixed(2) : null;
+    const mv = [];
+    if (dp != null && Math.abs(dp) >= 0.01) mv.push((dp > 0 ? '升盘+' : '降盘') + dp.toFixed(2));
+    if (dh != null && Math.abs(dh) >= 0.02) mv.push('上盘水' + (dh < 0 ? '↓' : '↑') + Math.abs(dh).toFixed(2));
+    /* ★ 2026-10-24：洋哥自传第3步「预设指数 vs 实际指数」显式化。
+       27 场精选里有 6 场（挪威/波黑/布雷达/国米/曼联/布洛马）主判据就是「合理盘 vs 实际开高/浅开」，
+       此前主表只显示盘型、不显示盘分差数值，用户看不到"高开/浅开"这一步。现把 pan_gap 直接摊在副行。 */
+    const _gapTxt = (gap != null && Math.abs(gap) >= 0.01)
+      ? ('盘分差' + (gap >= 0 ? '+' : '') + gap.toFixed(2) + (gap >= 0.5 ? '(高开)' : (gap <= -0.5 ? '(浅开)' : '')))
+      : '';
+    /* ★ 2026-10-25：结构下盘（盘口结构正信号·标定可下注·独立于破绽反买框架·不碰 t1 终局门 0.72）。
+       标定窗口 pan_gap∈[-0.4,-0.13) 且引擎判下盘/观望 + 提质门禁(欧赔分歧≥0.2 或 浅盘|h|<0.5)：实际盘比欧赔预期浅 → 下盘(受让)易兑现。
+       3份bake去重 832 场：命中 58.1% / ROI +19.2% / 95%CI[12.7,25.7] 显著。
+       此处仅作亚盘副行观察标注；下注级推荐由 _finalBet 结构下盘分支 + 精选优选「结构下盘」子表给出（均不触 t1 终局门）。 */
+    const _sdHere = _structDown(a);
+    const _edgeNote = _sdHere
+      ? (' · 🟢结构下盘(标定'+_sdHere.hit+'%·ROI+'+_sdHere.roi+'%·n='+_sdHere.n+'·可下注)') : '';
+    const sub = upTxt + (h1 != null ? ('·水 ' + h1.toFixed(2)) : '') + (mv.length ? (' · ' + mv.join(' ')) : '') + (ty ? (' · ' + ty) : '') + (_gapTxt ? (' · ' + _gapTxt) : '') + _edgeNote;
+    return { ok:true, kind:'dir', dir, side, sideTxt, upSide, line, gap, ty, pred, dp, dh, txt:dir + (sideTxt ? ('·' + sideTxt) : ''), sub };
+  }
+  /* 亚盘 × 欧盘 交叉：亚盘给的方向 vs 欧盘层（模型方向，无则退资金最热方） */
+  function _asiaCross(r, aj){
+    if (!aj || aj.kind !== 'dir' || !aj.side) return null;
+    const euSide = (r.dir === 'W' || r.dir === 'L') ? r.dir
+                 : (r.heatUsable && (r.heatSide === 'W' || r.heatSide === 'L') ? r.heatSide : null);
+    if (!euSide) return null;
+    const same = (euSide === aj.side);
+    return { same, euSide, euTxt: euSide === 'W' ? '主' : '客',
+             badge: same ? '双盘共振' : '双盘冲突', c: same ? '#16a34a' : '#f97316' };
+  }
+  /* 该判定档的回测自证（★ 2026-10-30 改用引擎 AH_BT v4 表——2586 场最新让球深挖，
+     替代旧的 BET_BACKTEST.asia 8天小窗。AH_BT 键含 盘型+方向+可选水位/盘深 细分） */
+  function _asiaCalibFor(aj, r){
+    const AH = (typeof AH_BT !== 'undefined' && AH_BT) ? AH_BT : null;
+    if (!AH || !aj) return null;
+    /* 中庸盘：引擎只给「观望」，但回测显示盘口系统性偏深 → 押下盘(受让)有结构偏差（仅观察） */
+    if (aj.kind === 'dir' && aj.dir === '观望' && aj.ty === '中庸盘'){
+      const md = AH['中庸盘·下盘']; if (!md || md.n < 40) return null;
+      return { k: 'mid_down', ...md, obs: true };
+    }
+    if (aj.kind !== 'dir') return null;
+    const keys = [];
+    if (aj.pred === '上盘' || aj.pred === '下盘'){
+      const base = aj.ty + '·' + aj.pred;
+      /* 深盘/中庸盘 再按水位方向细分（v4 证明 dh 是方向关键） */
+      if (aj.dh != null){
+        const dhk = aj.dh <= -0.05 ? 'dh降' : (aj.dh >= 0.05 ? 'dh升' : '');
+        if (dhk && AH[base + '·' + dhk] && AH[base + '·' + dhk].n >= 20) keys.push(base + '·' + dhk);
+      }
+      keys.push(base);
+    }
+    for (const k of keys) if (AH[k] && AH[k].n >= 20) return { k, ...AH[k] };
+    return null;
+  }
+
+  function _heatInfo(r){
+    const yg = (r && r.yg) || {};
+    const heatSrc = yg.heatSrc || (r && r.heatSrc) || null;
+    const hotIdx = (yg.hotIdx != null) ? yg.hotIdx : ((r && r.hotIdx != null) ? r.hotIdx : null);
+    const hotSideIdx = yg.hotSideIdx || (r && r.hotSideIdx) || null;
+    const heatExcess = (r && r.heatExcess != null) ? r.heatExcess : (yg.heatExcess != null ? yg.heatExcess : null);
+    // ★ 洋哥口径：过热 = 净超买 = (占比−公平胜率) − 返还率缺口(heatGap)，非绝对偏差。参考软件「+N」即此净值。
+    //   绝对偏差 heatExcess 极端场可达 +70pt（引擎 line4311 实证），÷4.7 仍 +15级 → 必须用净值才对得上参考软件 +4/+6/+7。
+    const heatGap = (yg && yg.heatGap != null) ? +yg.heatGap : 0;
+    const bdDirOk = (yg && yg.bdDirOk === true);   // 北单错行护栏：false=假热（引擎 line4336 警告的 +65pt 错行放大假信号）
+    const netExcess = (heatExcess != null) ? +(heatExcess - heatGap).toFixed(1) : null;
+    const pctSide = (r && r.heatSide) || null;                       // 占比最高方（资金最多去哪）
+    const isReal = (heatSrc === 'beidan' || heatSrc === 'betfa');
+    // ★ 有真实资金源时，必须 bdDirOk 干净配对才算可用（错行假热直接判无真实资金源，不显示超买）
+    const usable = (heatSrc ? (isReal && bdDirOk) : (!!(r && (r.heatUsable || r.pct)) || yg.heatUsable === true));
+    /* ★ 关键：档位/热方/数值必须**同一指标**。
+       引擎分档优先用「澳客冷热指数 hotIdx」（有必发 hot 就以其为准），故此处也用 hotIdx 是否存在来选口径——
+       不能再用 heatSrc==='betfa'：一场若同时有北单+必发数据，heatSrc 会取 'beidan'，
+       旧写法就会"档位按澳客冷热、数值按超买pt" → 出现"正式过热/超买+8.7pt""中热/超买−8.6pt"这种自相矛盾。 */
+    const hasAoke = (hotIdx != null);
+    let tier = yg.heatTier || (r && r.heatTier) || null;
+    if (!tier){
+      if (hasAoke)                 tier = (hotIdx >= 50 ? 'hot' : (hotIdx >= 15 ? 'mid' : (hotIdx >= 5 ? 'small' : 'normal')));
+      /* ★★ 2026-10-31 八修·门槛归位到唯一 pt 标尺（netExcess 已是**净超买**，但门槛仍是绝对偏差时代的 18/9/3）：
+         净超买 18pt 才"正式过热"，而资金板 ≥+4 就判正式过热 → 同一场两处档位矛盾（又一处"两套标尺"）。
+         现统一：≥+4pt 正式过热(hot) / +2~4 中热(mid) / +0.5~2 小热(small) / 其余正常。 */
+      else if (netExcess != null) tier = (netExcess >= 4 ? 'hot' : (netExcess >= 2 ? 'mid' : (netExcess >= 0.5 ? 'small' : 'normal')));
+      else tier = 'normal';
+    }
+    // 热方：与档位同源 —— 有澳客冷热则取「冷热指数最热方」，否则取「占比最高方」
+    const side = (hasAoke && hotSideIdx) ? hotSideIdx : (pctSide || hotSideIdx || null);
+    const altSide = (hasAoke && hotSideIdx && pctSide && pctSide !== hotSideIdx) ? pctSide : null;  // 两口径不一致时提示
+    const val = hasAoke
+      ? ('澳客冷热' + hotIdx + (netExcess != null ? ('·净超买' + (netExcess >= 0 ? '+' : '') + (+netExcess).toFixed(1) + 'pt') : ''))
+              : (netExcess != null ? ('净超买 ' + (netExcess >= 0 ? '+' : '') + (+(_ptToLvl(netExcess) || 0)).toFixed(1) + 'pt') : '');
+    return { tier, side, hotSideIdx, altSide, hotIdx, heatExcess, hasAoke, betfa: hasAoke, usable,
+             metric: hasAoke ? '必发·澳客冷热指数' : '北单·净超买pt', val, src: heatSrc };
+  }
+  const _sideTxt = s => (s === 'W' ? '主胜' : (s === 'L' ? '客胜' : (s === 'D' ? '平' : '')));
+  const _tierLabel = t => (t === 'hot' ? '正式过热' : (t === 'mid' ? '中热' : (t === 'small' ? '小热' : '正常热')));
+  const _tierCls = t => (t === 'hot' ? 'bW' : (t === 'mid' ? 'bD' : (t === 'small' ? 'bK' : 'bG')));
+
+  /* 「资金热度」列（当天段 + 既往段共用 _rowHTML，故一处覆盖两处）：
+     徽章=档位(点名哪一方热) + 副行=数值与来源；两口径不一致时追加"另·澳客冷热最热=…"。 */
+  function _heatCell(r){
+    const h = _heatInfo(r);
+    if (!h.usable) return '<span style="font-size:11px;color:var(--mut)">无真实资金源</span>';
+    const sTxt = _sideTxt(h.side);
+    /* 正常热档内再分出「偏冷」：与档位同源地判负——有澳客冷热看 hotIdx<0，否则看超买≤−3pt。
+       若仍标"正常热·超买−16.7pt"自相矛盾。偏冷 = 该方被资金冷落（潜在价值侧）。 */
+    const cold = (h.tier === 'normal') && (h.hasAoke ? (h.hotIdx < 0) : (h.heatExcess != null && h.heatExcess <= -3));
+    /* ★ 2026-10-21e：北单源 heatExcessEff≥18pt = 洋哥「大热必死」确认信号（站对面命中 84% 标定，命中率修复 15→18pt）。
+       旧版只标"正式过热"，用户感知不到"大热必死"；现对北单源过热档显式点名"大热必死"，与引擎 isHot 口径一致。 */
+    const isBigHot = (h.tier === 'hot' && !h.hasAoke && h.usable && h.heatExcess != null && h.heatExcess >= 18);
+    const tlabel = cold ? '偏冷' : (isBigHot ? '大热必死' : _tierLabel(h.tier));
+    const tcls = cold ? 'bG' : _tierCls(h.tier);
+    let altTxt = '';
+    if (h.altSide){
+      const _ai = ['W','D','L'].indexOf(h.altSide);
+      const _ap = (r.pct && _ai >= 0) ? ('·' + r.pct[_ai] + '%') : '';
+      altTxt = '；另·占比最高=' + _sideTxt(h.altSide) + _ap;
+    }
+    let actTxt = '';
+    if (h.tier === 'hot'){
+      const _ah = heatActionHint(h.side, r.analysis);
+      actTxt = '<br><span style="font-size:9.5px;color:var(--yel)">' + _ah.t + (_ah.vs != null ? ('·' + _ah.vs) : '') + '</span>';
+    }
+    return '<span class="badge ' + tcls + '">' + (sTxt ? sTxt + '·' : '') + tlabel + '</span>'
+         + '<br><span style="font-size:10.5px;color:var(--mut)">' + (h.val || '—') + altTxt + '</span>'
+         + actTxt
+         + (window.__DATA_TS__ ? '<br><span style="font-size:9.5px;color:var(--mut)">数据截至 ' + window.__DATA_TS__ + '</span>' : '');
+  }
+
+  /* 「亚盘判定」列（总览与16列全表共用）：上盘/下盘徽章 + 让球与水位变动 + 盘型 + 与欧盘共振/冲突 + 该档回测自证 */
+  function _asiaCell(r){
+    const aj = _asiaJudge(r);
+    if (aj.kind === 'none')
+      return '<span style="font-size:11px;color:var(--mut)">' + aj.txt + '</span><br><span style="font-size:10px;color:var(--mut)">' + (aj.sub || '') + '</span>';
+    if (aj.kind === 'void')
+      return '<span class="badge bD" title="盘分差 = 实际初盘 − 欧赔换算的预期盘；|≥2球| 说明亚盘让球方向与欧赔严重矛盾，实测多为源数据主客错位，该档历史 32.9% 赢盘/−31.3%，故判定作废">' + aj.txt + '</span><br><span style="font-size:10px;color:var(--mut)">' + aj.sub + '</span>';
+    const cross = _asiaCross(r, aj);
+    const cal = _asiaCalibFor(aj, r);
+    const cls = aj.dir === '上盘' ? 'bW' : (aj.dir === '下盘' ? 'bL' : 'bG');
+    let h = '<span class="badge ' + cls + '">' + aj.txt + '</span>';
+    h += '<br><span style="font-size:10px;color:var(--mut)">' + aj.sub + '</span>';
+    if (cross) h += '<br><span style="font-size:10px;color:' + cross.c + '">' + (cross.same ? '✓ ' : '⚡ ') + cross.badge + '（欧盘指' + cross.euTxt + '）</span>';
+    if (cal){
+      if (cal.obs){
+        /* 中庸盘观察：盘口系统性偏深，押下盘(受让)有稳定结构偏差（仅作盘口层观察，非下注信号） */
+        h += '<br><span style="font-size:9.5px;color:#16a34a" title="中庸盘=盘口与欧赔吻合，引擎只给「观望」，约占当日2/3场次；但回测显示盘口系统性偏深，历史押下盘(受让)赢盘率显著高于押上盘，属结构观察、不参与最终下注。押上盘仅 39.4%/−14.8%。">📊 盘口偏深·押下盘 ' + cal.win + '% 赢 / ROI +' + cal.roi + '% (n=' + cal.n + ')</span>';
+      } else {
+        h += '<br><span style="font-size:9.5px;color:' + (cal.roi >= 0 ? '#16a34a' : '#e54545') + '" title="回测口径：1047场干净样本(8天)，按真实水位结算，0.25/0.75半赢半输、整数盘走水退本">回测 ' + cal.win + '% 赢盘 / ROI ' + (cal.roi > 0 ? '+' : '') + cal.roi + '% (n=' + cal.n + ')</span>';
+      }
+    }
+    /* ★ 2026-10-30 实时欧赔4家（365/立博/威廉/英特）：亚盘判定列下方附各家常赔率与主胜变化 */
+    const _cl = (r.a && r.a.coLive) || null;
+    if (_cl){
+      const _rows = [];
+      for (const co of ['Bet365','立博','威廉希尔','Interwette']){
+        const v = _cl[co]; if (!v || !v.c) continue;
+        const o = v.o || null;
+        const d = (o && v.c.h != null) ? +(v.c.h - o.h).toFixed(2) : null;
+        const arrow = (d == null || Math.abs(d) < 0.02) ? '' : (d < 0 ? '<span style="color:#16a34a;font-size:9px">▼</span>' : '<span style="color:#e54545;font-size:9px">▲</span>');
+        _rows.push('<div style="font-size:9.5px;line-height:1.4"><span style="opacity:.65">'+(co==='Bet365'?'365':(co==='立博'?'立博':(co==='威廉希尔'?'威廉':'英特')))+'</span> <b>'+ (+v.c.h).toFixed(2) +'</b>'+arrow+'</div>');
+      }
+      if (_rows.length) h += '<br><span style="font-size:9.5px;color:#f97316" title="365/立博/威廉/英特 4家实时欧赔（主胜），▲主胜升/▼主胜降">🟠实时欧赔</span><div style="font-size:9.5px;line-height:1.4">'+_rows.join('')+'</div>';
+    }
+    return h;
+  }
+
+  function _rowHTML(r, ri){
+    try { (window.__tfCardData||(window.__tfCardData={}))[ri] = r; } catch(e){}   // ★ 对照卡按需生成用
+    const v = _verdict(r);
+    const spCell = r.sp ? r.sp.join(' / ') : '—';
+    const pctCell = r.pct ? r.pct.map(x=>x+'%').join(' / ') : '—';
+    const dirCell = (r.dir && r.dir!=='D') ? '<b style="color:var(--acc)">'+labelW(r.dir)+'</b>'+(r.conf!=null?' <span style="font-size:11px;opacity:.7">conf'+r.conf+'</span>':'') : (r.dir==='D'?'平':(r.bdDir?'<span style="color:#6aa0ff">北单·'+labelW(r.bdDir)+'</span>':'<span style="color:#8b98a9">—</span>'));
+    const fairCell = r.fairProb!=null ? r.fairProb+'%' : '—';
+    let tfCell;
+    if (r.tf){ const mi=['W','D','L'].indexOf(r.tf.maxSide);
+      const _he=(r.heatExcess!=null)?r.heatExcess:((r.yg&&r.yg.heatExcess!=null)?r.yg.heatExcess:null);
+      const _g=(r.gap!=null)?r.gap:((r.yg&&r.yg.heatGap!=null)?r.yg.heatGap:0);
+      const _net=(_he!=null&&_g!=null)?(_he-_g):null;
+      const over=(_net!=null && _net>0);
+      const c= over?'#e54545':(r.tf.maxFlow>=15?'#e54545':r.tf.maxFlow>=8?'#f97316':r.tf.maxFlow<=-8?'#16a34a':'#8b98a9');
+      const _lvT=(_net!=null)?_ptToLvl(_net):((r.gap!=null)?_ptToLvl(r.tf.maxFlow-r.gap):null);
+      tfCell = '<b style="color:'+c+'">'+(_lvT!=null?('+' + _lvT.toFixed(1)+'pt'):(fmt(r.tf.maxFlow)+'pp'))+'</b> <span style="font-size:11px;opacity:.7" title="超买(占比−公平)='+(_he!=null?fmt(_he):'—')+'pt 缺口='+(_g!=null?fmt(_g):'—')+'pt；北单−365流速='+fmt(r.tf.maxFlow)+'pt">('+WDL[mi]+(r.tf.recomputed?'·重算':'')+(over?'·超缺口':(r.gap!=null?'·缺口'+r.gap+'pt':''))+')</span>'; }
+    else { tfCell = '<span style="color:#8b98a9">—</span>'; }
+    const pc = v2 => (v2==null) ? '<span style="color:var(--gry)">—</span>' : v2.toFixed(1)+'%';
+    const payCell = '<td style="font-size:11px;line-height:1.5"><span style="color:#36c275">北单 '+pc(r.spR)+'</span><br><span style="color:#3a8ee6">B365 '+pc(r.euR)+'</span>'+(r.jcR!=null?'<br><span style="color:#ff7a3c">竞彩 '+pc(r.jcR)+'</span>':'')+'</td>';
+    /* ★ 2026-10-16：三盘板比分列改为实时渲染（复用 tbScoreCell，与档位/优选/破蛋同口径）。
+       带 data-pscore，由 _triScoreTick 每 30s 就地刷新；r.m 实时源更新 home_score 后即显示进行中比分→终场✓/✗。 */
+    let finCell;
+    if (r.m){ finCell = '<td data-pscore="'+r.tid+'">'+ _triScoreCell({ m:r.m, dir:(r.dir&&r.dir!=='D')?r.dir:null, a:r.a }) +'</td>'; }
+    else if (r.finScore){ const f=r.finScore; const col = f.hs>f.as?'var(--grn)':(f.hs<f.as?'var(--red)':'var(--yel)'); finCell='<td style="font-weight:700;color:'+col+'">'+f.hs+':'+f.as+'</td>'; }
+    else finCell='<td style="color:var(--mut)">—</td>';
+    const lmCell = r.lm ? ('主'+r.lm.lam.toFixed(1)+'/客'+r.lm.mu.toFixed(1)+'/共'+(r.lm.lam+r.lm.mu).toFixed(1)) : '—';
+    const fb = _finalBet(r);
+    const tidAttr = r.tid ? (' onclick="onAnalyze(event,\'' + r.tid + '\')\" style="cursor:pointer;color:var(--acc)"') : '';
+    return '<tr>' +
+      '<td style="white-space:nowrap;color:var(--mut)">'+ _dOf(r.b.date) +'</td>' +
+      '<td>'+ (r.b.time||'—') +'</td>' +
+      '<td>'+ (r.b.league||'') +'</td>' +
+      '<td><a onclick="__tfToggle('+ri+');event.stopPropagation()" style="cursor:pointer" title="点击展开/收起 三盘对照卡（竞彩/Bet365走势/北单SP + 同返还率换算赔率 + 盘速差pp）"><b style="color:var(--acc)">'+ (r.b.home||'') +'</b> <span style="opacity:.6">vs</span> <b style="color:var(--acc)">'+ (r.b.away||'') +'</b></a>'
+        + (r.tid ? ' <span class="tri-live" data-pscore-inline="'+r.tid+'">'+ _triInlineScore(r) +'</span>' : ' <span class="tri-live">'+ _triInlineScore(r) +'</span>')
+        + (r.src ? ' <span style="font-size:10px;border-radius:4px;padding:0 3px;margin-left:3px;color:'+(r.src==='竞彩'?'#ff7a3c':(r.src==='北单'?'#3a8ee6':'#8b98a9'))+';border:1px solid '+(r.src==='竞彩'?'#ff7a3c':(r.src==='北单'?'#3a8ee6':'#8b98a9'))+'">'+r.src+'</span>' : '')
+        + (r.m ? '' : ' <span style="font-size:10px;border-radius:4px;padding:0 3px;margin-left:3px;color:#e54545;border:1px solid #e54545" title="北单有数据，但赛事库中找不到可配对的同场（队名/联赛/时刻对不上），仅展示北单SP与资金，无模型方向与实时比分">⚠源缺口·未配对</span>')
+        + '</td>' +
+      '<td>'+ spCell +'</td>' +
+      '<td>'+ pctCell +'</td>' +
+      '<td>'+ dirCell +'</td>' +
+      '<td style="font-size:11px;line-height:1.45;max-width:150px;white-space:normal;word-break:break-word;vertical-align:top">'+ _asiaCell(r) +'</td>' +
+      '<td>'+ fairCell +'</td>' +
+      '<td>'+ tfCell +'</td>' +
+      '<td style="font-size:11px;line-height:1.4;max-width:180px;white-space:normal;word-break:break-word;vertical-align:top">'+ _heatCell(r) +'</td>' +
+      payCell +
+      finCell +
+      '<td style="white-space:nowrap;font-size:11.5px;color:var(--mut)">'+ lmCell +'</td>' +
+      '<td style="font-size:12px;line-height:1.5;max-width:300px;white-space:normal;word-break:break-word;vertical-align:top">'+ _basis(r) +'</td>' +
+      '<td style="font-size:12.5px;line-height:1.4;max-width:240px;white-space:normal;word-break:break-word;vertical-align:top"><b style="color:'+fb.c+'">'+ fb.ic+' '+fb.bet +'</b><br><span style="font-size:10.5px;color:var(--mut)">'+ fb.tier+'·'+fb.note +'</span></td>' +
+      '<td><a onclick="__tfToggle('+ri+');event.stopPropagation()" style="cursor:pointer;color:var(--acc)">对照卡</a>' + (r.tid ? ' <span style="opacity:.35">|</span> <a'+tidAttr+'>明细</a>' : '') + '</td>' +
+    '</tr>' +
+    '<tr id="tfcard_'+ri+'" style="display:none"><td colspan="17" style="padding:4px 6px"></td></tr>';   // ★ 内容点开时才生成
+  }
+  /* ★ 2026-10-15b 既往/当天分栏：北单投注期跨日（含前一日 00:00~06:00 场次），
+     主表按「比赛日期」拆成「当天(未完赛)」与「既往(已完赛·研究参考)」两栏，避免混在一起；
+     已配对(可三方对照)与仅北单数据两个子档在每栏内各自保留。 */
+  let _ri = 0;
+  const todayRows = rows.filter(_isToday);
+  const pastRows  = rows.filter(r => !_isToday(r));
+
+  const note = '<details style="margin:8px 0"><summary style="cursor:pointer;font-weight:700;color:var(--acc);font-size:13px">📖 三盘·资金流向 说明（点击展开 · 含洋哥公式 / 大热判据 / 拥挤陷阱档）</summary><p class="note" style="border-left:3px solid var(--acc)"><b>三盘·资金流向（北单真实资金 × 机构欧赔 × 模型方向 三方对照监测，非交易信号）。</b>' +
+    '① 本板直接遍历<b>本期北单(跨日投注期)全部 ' + rows.length + ' 场</b>（墨尔本vs首尔F 等此前因「引擎缺 an/heatUsable」被漏的场现已纳入），不再因缺模型方向或资金源而整行消失；每行新增「日期」列，并按日期把<b>当天(未完赛)</b>与<b>既往(已完赛·仅研究参考)</b>分成上下两栏，互不混淆。' +
+    '② 北单−欧赔差值=洋哥自传(file1 178/180 行)精确公式：北单赔率池返还率=100%，故<b>北单×365返还率=同基准赔率</b>；各侧偏差=(1/换算赔率 − 1/365同侧赔率)×100。例：莫尔德 北单2.03×94.79%=1.92，365=2.6 → (1/1.92−1/2.6)=<b>13.6pp</b>，远超该场返还率缺口5.21%→大热（与洋哥判定一致）；水晶宫 北单2.01×93.98%=1.89，365=2.00 → (1/1.89−1/2)=<b>2.9pp</b>，小于缺口6.02%→受注均衡。365≈94−95%返还率，<b>两家返还率不同，不能直接比原始赔率</b>（洋哥原话：连返还率都不一样天天算分歧算个锤子）。该对照仅作监测，回测证伪 edge（真实边 +1.4pp，z=0.38 不显著），<b>不包装成预警、不可机械反买</b>；它正是洋哥美国vs伊朗案例复算 +15.54pt 大热必死的数学口径。' +
+    '③ 真正有参考价值的是<b>散户资金是否过度追捧某方</b>（超买=拥挤·价值被吃光）——故本板<b>独立设「资金热度」列</b>：徽章=档位并<b>点名哪一方热</b>（主胜/平/客胜），副行=数值与来源（<b>澳客冷热指数</b> 或 北单<b>超买pt</b>）。' +
+    '分档与「热度榜 / 深盘板 / 三盘资金板 / 每日复盘」<b>完全同源</b>（★ 2026-10-31 全板唯一 pt 标尺收口，旧文案的 18/9/3 是"绝对偏差"时代的门槛，已废）：<b style="color:var(--red)">正式过热</b>=澳客冷热≥50 <b>或 净超买 ≥+4pt</b>（+4~+6 显著 · <b style="color:#dc2626">≥+6 必发级</b>）→ <b>极端拥挤陷阱档</b>：该方已被买满、赔率无价值，列为<b>最需警惕·默认反买观察档</b>（模型反向→果断反买；模型同向→仅轻仓顺势）。<b style="color:var(--yel)">中热</b>=澳客冷热≥15（或净超买 +2~+4pt）→ 偏热·谨慎顺势；<b>小热</b>=≥5（或 +0.5~+2pt）；<b>正常热</b>=其余。<b>净超买pt = 资金占比 − 公平胜率 − 返还率缺口</b>（绝对偏差再扣掉该场抽水，缺口通常 6~11pt），直接体现"钱比赔率看好该方多多少"——本板资金格同时露出<b>净超买</b>与<b>绝对偏差(未扣缺口)</b>两个量，便于你自行判断，二者<b>不是同一个数</b>。' +
+    '两口径不一致时会并列提示（例：占比最高=主胜，但澳客冷热最热=平）。若北单/必发均未覆盖则显「<b>无真实资金源</b>」——那是数据缺失，不代表没比赛。' +
+    '④ <b>正式过热=极端拥挤陷阱档（默认反买观察）</b>，但"过热方必不赢"是误区：<b>10-17 全量 19 场带资金数据（去重），新逻辑标 9 场正式过热</b>（超买≥15pt + 流动性≥3万），过热方<b>赢球 4、打平 3、输 2</b>，方向命中 <b>5/9=55.6%</b>——过热方赢球率≈其赔率隐含概率，<b>市场有效、非必死</b>。故本档不做"无脑反买"，而是<b>数据门控反买</b>：当<b>模型方向与过热方反向</b>时＝你要求的"过热方赢不了档"→果断反买；模型同向则仅轻仓顺势。9 场里 4 场未中（威尼斯那不勒斯 84%大热 0-1 爆冷、米尔沃尔 87.6% 平、比利亚雷 84% 平、科特布斯 70% 平）恰是"该赢但非碾压"的拥挤局，正是反买信号最该盯的。流动性下限还剔除柏太阳神(成交量2917)等迷你噪声场。动作建议结合模型方向+引擎价值分（已完赛区另给「调用命中/防平」对照）。' +
+    '⑤ <b>点每行「对阵」（或最右「对照卡」链接）</b>展开参考软件式单场三盘对照卡：①竞彩官方 ②Bet365（初盘→临盘走势线）③北单SP+真实占比，下方「盘速差对照」双栏<b>显式给出换算赔率</b>（一盘赔率÷一盘返还率×二盘返还率，参考图实例：1.76÷0.8856×0.9475=1.8830）与对365的概率差pp。' +
+    '⑥ 顶部新增「洋哥三盘法·方法论图例」(可折叠) 与本板每行「盘级偏差(胜赔估算·洋哥盘级表 0.25=1级)」「资金流速异常」判定，均按洋哥自传 file1/file2/file3 的<b>返还率换算 / 盘级 / 流速</b>公式精确实现：大热不再用固定 15pp，而是对照<b>该场专属返还率缺口(1−365R)</b>，差值超缺口 或 盘级偏差≥2级(0.5) 即判洋哥大热；竞彩强lean而365纹丝不动即标流速异常。' +
+    '⑦ <b>「亚盘判定(上/下盘)」列</b>（2026-10-23 新增，回应"能否推上盘还是下盘"）：<b>上盘=让球方</b>（临场盘口 p1&gt;0 则主队为上盘、p1&lt;0 则客队为上盘），<b>下盘=受让方</b>。判定规则=引擎 <b>秦俑十大盘型</b>（盘分差=实际初盘−欧赔换算预期盘 + 初盘水位 + 临场升降盘 dp + 上盘水位变动 dh），产出 上盘/下盘/观望；副行给出 让球数·上盘水位·升降盘·盘型，并标<b>双盘共振/冲突</b>（亚盘方向 vs 欧盘·模型方向）。<b>回测自证（当前引擎重算 3 份快照 · 1384 场完场亚盘结算 / 按真实水位）</b>：判<b>上盘</b> 53.6% 赢盘、<b>ROI +5.0%</b>（CI 49.2~58.1，弱正期望）；判<b>下盘</b> 45.6%、ROI −9.9%（负期望·勿机械买下盘）；盘型分层：<b>深盘·上盘 66.7%/+27.4%</b>、示弱盘·上盘 58.3%/+16.4%、阻挡盘·上盘 56.3%/+10.5%，而<b>浅盘·下盘 36.5%/−25.8% 是明确反向坑</b>、妥协盘·上盘 44.1%/−11.3%。<b>判废档</b>：|盘分差|≥2 的 337 场（亚盘让球方向与欧赔预期盘差 2 球以上）实测 32.9% 赢盘/−31.3%，多为源数据主客错位，直接标「判废·主客矛盾」不给方向。另发现：<b>中庸盘（盘口与欧赔吻合，引擎只给「观望」，约占当日 2/3 场次）</b>回测显示<b>盘口系统性偏深</b>——历史押<b>下盘(受让) 57.3% 赢盘 / ROI +11.0%</b>（n=1042，CI 54.3~60.3，高于 52.8% 盈亏线），押上盘仅 39.4%/−14.8%；即便上盘水位下降（本应利好让球方）押下盘仍赢 60.4%/+16.1%。该档在三盘板「亚盘判定」列显「观望·中庸盘」并附<b>📊 盘口偏深·押下盘 +11%ROI</b>观察（绿色行），属结构读数、<b>同样不参与最终下注</b>。⚠ 该回测仅 8 天窗口、未跨赛季，<b>不是可直接下注的 alpha</b>；本列只作盘口层读数与一致性交叉，<b>不参与</b>「精选/最终下注」（那一路仍由 stakePlan + 标定命中率决定）。' +
+    '⑧ <b>⚠ 正式过热·方向铁律（2026-10-23 复盘，已固化 asia_calib.hot_receiver）</b>：正式过热（<b style="color:#b45309">该复盘用绝对偏差口径 ≥18pt ≈ 净超买 +10pt</b>）复盘历史 33 场发现——<b>过热方 88% 是亚盘「受让方/下盘」（盘口上的弱队），而不是让球方（上盘）</b>。因此务必纠正一个常见误解：① 若把"买对面受让球"理解成<b>机械买弱队受让（下盘）</b>，赢盘率仅 <b>20.5%</b>（≥18，n=33）/ 24.5%（≥15，n=47）/ 9.1%（≥25，n=11）→ 因为你买的下盘恰是被爆买的热门方，等于顺着资金买、必死；② 真正的「大热必死」亚盘版 = <b>反买过热方</b>，而过热方在正式过热里 88% 是下盘，所以反买 = <b>买上盘（让球方）</b>，赢盘率 <b>78.0%</b>（≥18）/ 76.6%（≥15）/ 100%（≥25，n=11），与 1X2 反买命中率 75.8%（≥18）交叉验证一致。<b>结论：正式过热这一档，正确动作是「反买过热方 = 买上盘（让球方）」，不是买受让</b>；看板「正式过热·陷阱·反买」逻辑方向正确，只是它反买出来的那一边在正式过热里通常是上盘。⚠ 亚盘样本 n=33/47/11 来自 287 场标定窗口，与 1047 场纯亚盘集（北单/gqj2 与 okooo 两套 tournament_id 不互通、无法合并）独立，方向性结论可靠、勿当精确 alpha。</b>' +
+    '⑨ <b>⚠ 北单样本量门槛 + 必发定位（洋哥 file1/file4 原话）</b>：北单"单天销售额约3000万、分散到上千场"，<b>小比赛单场受注额极小 → 赔率池偏差参考价值低、慎用</b>；唯<b>世界杯/欧洲杯样本提升30倍以上</b>最可靠。故本板北单信号（超买/盘级偏差/流速异常）在<b>低级别/野鸡场</b>即便显偏差也只作"监测"、不升"洋哥大热判定"红档；高可信仅限<b>主流联赛/大赛</b>。另：<b>必发(betfa)按洋哥 L115 仅反映"交易活跃度"，并非真实购买热度</b>（买卖双向同算、含对冲），故本板<b>不以必发单独认定大热</b>；权威 100% 真实资金源始终是<b>北单赔率池</b>（先有资金后有赔率，三项即真实占比）。</p></details>';
+
+  /* ★ 2026-10-15 新增：三盘返还率对照图（欧赔基准=Bet365，架构参照参考图之「两盘对照 + 返还率底栏」）。
+     把抓到的三家返还率画成横向条形图：北单SP池 / Bet365欧赔 / 竞彩官方，
+     底栏显式标「赚赔(抽水)=1−返还率」，正是洋哥「同返还率换算」要抹平的量。
+     ★ Bet365 那根用全市场 OFFLINE_PACK 的 payout 均值（稳定≈94%）——因本板为「不漏北单场」故意保留大量无 an 的行，
+      若只取已配对行的欧赔会过稀；基准用全市场均值更稳更准确。 */
+  const _avg = arr => { const v = arr.filter(x=>x!=null); return v.length ? +(v.reduce((b,x)=>b+x,0)/v.length).toFixed(2) : null; };
+  const avgSpR  = _avg(rows.map(r=>r.spR));
+  const avgEuR0 = _avg(rows.map(r=>r.euR0));     // 已配对行的 Bet365 初盘（若有）
+  const avgEuR  = _avg(rows.map(r=>r.euR));       // 已配对行的 Bet365（即时/聚合）
+  const avgJcR  = _avg(rows.map(r=>r.jcR));       // 竞彩官方（名称配对成功者）
+  // 全市场 Bet365 返还率（基准）：遍历 OFFLINE_PACK 所有 pack 的 an.payout
+  let _euAll = [];
+  try { if (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK){ for (const _k in OFFLINE_PACK){ const _a = OFFLINE_PACK[_k] && OFFLINE_PACK[_k].an; if (_a && _a.payout != null) _euAll.push(+(_a.payout*100).toFixed(2)); } } } catch(e){}
+  const allEuR = _euAll.length ? +(_euAll.reduce((b,x)=>b+x,0)/_euAll.length).toFixed(2) : (avgEuR || avgEuR0);
+  function _payChart(){
+    const items = [
+      {n:'北单SP池（北京单场）', v:avgSpR,  c:'#36c275', sub:'≈零Margin·三项即真实资金%'},
+      {n:'Bet365 欧赔（基准·全市场）', v:allEuR, c:'#3a8ee6', sub:'核心公司即时盘·全市场均值 ' + _euAll.length + ' 场'},
+      {n:'Bet365 欧赔（已配对初盘）', v:avgEuR0, c:'#5aa9f0', sub:'北单配对场·开盘'},
+      {n:'竞彩官方（胜平负）', v:avgJcR, c:'#ff7a3c', sub:'中国体彩·开赛时间主键配对'},
+    ].filter(x=>x.v!=null);
+    if (!items.length) return '';
+    const X0=188, X1=634, RLO=80, RHI=100, barH=24, pitch=42, top=48, bot=top+items.length*pitch;
+    const H = bot+16;
+    const xOf = R => X0 + (Math.max(RLO,Math.min(RHI,R))-RLO)/(RHI-RLO)*(X1-X0);
+    let s = '<svg viewBox="0 0 680 '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMin meet">';
+    s += '<text x="0" y="14" fill="var(--mut)" font-size="11.5">返还率 R = 1/Σ(1/赔率) · 越高=抽水越低 · 欧赔基准=Bet365</text>';
+    for (const g of [80,85,90,95,100]){
+      const gx = xOf(g);
+      s += '<line x1="'+gx.toFixed(1)+'" y1="'+(top-6)+'" x2="'+gx.toFixed(1)+'" y2="'+bot+'" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 4"/>';
+      s += '<text x="'+gx.toFixed(1)+'" y="'+(top-10)+'" fill="var(--mut)" font-size="9.5" text-anchor="middle">'+g+'%</text>';
+    }
+    items.forEach((it,i)=>{
+      const y = top + i*pitch; const bx = xOf(it.v);
+      s += '<text x="182" y="'+(y+barH/2+4)+'" fill="var(--txt)" font-size="12" text-anchor="end">'+it.n+'</text>';
+      s += '<rect x="'+X0+'" y="'+y+'" width="'+Math.max(2,(bx-X0)).toFixed(1)+'" height="'+barH+'" rx="5" fill="'+it.c+'" opacity="0.92"/>';
+      s += '<text x="'+(bx+6).toFixed(1)+'" y="'+(y+barH/2+4)+'" fill="var(--txt)" font-size="12.5" font-weight="700">'+it.v.toFixed(2)+'%</text>';
+      s += '<text x="'+(bx+6).toFixed(1)+'" y="'+(y+barH+13)+'" fill="var(--mut)" font-size="10">抽水(赚赔) '+(100-it.v).toFixed(2)+'% · '+it.sub+'</text>';
+    });
+    s += '</svg>';
+    const dSpB = (avgSpR!=null && allEuR!=null) ? (avgSpR-allEuR).toFixed(2) : '—';
+    return '<div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:10px 0">' + s +
+      '<div style="font-size:11px;color:var(--mut);margin-top:4px;line-height:1.5">赚赔(抽水)=1−返还率。北单≈0.3% / Bet365≈5.5% / 竞彩≈11.3% —— 北单与Bet365返还率差≈<b style="color:var(--acc)">'+dSpB+'pp</b>，正是洋哥「一盘赔率÷一盘返还率×二盘返还率」要抹平的量：北单SP÷北单R×Bet365R 才与欧赔可比（否则「连返还率都不一样天天算分歧算个锤子」）。</div></div>';
+  }
+  const payChartHTML = _payChart();
+
+  const _thead = '<thead><tr><th>日期</th><th>开赛</th><th>联赛</th><th>对阵</th><th>北单SP</th><th>北单真实占比</th><th>模型方向</th><th title="亚盘判定：上盘=让球方、下盘=受让方；规则=秦俑十大盘型(盘分差+初盘水位+临场升降盘/水位)｜回测1047场：判上盘59.4%赢盘/+16.1%ROI，判下盘49.1%/−4.9%，浅盘判下盘36.5%/−25.8%">亚盘判定(上/下盘)</th><th>欧赔公平%</th><th>北单−欧赔</th><th>资金热度</th><th>返还率(北单/B365/竞彩)</th><th>比分</th><th>估算进球(主/客/共)</th><th>分析依据</th><th>最终下注方向</th><th>明细</th></tr></thead>';
+  /* ★ 2026-10-15b：每栏内保留「可三方对照 / 仅北单数据」两个子档；_ri 全局自增保证展开卡 id 不冲突。 */
+  function _sectionTables(arr){
+    const _u = arr.filter(r => !!r.tid);
+    const _j = arr.filter(r => !r.tid);
+    const _uH = _u.map(r => _rowHTML(r, _ri++)).join('');
+    const _jH = _j.map(r => _rowHTML(r, _ri++)).join('');
+    const _uT = _u.length ? ('<div style="font-weight:700;margin:10px 0 4px;color:var(--acc)">▸ 可三方对照（' + _u.length + ' 场 · 有模型方向 / Bet365 / 竞彩对照）</div>' + _tfWrap('<table class="htab">' + _thead + '<tbody>' + _uH + '</tbody></table>')) : '<p class="note" style="margin:6px 0">本栏无已配对机构欧赔的场次。</p>';
+    const _jT = _j.length ? ('<details style="margin:10px 0"><summary style="cursor:pointer;font-weight:700;color:var(--mut)">▸ 仅北单数据 · 无机构对照（' + _j.length + ' 场 · 点击展开）</summary>' + _tfWrap('<table class="htab">' + _thead + '<tbody>' + _jH + '</tbody></table>') + '<p class="note">这些场未进模型池（赛事库无对应），只有北单SP + 真实占比、无 Bet365 / 竞彩对照，无法做三方流速差；仅供参考。</p></details>') : '';
+    return _uT + _jT;
+  }
+  /* ★ 2026-10-20 改写：旧文案写死「北单 405 封锁 / 竞彩今日档已结」，源一恢复就成了误导性报错。
+     现只做**口径说明**（销售日 vs 开赛日），不再断言源是否可用。 */
+  const _fbBanner = _fallbackBs.length ? ('<p class="note" style="border-left:3px solid var(--yel);background:rgba(249,115,22,.08)"><b>⚠ 口径说明：「当天」按<b>销售日（批次日）</b>归属 —— 北单批次日与竞彩 businessDate 同口径；竞彩 matchDate 对凌晨开赛场会记到次日（如周二档欧冠记 10-21 00:45，实为 10-20 晚开踢），本板已统一按批次日归到今天。下方「📉 模型方向·今日回退」列出今日<b>非北单/竞彩</b>、但有模型方向(W/L)的真实一队比赛（已剔青年队/女足/学院），其北单SP/真实占比/资金热度列统一标「无真实资金源」——仅供参考，非真实资金口径。</b></p>') : '';
+  /* ★ 2026-10-21f：当天栏内再拆「未完赛/进行中」与「今日已完场复盘」，解决"历史比赛与当日至次日凌晨未完赛混在一起"的混乱。
+     判定：r.m.state==='-1' 且有真实比分，或 r.finScore 有值 = 已完场；其余(含进行中/待开赛) = 未完赛。 */
+  const _isFin = r => (r.m && String(r.m.state)==='-1' && r.m.home_score!=null && r.m.away_score!=null) || (r.finScore && isFinite(r.finScore.hs) && isFinite(r.finScore.as));
+  const todayLive = todayRows.filter(r => !_isFin(r));   // 未完赛 / 进行中
+  const todayFin  = todayRows.filter(r =>  _isFin(r));   // 今日已完场（有比分·复盘）
+  const _liveFund = todayLive.filter(r => r.src !== '模型回退');
+  const _liveModel = todayLive.filter(r => r.src === '模型回退');
+  const _finFund = todayFin.filter(r => r.src !== '模型回退');
+  const _finModel = todayFin.filter(r => r.src === '模型回退');
+  const _liveSec = (todayLive.length) ? ('<div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">① 当天未完赛 / 进行中 · ' + todayLabel + '（' + todayLive.length + ' 场 · 按销售批次日）</div>' + _sectionTables(_liveFund) + (_liveModel.length?('<div style="font-weight:700;margin:16px 0 4px;color:#f97316">📉 模型方向 · 今日回退（非北单/竞彩 · 无真实资金源 · 已剔青年队/女足/学院 · 仅供参考）</div>' + _sectionTables(_liveModel)):'')) : '<p class="note" style="margin:8px 0">当天（' + todayLabel + '）暂无未完赛场次。</p>';
+  const _finSec = todayFin.length ? ('<div style="font-weight:700;margin:18px 0 4px;color:#16a34a">✔ 今日已完场复盘（' + todayFin.length + ' 场 · 有比分 · 仅复盘参考）</div>' + _sectionTables(_finFund) + (_finModel.length?_sectionTables(_finModel):'')) : '';
+  const _todayFund = todayRows.filter(r => r.src !== '模型回退');   // 兼容下游引用（如 _rowHTML 计数）
+  const _todayModel = todayRows.filter(r => r.src === '模型回退');
+  const _todaySec = _liveSec;
+  const _modelSec = '';
+  const _pastSec = pastRows.length ? ('<div style="font-weight:700;margin:18px 0 4px;color:#8b98a9">② 既往 · 其他日期（' + pastRows.length + ' 场 · 已完赛 · 仅研究参考 · 非投注信号）</div>' + _sectionTables(pastRows)) : '';
+  const todayHTML = _fbBanner + _liveSec + _finSec + _pastSec;
+
+  /* ★ 2026-10-19：精选优选「逐行让几球最稳」——从模型比分概率分布算每条亚盘线赢盘覆盖率，
+     给出同方向里覆盖≥60%的最深让球线（既稳又吃得到让球价值）。覆盖算法与离线报告一致。 */
+  function _triHcapDist(an){
+    var top=(an&&an.score&&an.score.top)||[];
+    var p1x2=(an&&an.score&&an.score.p1x2)||{W:0,D:0,L:0};
+    var W=+p1x2.W||0,D=+p1x2.D||0,L=+p1x2.L||0;
+    var ex={};
+    for(var i=0;i<top.length;i++){ var t=top[i]; var sc=String(t.score).split('-'); var h=+sc[0],a=+sc[1]; if(isNaN(h)||isNaN(a))continue; var m=h-a; ex[m]=(ex[m]||0)+(+t.p||0); }
+    var exW=0,exD=ex[0]||0,exL=0;
+    for(var k in ex){ var mm=+k; if(mm>0)exW+=ex[k]; else if(mm<0)exL+=ex[k]; }
+    var rW=Math.max(0,W-exW),rD=Math.max(0,D-exD),rL=Math.max(0,L-exL);
+    var dist={},maxWin=0,minLose=0;
+    for(var k2 in ex){ var mm2=+k2; if(mm2>maxWin)maxWin=mm2; if(mm2<minLose)minLose=mm2; }
+    for(var k3 in ex){ var mm3=+k3; if(mm3>0)dist[mm3]=ex[k3]+(exW>0?rW*ex[k3]/exW:0); else if(mm3===0)dist[0]=ex[k3]+rD; else dist[mm3]=ex[k3]+(exL>0?rL*ex[k3]/exL:0); }
+    if(exW<=0&&rW>0)dist[maxWin+1]=(dist[maxWin+1]||0)+rW;
+    if(exL<=0&&rL>0)dist[minLose-1]=(dist[minLose-1]||0)+rL;
+    return dist;
+  }
+  function _triHcapCover(dist,line){
+    var cover=0,push=0,lose=0,L=Math.abs(line);
+    for(var k in dist){ var mm=+k, v=+dist[k];
+      if(L===0.5){ if(line<0){ if(mm>=1)cover+=v; else lose+=v; } else { if(mm<=-1)cover+=v; else lose+=v; } }
+      else if(L===1){ if(line<0){ if(mm>=2)cover+=v; else if(mm===1)push+=v; else lose+=v; } else { if(mm<=-2)cover+=v; else if(mm===-1)push+=v; else lose+=v; } }
+      else if(L===1.5){ if(line<0){ if(mm>=2)cover+=v; else lose+=v; } else { if(mm<=-2)cover+=v; else lose+=v; } }
+      else if(L===2){ if(line<0){ if(mm>=3)cover+=v; else if(mm===2)push+=v; else lose+=v; } else { if(mm<=-3)cover+=v; else if(mm===-2)push+=v; else lose+=v; } }
+      else if(L===2.5){ if(line<0){ if(mm>=3)cover+=v; else lose+=v; } else { if(mm<=-3)cover+=v; else lose+=v; } }
+      else if(L===3){ if(line<0){ if(mm>=4)cover+=v; else if(mm===3)push+=v; else lose+=v; } else { if(mm<=-4)cover+=v; else if(mm===-3)push+=v; else lose+=v; } }
+    }
+    return {cover:+cover.toFixed(1),push:+push.toFixed(1),lose:+lose.toFixed(1)};
+  }
+  /* ★ 2026-10-20：用户问"到底有没有抓实时让球赔率、到底让几球"——引擎一直在抓（an.a0 初盘→an.p1 临场，
+     多公司中位 n_asia 家，97% 覆盖），但本列此前只显模型覆盖线、真实盘口根本没亮出来。
+     此行先亮「实盘」：临场盘(优先)→档位换算，带初→临移动（升盘/降盘=资金方向）与上盘水位。 */
+  function _triHcapReal(an){
+    if (!an) return '';
+    var live = (an.p1 != null && isFinite(+an.p1)) ? +an.p1
+             : ((an.grade_hcap_a != null && isFinite(+an.grade_hcap_a)) ? +an.grade_hcap_a : null);
+    var open = (an.a0 != null && isFinite(+an.a0)) ? +an.a0 : null;
+    if (live == null && open == null) return '<span style="color:var(--mut);font-size:9.5px">实盘：无真实亚盘</span>';
+    var lineTxt = function(v){ return v == null ? '—' : (v > 0 ? ('主让' + v) : (v < 0 ? ('客让' + Math.abs(v)) : '平手')); };
+    var h = '<b style="color:var(--acc)">实盘 ' + lineTxt(live) + '</b>';
+    if (live != null && open != null){
+      var d = Math.round((live - open) * 100) / 100;
+      var mv = (d >= 0.25) ? '<span style="color:var(--red);font-weight:600">↑升盘</span>'
+              : (d <= -0.25) ? '<span style="color:var(--grn);font-weight:600">↓降盘</span>'
+              : '<span style="color:var(--mut)">→持平</span>';
+      h += '<span style="color:var(--mut)">（初 ' + lineTxt(open) + '→临 ' + lineTxt(live) + ' ' + mv + '）</span>';
+    }
+    if (an.grade_water_a != null && isFinite(+an.grade_water_a)) h += '<span style="color:var(--mut)"> 上水' + (+an.grade_water_a).toFixed(2) + '</span>';
+    if (an.n_asia) h += '<span style="color:var(--mut)"> ·' + an.n_asia + '家</span>';
+    return h;
+  }
+  function _triHcapCell(r){
+    var an=r.a||null;
+    if(!an||!an.score||!an.score.top||!an.score.top.length) return '<span style="color:var(--mut);font-size:10px">—</span>';
+    var dir=r.dir;
+    var fav=(dir==='L')?1:-1;
+    if(dir!=='W'&&dir!=='L'){ var p1=an.score.p1x2||{}; var w=+p1.W||0,l=+p1.L||0; fav=(w>=l)?-1:1; }
+    var dist=_triHcapDist(an);
+    var LINES=[0.5,1,1.5,2,2.5,3];
+    var cells='', i, c, col;
+    for(i=0;i<LINES.length;i++){ var ln=LINES[i]*(fav<0?-1:1); c=_triHcapCover(dist,ln);
+      col=c.cover>=70?'var(--grn)':(c.cover>=60?'#b6d94c':(c.cover>=50?'var(--yel)':'var(--red)'));
+      cells+='<span style="display:inline-block;min-width:25px;text-align:center;font-size:10px;color:'+col+'">'+c.cover+(c.push?('<span style="color:var(--mut)">/'+c.push+'</span>'):'')+'</span>';
+    }
+    // ★ 2026-10-19 改进：永远给出覆盖最高的「最稳让球线」(回答"让几球最稳")；
+    //   覆盖≥60% 标强信号(高亮)，否则标「弱」(灰)。不再只显"无≥60%线"。
+    var all=LINES.map(function(L){ return {L:L, c:_triHcapCover(dist, L*(fav<0?-1:1))}; });
+    var best=all.slice().sort(function(a,b){ return b.c.cover - a.c.cover; })[0];
+    var bestCov=best?best.c.cover:0;
+    var strong=bestCov>=60;
+    var sideTxt=(fav<0?'主':'客');
+    var recTxt=best?('<b style="color:'+(strong?'var(--acc)':'var(--mut)')+'">'+(sideTxt+' -'+best.L+' · '+bestCov+'%')+'</b>'+(strong?'':' <span style="color:var(--mut);font-size:9.5px">弱</span>')):'<span style="color:var(--mut);font-size:10px">—</span>';
+    var sd=(an.strength_diff!=null)?('实力差'+ (an.strength_diff>0?'+':'') + (Math.round(an.strength_diff*10)/10)) : '';
+    return '<div style="font-size:10px;line-height:1.45">'+_triHcapReal(an)+'<br>'+(fav<0?'主让':'客让')+' '+cells+'<br>'+recTxt+(sd?'<br><span style="color:var(--mut)">'+sd+'</span>':'')+'</div>';
+  }
+  /* ★ 2026-10-21 用户要求：精选档每场必须「备注阈值多少、多少的阈值是精选」——即逐场自证
+     命中了哪条线索、它的实际值是多少、门槛是多少。阈值全部取引擎同款常量展示，改引擎阈值此处同步。
+     五条严格线索门槛：①大热必死 = 洋哥定性(超买>该场返还率缺口·自传174行) + 三盘合流(①盘竞彩官方/365趋势与北单同指·②盘365不设防异常确认·自传199行) ②赔率抬升型 favMv∈[-35,-15]% 且临盘≤2.2
+     ③市场大热 临盘热门方≤1.75 且主流联赛 ④聪明钱背离 gap≥4 ⑤权威分歧 authSpread≥0.70 */
+  function _gateCell(r){
+    const a = r && r.a ? r.a : null;
+    const y = (a && a.yg) || (r && r.yg) || {};
+    const pl = (a && a.plan) || (r && r.plan) || {};
+    const div = (a && a.company_div) || null;
+    const sig = pl.signals || [];
+    const _n = (v, d) => (v == null ? '?' : (+v).toFixed(d == null ? 1 : d));
+    const items = [];
+    // ③ 市场大热（不依赖北单：主流联赛 + 临盘热门方低赔）
+    if (sig.indexOf('市场大热') >= 0 || y.marketHeavy){
+      const mx = (y.mhMax != null ? y.mhMax : 1.75);
+      items.push('市场大热 临盘 <b style="color:#f97316">' + _n(y.favClose, 2) + '</b> ≤ <b>' + _n(mx, 2) + '</b>');
+    }
+    // ① / ② 大热必死：区分「真实资金超买」与「赔率抬升型」
+    if (y.isHot && y.heatKind === 'odds-rise'){
+      items.push('赔率抬升 <b style="color:#f97316">' + _n(y.favMv, 1) + '%</b> ∈ [-35,-15]%');
+    } else if (sig.indexOf('大热必死') >= 0 || (y.isHot && y.heatKind !== 'odds-rise')){
+      const _eff = (y.deepHeat && y.deepHeat.eff != null) ? y.deepHeat.eff : y.heatExcess;
+      const _gap = (y.heatGap != null) ? y.heatGap : null;
+      // 洋哥自传174行：大热定性 = 差值 > 返还率缺口（无+12缓冲）
+      items.push('洋哥定性大热 超买 <b style="color:#ea580c">+' + _n(_eff, 1) + 'pt</b> &gt; 返还率缺口 ' + _n(_gap, 1) + 'pt（自传174行·无+12缓冲）');
+      // 洋哥自传199行：大热必死=三盘合流（①盘资金趋势同指 + ②盘365不设防确认）
+      const _pan2 = y.pan2;
+      const _sideOk = (_pan2 && _pan2.side && y.heatSide && _pan2.side === y.heatSide)
+                   || (y.jc && y.jc.hotSide && y.heatSide && y.jc.hotSide === y.heatSide);
+      const _noDef = _pan2 && (_pan2.def === 'flat' || _pan2.def === 'fade');
+      const _oneP = _pan2 ? ('365趋势' + (_pan2.side||'?') + (y.heatSide && _pan2.side===y.heatSide?'(同指)':'(异指)'))
+                          : (y.jc ? ('竞彩官方' + (y.jc.hotSide||'?') + (y.heatSide && y.jc.hotSide===y.heatSide?'(同指)':'(异指)')) : '无①盘数据');
+      const _twoP = _pan2 ? (_pan2.def === 'follow' ? '365设防(吃水盘)' : (_noDef ? '365不设防·异常确认' : '365按兵(观望)')) : '无②盘数据';
+      items.push('三盘合流 ①盘(' + _oneP + ') ' + (_sideOk ? '✓' : '✗') + ' · ②盘(' + _twoP + ') ' + (_noDef ? '✓' : '✗'));
+      // ★ 2026-10-24：洋哥 File3(资金流速)+File5(盘级偏差) 显式证据（之前只藏在折叠对照卡，用户看不到"为什么"）
+      if (y.pan2){
+        const _p2 = y.pan2;
+        const _oneFlow = _p2.hot1 ? ('①盘全市场单方降'+Math.abs(_p2.mktDv)+'·资金流速热') : '①盘流速平稳';
+        const _two = _p2.def==='fade' ? '②盘365反向不设防·异常✓' : (_p2.def==='follow' ? '②盘365跟随降水·吃水盘(无价值)' : (_p2.def==='flat' ? '②盘365按兵不动·观察' : '无②盘365数据'));
+        items.push('资金流速：'+_oneFlow+' ／ '+_two);
+        if (_p2.hot1 && (_p2.def==='fade'||_p2.def==='flat'))
+          items.push('⚠ 流速背离(捷克vs南非型)：资金快流速但365'+(_p2.def==='fade'?'反升':'按兵')+'→异常盘·问题盘嫌疑');
+      }
+      /* ★ 2026-10-24（精读洋哥27场精选后修正）：原「盘级偏差」是 heatExcess/7 反推的近似数（假换算），
+         与洋哥 File2《盘级换算详解》的口径不是一回事。现改读三盘行真实算出的 r.levDev/r.levSide
+         （北单SP×365R → 盘级表 vs 365 盘级；0.25=1盘级；洋哥第二条判据 = 偏差≥2盘级/0.5水）。 */
+      if (r && r.levDev != null && Math.abs(r.levDev) >= 0.01){
+        const _lv = Math.abs(r.levDev);
+        const _nLv = Math.round(_lv / 0.25);
+        const _lvSide = (r.levSide === 'W') ? '主' : (r.levSide === 'L' ? '客' : '—');
+        items.push('③盘盘级偏差 ' + _lvSide + '偏 <b style="color:#ea580c">' + _lv.toFixed(2) + '</b> = <b>' + _nLv + ' 盘级</b>(0.25/级)'
+          + (_nLv >= 2 ? ' · <b style="color:#e54545">≥2盘级(0.5水)·洋哥大热第二条判据✓</b>' : '（&lt;2盘级·未达阈值）'));
+      }
+      /* ★ 2026-10-24 新增「预设盘/合理盘」证据（洋哥第3步：预设指数 vs 实际指数）。
+         27场里 6 场主判据就是「合理盘 vs 实际开高/浅开」，此前 PICK 自证完全没有这一行。
+         ⚠ 仅作观察证据，不新增 PICK 门（遵守"模型改动先标定"铁律，未回测前不进下注）。 */
+      if (a && a.pan_gap != null && isFinite(+a.pan_gap)){
+        const _pg = +a.pan_gap;
+        const _fmtH = v => (v == null || !isFinite(+v)) ? '—' : (((+v) >= 0 ? '主让' : '客让') + Math.abs(+v).toFixed(2));
+        const _tag = (_pg >= 0.5) ? '高开·造热上盘(让球方)' : (_pg <= -0.5 ? '浅开·力量不足·易造热下盘' : '接近合理盘');
+        items.push('预设盘 理论 <b>' + _fmtH(a.exp_hcap) + '</b> vs 实际初盘 <b>' + _fmtH(a.a0) + '</b> 盘分差 <b style="color:'
+          + (_pg >= 0.5 ? '#e54545' : (_pg <= -0.5 ? '#3fb950' : '#8b98a9')) + '">' + (_pg >= 0 ? '+' : '') + _pg.toFixed(2)
+          + '</b> → ' + _tag + ' <span style="color:var(--mut)">(观察·未入PICK门)</span>');
+      }
+      // ★ 2026-10-23 诚实「可直押对面」观察：标出过热方对面，但点明历史护栏负ROI不可机械反买
+      const _opp = (y.heatSide === 'W') ? '客胜(L)' : (y.heatSide === 'L' ? '主胜(W)' : '?');
+      /* ★ 2026-10-24：洋哥27场实证——22场买受让方(下盘)、2场买让球方(上盘：国米-1/奥萨苏纳-0.5，都是"下盘变热"时反买上盘)。
+         故「反买热方」可上可下，必须按当场让球方映射，不能默认永远买下盘。 */
+      let _plateTxt = '';
+      if (y.heatSide && y.heatSide !== 'D' && a && a.p1 != null && isFinite(+a.p1) && +a.p1 !== 0){
+        const _oppSide = (y.heatSide === 'W') ? 'L' : 'W';
+        const _upSide = (+a.p1 > 0) ? 'W' : 'L';        // 让球方 = 上盘
+        _plateTxt = '｜亚盘对应买 <b>' + ((_oppSide === _upSide) ? '上盘(让球方)' : '下盘(受让方)') + '</b>';
+      }
+      items.push('🔥 可观察押<b style="color:#e54545">过热方对面(' + _opp + ')</b>' + _plateTxt + '；但 287历史加方向护栏后高门槛直押胜 ROI≈−10%~−26%(n=5~8) → <b>非正期望·仅观察·不可机械反买</b>');
+    }
+    // ④ 聪明钱背离
+    if (sig.indexOf('聪明钱背离') >= 0 && div && div.sharpVsPop){
+      items.push('聪明钱背离 gap <b style="color:#f97316">' + _n(div.sharpVsPop.gap, 2) + '</b> ≥ 4');
+    }
+    // ⑤ 权威分歧
+    if (sig.indexOf('权威分歧') >= 0 && div){
+      items.push('权威分歧 <b style="color:#f97316">' + _n(div.authSpread, 2) + '</b> ≥ 0.70');
+    }
+    if (!items.length) return '<span style="color:var(--mut)">—</span>';
+    return '<div style="font-size:10.5px;line-height:1.55">' + items.map(function(x){ return '<div>' + x + '</div>'; }).join('') + '</div>';
+  }
+  function _pickList(list, kind){
+    /* ★ 2026-10-25 用户要求（对标竞彩/北单「建议层提示」）：精选优选加「推荐」列 —— 玩法@赔率（仓位）。
+       仅当模型有明确方向(W/D/L)时给可下注推荐；赔率取临盘 o1*(缺失回退初盘 o0*)；仓位取 plan.frac。
+       无方向场次明确标「—（无方向·仅监测）」，绝不臆造推荐。 */
+    function _recCell(r){
+      /* ★ 2026-10-25：结构下盘（亚盘下盘/受让方）独立推荐列，与 1X2 方向列正交。
+         水位取亚盘下盘水 = 2 − 上盘水(h1)，标定命中 58.1% / ROI +19.2% / n=832。 */
+      if (r.structDown){
+        const a = r.a || {};
+        const upW = (a.h1 != null && isFinite(+a.h1)) ? +a.h1 : null;
+        const downW = (upW != null) ? +(2 - upW).toFixed(2) : null;
+        const w = (downW != null && downW > 1.01) ? ('@' + downW.toFixed(2)) : '';
+        const _s = r.star>=3?'★★★':(r.star===2?'★★':'★');
+        const _star = r.star ? ('<span style="color:#f59e0b;font-weight:800;letter-spacing:1px">'+_s+'</span> ') : '';
+        return _star + '<b style="color:#2faa6a">下盘(受让)' + w + '</b> <span style="font-size:10.5px;color:var(--mut)">（本金1/4·标定58.1%·+19.2%ROI·n=832）</span>';
+      }
+      const dir = (r.dir==='W'||r.dir==='D'||r.dir==='L') ? r.dir : null;
+      if (!dir) return '<span style="color:var(--mut);font-size:11px">—（无方向·仅监测）</span>';
+      const DT = { W:'主胜', D:'平局', L:'客胜' };
+      const a = r.a || null;
+      let odds = null;
+      if (a){
+        odds = dir==='W' ? (a.o1h!=null?a.o1h:a.o0h)
+             : dir==='D' ? (a.o1d!=null?a.o1d:a.o0d)
+             : (a.o1a!=null?a.o1a:a.o0a);
+      }
+      const frac = (r.plan && r.plan.frac!=null) ? +r.plan.frac : null;
+      let stake = '';
+      if (frac!=null && frac>0){
+        const inv = Math.round(1/frac);
+        stake = (inv>0 && Math.abs(1/inv-frac)<1e-6) ? ('本金1/'+inv) : ('仓位'+(frac*100).toFixed(1)+'%');
+        if (frac>=0.3) stake = '主注·'+stake;
+        else if (frac<0.1) stake = '极小注·'+stake;
+      }
+      const oTxt = (odds!=null && isFinite(+odds)) ? ('@'+(+odds).toFixed(2)) : '';
+      return '<b style="color:#2faa6a">'+DT[dir]+oTxt+'</b>'+(stake?(' <span style="font-size:10.5px;color:var(--mut)">（'+stake+'）</span>'):'');
+    }
+    if (!list.length){
+      if (kind === 'PICK') return '<p class="note">本档（精选·PICK 洋哥破绽盘）今日 0 场——洋哥自传「出现破绽=问题盘=精选推荐(本金1/3)」：任一破绽线索（大热必死=洋哥定性超买&gt;返还率缺口·且三盘合流(①盘同指+②盘365不设防) / 赔率抬升型大热 favMv∈[-35,-15]% / 市场大热（临盘热门方≤1.75 的主流联赛名气队·需真实过热≥动态预警门槛）/ 聪明钱背离 gap≥4 / 权威分歧≥0.70）即入选。若为空说明今日无符合破绽盘，可下注信号请见下方「优选（B类）」与「正式过热·拥挤提示榜」。</p>';
+      return '<p class="note">本档今日暂无符合场次。</p>';
+    }
+    return _tfWrap('<table class="htab"><thead><tr><th>日期</th><th>开赛</th><th>对阵</th><th>历史交锋</th><th>北单SP</th><th>真实占比</th><th>资金热度</th><th>命中阈值·自证（实际值 vs 门槛）</th><th>模型方向</th><th>流速差</th><th>比分</th><th>估算进球(主/客/共)</th><th>实盘亚盘 / 让球最稳(0.5/1/1.5/2/2.5/3覆盖%)</th><th style="color:#2faa6a">推荐（玩法@赔率·仓位）</th><th>最终下注方向</th></tr></thead><tbody>' +
+      list.map(r=>{
+        const v=_verdict(r); const fb=_finalBet(r);
+        const tfCell = r.tf ? fmt(r.tf.maxFlow)+'pp('+WDL[['W','D','L'].indexOf(r.tf.maxSide)]+')' : '—';
+        const _srcTag = r.src ? (' <span style="font-size:10px;border-radius:4px;padding:0 3px;margin-left:4px'+(r.src==='竞彩'?';color:#ff7a3c;border:1px solid #ff7a3c':(r.src==='北单'?';color:#3a8ee6;border:1px solid #3a8ee6':';color:#8b98a9;border:1px solid #8b98a9'))+'">'+r.src+'</span>') : '';
+        const _rdate = (r.b && r.b.date) ? _dOf(r.b.date) : todayLabel;
+        /* ★ 2026-10-19：优选榜「比分」列原来只判 r.finScore（只有完场才有比分），未开赛/进行中一律「—」
+           ——用户"比分在哪里"就是这里。改为与主表同口径 _triScoreCell：进行中出实时比分/分钟、完场出终场、
+           未开赛出 Dixon-Coles 预测 Top1；带 data-pscore 由 _triScoreTick 每 30s 就地刷新。 */
+        let _fin;
+        try{
+          const _mm = r.m || ((r.tid && typeof MATCHES !== 'undefined') ? MATCHES.find(function(x){ return x && String(x.tid) === String(r.tid); }) : null);
+          if (_mm) _fin = '<span data-pscore="'+r.tid+'">' + _triScoreCell({ m:_mm, dir:(r.dir && r.dir!=='D') ? r.dir : null, a:r.a || null }) + '</span>';
+          else if (r.finScore){ const f=r.finScore; const col = f.hs>f.as?'var(--grn)':(f.hs<f.as?'var(--red)':'var(--yel)'); _fin='<b style="color:'+col+'">'+f.hs+':'+f.as+'</b>'; }
+          else _fin = '<span style="color:var(--mut)">—</span>';
+        }catch(e){ _fin = '<span style="color:var(--mut)">—</span>'; }
+        const _lm = (r.lm) ? ('主'+r.lm.lam.toFixed(1)+'/客'+r.lm.mu.toFixed(1)+'/共'+(r.lm.lam+r.lm.mu).toFixed(1)) : '—';
+        return '<tr><td style="white-space:nowrap;color:var(--mut)">'+_rdate+'</td>'+'<td>'+r.b.time+'</td>'+
+          '<td><b>'+r.b.home+'</b> vs <b>'+r.b.away+'</b>'+_srcTag+'</td>'+
+          '<td>'+_h2hBadge(r)+'</td>'+
+          '<td>'+(r.sp?r.sp.join('/'):'—')+'</td>'+
+          '<td>'+(r.pct?r.pct.map(x=>x+'%').join('/'):'—')+'</td>'+
+          '<td style="font-size:11px;line-height:1.4">'+ _heatCell(r) +'</td>'+
+          '<td style="font-size:10.5px;white-space:nowrap">'+ _gateCell(r) +'</td>'+
+          '<td>'+(r.dir&&r.dir!=='D'?'<b style="color:var(--acc)">'+labelW(r.dir)+'</b>'+(r.conf!=null?'·'+r.conf:''):(r.dir==='D'?'平':'—'))+'</td>'+
+          '<td>'+tfCell+'</td>'+
+          '<td>'+_fin+'</td>'+
+          '<td style="white-space:nowrap;font-size:11.5px;color:var(--mut)">'+_lm+'</td>'+
+          '<td style="white-space:nowrap">'+_triHcapCell(r)+'</td>'+
+          '<td style="white-space:nowrap">'+_recCell(r)+'</td>'+
+          '<td style="font-size:12.5px;line-height:1.4"><b style="color:'+fb.c+'">'+fb.ic+' '+fb.bet+'</b><br><span style="font-size:10.5px;color:var(--mut)">'+fb.tier+'·'+fb.note+'</span></td></tr>';
+      }).join('')+'</tbody></table>');
+  }
+  // ★ 2026-10-15 修复「三盘板内嵌优选段今日整段为空」：原逻辑只遍历北单(BD_ROWS)，今日计划级信号
+  // （9 SMALL + 1 MID，共 10 场）全在竞彩/国际/青年场，北单 0 场 → 段空。现把今日竞彩中带
+  // PICK/MID/SMALL 计划的场次也并入优选榜（标注「竞彩」），与北单并列；主表(北单资金流向)仍保持北单纯净。
+  const _bdTids = new Set(rows.map(r => r.tid).filter(Boolean));
+  const jcPlanRows = [];
+  try {
+    const _M = (typeof MATCHES !== 'undefined' && MATCHES) || [];
+    for (const m of _M){
+      if (!m || !m.tid || _bdTids.has(m.tid)) continue;
+      const _p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[m.tid] : null;
+      const _a = _p ? _p.an : null;
+      if (!_a || !_a.plan || !_a.plan.level || _a.plan.level==='SKIP') continue;
+      const _yg = _a.yg || {};
+      const _isJc = !!(m && m.jc);
+      // ★ 2026-10-20 修正（用户要求：三盘板只收北单+竞彩，禁止国际野鸡场）：
+      //   本内嵌优选榜只并入「真竞彩」(m.jc) 场次；必发/betfa 覆盖的国际场（打'国际'标）一律不进——
+      //   它们既非北单也非竞彩，混进资金流向板会污染"北单/竞彩真实资金"口径，正是用户投诉的乱入行。
+      if (!_isJc) continue;
+      // ★ 真实来源判定：此处仅剩真竞彩；北单由主表(BD_ROWS)承载，国际场已在上行剔除。
+      const _src = '竞彩';
+      jcPlanRows.push({
+        tid: m.tid,
+        m: m,        // ★ 2026-10-19：供优选榜比分列(_triScoreCell)直接取实时赛程/比分
+        a: _a,       // ★ 2026-10-19：供 tier / 比分列命中标记使用
+        b: { time: String(m.kickoff||'').slice(-5) || '—', home: displayTeam(m,'home'), away: displayTeam(m,'away'), date: (typeof _mDayOf === 'function' ? _mDayOf(m) : '') },
+        sp: null, pct: null,
+        dir: _a.dirCode || null,
+        conf: _a.conf!=null ? Math.round(_a.conf) : null,
+        valueScore: (_a.value_score != null ? Math.round(_a.value_score) : 0),
+        tf: _yg.triFlow || null,
+        heatExcess: _yg.heatExcess!=null ? _yg.heatExcess : null,
+        heatSide: _yg.heatSide || null,
+        yg: _yg, heatSrc: _yg.heatSrc || null, heatTier: _yg.heatTier || null,
+        hotIdx: (_yg.hotIdx != null ? _yg.hotIdx : null), hotSideIdx: _yg.hotSideIdx || null,
+        bdDir: null, bdFair: null, spR: null,
+        plan: _a.plan,
+        src: _src,
+        heatUsable: !!(_yg.heatUsable || _yg.heatSrc === 'betfa')
+      });
+    }
+  } catch(e){}
+  // ★ 2026-10-15b：优选精选只列「当天未完赛」场次（投注信号只对未来有效）；
+  //   既往(已完赛)场次一律不进优选榜，只在下方「既往」研究栏以资金流向表呈现，避免把历史当信号。
+  const pickA = rows.filter(r => _isToday(r) && r.plan && r.plan.level==='PICK').concat(jcPlanRows.filter(r => _isToday(r) && r.plan && r.plan.level==='PICK'));
+  const pickB = rows.filter(r => { if (!_isToday(r)) return false; if (r.plan && (r.plan.level==='MID'||r.plan.level==='SMALL')) return true;
+    if (r.tf && Math.abs(r.tf.maxFlow)>=12) return true; if (r.heatUsable && r.heatExcess!=null && r.heatExcess>=8 && r.heatExcess<15) return true; return false; })
+    .concat(jcPlanRows.filter(r => { if (!_isToday(r)) return false; const lv=r.plan&&r.plan.level; return lv==='MID'||lv==='SMALL'; }));
+  const hotAvoid = rows.filter(r => { if (!_isToday(r)) return false; const _h = _heatInfo(r); return _h.usable && _h.tier === 'hot'; });
+  /* ★ 2026-10-25：结构下盘·可下注子集（独立信号轴，不与破绽框架重叠）。
+     窗口 pan_gap∈[-0.63,-0.13) 且引擎判下盘/观望（实际盘比欧赔预期浅 → 下盘易兑现）。
+     排除已被 PICK/MID/SMALL/hotAvoid 收录的场（避免重复展示），仅列纯结构信号场；标 structDown=true 供 _finalBet/_recCell 识别。 */
+  const _consumed = new Set();
+  [pickA, pickB, hotAvoid].forEach(arr => arr.forEach(r => { if (r.tid) _consumed.add(r.tid); }));
+  const _isStructDown = r => {
+    if (!r || _consumed.has(r.tid) || !_isToday(r)) return false;
+    const a = r.a; if (!a) return false;
+    // ★ 2026-11-02 复用 _structDown 判定（含临场重判），保证与 tierBadgeCardSoft/弹窗同源
+    return !!_structDown(a);
+  };
+  const structDownList = rows.filter(_isStructDown).concat(jcPlanRows.filter(_isStructDown)).map(r => { const a=r.a||{}; const g=a.pan_gap!=null&&isFinite(+a.pan_gap)?+a.pan_gap:null; const _pick=(a.pan_predict==='下盘'); const _star=(_pick&&g!=null)?3:0; return Object.assign({}, r, { structDown:true, star:_star }); });
+  // ★ 模型方向·研究参考（2026-10-15 增补）：洋哥三线索只找"破绽盘"，正常盘一律 SKIP → 整轮欧战常空手。
+  //   但模型对部分场确有清晰方向(dir=W/D/L, conf≥50)，不该被埋。单列"研究参考"展示，明确标注
+  //   「非投注信号·无真实资金源」，与上方问题盘精选严格区分，避免误导。来源以全量 MATCHES 为准。
+  const _seenTid = new Set();
+  [].concat(pickA, pickB, hotAvoid).forEach(r => { if (r && r.tid) _seenTid.add(r.tid); });
+  const dirTrack = [];
+  try {
+    const _M = (typeof MATCHES !== 'undefined' && MATCHES) || [];
+    const _today = (typeof panelDay === 'function') ? panelDay() : todayStr();
+    for (const m of _M){
+      if (_seenTid.has(m.tid)) continue;
+      if (!(m && m.jc)) continue;   // ★ 2026-10-20：三盘板只收北单+竞彩，国际野鸡场(无 m.jc)一律不进研究参考
+      const _k = (typeof heatKick === 'function') ? heatKick(m) : null;
+      if (!_k || _k.day !== _today) continue;   // ★ 三盘资金板是"今日"板，只收今日场次（勿跨 6 天窗口）
+      const ph = (typeof matchPhase === 'function') ? matchPhase(m) : null;
+      if (ph === 'finished') continue;
+      const _p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[m.tid] : null;
+      const _a = _p ? _p.an : null;
+      if (!_a || !_a.dirCode || _a.dirCode === 'D') continue;
+      const _conf = (_a.conf != null) ? _a.conf : 0;
+      if (_conf < 50) continue;
+      const _yg = _a.yg || {};
+      dirTrack.push({
+        tid: m.tid,
+        b: { time: String(m.kickoff || '').slice(-5) || '—', home: displayTeam(m, 'home'), away: displayTeam(m, 'away') },
+        sp: null, pct: null,
+        dir: _a.dirCode, conf: Math.round(_conf),
+        valueScore: (_a.value_score != null ? Math.round(_a.value_score) : 0),
+        tf: _yg.triFlow || null,
+        heatExcess: _yg.heatExcess != null ? _yg.heatExcess : null,
+        heatSide: _yg.heatSide || null,
+        yg: _yg, heatSrc: _yg.heatSrc || null, heatTier: _yg.heatTier || null,
+        hotIdx: (_yg.hotIdx != null ? _yg.hotIdx : null), hotSideIdx: _yg.hotSideIdx || null,
+        bdDir: null, bdFair: null, spR: null,
+        plan: null, src: '国际', heatUsable: !!(_yg.heatUsable || _yg.heatSrc === 'betfa')
+      });
+    }
+  } catch(e){}
+  dirTrack.sort((x, y) => String(x.b.time || '').localeCompare(String(y.b.time || '')));
+  // ★ 市场方向·研究参考（2026-10-15 增补）：模型无方向(dir=—/D)但市场有明显热门方的场（如欧联顶级场），
+  //   单列"市场方向·研究参考"，明确标注「非模型信号·非投注信号」，让这类场也可见——洋哥三线索/硬方向池
+  //   都只盯破绽/深盘，正常盘会空手，导致整轮欧战顶级场在我板子上完全消失。仅展示主流/精英联赛，避免野鸡噪声。
+  const _SHOW_LG = ['欧冠','欧联','欧协','欧会','欧罗巴','解放者','南美','英超','西甲','德甲','意甲','法甲','英冠','荷甲','葡超','苏超','土超','美职','MLS','亚冠','日职','韩K','中超','国王杯','德国杯','法国杯','意杯','足总','欧国联','世预','非洲杯','亚洲杯'];
+  const mktTrack = [];
+  try {
+    const _M = (typeof MATCHES !== 'undefined' && MATCHES) || [];
+    const _today = (typeof panelDay === 'function') ? panelDay() : todayStr();
+    for (const m of _M){
+      if (_seenTid.has(m.tid)) continue;
+      if (!(m && m.jc)) continue;   // ★ 2026-10-20：三盘板只收北单+竞彩，国际野鸡场(无 m.jc)一律不进研究参考
+      const _k = (typeof heatKick === 'function') ? heatKick(m) : null;
+      if (!_k || _k.day !== _today) continue;
+      const ph = (typeof matchPhase === 'function') ? matchPhase(m) : null;
+      if (ph === 'finished') continue;
+      const _p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[m.tid] : null;
+      const _a = _p ? _p.an : null;
+      if (!_a) continue;
+      // ★ 修正（2026-10-15）：数据中"无模型方向"的真实标记是 em-dash '—'（占 ~46%，并非 'D' 也非空），
+      //   原 `_a.dirCode && _a.dirCode!=='D'` 会把 '—' 误判为"已有方向"而整段跳过 → mktTrack 永远为空。
+      //   正确口径：仅当 dirCode 为清晰 W/L 才视为"已有模型方向"(已在 dirTrack)，其余('—'/'D'/空)皆算无方向。
+      if (_a.dirCode === 'W' || _a.dirCode === 'L') continue;   // 已有清晰模型方向→已在 dirTrack
+      const _lg = cleanLeague(m);
+      if (!_SHOW_LG.some(x => _lg.indexOf(x) >= 0)) continue;
+      const _mk = [(_a.mk_h != null ? _a.mk_h : 0), (_a.mk_d != null ? _a.mk_d : 0), (_a.mk_a != null ? _a.mk_a : 0)];
+      const _mx = Math.max.apply(null, _mk); const _mi = _mk.indexOf(_mx);
+      if (_mx < 0.55) continue;
+      const _mkDir = _mi === 0 ? 'W' : (_mi === 2 ? 'L' : 'D');
+      const _yg = _a.yg || {};
+      mktTrack.push({
+        tid: m.tid,
+        b: { time: String(m.kickoff || '').slice(-5) || '—', home: displayTeam(m, 'home'), away: displayTeam(m, 'away') },
+        sp: null, pct: null,
+        dir: _mkDir, conf: Math.round(_mx * 100),
+        tf: null, heatExcess: _yg.heatExcess != null ? _yg.heatExcess : null, heatSide: _yg.heatSide || null,
+        yg: _yg, heatSrc: _yg.heatSrc || null, heatTier: _yg.heatTier || null,
+        hotIdx: (_yg.hotIdx != null ? _yg.hotIdx : null), hotSideIdx: _yg.hotSideIdx || null,
+        bdDir: null, bdFair: null, spR: null,
+        plan: null, src: '国际', heatUsable: !!(_yg.heatUsable || _yg.heatSrc === 'betfa'), mktOnly: true
+      });
+    }
+  } catch(e){}
+  mktTrack.sort((x, y) => String(x.b.time || '').localeCompare(String(y.b.time || '')));
+  // ★ 2026-10-23 回测验证面板：把"跑数据"的真实数字直接晒给洋哥看（共享 backtestPanelHTML，三盘板 + 独立精选板同口径）
+  const _bk = backtestPanelHTML();
+  const pickHTML = '<div style="font-weight:700;margin:18px 0 4px;color:var(--acc)">优选精选·实时监测（洋哥自传·问题盘三线索 + 北单流速差）</div>' +
+    '<div style="font-size:11px;color:var(--mut);margin:0 0 6px;line-height:1.5"><b>仅列当天（' + todayLabel + '）未完赛场次</b>；既往已完赛场次不进优选榜，见下方「② 既往」研究栏。来源以官方赛程/北单表实判定，绝不臆造标签：<b style="color:#ff7a3c">竞彩</b>=体彩真开售；<b style="color:#3a8ee6">北单</b>=北京单场。★ 本板（三盘·资金流向）只收录<b>北单 + 竞彩</b>赛事——必发/betfa 覆盖的国际野鸡场（里加/塔林/低级别/青年/U 系列等）既非北单也非竞彩，一律不进本板，避免污染"北单/竞彩真实资金"口径。</div>' +
+    '<div style="font-weight:600;margin:10px 0 2px;color:#e54545">精选（A类·PICK 任一破绽·洋哥精选推荐）</div>' +
+    '<div style="font-size:10.5px;color:var(--mut);margin:0 0 5px;line-height:1.6">精选门槛（<b>任一命中即 PICK·本金1/3</b>）：' +
+      '①大热必死 = <b>洋哥定性(超买&gt;该场返还率缺口·自传174行)</b> + <b>三盘合流</b>(①盘竞彩官方/365趋势与北单同指 · ②盘365不设防异常确认·自传199行)；②赔率抬升型 热门方临场赔率变动 <b>favMv∈[-35,-15]%</b> 且临盘<b>≤2.2</b>；' +
+      '③市场大热 主流联赛且临盘热门方 <b>≤1.75</b>（不依赖北单）；④聪明钱背离 <b>gap≥4</b>；⑤权威分歧 <b>≥0.70</b>。' +
+      '★ <b>②③是「强势热门方·正路信号」</b>：回测反买热门方仅 3.2%/2.3% 命中、ROI −88%/−90%（名气队/看好的方真实必胜）→ <b>本板对②③只走正路·随模型方向，绝不站对面</b>；可反买的破绽盘只有①大热必死（北单真实超买·站对面 70%·n=50 命中）。详见上方「回测验证」面板。' +
+      '右列「命中阈值·自证」逐场标出<b>实际值 vs 门槛</b>，可当场核对。</div>' +
+    '<div style="font-size:10.5px;padding:4px 8px;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.22);border-radius:8px;margin:0 0 6px;line-height:1.6">⚠ <b>大热必死·诚实复查（2026-10-23）</b>：287历史样本加「北单/365方向护栏」(同实时引擎 _bdDirOk) 后，dyn gap+12 高门槛直押胜从 +16.8% 翻转成 n=5/ROI≈−10%、fixed18 翻转成 n=8/ROI −26%，均亏钱且样本过小。→ <b>原 +16.8% 是「北单错行假热」污染（错向场超买中位 10.5pt &gt; 同向 7.1pt）</b>。故精选中「大热必死」仅作<b>拥挤·减仓·观察</b>，<b>不可机械反买对面</b>；已逐场在「命中阈值·自证」标出「可观察押过热方对面」但附负ROI警告（详见回测面板·历史标定块）。</div>' + _pickList(pickA, 'PICK') +
+    '<div style="font-weight:600;margin:10px 0 2px;color:#f97316">优选（B类·MID/SMALL 或 背离偏大/偏热）</div>' + _pickList(pickB) +
+    (hotAvoid.length ? '<div style="font-weight:600;margin:10px 0 2px;color:#e54545">正式过热·拥挤提示榜（真实资金过热档：澳客冷热≥50 或 净超买 ≥+4pt·流动性≥3万）</div>' + _pickList(hotAvoid) : '') +
+    (dirTrack.length ? '<div style="font-weight:600;margin:10px 0 2px;color:#6aa0ff">模型方向·研究参考（dir 清晰·conf≥50·无真实资金源·非投注信号）</div>' + _pickList(dirTrack) : '') +
+    (mktTrack.length ? '<div style="font-weight:600;margin:10px 0 2px;color:#9a6aeb">市场方向·研究参考（模型无方向·仅市场热门方·非模型信号·非投注信号）</div>' + _pickList(mktTrack) : '')
+    + (structDownList.length ? '<div style="font-weight:600;margin:10px 0 2px;color:#2faa6a">结构下盘（盘口结构正信号·标定命中 58.1%·ROI +19.2%·独立样本 n=832·不碰 t1 终局门）</div>' + _pickList(structDownList, 'SD') : '')
+    + dailyRecordHTML();
+
+  const TF = window.TRIFLOW;
+  let bt='';
+  if (TF && TF.backtest){ const b=TF.backtest; const sig=b.reverseMaxSide.sig;
+    bt = '<div style="font-weight:700;margin:18px 0 4px;color:#8b98a9">研究背景：流速差回测（证明"反买大热"不成立）</div>' +
+      '<div class="rstats" style="margin:8px 0">' +
+      '<div class="rcard"><div class="rn" style="color:'+(sig?'#e54545':'#8b98a9')+'">'+b.reverseMaxSide.p+'%</div><div class="rl">反站最大侧命中</div><div class="rr">基线66.7%·边'+b.reverseMaxSide.edge+'pp·z='+b.reverseMaxSide.z+(sig?' ✓':' ✗')+'</div></div>' +
+      '<div class="rcard"><div class="rn" style="color:#8b98a9">'+b.maxSideWin.p+'%</div><div class="rl">超买方实际胜率</div><div class="rr">基线33.3%·z='+b.maxSideWin.z+'</div></div>' +
+      '<div class="rcard"><div class="rn" style="color:var(--acc)">'+b.cleanN+'</div><div class="rl">无让球干净样本</div><div class="rr">总配对 '+b.paired+'</div></div>' +
+      '</div>' +
+      (b.verdict==='no_edge' ? '<p class="note">用正确基线复核：三盘随机反买一边天然赢 66.7%，真实边仅 +'+b.reverseMaxSide.edge+'pp（z='+b.reverseMaxSide.z+'，不显著）；"大热必死"各档 max|z|≤0.58。<b>不存在可机械利用的 alpha</b>——故本板只做监测，不可机械反买。</p>' : '');
+  }
+  let libHTML='';
+  if (TF && TF.samples && TF.samples.length){
+    const cell = v => { const c = v >= 15 ? '#e54545' : (v >= 8 ? '#f97316' : (v <= -8 ? '#16a34a' : '#8b98a9')); return '<b style="color:' + c + '">' + fmt(v) + '</b>'; };
+    const sr = TF.samples.slice().sort((a,b)=> String(b.day).localeCompare(String(a.day))).map(s=>{
+      const mx=WDL[s.maxSide==='W'?0:s.maxSide==='L'?2:1];
+      return '<tr><td>'+s.day+'</td><td>'+s.league+'</td><td><b>'+s.bd+'</b></td><td>'+s.sp.join('/')+'</td><td>'+s.flow.map(v=>cell(v)).join(' / ')+'</td><td><b>'+mx+'</b> '+fmt(s.maxFlow)+'</td><td>'+s.score+'</td></tr>';
+    }).join('');
+    libHTML = '<div style="font-weight:700;margin:14px 0 4px;color:#8b98a9">历史偏离样本（按日期·研究用，非信号）</div>' +
+      '<table class="htab"><thead><tr><th>日期</th><th>联赛</th><th>对阵</th><th>北单SP</th><th>流速差 W/D/L</th><th>最大侧</th><th>赛果</th></tr></thead><tbody>'+sr+'</tbody></table>';
+  }
+  /* ★ 洋哥三盘法·方法论图例（按洋哥自传完善三盘资金板块：把底层公式与判据显式呈现，使板块"按洋哥公式建"自证） */
+  const legendHTML = '<details style="margin:10px 0;background:var(--card2);border:1px solid var(--acc);border-radius:10px;padding:10px 12px">' +
+    '<summary style="cursor:pointer;font-weight:800;color:var(--acc);font-size:14px">★ 洋哥三盘法 · 底层公式与判据（点击收起）</summary>' +
+    '<div style="font-size:12px;line-height:1.7;color:var(--txt);margin-top:8px">' +
+      '<div style="margin:6px 0"><b style="color:#ff7a3c">一盘·竞彩官方</b>：无人工操盘，反映玩家资金趋势 → 换算到 365 同返还率找资金平衡点/流速。</div>' +
+      '<div style="margin:6px 0"><b style="color:#3a8ee6">二盘·Bet365</b>：判断是否异常人工操盘 —— 资金快进时 365 纹丝不动即异常（问题盘嫌疑）。</div>' +
+      '<div style="margin:6px 0"><b style="color:#36c275">三盘·北单赔率池</b>：先有资金后有赔率，100% 反映真实资金占比（返还率≈100%）。</div>' +
+      '<div style="margin:8px 0;padding:6px 8px;background:rgba(127,127,127,.06);border-radius:6px;font-size:11.5px">📐 <b>返还率换算公式（洋哥铁律）</b>：<br><b>同基准赔率 = 某盘赔率 ÷ 该盘返还率 × 目标盘返还率</b><br>例：竞彩初盘 1.76 ÷ 0.8856 × 0.9475 = 1.8830；北单(≈100%返) × 365返率 = 同基准。<br>两家返还率不同，<b>不能直接比原始赔率</b>（"连返还率都不一样天天算分歧算个锤子"）。</div>' +
+      '<div style="margin:8px 0;padding:6px 8px;background:rgba(229,69,69,.06);border-radius:6px;font-size:11.5px">🔴 <b>大热两条判据（站热门对面观察）</b>：<br>① 北单−欧赔差值 <b>&gt; 该场返还率缺口</b>（缺口 = 1 − 365返还率，通常 5~6%）→ 即可能大热，差值越大把握越高；<br>② 换算亚盘后 <b>盘级偏差 ≥ 2 级（0.25 为 1 级）</b> → 即可能大热。<br>案例：莫尔德 北单2.03→同率1.92(半球) vs 365(2.6·平手)，盘级偏差 0.5(2级)、差值 13.6% 远超缺口 5.21% → 大热；水晶宫 差值 3.19% &lt; 缺口 6.02% → 均衡。</div>' +
+      '<div style="margin:8px 0;padding:6px 8px;background:rgba(58,142,230,.06);border-radius:6px;font-size:11.5px">🌊 <b>资金流速异常（洋哥·捷克vs南非）</b>：竞彩(无人工操盘)显示某方资金快进（换算 365 同率已进半一低水），但 365 亚盘/标准指数<b>纹丝不动</b>接受更快资金冲击 → 异常，选对面。正常变化不超 1 个盘级(0.25)。</div>' +
+      '<div style="margin:6px 0;color:var(--mut);font-size:11px">⚠ 本板"北单−欧赔流速差"回测证伪可机械反买 alpha（真实边 +1.4pp·z=0.38 不显著）——故上述判据<b>仅作监测与问题盘狩猎</b>，不包装成预警、不机械反买；真正过热拥挤档见「资金热度」列与「正式过热·拥挤提示榜」。</div>' +
+    '</div></details>';
+  /* ★ 2026-10-23 重构：三盘资金板「总览」前置，参照精选优选板的「设计位置框架」——
+     弹窗打开第一眼只给一张干净卡片（标题+统计+一句话口径+紧凑徽章表：对阵/资金热度/模型方向/北单−欧赔/最终方向），
+     点「对照卡」展开三盘详情；16列全量表、优选榜、返还率图、命中率、回测、历史样本、方法论全部收进「▸ 详细数据」折叠，
+     解决用户"杂乱无章"——不再一开弹窗就被 16 列 + 6 段长注 + 图 + 回测 砸脸。 */
+  const CAP2 = 12;
+  let _cri = 50000;
+  const _vbBg = c => ({'#e54545':'#fee2e2','#f97316':'#fef3c7','#8b98a9':'#eef2f7','#16a34a':'#dcfce7','#6aa0ff':'#dbeafe','#eab308':'#fef9c3'})[c] || '#eef2f7';
+  function _tfHeatBadge(r){
+    const h=_heatInfo(r);
+    if(!h.usable) return '<span style="font-size:11px;color:var(--mut)">无真实资金源</span>';
+    const sTxt=_sideTxt(h.side);
+    const isBig=(h.tier==='hot' && !h.hasAoke && h.usable && h.heatExcess!=null && h.heatExcess>=18);
+    const cold=(h.tier==='normal') && (h.hasAoke ? h.hotIdx<0 : (h.heatExcess!=null && h.heatExcess<=-3));
+    const label=cold?'偏冷':(isBig?'大热必死':_tierLabel(h.tier));
+    let bg,col;
+    if(h.tier==='hot'){bg='#fee2e2';col='#dc2626';}
+    else if(h.tier==='mid'){bg='#fef3c7';col='#b45309';}
+    else if(h.tier==='small'){bg='#fef9c3';col='#a16207';}
+    else {bg='#eef2f7';col='#64748b';}
+    return '<span style="background:'+bg+';color:'+col+';padding:1px 7px;border-radius:5px;font-weight:700;font-size:11px;white-space:nowrap">'+ (sTxt?sTxt+'·':'')+label+'</span>'
+      + '<div style="font-size:10px;color:var(--mut);margin-top:2px">'+(h.val||'—')+'</div>';
+  }
+  function _tfDirCell(r){
+    if(r.dir&&r.dir!=='D') return '<b style="color:var(--acc)">'+labelW(r.dir)+'</b>'+(r.conf!=null?' <span style="font-size:10px;opacity:.7">conf'+r.conf+'</span>':'');
+    if(r.dir==='D') return '平';
+    if(r.bdDir) return '<span style="color:#6aa0ff">北单·'+labelW(r.bdDir)+'</span>';
+    return '<span style="color:#8b98a9">—</span>';
+  }
+  function _tfFlowBadge(r){
+    // ★ 2026-10-29 终校：头条「+N」= 洋哥净超买 (heatExcess−gap) 点数（pt），NOT 盘级（绝不÷4.7）。
+    //   maxFlow(北单−欧赔流速差) 降为副行「流速 Xpp」，不再充当头条量级。
+    const _he = (r.heatExcess!=null) ? r.heatExcess : ((r.yg && r.yg.heatExcess!=null) ? r.yg.heatExcess : null);
+    const _gap = (r.gap!=null) ? r.gap : ((r.yg && r.yg.heatGap!=null) ? r.yg.heatGap : 0);
+    const _lv = (_he!=null && _gap!=null) ? _ptToLvl(_he - _gap) : null;
+    let main='';
+    if(r.tf){
+      const mi=['W','D','L'].indexOf(r.tf.maxSide);
+      const over=(_he!=null && _gap!=null && (_he - _gap) > 0);
+      const c= over?'#dc2626':(_lv!=null && _lv>=2?'#b45309':'#64748b');
+      const bg= over?'#fee2e2':(_lv!=null && _lv>=2?'#fef3c7':'#eef2f7');
+      const _mainTxt = (_lv!=null) ? ('+' + _lv.toFixed(1) + 'pt') : (fmt(r.tf.maxFlow) + 'pp');
+      main='<span title="超买(北单占比−公平胜率)='+(_he!=null?fmt(_he):'—')+'pt，缺口'+(_gap!=null?fmt(_gap):'—')+'pt，净超买'+(_lv!=null?_lv.toFixed(1):'—')+'pt；北单−欧赔流速='+(r.tf.maxFlow!=null?fmt(r.tf.maxFlow)+'pp':'—')+'" style="background:'+bg+';color:'+c+';padding:1px 7px;border-radius:5px;font-weight:700;font-size:11px;white-space:nowrap">'+_mainTxt+'('+WDL[mi]+(over?'·超缺口':'')+')</span>'
+        + (r.tf.maxFlow!=null?'<div style="font-size:10px;color:var(--mut);margin-top:2px">北单−欧赔流速 '+fmt(r.tf.maxFlow)+'pp</div>':'');
+    } else if(_lv!=null){
+      main='<span title="超买(北单占比−公平胜率)−返还率缺口" style="background:#eef2f7;color:#64748b;padding:1px 7px;border-radius:5px;font-weight:700;font-size:11px">+'+_lv.toFixed(1)+'pt</span>';
+    } else {
+      main='<span style="color:var(--mut);font-size:11px">—</span>';
+    }
+    /* ★ 2026-10-31：洋哥旗舰「盘口翻转型」（美伊型）标记——北单把 365 上盘买到翻方向。
+       这不是错行：已过四道数据质量闸（占比分布健康/热门不败≥65%/方向翻转/盘级差≥2）。 */
+    if (r.yg && r.yg.bdFlip){
+      main += '<div style="font-size:9.5px;margin-top:2px;color:#b45309" title="北单把上盘买到翻方向（洋哥2022美国vs伊朗型）；已过占比健康+不败≥65%+盘级差≥2 四道闸">🔁盘口翻转型</div>';
+    }
+    /* ★ 2026-10-24：洋哥 File3(资金流速异常) + File5(盘级偏差≥2级) 这两大核心信号，
+       原先只藏在每行折叠的「对照卡」里（4025-4026），主表一眼看不见 → 用户以为没有。
+       现拉到主表「北单−欧赔」列可见：流速异常=竞彩强lean但365纹丝不动(捷克vs南非型)；
+       盘级偏差=北单换算365同返后盘口被造深≥2级(0.5水)。二者均为实时按当前赔率算。 */
+    const chips=[];
+    if(r.flowAnom) chips.push('<span style="background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:5px;font-weight:700;font-size:10.5px;white-space:nowrap">⚡流速异常</span>');
+    if(r.levDev!=null && Math.abs(r.levDev)>=0.5) chips.push('<span style="background:#fef3c7;color:#b45309;padding:1px 6px;border-radius:5px;font-weight:700;font-size:10.5px;white-space:nowrap">盘级偏差'+(r.levDev>0?'+':'')+r.levDev+'级</span>');
+    return main + (chips.length?('<div style="margin-top:2px">'+chips.join(' ')+'</div>'):'');
+  }
+  function _tfVerdictBadge(r){
+    const v=_verdict(r);
+    return '<span style="background:'+_vbBg(v.c)+';color:'+v.c+';padding:1px 7px;border-radius:5px;font-weight:700;font-size:11px;white-space:nowrap">'+v.ic+' '+v.t+'</span>';
+  }
+  function _rowCompact(r, i){
+    const ci=_cri++;
+    try { (window.__tfCardData||(window.__tfCardData={}))[ci] = r; } catch(e){}   // ★ 对照卡按需生成用
+    const hide = '';
+    const srcTag = r.src ? (' <span style="font-size:10px;border-radius:4px;padding:0 3px;color:'+(r.src==='竞彩'?'#ff7a3c':(r.src==='北单'?'#3a8ee6':'#8b98a9'))+';border:1px solid '+(r.src==='竞彩'?'#ff7a3c':(r.src==='北单'?'#3a8ee6':'#8b98a9'))+'">'+r.src+'</span>') : '';
+    const teamCell = '<b style="font-size:13px;color:var(--acc)">'+r.b.home+'</b> <span style="opacity:.6">vs</span> <b style="font-size:13px;color:var(--acc)">'+r.b.away+'</b>'+srcTag
+      + '<div style="font-size:10px;opacity:.55;margin-top:1px">'+ (r.b.league||'')+' '+ _dOf(r.b.date) +' '+(r.b.time&&r.b.time!=='00:00'?r.b.time:'待定') +'</div>';
+    const tidAttr = r.tid ? (' onclick="onAnalyze(event,\''+r.tid+'\')" style="cursor:pointer"') : '';
+    return '<tr'+hide+' style="border-top:1px solid var(--line)">'
+      + '<td style="padding:7px 6px"'+tidAttr+'>'+teamCell+'</td>'
+      + '<td style="padding:7px 6px">'+ _tfHeatBadge(r) +'</td>'
+      + '<td style="padding:7px 6px;font-size:11px">'+ _asiaCell(r) +'</td>'
+      + '<td style="padding:7px 6px">'+ _tfDirCell(r) +'</td>'
+      + '<td style="padding:7px 6px">'+ _tfFlowBadge(r) +'</td>'
+      + '<td style="padding:7px 6px">'+ _tfVerdictBadge(r) +'</td>'
+      + '<td style="padding:7px 6px;white-space:nowrap"><a onclick="__tfToggle('+ci+');event.stopPropagation()" style="cursor:pointer;color:var(--acc)">对照卡</a>'+(r.tid?' <span style="opacity:.35">|</span> <a'+tidAttr+'>明细</a>':'')+'</td>'
+      + '</tr>'
+      + '<tr id="tfcard_'+ci+'" style="display:none"><td colspan="7" style="padding:4px 6px"></td></tr>';   // ★ 内容点开时才生成
+  }
+  const _ovList = rows.slice().sort((a,b)=> ((_isToday(b)?1:0)-(_isToday(a)?1:0)) || String(a.b.time||'').localeCompare(String(b.b.time||'')));
+  /* ★ 2026-10-29：概览表按需展开（每行产出 2 个 tr：数据行 + 对照卡空壳行） */
+  window.__tfList = _ovList;
+  window.__tfCap = CAP2;
+  window.__tfExpandAll = function(){
+    try {
+      const tb = document.getElementById('tfOverviewTbody');
+      const list = window.__tfList || [];
+      const btn = document.getElementById('tfExpandBtn');
+      if (!tb) return;
+      if (tb.getAttribute('data-all') === '1'){          // 收起：删掉第 CAP2 行之后的所有 tr
+        const trs = tb.children;
+        for (let i = trs.length - 1; i >= CAP2 * 2; i--) tb.removeChild(trs[i]);
+        tb.setAttribute('data-all','0');
+        if (btn) btn.textContent = '展开全部 ' + list.length + ' 场（默认只渲染前 ' + CAP2 + ' 行）';
+        return;
+      }
+      let html = '';
+      for (let i = CAP2; i < list.length; i++) html += _rowCompact(list[i], i);
+      tb.insertAdjacentHTML('beforeend', html);
+      tb.setAttribute('data-all','1');
+      if (btn) btn.textContent = '收起（只看前 ' + CAP2 + ' 场）';
+    } catch(e){ console.warn('三盘概览展开失败', e && e.message); }
+  };
+  // ★ 2026-10-23：双盘共振/冲突统计（亚盘判定方向 vs 欧盘·模型方向，复用 _asiaCross）
+  let _reso=0,_conf=0,_asiaN=0;
+  try{
+    for (const r of rows){
+      const _aj=_asiaJudge(r); if(!_aj||_aj.kind!=='dir') continue;
+      const _cr=_asiaCross(r,_aj); if(!_cr) continue;
+      _asiaN++; if(_cr.same) _reso++; else _conf++;
+    }
+  }catch(e){}
+  /* ★ 2026-10-24：实时新鲜度脚注——直接回答用户质疑「数据是动态的，你到底有没有实时更新判断」。
+     数据链路：浏览器直连源站拉 gqj2 列表 + 平台每15分钟云端重算三段盘路+北单快照(CVM累积) + 可选云端Worker每5分钟合并；
+     render() 时按当前赔率逐场重算 yg（含 heatExcess/pan2/levDev/flowAnom），故三盘判断是动态的、非静态快照。 */
+  const _age = (typeof bakeAgeMin === 'function') ? bakeAgeMin() : null;
+  const _rtDot = (_age != null && _age <= 10) ? '#16a34a' : (_age != null ? '#c07a1e' : '#64748b');
+  const _rtTxt = (_age != null && _age <= 10) ? ('实时数据刚更新（'+ageText(_age)+'）') : (_age != null ? ('数据已 '+ageText(_age)+'（后台15分钟自动重算中 / Ctrl+F5 强刷）') : '离线快照');
+  const _rtLine = '<div style="font-size:11px;margin:0 0 6px;line-height:1.5;border-left:3px solid '+_rtDot+';padding:5px 8px;background:rgba(127,127,127,.05);border-radius:4px">'
+    + '<b style="color:'+_rtDot+'">● '+_rtTxt+'</b> ｜ 上方每场 <b style="color:var(--acc)">三盘判断按当前赔率实时重算</b>（平台每15分钟云端重算三段盘路+北单快照，可选云端Worker每5分钟再合并）'
+    + '｜ 下方「回测验证」面板为<b>历史标定</b>（非直接下注alpha），实时信号看本表逐场徽章与「对照卡」'
+    + '</div>';
+  const overviewHTML = '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:8px 0">'
+    + '<div style="font-weight:700;margin:2px 0 6px;font-size:14px">💰 三盘·资金流向 · 总览'
+    + '<span style="opacity:.55;font-weight:400;font-size:12px;margin-left:6px">本期 '+rows.length+' 场 · 正式过热 '+nFake+' · 背离 '+nDiv+' · 同向 '+nSame+' · <b style="color:#16a34a">双盘共振 '+_reso+'</b>/<b style="color:#f97316">冲突 '+_conf+'</b>（亚盘判定 vs 欧盘方向）</span></div>'
+    + '<div style="font-size:10.5px;opacity:.6;margin:0 0 6px;line-height:1.5">北单真实资金 × 机构欧赔 × 模型方向 三方对照监测（非交易信号）｜<b>亚盘判定(上/下盘) × 欧盘(资金热度/模型方向) 双盘对照</b>｜点「对照卡」展开 竞彩 / Bet365 / 北单 三盘详情与同返还率换算｜「明细」看引擎分析</div>'
+    + _rtLine
+    + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="color:var(--muted,#8b98a9);font-size:11px;text-align:left">'
+    + '<th style="padding:4px 6px;font-weight:500">对阵 / 来源</th>'
+    + '<th style="padding:4px 6px;font-weight:500">资金热度</th>'
+    + '<th style="padding:4px 6px;font-weight:500" title="亚盘判定：上盘=让球方、下盘=受让方。规则见详细数据→方法论。回测1047场：判上盘59.4%赢盘/+16.1%ROI，判下盘49.1%/−4.9%">亚盘判定</th>'
+    + '<th style="padding:4px 6px;font-weight:500">欧盘·模型方向</th>'
+    + '<th style="padding:4px 6px;font-weight:500">北单−欧赔</th>'
+    + '<th style="padding:4px 6px;font-weight:500">最终方向</th>'
+    + '<th style="padding:4px 6px;font-weight:500"></th></tr></thead><tbody id="tfOverviewTbody">'
+    /* ★ 2026-10-29 性能：只渲染前 CAP2 行（旧版是全渲染 + display:none 藏起来 ——
+       藏起来照样占 DOM，28,089 个节点就是这么来的）。点「展开全部」再按序插剩余行。 */
+    + _ovList.slice(0, CAP2).map((r,i)=> _rowCompact(r, i)).join('')
+    + '</tbody></table>'
+    + (rows.length>CAP2 ? '<button class="sec" id="tfExpandBtn" style="width:100%;margin:8px 0 2px;font-size:12px" onclick="__tfExpandAll()">展开全部 '+rows.length+' 场（默认只渲染前 '+CAP2+' 行，避免 DOM 过大拖慢整页）</button>' : '')
+    + '</div>';
+  /* ★ 2026-10-24 洋哥三盘法·显式三盘结构卡（复刻自传 pp.76-91「三盘分析法」）：
+     一盘(竞彩官方·资金趋势) → 二盘(365·是否异常操盘) → 三盘(北单赔率池·真实热度偏差)，逻辑顺序不可颠倒（切勿从三盘起步）。
+     下方回测数字来自 2026-10-23 三盘合流专项回测（当前引擎重算 3 份快照完场场次）。 */
+  /* ★ 2026-10-24 方向③：竞彩初盘走势采集状态（collect_jc_history.cjs 随 refresh_all 每周期累积初→临快照，
+     补一盘流速最弱一环）。动态显示已存场数与已有≥2快照(可显初→临方向)的场数。 */
+  function jcHistStat() {
+    try {
+      /* ★ 2026-10-29：全量 JC_HISTORY 已外置按需加载（不再内联 521KB 进首屏），
+         这里只需要两个计数 → 优先读构建时注入的轻量摘要。 */
+      const _sm = window.JC_HISTORY_SUMMARY;
+      if (_sm && typeof _sm === 'object'){
+        if (!_sm.n) return '竞彩初盘走势采集已启用（collect_jc_history.cjs·随cron累积），当前尚无快照，初→临序列随运行逐步填充';
+        return '竞彩初盘走势采集已启用：已存 ' + _sm.n + ' 场快照，其中 ' + _sm.mv + ' 场已有≥2初→临点（可显方向）';
+      }
+      const h = window.JC_HISTORY || {}; const ks = Object.keys(h);
+      const mv = ks.filter(k => h[k] && h[k].history && h[k].history.length >= 2).length;
+      if (!ks.length) return '竞彩初盘走势采集已启用（collect_jc_history.cjs·随cron累积），当前尚无快照，初→临序列随运行逐步填充';
+      return '竞彩初盘走势采集已启用：已存 ' + ks.length + ' 场快照，其中 ' + mv + ' 场已有≥2初→临点（可显方向）';
+    } catch (e) { return '竞彩初盘走势采集已启用'; }
+  }
+  const ygTriCard =
+    '<div style="background:var(--card2);border:1px solid var(--acc);border-radius:12px;padding:12px 14px;margin:10px 0">'+
+      '<div style="font-weight:800;color:var(--acc);font-size:13.5px;margin-bottom:2px">🀄 洋哥三盘法 · 大热必死（自传三盘分析法）</div>'+
+      '<div style="font-size:11px;color:var(--mut);margin-bottom:10px">逻辑顺序：一盘(资金趋势) → 二盘(异常操盘?) → 三盘(热度偏差) · <b style="color:var(--yel)">切勿从三盘起步</b></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 26px 1fr 26px 1fr;align-items:stretch;gap:0">'+
+        '<div style="background:#11202e;border:1px solid #1f3b52;border-radius:10px;padding:10px">'+
+          '<div style="font-weight:800;color:#4aa3ff;font-size:13px">一盘 · 竞彩官方</div>'+
+          '<div style="font-size:11.5px;color:var(--mut);margin-top:4px;line-height:1.5">盘口<b>变化</b>体现玩家资金趋势。例：水晶宫 1.81→1.78→1.88 连续升 = 资金撤离热门方、对其状态伤病生疑。<br><span style="color:#6aa0ff">板内取：竞彩官方当前隐含热门方。' + (typeof jcHistStat === 'function' ? jcHistStat() : '竞彩初盘走势采集已启用') + '</span></div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:20px;font-weight:800">→</div>'+
+        '<div style="background:#1a1626;border:1px solid #3a2f52;border-radius:10px;padding:10px">'+
+          '<div style="font-weight:800;color:#b07cff;font-size:13px">二盘 · Bet365</div>'+
+          '<div style="font-size:11.5px;color:var(--mut);margin-top:4px;line-height:1.5">是否<b>异常操盘</b>。365 跟随一盘同向变 = 吃水盘（无价值）；365 背离/按兵不设防 = 异常确认。<br><span style="color:#c9a3ff">板内取：pan2.def = 跟随降水(设防) / 反向不设防(异常) / 按兵(观望)</span></div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;justify-content:center;color:var(--acc);font-size:20px;font-weight:800">→</div>'+
+        '<div style="background:#10241a;border:1px solid #1f4a36;border-radius:10px;padding:10px">'+
+          '<div style="font-weight:800;color:#36c275;font-size:13px">三盘 · 北单赔率池</div>'+
+          '<div style="font-size:11.5px;color:var(--mut);margin-top:4px;line-height:1.5">100% 真实资金占比。某方赔率被打偏低于应有（莫尔德平手盘→2.0几=让半球中水）= 异常大热。<br><span style="color:#5fd49a">板内取：heatExcessEff vs 该场返还率缺口(1−365R·洋哥174行·无+12缓冲)，超缺口 = 大热（站对面观察）</span></div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="margin-top:10px;font-size:11.5px;line-height:1.7;background:#0a0d12;border-radius:8px;padding:8px 10px">'+
+        '<b style="color:var(--grn)">大热必死 = 三盘合流</b>：③盘超买 &gt; 该场返还率缺口(1−365R，洋哥自传174行·无+12缓冲) &nbsp;<b style="color:var(--mut)">且</b>&nbsp; ①盘趋势同指 &nbsp;<b style="color:var(--mut)">且</b>&nbsp; ②盘365不设防确认 → 站热门对面<b style="color:#b45309">观察</b>（⚠加方向护栏后直押胜 ROI≈−10%~−26%，仅观察·不可机械反买）。'+
+        '<br><span style="color:var(--mut)">回测：三盘合流站对面 1X2 <b style="color:#b45309">68%</b> 命中/+15.9%ROI(n=25·观察)；<b style="color:#b45309">仅③盘北单超缺口</b> n=1276 65.6%/+51%ROI（最强单信号）；<b style="color:var(--red)">仅②盘单盘</b> 30.5%/−16%ROI → 证「切勿从三盘起步」。⚠ 以上"正ROI"用引擎已护栏样本，与287场方向护栏复核(−10%~−26%)冲突，项目采用保守口径：大热必死一律观察·不可机械反买。</span>'+
+      '</div>'+
+            /* ★ 2026-10-24（精读洋哥27场精选全记录 25红2黑·93%）：完整明细表并入三盘法方法论卡，供随时对照 */
+'<div style="margin-top:8px;font-size:11.5px;line-height:1.7;border-top:1px dashed var(--line);padding-top:8px">'+
+        '<b style="color:var(--acc)">洋哥27场精选实证（25红2黑·93%）</b>：买受让方(下盘) <b>22</b> 场(95.5%) ｜ 平手 <b>3</b> 场(66.7%) ｜ 反买让球方(上盘：国米-1、奥萨苏纳-0.5，均为"下盘变热") <b>2</b> 场(100%) → '+
+        '「反买被造热方」<b style="color:var(--yel)">可上可下</b>，不是无条件买下盘；共性 = ①盘流速热 → ②盘365不设防 → ③盘北单被打偏≥1盘级(常见半球/一球/球半)。'+
+        '<br><span style="color:var(--mut)">判据计数：预设盘6 · 北单热度10 · 临场降盘4 · 返还率兜底1 · 365不设防6 · 三盘显式9。⚠ 27场为历史样本，本地无当时北单/竞彩快照，<b>不可回测</b>，仅作方法论校准，不计入任何 ROI 统计。</span>'+
+        '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--blu);font-size:11px">▸ 27场明细对照（点击展开）</summary>'+
+        "<table style=\"width:100%;border-collapse:collapse;font-size:10.5px;margin-top:6px\"><thead><tr style=\"color:var(--acc);text-align:left;border-bottom:1px solid var(--acc)\"><th style=\"padding:2px 5px\">#</th><th style=\"padding:2px 5px\">比赛</th><th style=\"padding:2px 5px\">盘口</th><th style=\"padding:2px 5px\">比分</th><th style=\"padding:2px 5px\">中</th><th style=\"padding:2px 5px\">类型</th><th style=\"padding:2px 5px\">洋哥判据</th></tr></thead><tbody><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">1</td><td style=\"padding:2px 5px\">挪威vs瑞士</td><td style=\"padding:2px 5px;white-space:nowrap\">瑞士+0.5</td><td style=\"padding:2px 5px;white-space:nowrap\">0-0</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">哈兰德题材高开半球造热挪威，实际合理盘为0.25</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">2</td><td style=\"padding:2px 5px\">波黑vs意大利</td><td style=\"padding:2px 5px;white-space:nowrap\">波黑+1</td><td style=\"padding:2px 5px;white-space:nowrap\">1-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">实际合理盘0.75，各种题材高开造热意大利</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">3</td><td style=\"padding:2px 5px\">拉齐奥vs帕尔马</td><td style=\"padding:2px 5px;white-space:nowrap\">帕尔马+0.5</td><td style=\"padding:2px 5px;white-space:nowrap\">1-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">竞彩上盘单边连续下降，欧洲标准盘上盘水位上升，上盘过热</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">4</td><td style=\"padding:2px 5px\">马刺vs掘金</td><td style=\"padding:2px 5px;white-space:nowrap\">掘金+1.5</td><td style=\"padding:2px 5px;white-space:nowrap\">掘金胜</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">马刺12连胜，竞彩被打偏2分，亚盘无任何规避热度操盘，上盘热</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">5</td><td style=\"padding:2px 5px\">奥尔格里特vs马尔默</td><td style=\"padding:2px 5px;white-space:nowrap\">奥尔格里特+1</td><td style=\"padding:2px 5px;white-space:nowrap\">1-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">升班马对前赛季冠军，操盘超强队，玩家买入客队热情淋漓尽致但临场依旧回水，上盘大热</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">6</td><td style=\"padding:2px 5px\">布雷达vs鹿特丹斯巴达</td><td style=\"padding:2px 5px;white-space:nowrap\">鹿特丹斯巴达+0.25</td><td style=\"padding:2px 5px;white-space:nowrap\">1-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">联赛倒数打正数，合理盘平手，强队只能给客队散热，竞彩布雷达买入热情，临场无降水</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">7</td><td style=\"padding:2px 5px\">国际米兰vs罗马</td><td style=\"padding:2px 5px;white-space:nowrap\">国际米兰-1</td><td style=\"padding:2px 5px;white-space:nowrap\">5-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">让球</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">基本面最差的国米，遇到暂进欧冠的罗马，理论半一低水，开高一球，下盘变热门</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">8</td><td style=\"padding:2px 5px\">米尔沃尔vs诺维奇</td><td style=\"padding:2px 5px;white-space:nowrap\">诺维奇+0.25</td><td style=\"padding:2px 5px;white-space:nowrap\">1-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">米尔沃尔积分第二，冲超在望，客队无欲无求。上盘资金都买疯了，临场还降盘，热透</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">9</td><td style=\"padding:2px 5px\">老鹰vs尼克斯</td><td style=\"padding:2px 5px;white-space:nowrap\">尼克斯+1.5</td><td style=\"padding:2px 5px;white-space:nowrap\">尼克斯胜</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">老鹰连胜题材较多，3.5是盘口平衡点，临场1.5坚挺，无惧老鹰买入筹码</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">10</td><td style=\"padding:2px 5px\">勇士vs国王</td><td style=\"padding:2px 5px;white-space:nowrap\">国王+14.5</td><td style=\"padding:2px 5px;white-space:nowrap\">勇士赢5</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">竞彩被打到17.5，临场还退盘，勇士过热</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">11</td><td style=\"padding:2px 5px\">奥勒松vs腓特烈斯塔</td><td style=\"padding:2px 5px;white-space:nowrap\">奥勒松-0</td><td style=\"padding:2px 5px;white-space:nowrap\">2-3</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">平手</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">客队在主任心中处热门，临场亚盘维持平手低水，但客队逆转，再遇到还会选择主队</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">12</td><td style=\"padding:2px 5px\">曼城vs狼队</td><td style=\"padding:2px 5px;white-space:nowrap\">曼城-0</td><td style=\"padding:2px 5px;white-space:nowrap\">1-0</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">平手</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">北单赔率被打偏两级的比赛，百里挑一，庄家都不怕，我们更没理由怕，就是踢不过</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">13</td><td style=\"padding:2px 5px\">阿森纳vs伯恩茅斯</td><td style=\"padding:2px 5px;white-space:nowrap\">伯恩茅斯+1.25</td><td style=\"padding:2px 5px;white-space:nowrap\">1-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">必须要赢的比赛，上盘买入资金巨大，临场最后几分钟降盘，完全与玩家心理相悖，热死</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">14</td><td style=\"padding:2px 5px\">曼联vs利兹联</td><td style=\"padding:2px 5px;white-space:nowrap\">利兹联+1</td><td style=\"padding:2px 5px;white-space:nowrap\">1-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">合理一球低水，临场一球超低水，导致附加盘的上盘一半过热</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">15</td><td style=\"padding:2px 5px\">布洛马波卡纳vs索尔纳</td><td style=\"padding:2px 5px;white-space:nowrap\">布洛马波卡纳+0.5</td><td style=\"padding:2px 5px;white-space:nowrap\">2-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">主队基本面下降很多，客队也没拿到应有的半球低水盘，超过返还率兜底的最大热度保护</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">16</td><td style=\"padding:2px 5px\">勒沃库森vs奥格斯堡</td><td style=\"padding:2px 5px;white-space:nowrap\">奥格斯堡+1.5</td><td style=\"padding:2px 5px;white-space:nowrap\">1-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">亚盘和趋势盘完全相反操盘方向，勒沃库森主胜都热死，更别说让球盘了</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">17</td><td style=\"padding:2px 5px\">尤尔加登vs哈马比</td><td style=\"padding:2px 5px;white-space:nowrap\">尤尔加登+0.25</td><td style=\"padding:2px 5px;white-space:nowrap\">1-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">主任2.31-1.92，资金压力完全在客队，亚盘纹丝不动无惧客队筹码，北单热度换算客队大热</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">18</td><td style=\"padding:2px 5px\">奥萨苏纳vs塞维利亚</td><td style=\"padding:2px 5px;white-space:nowrap\">奥萨苏纳-0.5</td><td style=\"padding:2px 5px;white-space:nowrap\">2-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">让球</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">主任资金趋势在客队，庄家反向操盘降主队赔率，北单热度系统客队大热，读秒绝杀拿下</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">19</td><td style=\"padding:2px 5px\">威廉二世vs福伦丹</td><td style=\"padding:2px 5px;white-space:nowrap\">福伦丹+0.25</td><td style=\"padding:2px 5px;white-space:nowrap\">1-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">资金趋势1盘主队2.05降到1.92，很热。二盘主队2.15升到2.32完全不惧主任资金，三盘主队同样大热</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">20</td><td style=\"padding:2px 5px\">皇家马德里vs毕尔巴鄂竞技</td><td style=\"padding:2px 5px;white-space:nowrap\">毕尔巴鄂竞技+1</td><td style=\"padding:2px 5px;white-space:nowrap\">4-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">总结：一盘盘的比赛，三盘热度偏移增加一个，确保大热数据的准确性</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">21</td><td style=\"padding:2px 5px\">萨普斯堡vs莫尔德</td><td style=\"padding:2px 5px;white-space:nowrap\">萨普斯堡+0</td><td style=\"padding:2px 5px;white-space:nowrap\">2-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">平手</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">一盘莫尔德2.35到2.15，大热。二盘纹丝不动，不设防。三盘莫尔德被打偏到半球中水，热透</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">22</td><td style=\"padding:2px 5px\">浦和红钻vs冈山绿雉</td><td style=\"padding:2px 5px;white-space:nowrap\">冈山绿雉+0.5</td><td style=\"padding:2px 5px;white-space:nowrap\">0-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">一盘1.87降1.71，二盘1.91升1.95，完全对上盘热度不设防。三盘上盘让到一球中水，热透</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">23</td><td style=\"padding:2px 5px\">西班牙vs佛得角</td><td style=\"padding:2px 5px;white-space:nowrap\">佛得角+2.5</td><td style=\"padding:2px 5px;white-space:nowrap\">0-0</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">一盘西班牙资金流速达到3球低水，二盘完全不合理，临场降盘。三盘西班牙被打到3.5球，历史罕见</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">24</td><td style=\"padding:2px 5px\">葡萄牙vs刚果</td><td style=\"padding:2px 5px;white-space:nowrap\">刚果+1.5</td><td style=\"padding:2px 5px;white-space:nowrap\">1-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">一盘葡萄牙资金流速被干到2.25球，临场机构根本不管葡萄牙热度。三盘被打偏到2.25球低水，热透</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">25</td><td style=\"padding:2px 5px\">捷克vs南非</td><td style=\"padding:2px 5px;white-space:nowrap\">南非+0.5</td><td style=\"padding:2px 5px;white-space:nowrap\">1-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">一盘竞彩较快（流速半一中水），临场机构对上盘热度不设防。三盘被打偏到一球低水，捷克热透</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">26</td><td style=\"padding:2px 5px\">日本vs瑞典</td><td style=\"padding:2px 5px;white-space:nowrap\">瑞典+0.25</td><td style=\"padding:2px 5px;white-space:nowrap\">1-1</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">一盘日本半一流速热透，二盘平半临场还一直升水不设防。三盘半一依旧热透 → 日本被造热</td></tr><tr style=\"border-bottom:1px solid var(--line)\"><td style=\"padding:2px 5px;color:var(--mut)\">27</td><td style=\"padding:2px 5px\">莫尔德vs布兰</td><td style=\"padding:2px 5px;white-space:nowrap\">布兰+0.25</td><td style=\"padding:2px 5px;white-space:nowrap\">1-2</td><td style=\"padding:2px 5px;color:#e54545;font-weight:700\">✗</td><td style=\"padding:2px 5px\">受让</td><td style=\"padding:2px 5px;color:var(--mut);font-size:10.5px\">一盘半球低水（1.95降1.77）热透，二盘平半中水略升水无惧莫尔德热度，三盘半一低水，热透</td></tr></tbody></table>"+
+      '</details>'+
+      '<div style="margin-top:8px;font-size:11.5px;line-height:1.7;border-top:1px dashed var(--line);padding-top:8px">'+
+        '<b style="color:var(--yel)">C4 · 小偏差下盘增强评估（2026-10-24 标定）</b>：引擎 classifyPan 仅 pan_gap≤-0.5 判下盘；pan_gap∈[-0.5,0)（中庸盘偏下）判<b>观望</b>。留出验证显示该区间买下盘 ROI <b style="color:#5fd49a">+17%</b>（训练/测试双样本显著）→ 引擎「观望」区漏判的<b>结构下盘边缘</b>。'+
+        '<br><span style="color:var(--mut)">处置（增强而非新门）：仅作观察级软信号——①亚盘列 _edgeNote（中庸盘偏下·结构下盘边缘+17%·观察）②档位徽章「软·结构下盘边缘 +17%·观察」(tierBadgeCardSoft 附加层)③ an.softDownEdge 写入引擎 analyze 返回对象。三者均<b>不改 tier / 终局门(0.72) / stakePlan 下注门</b>，最终下注仍由 stakePlan + 标定命中率决定。诚实边界：2089 场事后+时间外标定、未跨赛季、仍观察级。</span>'+
+      '</div>'+
+      '</div>'
+    '</div>';
+  const _detail = todayHTML + _bk + pickHTML + payChartHTML + _triHitHTML + stat + bt + libHTML + ygTriCard + note + legendHTML
+    + '<div style="margin:14px 0;padding:12px 16px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(135deg,#13202e,#0f1a24);color:#cfe3f5">'
+    + '<b style="color:var(--acc)">📊 离线深度报告</b> · '
+    + '<a href="https://188-code.github.io/football-odds-board/panguo_yangge_report.html" target="_blank" style="color:var(--acc);text-decoration:none">预设盘偏差回测 + 洋哥27场对照（GitHub Pages）</a>'
+    + ' · <a href="http://42.193.242.59/panguo_yangge_report.html" target="_blank" style="color:var(--acc);text-decoration:none">Caddy 主站</a>'
+    + '<div style="font-size:12px;color:var(--mut);margin-top:4px">含 Wilson/Bootstrap 95% CI + 时间外留出验证 + 小偏差下盘增强评估（本链接收录于「详细数据」区，可一键跳转）</div>'
+    + '</div>';
+  /* ★ 2026-10-26：用户反馈「三盘资金板块根本看不懂」→ 顶部加纯白话引导框（零术语），先让人看懂再看细节。 */
+  const _plainGuide = '<div style="background:linear-gradient(135deg,#0e2a1c,#0e1f2a);border:1px solid #1f6b46;border-radius:12px;padding:12px 14px;margin:8px 0;font-size:12.5px;line-height:1.75;color:#dcefe2">'
+    + '<div style="font-weight:800;color:#36c275;font-size:14px;margin-bottom:6px">👀 三盘资金板 · 三句话看懂</div>'
+    + '<div>① <b>这张表看「钱往哪边压」</b>：<span style="color:#ff7a3c;font-weight:700">橙=竞彩官方</span>、<span style="color:#3a8ee6;font-weight:700">蓝=Bet365机构赔率</span>、<span style="color:#36c275;font-weight:700">绿=北单真实资金池</span>（北单是「先有真钱押注、再开赔率」，最贴近真实下注方向）。三色一致=强信号，打架=警惕。</div>'
+    + '<div>② <b>「资金热度」列看拥挤程度</b>：<span style="color:#e54545;font-weight:700">红·正式过热</span>=某队被海量资金追捧（价值被吃光）、<span style="color:#f97316;font-weight:700">橙·中热</span>=偏热、<span style="color:#64748b">灰·正常</span>=没异常。<b>过热≠必输</b>，是「减仓 / 别追高」的提醒，不是「它一定死」。</div>'
+    + '<div>③ <b>「亚盘判定」列</b>：<b>上盘=让球方</b>（被看好的一方）、<b>下盘=受让方</b>（被看衰的一方）。回测结论：判「上盘」赢盘率约 59%（有正期望），判「下盘」基本没优势。<b>本板所有信号都是「观察提示」，不是自动下注指令</b>——点每行的「对照卡」可看三盘细节。</div>'
+    + '</div>';
+  return _plainGuide + overviewHTML
+    + '<details style="margin:10px 0"><summary style="cursor:pointer;font-weight:700;color:var(--acc);font-size:13px">▸ 详细数据（三盘全量16列 + 对照卡 + 返还率图 + 命中率 + 回测 + 历史样本 + 方法论图例）</summary>'
+    + _detail
+    + '</details>';
+}
+
+async function openTriFlow(){
+  try{ _htAbort = false; resolvePredictions(); }catch(e){}
+  // ★ 2026-10-15 修复「三盘板整块空白/表格消失」：
+  //   原把 `await _ensureDetail()`（加载较大的 bake_detail.js）放在最前面 → 整个面板(含主表/返还率图/回测/历史样本)
+  //   都被这个异步加载阻塞；一旦该文件线上加载慢或挂起，await 不返回 → innerHTML 永不写入 → 用户看到整板空白。
+  //   现改为：先【即时】渲染主表/图表（这些只依赖 BD_ROWS 与 OFFLINE_PACK，根本不需要 a.plan 合并），
+  //   面板立刻可见；再【后台】异步合并 bake_detail（仅供内嵌优选段），完成/超时/失败都不再影响主表显示。
+  const _first = (function(){ try { return triFlowHTML(); } catch(e){ return '<p class="note">生成失败：' + (e && e.message || e) + '</p>'; } })();
+  const _box = $('triFlowContent'); if (_box) _box.innerHTML = _first;
+  const _modal = $('triFlowModal'); if (_modal) _modal.classList.add('show');
+  /* ★ 2026-10-16 启动三盘实时比分脉冲（30s 就地刷 data-pscore 格，不整块重渲） */
+  try{ if (_triPoll) clearInterval(_triPoll); _triPoll = setInterval(_triScoreTick, 30000); }catch(e){}
+  // 后台合并：8s 超时兜底，绝不因大文件挂起而阻塞主表；失败则保持首次渲染（优选段显示空档说明，不空白整板）
+  (async () => {
+    try {
+      await Promise.race([ _ensureDetail(), new Promise((_, rej) => setTimeout(() => rej(new Error('detail timeout 8s')), 8000)) ]);
+      const _dm = window.__BAKE_DETAIL__ || {}; for (const _t in _dm) _mergeDetail(_t);
+      const _box2 = $('triFlowContent');
+      if (_box2) _box2.innerHTML = (function(){ try { return triFlowHTML(); } catch(e){ return _first; } })();
+    } catch(e){ /* 合并失败/超时：主表已渲染，保持不动 */ }
+  })();
+}
+function closeTriFlow(){ const _m = $('triFlowModal'); if(_m) _m.classList.remove('show'); try{ if (_triPoll){ clearInterval(_triPoll); _triPoll = null; } }catch(e){} }
+/* ★ 2026-10-16：三盘·资金流向板独立实时比分脉冲（与纯深盘/_htScoreTick 同口径）。
+   三盘板此前无 data-pscore、无 30s 节拍 → 比分永远停在打开面板那一刻的快照，从不随比赛推进刷新（用户多次强调的痛点）。
+   现：_triScoreCell 复用 tbScoreCell（进行中比分到终场✓/✗），_triScoreTick 每 30s 按 tid 从 MATCHES 取【当前】比赛对象就地重算，
+   避免存储旧对象引用导致 loadMatches 重建后比分不更新。 */
+let _triPoll = null;
+function _triScoreCell(r){
+  try{
+    const m = r && r.m; if (!m) return '<b style="color:var(--mut)">—</b>';
+    const ph = matchPhase(m);
+    const dir = (r.dir && r.dir !== 'D') ? r.dir : null;
+    return tbScoreCell(m, ph, dir, (r.a && r.a.tier) || null, true);
+  }catch(e){ return '<b style="color:var(--mut)">—</b>'; }
+}
+/* ★ 2026-10-18：三盘·资金流向板「对阵」行内实时比分徽章（用户明确："在那里面加实时比分"=三盘板块内，非独立弹窗）。
+   紧贴对阵名后面显示：进行中→「2:1 67′」(红)／完场→「2:1 ✓/✗」(按主队视角着色)／未开赛→「预测 x-x」或「—」。
+   带 data-pscore-inline=tid，由 _triScoreTick 每 30s 就地刷新（与比分列同源，但更醒目且不影响列宽）。 */
+function _triInlineScore(r){
+  const m = r && r.m;
+  if (m){
+    const h = m.home_score, a = m.away_score;
+    const has = (h != null && a != null && isFinite(+h) && isFinite(+a));
+    const ph = matchPhase(m);
+    const dir = (r.dir && r.dir !== 'D') ? r.dir : null;
+    if (ph === 'live' && has){
+      const k = (typeof tbTs === 'function') ? tbTs(m) : 0;
+      const min = k ? Math.max(0, Math.floor((Date.now()-k)/60000)) + '′' : '进行中';
+      return '<b style="color:var(--red);font-weight:700">'+h+':'+a+'</b> <span style="font-size:10.5px;color:var(--red)">'+min+'</span>';
+    }
+    if (ph === 'fin' && has){
+      /* ★ 2026-10-29：与 tbScoreCell 同护栏——非真完场(state≠'-1')的 0:0 是数值缺省，不当赛果印。 */
+      if (h === 0 && a === 0 && String(m.state) !== '-1')
+        return '<span style="font-size:10.5px;color:var(--mut)">完场·比分待回补</span>';
+      const act = (typeof actualDir === 'function') ? actualDir(h,a) : null;
+      const col = act==='W' ? 'var(--red)' : (act==='L' ? 'var(--grn)' : 'var(--yel)');
+      let hit = ''; if (dir && act){ hit = (dir===act) ? '✓' : '✗'; }
+      return '<b style="color:'+col+';font-weight:700">'+h+':'+a+'</b>' + (hit ? ' <span style="font-size:10.5px;color:'+(hit==='✓'?'var(--grn)':'var(--red)')+'">'+hit+'</span>' : '');
+    }
+    const _sc = (m.analysis && m.analysis.score && m.analysis.score.top) || null;
+    if (_sc && _sc.length) return '<span style="font-size:10.5px;color:var(--mut)">预测 '+_sc[0].score+'</span>';
+    return '<span style="font-size:10.5px;color:var(--mut)">未开赛</span>';
+  }
+  if (r.finScore){ const f=r.finScore; const col=f.hs>f.as?'var(--grn)':f.hs<f.as?'var(--red)':'var(--yel)'; return '<b style="color:'+col+';font-weight:700">'+f.hs+':'+f.as+'</b>'; }
+  return '<span style="font-size:10.5px;color:var(--mut)">—</span>';
+}
+function _triScoreTick(){
+  try{
+    const root = document.getElementById('triFlowContent');
+    if (!root) return;
+    const MM = (typeof MATCHES !== 'undefined') ? MATCHES : null;
+    if (!MM) return;
+    const els = root.querySelectorAll('[data-pscore]');
+    for (let i = 0; i < els.length; i++){
+      const el = els[i], tid = el.getAttribute('data-pscore');
+      const m = MM.find(x => x && String(x.tid) === String(tid));
+      if (!m) continue;
+      try{
+        const html = _triScoreCell({ m:m, dir:(m.analysis && m.analysis.dirCode) || null, a:m.analysis });
+        if (el.innerHTML !== html) el.innerHTML = html;
+      }catch(e){}
+    }
+    /* ★ 2026-10-18：同步刷新行内实时比分徽章 [data-pscore-inline]。 */
+    const inls = root.querySelectorAll('[data-pscore-inline]');
+    for (let i = 0; i < inls.length; i++){
+      const el = inls[i], tid = el.getAttribute('data-pscore-inline');
+      const m = MM.find(x => x && String(x.tid) === String(tid));
+      if (!m) continue;
+      try{
+        const html = _triInlineScore({ m:m, dir:(m.analysis && m.analysis.dirCode) || null });
+        if (el.innerHTML !== html) el.innerHTML = html;
+      }catch(e){}
+    }
+  }catch(e){}
+}
+/* ═══════════ 优选精选（洋哥自传·问题盘三线索 ＋ 实测硬方向池） ═══════════
+   ★ 为什么补这个板块：别人软件有「优选/精选」，我们的板子一直没有 —— 查明两处真根因：
+     ① 引擎**早就**按《洋哥自传》原文实现了三条独立问题盘线索 → 精选推荐/加重/小注（engine.stakePlan，
+        自传原文："另外10%的比赛…出现问题盘，也就是精选推荐…建议投资金额为本金的 1/3"），
+        但它只渲染在单场卡片里，从没聚合成板块；
+     ② 离线补结论脚本 _recalc_bake_an.cjs 有两个坑：从未注入公司分歧，且从不赋 agg.tid
+        （engine 取分歧用的是 agg.tid，见 engine.js:2817）⇒ an.company_div 恒空、a.plan 恒 SKIP
+        ⇒ 连卡片那个「精选」徽章也一直是空的（用户"优选呢、精选呢"的工程根因，两处都已修）。
+   本面板给两档口径：
+     A. 硬方向池（7870 场完场真值标定，不依赖任何跨源 join，最稳）：
+          精选 = 纯深盘(|让球|≥0.8·热门方==模型方向) ∩ 市场头号≥0.80 → 实测 96%
+          优选 = 纯深盘(方向一致·无大热确认)                        → 实测 85%
+     B. 洋哥自传·问题盘三线索（实时 a.plan）：
+          PICK=三线合流（自传"精选推荐"级·本金1/3）／MID=两线(1/10)／SMALL=一线(1/20)
+   选出的场次自动入库(localStorage 留底)，完场后在窗口内回填赛果计命中。 */
+const _PL_KEY = 'WBPICKLIB_V1';
+function pickLibLoad(){ try { return JSON.parse(localStorage.getItem(_PL_KEY) || '[]') || []; } catch(e){ return []; } }
+function pickLibSave(a){ try { localStorage.setItem(_PL_KEY, JSON.stringify(a)); } catch(e){} }
+function pickLibSync(list){
+  const lib = pickLibLoad(); const idx = {}; lib.forEach(e => { idx[String(e.tid)] = e; });
+  const _now = Date.now();
+  for (const p of list){
+    const e = idx[String(p.tid)];
+    if (e){ e.time=p.time; e.league=p.league; e.home=p.home; e.away=p.away; e.dir=p.dir; e.dirTxt=p.dirTxt; e.hcap=p.hcap;
+            e.tier=p.tier; e.mk=p.mk; e.source=p.source; e.level=p.level||''; e.sig=(p.sig||[]).join('+'); e.note=p.note||''; }
+    else { const n = { ts:_now, date:todayStr(), tid:p.tid, time:p.time, league:p.league, home:p.home, away:p.away,
+                       dir:p.dir, dirTxt:p.dirTxt, hcap:(p.hcap!=null?p.hcap:null), tier:p.tier, mk:p.mk, source:p.source,
+                       level:p.level||'', sig:(p.sig||[]).join('+'), note:p.note||'', hs:null, as:null, hit:null };
+           lib.push(n); idx[String(p.tid)] = n; }
+  }
+  /* 完场回填：只在当前快照窗口内回填（更早场次赛果不在 MATCHES 里，留空不猜，绝不伪造） */
+  for (const e of lib){
+    if (e.hit != null) continue;
+    const m = MATCHES.find(x => String(x.tid) === String(e.tid));
+    if (m && String(m.state) === '-1' && m.home_score != null && m.away_score != null){
+      e.hs = m.home_score; e.as = m.away_score;
+      const act = m.home_score > m.away_score ? 'W' : (m.home_score < m.away_score ? 'L' : 'D');
+      e.hit = (e.dir === act) ? 1 : 0;
+    }
+  }
+  pickLibSave(lib); return lib;
+}
+/* ★ 2026-10-10：优选精选面板排序模式 —— 默认「按开赛时间」（用户要看先后），可切「按强度」。
+   window._pickSort: 'time'（默认，开赛早的在前）| 'strength'（旧口径：精选/档位优先、头号概率降序）。 */
+if (window._pickSort !== 'strength') window._pickSort = 'time';
+/* 开赛时间排序键：必须拿真正的 YYYYMMDDHHMM 数字串比较 ——
+   直接比 "9:05" vs "10:00" 这种 HH:MM 字符串会把 9 点排到 10 点之后（字符串逐位比较的坑）。 */
+function _pickTimeKey(x){
+  try{
+    const t = kickTs(x && x.m || {});
+    /* kickTs 在 m.kickoff 缺失时会补成 day+'0000'（排最前，实则时刻未知）——
+       这种情况不信任它，落到下面用 heatKick 从 match_time_int 反推的 HH:MM 重拼。 */
+    if (/^\d{12}$/.test(t || '') && !/0000$/.test(t)) return t;
+  }catch(e){}
+  try{
+    const _s = String((x && x.time) || '00:00');
+    const _p = _s.split(':');
+    const hh = String(_p[0] || '00').padStart(2, '0'), mm = String((_p[1] || '00')).padStart(2, '0');
+    const d = String((x && x.m && (x.m.day || x.m._day)) || todayStr()).replace(/-/g, '');
+    return (/^\d{8}$/.test(d) ? d : todayStr()) + hh + mm;
+  }catch(e){ return '999999999999'; }
+}
+/* 统一排序入口：time 模式以开赛时间为主键、强度比较器只做同刻兜底；strength 模式走原强度比较器。 */
+function _pickSortDo(out, strengthCmp){
+  if (window._pickSort === 'strength'){ out.sort(strengthCmp); return out; }
+  out.sort((x, y) => String(_pickTimeKey(x)).localeCompare(String(_pickTimeKey(y))) || (strengthCmp ? strengthCmp(x, y) : 0));
+  return out;
+}
+function setPickSort(mode){
+  window._pickSort = (mode === 'strength') ? 'strength' : 'time';
+  try{ if (window._pickReRender) window._pickReRender(); }catch(e){}
+}
+/* 「本批精选用的盘口时刻」内容（供面板首次渲染 + 30s 节拍就地更新同一个条）。
+   取两个时间：① 球探 titan007 盘口更新时间（5 分钟一轮，最新）
+               ② 全量烘焙 generated（15 分钟一轮，精选结论就在这时重算）
+   以两者中较新的为"新鲜度"基准，>45 分钟标红提醒盘口已旧。 */
+function _pickSnapInner(){
+  try{
+    const t7 = (typeof t7LocalUpdated === 'function') ? (t7LocalUpdated() || '') : '';
+    let gTxt = '', ms = 0;
+    const g = (typeof BAKE_META !== 'undefined' && BAKE_META && BAKE_META.generated) || '';
+    if (g){
+      try{ const d = new Date(g), p = n=>String(n).padStart(2,'0');
+        if (!isNaN(d.getTime())){ gTxt = p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); ms = d.getTime(); } }catch(e){}
+    }
+    try{ if (t7){ const d2 = new Date(String(t7).replace(' ', 'T')); if (!isNaN(d2.getTime()) && d2.getTime() > ms) ms = d2.getTime(); } }catch(e){}
+    if (!t7 && !gTxt) return '';
+    let age = '';
+    if (ms){
+      const mins = Math.floor((Date.now() - ms) / 60000);
+      const txt = mins < 1 ? '刚刚' : (mins < 60 ? (mins + ' 分钟前') : (Math.floor(mins/60) + ' 小时' + (mins%60 ? (' ' + (mins%60) + '分') : '') + '前'));
+      const col = mins <= 15 ? 'var(--grn)' : (mins <= 45 ? 'var(--yel)' : 'var(--red)');
+      age = '　·　' + `<b style="color:${col}">${txt}</b>`;
+    }
+    return `🕒 <b>本批精选用的盘口</b>：`
+      + (t7 ? ('球探 <b style="color:var(--acc)">' + t7 + '</b>') : '')
+      + (t7 && gTxt ? '　｜　' : '')
+      + (gTxt ? ('全量重算 <b style="color:var(--acc)">' + gTxt + '</b>') : '')
+      + age
+      + `<span style="display:block;margin-top:3px">服务端每 <b>5 分钟</b> 重抓球探盘口、每 <b>15 分钟</b> 全量重抓并重算精选；`
+      + `页面检测到新版会<b>自动刷新</b>。停留期间<b>比分每 30 秒更新</b>，但方向/档位/让球要等下一轮快照推上来才会变。</span>`;
+  }catch(e){ return ''; }
+}
+/* A. 硬方向池：纯深盘（方向一致·无大热确认），再按市场头号概率分 精选/优选 */
+function buildHardPool(){
+  const today = panelDay(); const out = [];
+  for (const m of MATCHES){
+    const p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[m.tid] : null;
+    const a = p ? p.an : null;
+    if (!a || !a.dirCode || a.dirCode === 'D') continue;
+    const k = heatKick(m); if (k.day !== today) continue;
+    /* ★ 2026-10-10 改：此处不再丢弃已完场，改为打 ph 标记交给面板分流 ——
+       「未开赛+进行中」进可出手推荐表，「已完赛」进当日赛果回看表（仅回看、不当推荐）。
+       原 2026-10-09d 修复的诉求（别让踢完的场还挂在精选里当推荐）由分流保留，
+       同时补上"当日精选/优选打完后真实赛果与命中看得见"。 */
+    const ph = matchPhase(m);
+    const hc = (a.grade_hcap_a != null) ? a.grade_hcap_a : null;
+    if (hc == null || Math.abs(hc) < 0.8) continue;             // 只要深盘
+    if ((hc > 0 ? 'W' : 'L') !== a.dirCode) continue;           // 只要"热门方==模型方向"
+    const hS = a.heatSignal || {};
+    if (hS.strength >= 2 && hS.dir === a.dirCode) continue;     // 剔除大热确认（拥挤陷阱实测 48%）
+    const mk = (a.mk_h != null && a.mk_h > 0) ? Math.max(a.mk_h, a.mk_d, a.mk_a) : 0;
+    const conf = (a.conf != null) ? a.conf : ((a.value_score != null) ? a.value_score : null);
+    out.push({ tid:m.tid, m, ph, time:k.time, league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      dir:a.dirCode, dirTxt:labelWDL(a.dirCode), hcap:hc, a0:(a.a0!=null?+a.a0:null), p1:(a.p1!=null?+a.p1:null),
+      mk:Math.round(mk*100),
+      conf, tier:(mk >= 0.80 ? 'premium' : 'select'), isT1:(a.tier === 1), source:'硬方向池', sig:[], level:'' });
+  }
+  _pickSortDo(out, (x,y)=> ((y.tier==='premium'?1:0)-(x.tier==='premium'?1:0)) || (y.mk-x.mk) || ((y.conf||0)-(x.conf||0)) || String(x.time||'').localeCompare(String(y.time||'')));
+  return out;
+}
+/* B. 洋哥自传·问题盘三线索（a.plan，需 bake_detail 合并后才有值） */
+function buildPlanPool(){
+  const today = panelDay(); const ord = { PICK:0, MID:1, SMALL:2 }; const out = [];
+  for (const m of MATCHES){
+    const p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[m.tid] : null;
+    const a = p ? p.an : null;
+    if (!a) continue;
+    const pl = a.plan;
+    if (!pl || !pl.level || pl.level === 'SKIP' || pl.level === 'NONE') continue;
+    const k = heatKick(m); if (k.day !== today) continue;
+    /* ★ 2026-10-10 改（同 buildHardPool）：打 ph 标记交给面板分流，已完场进赛果回看而非丢弃。 */
+    const ph = matchPhase(m);
+    out.push({ tid:m.tid, m, ph, time:k.time, league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      dir:a.dirCode || null, dirTxt:(a.dirCode ? labelWDL(a.dirCode) : '观望'),
+      level:pl.level, sig:(pl.signals || []), note:pl.note || '', stakeText:pl.stakeText || '',
+      tier:null, mk:null, hcap:(a.grade_hcap_a != null ? a.grade_hcap_a : null), a0:(a.a0!=null?+a.a0:null), p1:(a.p1!=null?+a.p1:null), conf:(a.conf != null ? a.conf : null), source:'洋哥三线索' });
+  }
+  _pickSortDo(out, (x,y)=> ((ord[x.level]!=null?ord[x.level]:9)-(ord[y.level]!=null?ord[y.level]:9)) || String(x.time||'').localeCompare(String(y.time||'')));
+  return out;
+}
+/* C. 模型方向·研究参考（2026-10-15 增补）：dir 清晰(conf≥50) 但既非深盘、也非问题盘三线索的场，
+   单列"研究参考"，明确标注「非投注信号·无真实资金源」。与硬方向池(深盘)互补——把模型有看法但盘口
+   不够深、或没触发问题盘的场也曝光出来，避免整轮欧战因"正常盘空手"而完全不可见。 */
+function buildDirPool(){
+  const today = panelDay(); const out = [];
+  for (const m of MATCHES){
+    const p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[m.tid] : null;
+    const a = p ? p.an : null;
+    if (!a || !a.dirCode || a.dirCode === 'D') continue;
+    const k = heatKick(m); if (k.day !== today) continue;
+    const ph = matchPhase(m);
+    const hc = (a.grade_hcap_a != null) ? a.grade_hcap_a : null;
+    const conf = (a.conf != null) ? a.conf : 0;
+    if (conf < 50) continue;
+    // 已在硬方向池(深盘方向一致)或三线索里的不再重复
+    if (hc != null && Math.abs(hc) >= 0.8 && (hc > 0 ? 'W' : 'L') === a.dirCode) continue;
+    if (a.plan && a.plan.level && a.plan.level !== 'SKIP' && a.plan.level !== 'NONE') continue;
+    out.push({ tid:m.tid, m, ph, time:k.time, league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      dir:a.dirCode, dirTxt:labelWDL(a.dirCode), hcap:hc, a0:(a.a0!=null?+a.a0:null), p1:(a.p1!=null?+a.p1:null), mk:null,
+      conf, tier:null, isT1:(a.tier === 1), source:'模型方向·研究参考', sig:[], level:'', note:'非投注信号·无真实资金源', stakeText:'', heatUsable:!!((a.yg||{}).heatUsable) });
+  }
+  _pickSortDo(out, (x,y)=> ((y.conf||0)-(x.conf||0)) || String(x.time||'').localeCompare(String(y.time||'')));
+  return out;
+}
+/* ★ 2026-10-10：优选/精选/自传三线索表统一用这一格渲染「实时比分 / 赛果」，
+   口径与档位看板 tbScoreCell 完全一致：未开赛→预测Top3，进行中→当前比分，
+   已完赛→终场比分 + 主胜/平/客胜 + ✓命中/✗打脸（与赛前方向对撞）。 */
+function _pickScoreCell(x, dirChar){
+  try{
+    if (x && x.m) return tbScoreCell(x.m, x.ph || 'up', dirChar || x.dir || null, null, true);
+  }catch(e){}
+  return '<div class="tbs"><b style="color:var(--mut);font-weight:500">—</b><s>未开赛</s></div>';
+}
+/* ★ 实时比分节拍：只就地替换比分格（data-pscore），不整块重渲 panel。
+   整块 innerHTML 重渲会把面板滚动位置顶回顶部（用户正看表就被弹回去），且每拍重建全部池 + 写库太重；
+   这里按 tid 找到行数据重算比分格，仅在内容真变化时才写回 DOM。 */
+let _pickPoll = null, _pickRows = {};
+/* ★ 2026-10-25 修（实时比分永远不更新）：loadMatches 每 60s 会重建整个 MATCHES 数组为新对象，
+   而各板块的 _*Rows[tid].m 是面板打开时抓取的旧对象快照 → 之后永远指向旧比分。
+   这里在每次就地刷新前，按 tid 把 x.m 重新指到当前 MATCHES 的最新对象（含实时比分）。 */
+function _relinkRowM(rows){
+  if (!rows) return;
+  const MM = (typeof MATCHES !== 'undefined') ? MATCHES : null;
+  if (!MM || !MM.length) return;
+  const byTid = {};
+  for (const m of MM){ if (m && m.tid != null) byTid[String(m.tid)] = m; }
+  for (const tid in rows){ if (byTid[tid]) rows[tid].m = byTid[tid]; }
+}
+function _pickScoreTick(){
+  try{
+    _relinkRowM(_pickRows);
+    const root = document.getElementById('pickContent');
+    if (!root || !_pickRows) return;
+    const els = root.querySelectorAll('[data-pscore]');
+    for (let i = 0; i < els.length; i++){
+      const el = els[i], tid = el.getAttribute('data-pscore'), x = _pickRows[tid];
+      if (!x) continue;
+      const html = _pickScoreCell(x);
+      if (el.innerHTML !== html) el.innerHTML = html;
+    }
+    /* 让球列同步：场次由「未开赛」变「已完赛」时，从概率变为「实际让球结果 + ✓/✗」 */
+    const eh = root.querySelectorAll('[data-phcap]');
+    for (let i = 0; i < eh.length; i++){
+      const el = eh[i], tid = el.getAttribute('data-phcap'), x = _pickRows[tid];
+      if (!x) continue;
+      try{ const html = _pickHcapCell(x); if (el.innerHTML !== html) el.innerHTML = html; }catch(e){}
+    }
+    /* 盘口时刻条同步：让「距今 x 分钟」随时间自己走（面板不整块重渲，滚动位置不动） */
+    try{
+      const sb = document.getElementById('pickSnapBar');
+      if (sb && typeof _pickSnapInner === 'function'){
+        const h = _pickSnapInner();
+        if (h && sb.innerHTML !== h) sb.innerHTML = h;
+      }
+    }catch(e){}
+  }catch(e){}
+}
+/* ★ 2026-10-10：「让球到底买几球 / 买哪个」——用 λ/μ(Dixon-Coles) 算「让 k 球后」三项概率。
+   用户痛点：本面板只给胜平负方向(W/D/L)，但实盘是带让球的 —— 方向对 ≠ 让球后对
+   （典型：模型看主胜，实际只赢 1 球，买「主让 1 球」就是让平走水，白买）。
+   口径：引擎现 DC_RHO=0（独立 Poisson），故此处同源独立 Poisson，与卡片比分分布一致；
+   ⚠ 这是**模型推算**，非单独标定过的让球命中率 —— 展示时如实标注，不冒充实测。 */
+function _poisVec(l, N){ const r = []; let p = Math.exp(-l); r.push(p); for (let i = 1; i <= N; i++){ p *= l / i; r.push(p); } return r; }
+/* k>0 主让 k 球：让胜=GD>k / 让平=GD==k / 让负=GD<k（GD=主进球−客进球） */
+function _hcapWDL(lam, mu, k){
+  const N = 12, Ph = _poisVec(lam, N), Pa = _poisVec(mu, N);
+  let W = 0, D = 0, L = 0;
+  for (let i = 0; i <= N; i++){ const pi = Ph[i]; if (!(pi > 1e-12)) continue;
+    for (let j = 0; j <= N; j++){ const p = pi * Pa[j], gd = i - j;
+      if (gd > k) W += p; else if (gd === k) D += p; else L += p; } }
+  const s = W + D + L; if (!(s > 0)) return null;
+  return { W: W / s, D: D / s, L: L / s };
+}
+/* 该场模型 λ/μ：优先客户端实时分析，其次烘焙包 an.sc */
+function _pickLamMu(x){
+  try{
+    const m = x && x.m;
+    if (m && m.analysis && m.analysis.score && m.analysis.score.lambda != null)
+      return { lam: +m.analysis.score.lambda, mu: +m.analysis.score.mu };
+    const p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK && m) ? OFFLINE_PACK[m.tid] : null;
+    const sc = p && p.an && p.an.score;
+    if (sc && sc.lambda != null) return { lam: +sc.lambda, mu: +sc.mu };
+  }catch(e){}
+  return null;
+}
+function _pickHcapCell(x){
+  try{
+    const m = x.m || null;
+    let k = null, src = '';
+    const j = m ? jcOf(m) : null;
+    /* ① 竞彩官方让球数（hhad.goalLine 负=主让球 → k=主让球数）—— 用户能真买到的就是这个 */
+    if (j && j.hhad && j.hhad.goalLine != null && String(j.hhad.goalLine) !== ''){ k = -(+j.hhad.goalLine); src = 'official'; }
+    /* ② 非竞彩场次：用亚盘「实际临场盘」（按 0.25 球一档 snap，契合亚盘步进），不再粗暴取整到整数
+       —— 旧逻辑 Math.round 把 1.25 取整成 1、把 1.75 取整成 2，盘口错位导致"让胜/让负"与模型方向对不上。
+       ★ 2026-10-20：此值=引擎抓的实时临场亚盘（多公司中位），非推算——旧标"亚盘推算·非官方"误导，已改口径。 */
+    else if (x.hcap != null && Math.abs(x.hcap) >= 0.25){ k = Math.round(x.hcap * 4) / 4; src = 'asia'; }
+    if (k == null || !isFinite(k)) return '<span style="color:var(--mut)">—</span>';
+    const kTxt = k > 0 ? ('主让' + k + '球') : (k < 0 ? ('客让' + Math.abs(k) + '球') : '平手');
+    /* 已完赛：直接拿真实比分算让球结果，与模型赛前建议对撞（不马后炮改建议） */
+    const finHas = (x.ph === 'fin' && m && m.home_score != null && m.away_score != null && isFinite(+m.home_score));
+    const lm = _pickLamMu(x);
+    if (!lm) return `<div class="tbs"><b style="color:var(--mut);font-weight:500">${kTxt}</b><s style="text-decoration:none;color:var(--mut)">${src==='official'?'竞彩官方':'亚盘推算'}·λμ缺失</s></div>`;
+    const r = _hcapWDL(lm.lam, lm.mu, k);
+    if (!r) return '<span style="color:var(--mut)">—</span>';
+    const pct = v => Math.round(v * 100) + '%';
+    const items = [['让胜', r.W, 'W'], ['让平', r.D, 'D'], ['让负', r.L, 'L']].sort((a, b) => b[1] - a[1]);
+    const best = items[0];
+    /* ★ 诚实口径：模型 λ/μ 锚定在盘口线（λ−μ≈c_hcap），故在盘口线本身让胜/让负约五五开，
+       硬选一边本就是硬币 —— 只有某侧概率 ≥55% 才算"有明确倾向"，才标绿；否则标"均势·勿重注"，
+       不把 50% 的硬币当成信号。这正是对"让球准确率不高"的根因回应（不是算错，是线本身没 edge）。 */
+    const LEAN = 0.55;
+    const hasLean = (r.W >= LEAN || r.L >= LEAN);
+    let actTxt = '';
+    if (finHas){
+      const gd = (+m.home_score) - (+m.away_score);
+      const act = gd > k ? 'W' : (gd === k ? 'D' : 'L');
+      const lab = { W:'让胜', D:'让平', L:'让负' }[act];
+      const ok = (act === best[2]);
+      actTxt = `<s style="text-decoration:none">实际 <b style="color:var(--mut)">${m.home_score}:${m.away_score}</b> → <b style="color:var(--${act==='D'?'yel':(act==='W'?'red':'grn')})">${lab}</b> ${ok?'<b style="color:var(--grn)">✓</b>':'<b style="color:var(--red)">✗</b>'}</s>`;
+    }
+    const warn = (r.D >= 0.28) ? `<s style="text-decoration:none;color:var(--red);font-weight:600">⚠走水 ${pct(r.D)}</s>` : '';
+    /* ★ 2026-10-20：实盘亚盘口径——显示初盘→临场移动（升盘=资金压主、降盘=示弱），别再让用户猜"到底让几球"。 */
+    let srcTxt;
+    if (src === 'official'){
+      srcTxt = '竞彩官方让球';
+    } else {
+      let mv = '';
+      if (x.a0 != null && k != null){
+        const d = Math.round((k - x.a0) * 100) / 100;
+        mv = (d >= 0.25) ? ` ·初${x.a0}→临${k} <b style="color:var(--red)">↑升盘</b>`
+            : (d <= -0.25) ? ` ·初${x.a0}→临${k} <b style="color:var(--grn)">↓降盘</b>`
+            : ` ·初${x.a0}→临${k} 持平`;
+      }
+      srcTxt = `实时亚盘·临场盘${mv}`;
+    }
+    const goalTxt = `估算进球 主${lm.lam.toFixed(1)} / 客${lm.mu.toFixed(1)} / 共${(lm.lam+lm.mu).toFixed(1)}球`;
+    const leanTxt = hasLean ? '' : `<s style="text-decoration:none;color:var(--mut)">· 均势·勿重注</s>`;
+    return `<div class="tbs"><b style="color:var(--acc);font-weight:600">${kTxt}</b>`
+      + `<s style="text-decoration:none">${items.map(it => (hasLean && it === best ? `<b style="color:var(--grn)">${it[0]} ${pct(it[1])}</b>` : `<span style="color:var(--mut)">${it[0]} ${pct(it[1])}</span>`)).join(' / ')}</s>`
+      + `<s style="text-decoration:none;color:var(--mut)">${goalTxt}</s>`
+      + `<s style="text-decoration:none;color:var(--mut)">${srcTxt}${warn}</s>${leanTxt}${actTxt}</div>`;
+  }catch(e){ return '<span style="color:var(--mut)">—</span>'; }
+}
+/* ★ 用「不让球三项概率」网格拟合 λ/μ（独立 Poisson）。
+   关键：竞彩场次拿这个 λ/μ 去推「让 k 球后」概率才是**跨市场独立推断**；
+   若反过来用「让球赔」反解 λ/μ 再算让球后概率 = 自证循环（算出来就是官方隐含概率，毫无增量），必须避免。 */
+function _fitLamMuFromProbs(ph, pd, pa){
+  const N = 12; let best = null, be = 1e9;
+  for (let lh = 0.2; lh <= 4.8; lh += 0.1){ const Ph = _poisVec(lh, N);
+    for (let la = 0.2; la <= 4.8; la += 0.1){ const Pa = _poisVec(la, N);
+      let W = 0, D = 0, L = 0;
+      for (let i = 0; i <= N; i++){ const pi = Ph[i]; if (!(pi > 1e-12)) continue;
+        for (let j = 0; j <= N; j++){ const p = pi * Pa[j]; if (i > j) W += p; else if (i === j) D += p; else L += p; } }
+      const e = (W - ph) * (W - ph) + (D - pd) * (D - pd) + (L - pa) * (L - pa);
+      if (e < be){ be = e; best = [lh, la]; } } }
+  return best ? { lam: best[0], mu: best[1] } : null;
+}
+/* 竞彩场次 λ/μ 取数：①模型自有（an.sc，来自亚盘/欧赔拟合）②had 不让球官方赔率拟合（独立，推荐）
+   ③只剩 hhad 时反解 → 标 'circular' 自证循环，展示时如实标注不当事后诸葛 */
+function _jcLamMu(m, j){
+  try{
+    let an = (m && m.analysis) || null;
+    if (!an && typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK && OFFLINE_PACK[m.tid]) an = OFFLINE_PACK[m.tid].an;
+    const sc = (m && m.analysis && m.analysis.score) || (an && an.score);
+    if (sc && sc.lambda != null && !(an && an._src === 'jingcai_hhad')) return { lam:+sc.lambda, mu:+sc.mu, src:'model' };
+    if (j && j.had && +j.had.h > 1 && +j.had.d > 1 && +j.had.a > 1){
+      const ih = 1 / (+j.had.h), id = 1 / (+j.had.d), ia = 1 / (+j.had.a), s = ih + id + ia;
+      const r = _fitLamMuFromProbs(ih / s, id / s, ia / s);
+      if (r) return { lam:r.lam, mu:r.mu, src:'had' };
+    }
+    if (j && j.hhad){ const r = jcHhadToHad(j.hhad); if (r) return { lam:r.lh, mu:r.la, src:'circular' }; }
+  }catch(e){}
+  return null;
+}
+/* ★ 今日竞彩池：只要今天开售、且带官方让球盘(hhad)的场次 —— 这才是用户真能下注的那批 */
+function buildJcPool(){
+  const today = panelDay(); const out = [];
+  for (const m of MATCHES){
+    let j = null; try{ j = jcOf(m); }catch(e){}
+    if (!j || !j.hhad) continue;
+    const k0 = heatKick(m); if (k0.day !== today) continue;
+    const gl = j.hhad.goalLine;
+    if (gl == null || String(gl) === '') continue;
+    const k = -(+gl);
+    out.push({ tid:m.tid, m, jc:j, ph:matchPhase(m), time:k0.time, no:j.no || '',
+      league:cleanLeague(m), home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      k, lamMu:_jcLamMu(m, j) });
+  }
+  out.sort((x, y) => String(_pickTimeKey(x)).localeCompare(String(_pickTimeKey(y))));
+  return out;
+}
+const _pct = v => Math.round(v * 100) + '%';
+function _jcRow(x){
+  _pickRows[x.tid] = x;
+  const lm = x.lamMu;
+  const kTxt = x.k > 0 ? ('主让' + x.k + '球') : (x.k < 0 ? ('客让' + Math.abs(x.k) + '球') : '平手');
+  if (!lm) return `<tr>
+    <td>${timeCell({day:((x.m && (x.m.day || x.m._day)) || todayStr()), time:x.time}, true)}</td>
+    <td>${x.no}</td><td><b>${x.home}</b> vs <b>${x.away}</b></td>
+    <td><b style="color:var(--acc)">${kTxt}</b></td>
+    <td colspan="3" style="color:var(--mut)">无独立 λ/μ（仅让球盘，反解会自证循环）→ 不给建议</td></tr>`;
+  const rH = _hcapWDL(lm.lam, lm.mu, x.k), r0 = _hcapWDL(lm.lam, lm.mu, 0);
+  if (!rH || !r0) return `<tr><td colspan="7" style="color:var(--mut)">—</td></tr>`;
+  const itH = [['让胜', rH.W], ['让平', rH.D], ['让负', rH.L]].sort((a, b) => b[1] - a[1]);
+  const it0 = [['主胜', r0.W], ['平', r0.D], ['客胜', r0.L]].sort((a, b) => b[1] - a[1]);
+  const j = x.jc || {};
+  const oH = { '让胜':+(j.hhad && j.hhad.h), '让平':+(j.hhad && j.hhad.d), '让负':+(j.hhad && j.hhad.a) };
+  const o0 = { '主胜':+(j.had && j.had.h), '平':+(j.had && j.had.d), '客胜':+(j.had && j.had.a) };
+  /* 推荐只在 让胜/让负 里选（买"让平"= 买走水，不作为建议，只作风险提示） */
+  const candH = itH.filter(it => it[0] !== '让平');
+  const bH = candH[0], b0 = it0[0];
+  const evOf = (p, o) => (p && o && o > 1) ? (p * o - 1) : null;
+  const evH = evOf(bH[1], oH[bH[0]]), ev0 = evOf(b0[1], o0[b0[0]]);
+  /* 让平 ≥30% = 该档走水风险高，倾向改买不让球 */
+  let rec, recEv, recWhy;
+  if (rH.D >= 0.30){ rec = '买不让球·' + b0[0]; recEv = ev0; recWhy = '让球档走水 ' + _pct(rH.D); }
+  else if (evH != null && (ev0 == null || evH >= ev0) && evH > 0){ rec = '买' + kTxt + '·' + bH[0]; recEv = evH; recWhy = 'EV 更高'; }
+  else if (ev0 != null && ev0 > 0){ rec = '买不让球·' + b0[0]; recEv = ev0; recWhy = 'EV 更高'; }
+  else { rec = '无正 EV · 不买'; recEv = (evH != null || ev0 != null) ? Math.max(evH || -9, ev0 || -9) : null; recWhy = '两项 EV 均 ≤0'; }
+  const evCol = (recEv == null) ? 'var(--mut)' : (recEv > 0 ? 'var(--grn)' : 'var(--red)');
+  const evTxt = (recEv == null) ? '—' : (recEv > 0 ? '+' : '') + Math.round(recEv * 100) + '%';
+  const srcTag = lm.src === 'had' ? '<span style="color:var(--mut)">λμ由官方不让球赔拟合</span>'
+    : (lm.src === 'model' ? '<span style="color:var(--mut)">λμ模型自有</span>'
+    : '<span style="color:var(--red)">λμ由让球赔反解·自证循环仅参考</span>');
+  /* 已完赛：给真实结果与两个玩法的 ✓/✗（赛前建议 vs 实际，不马后炮改建议） */
+  let finTxt = '';
+  if (x.ph === 'fin' && x.m && x.m.home_score != null && x.m.away_score != null){
+    const gd = (+x.m.home_score) - (+x.m.away_score);
+    const actH = gd > x.k ? '让胜' : (gd === x.k ? '让平' : '让负');
+    const act0 = gd > 0 ? '主胜' : (gd === 0 ? '平' : '客胜');
+    const okH = (actH === bH[0]), ok0 = (act0 === b0[0]);
+    finTxt = `<s style="text-decoration:none">实际 <b>${x.m.home_score}:${x.m.away_score}</b> → 让球档 ${actH}${okH?'<b style="color:var(--grn)">✓</b>':'<b style="color:var(--red)">✗</b>'} / 不让球 ${act0}${ok0?'<b style="color:var(--grn)">✓</b>':'<b style="color:var(--red)">✗</b>'}</s>`;
+  }
+  return `<tr>
+    <td>${timeCell({day:((x.m && (x.m.day || x.m._day)) || todayStr()), time:x.time}, true)}</td>
+    <td>${x.no}</td>
+    <td><b>${x.home}</b> vs <b>${x.away}</b></td>
+    <td><b style="color:var(--acc)">${kTxt}</b></td>
+    <td>${itH.map(it => (it[0]==='让平' ? `<span style="color:${rH.D>=0.30?'var(--red)':'var(--mut)'}">让平 ${_pct(it[1])}</span>` : (it === bH ? `<b style="color:var(--grn)">${it[0]} ${_pct(it[1])}</b>` : `<span style="color:var(--mut)">${it[0]} ${_pct(it[1])}</span>`))).join(' / ')}</td>
+    <td>${it0.map(it => (it === b0 ? `<b style="color:var(--grn)">${it[0]} ${_pct(it[1])}</b>` : `<span style="color:var(--mut)">${it[0]} ${_pct(it[1])}</span>`)).join(' / ')}</td>
+    <td style="white-space:nowrap;color:var(--mut)">${lm ? `主${lm.lam.toFixed(1)}/客${lm.mu.toFixed(1)}/共${(lm.lam+lm.mu).toFixed(1)}` : '—'}</td>
+    <td><div class="tbs"><b style="color:var(--acc);font-weight:600">${rec}</b><s style="text-decoration:none;color:${evCol};font-weight:600">EV ${evTxt}</s><s style="text-decoration:none;color:var(--mut)">${recWhy} · ${srcTag}</s>${finTxt}</div></td>
+  </tr>`;
+}
+function _jcTbl(list, emptyTxt){
+  if (!list.length) return `<p class="note">${emptyTxt}</p>`;
+  return `<table class="htab"><thead><tr>
+    <th>开赛(月-日 时:分)</th><th>编号</th><th>对阵</th><th>官方让球</th><th>让球后概率(主队基准)</th><th>不让球概率</th><th>估算进球(主/客/共)</th><th>建议(含 EV)</th>
+  </tr></thead><tbody>${list.map(_jcRow).join('')}</tbody></table>`;
+}
+function _pickRow(x){
+  const dc = x.dir==='W' ? 'var(--acc)' : (x.dir==='L' ? 'var(--yel)' : 'var(--mut)');
+  _pickRows[x.tid] = x;   // 供实时比分节拍按 tid 就地更新
+  /* ★ 2026-10-10：时间列改印「MM-DD HH:MM」（showToday=true，不再因是今天就只印 HH:MM）——
+     带上日期后先后一眼可见，跨日凌晨场也不会被误当同一天乱插。 */
+  return `<tr>
+    <td>${timeCell({day:((x.m && (x.m.day || x.m._day)) || todayStr()), time:x.time}, true)}</td>
+    <td>${x.league}</td>
+    <td>${_srcBadge(x.m)}</td>
+    <td><b>${x.home}</b> vs <b>${x.away}</b></td>
+    <td>${_h2hBadge(x)}</td>
+    <td data-pscore="${x.tid}">${_pickScoreCell(x)}</td>
+    <td><b style="color:${dc}">${x.dirTxt}</b></td>
+    <td data-phcap="${x.tid}">${_pickHcapCell(x)}</td>
+    <td>${(()=>{ if(x.hcap==null) return '—'; const _t=(x.hcap>0?'主让':'客让')+' '+Math.abs(x.hcap).toFixed(2); let _mv=''; if(x.a0!=null){ const _d=Math.round((x.hcap-x.a0)*100)/100; _mv='<br><span style="font-size:10px;color:var(--mut)">'+(_d>=0.25?'<b style="color:var(--red)">↑升</b>':(_d<=-0.25?'<b style="color:var(--grn)">↓降</b>':'→平'))+' 初'+x.a0+'</span>'; } return '<b>'+_t+'</b>'+_mv; })()}</td>
+    <td>${(()=>{ try{ const a=(typeof OFFLINE_PACK!=='undefined'&&OFFLINE_PACK[x.tid])?OFFLINE_PACK[x.tid].an:null; return _eaPanluCellA(a); }catch(e){ return '<span style="font-size:10px;color:var(--mut)">—</span>'; } })()}</td>
+    <td style="font-size:10px;line-height:1.4">${(()=>{ try{ const a=(typeof OFFLINE_PACK!=='undefined'&&OFFLINE_PACK[x.tid])?OFFLINE_PACK[x.tid].an:null; return _eaPanluActionCellA(a); }catch(e){ return '<span style="font-size:10px;color:var(--mut)">—</span>'; } })()}</td>
+    <td style="font-size:10px;line-height:1.4;vertical-align:top">${(()=>{ try{ return _comboTierCell(x); }catch(e){ return '<span style="font-size:10px;color:var(--mut)">—</span>'; } })()}</td>
+    <td style="font-size:10px;line-height:1.3" title="${_tlTitleText(x.tid)}">${_coLiveCell({coLive:_coLiveOf(x)})}<div style="margin-top:3px;border-top:1px dashed var(--line);padding-top:2px">${_coEuCoreCell(x.tid)}</div><div style="margin-top:3px;border-top:1px dashed var(--line);padding-top:2px">${_coAsiaCoreCell(x.tid)}</div>${_tlCell(x.tid)}</td>
+    <td>${x.mk!=null ? x.mk+'%' : '—'}</td>
+    <td>${x.conf!=null ? x.conf : '—'}</td>
+    <td onclick="onAnalyze(event,'${x.tid}')" style="cursor:pointer;color:var(--acc)">明细</td>
+  </tr>`;
+}
+function _pickTbl(list, emptyTxt){
+  if (!list.length) return `<p class="note">${emptyTxt}</p>`;
+  return `<table class="htab"><thead><tr>
+    <th>开赛(月-日 时:分)</th><th>联赛</th><th>来源</th><th>对阵</th><th>历史交锋</th><th>实时比分/赛果</th><th>胜平负方向</th><th>让球怎么买(竞彩/整数盘)</th><th>亚盘盘口</th><th>庄家判读<br><span style="font-size:9px;font-weight:400">实水/折水+盘路</span></th><th>实操口诀<br><span style="font-size:9px;font-weight:400">怎么用这判读</span></th><th>系统方向<br><span style="font-size:9px;font-weight:400">监测·只读·不提供买法</span></th><th>🟠欧赔4家+亚盘4家<br><span style="font-size:9px;font-weight:400">逐家 初→临·升降</span></th><th>市场头号</th><th>置信</th><th>明细</th>
+  </tr></thead><tbody>${list.map(_pickRow).join('')}</tbody></table>`;
+}
+function _planRow(x){
+  const lv = { PICK:'自传精选推荐', MID:'优选·加重', SMALL:'小注' }[x.level] || x.level;
+  const col = { PICK:'var(--red)', MID:'var(--yel)', SMALL:'var(--mut)' }[x.level] || 'var(--mut)';
+  _pickRows[x.tid] = x;   // 供实时比分节拍按 tid 就地更新
+  /* ★ 2026-10-10：时间列改印「MM-DD HH:MM」（showToday=true，不再因是今天就只印 HH:MM）——
+     带上日期后先后一眼可见，跨日凌晨场也不会被误当同一天乱插。 */
+  return `<tr>
+    <td>${timeCell({day:((x.m && (x.m.day || x.m._day)) || todayStr()), time:x.time}, true)}</td>
+    <td>${x.league}</td>
+    <td>${_srcBadge(x.m)}</td>
+    <td><b>${x.home}</b> vs <b>${x.away}</b></td>
+    <td>${_h2hBadge(x)}</td>
+    <td data-pscore="${x.tid}">${_pickScoreCell(x)}</td>
+    <td><b style="color:${x.dir==='W'?'var(--acc)':x.dir==='L'?'var(--yel)':'var(--mut)'}">${x.dirTxt}</b></td>
+    <td data-phcap="${x.tid}">${_pickHcapCell(x)}</td>
+    <td><b style="color:${col}">${lv}</b></td>
+    <td style="font-size:10px;line-height:1.3">${_coLiveCell({coLive:_coLiveOf(x)})}</td>
+    <td>${x.sig.map(s=>`<span class="badge bN">${s}</span>`).join(' ')}</td>
+    <td>${x.stakeText}</td>
+    <td onclick="onAnalyze(event,'${x.tid}')" style="cursor:pointer;color:var(--acc)">明细</td>
+  </tr>`;
+}
+function _planTbl(list, emptyTxt){
+  if (!list.length) return `<p class="note">${emptyTxt}</p>`;
+  return `<table class="htab"><thead><tr>
+    <th>开赛(月-日 时:分)</th><th>联赛</th><th>来源</th><th>对阵</th><th>历史交锋</th><th>实时比分/赛果</th><th>胜平负方向</th><th>让球怎么买(竞彩/整数盘)</th><th>档位</th><th>🟠实时欧赔4家</th><th>问题盘线索</th><th>建议仓位</th><th>明细</th>
+  </tr></thead><tbody>${list.map(_planRow).join('')}</tbody></table>`;
+}
+function _libStats(lib, key, val){
+  const g = lib.filter(e => e[key] === val && e.hit != null);
+  const hit = g.filter(e => e.hit === 1).length;
+  return { n: g.length, hit, rate: g.length ? Math.round(hit / g.length * 100) : null };
+}
+function pickLibHTML(lib){
+  const done = lib.filter(e => e.hit != null);
+  const rows = lib.slice().sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')) || String(b.time||'').localeCompare(String(a.time||''))).slice(0, 60);
+  const sp = _libStats(lib,'tier','premium'), ss = _libStats(lib,'tier','select');
+  const gP = _libStats(lib,'level','PICK'), gM = _libStats(lib,'level','MID'), gS = _libStats(lib,'level','SMALL');
+  const stat = (l, s) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:12px">${l}：<b style="color:${(s.rate!=null&&s.rate>=80)?'var(--grn)':'var(--txt)'}">${s.rate!=null?s.rate+'%':'—'}</b> <span style="color:var(--mut)">(${s.hit}/${s.n})</span></span>`;
+  const rr = rows.map(e => {
+    const hitTxt = e.hit == null ? '<span style="color:var(--mut)">待赛/未回填</span>'
+      : (e.hit ? '<b style="color:var(--grn)">✓ 命中</b>' : '<b style="color:var(--red)">✗ 未中</b>');
+    const tag = e.tier === 'premium' ? '<span class="badge bW">精选</span>' : (e.tier === 'select' ? '<span class="badge bK">优选</span>' : `<span class="badge bN">${({PICK:'自传精选',MID:'加重',SMALL:'小注'})[e.level]||e.level}</span>`);
+    return `<tr><td>${e.date||''}</td><td>${e.time||''}</td><td>${e.league||''}</td><td><b>${e.home}</b> vs <b>${e.away}</b></td>
+      <td>${e.dirTxt||''}</td><td>${tag}</td><td>${e.hs!=null?(e.hs+':'+e.as):'—'}</td><td>${hitTxt}</td></tr>`;
+  }).join('');
+  return `<div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">📚 已入库留底（${lib.length} 场，其中 ${done.length} 场已回填赛果）</div>
+    <div style="margin:4px 0 8px">${stat('精选·硬方向池',sp)}${stat('优选·硬方向池',ss)}${stat('自传精选推荐(PICK)',gP)}${stat('自传加重(MID)',gM)}${stat('自传小注(SMALL)',gS)}</div>
+    ${lib.length?`<table class="htab"><thead><tr><th>日期</th><th>时间</th><th>联赛</th><th>对阵</th><th>方向</th><th>档位</th><th>比分</th><th>结果</th></tr></thead><tbody>${rr}</tbody></table>`:'<p class="note">暂无入库记录（本面板每次打开会把当日优选/精选自动入库）。</p>'}
+    <p class="note">入库＝把每次选出的场次留底到你本机（浏览器 localStorage），完场后自动回填赛果计命中。赛果只能在快照窗口内回填，更早的场次留空不猜。右上"累计"按已回填场次算，样本不足时不必当真。</p>`;
+}
+/* ★ 2026-10-12：真实战绩（硬方向池）实时复算 —— 直接戳破"命中率不错"错觉。
+   用当前已加载的 MATCHES + OFFLINE_PACK 复算面板"优选精选"的方向命中率，并从欧赔取热门方实赔，
+   算盈亏平衡线与 ROI：方向命中高（≈挑超级热门的自然胜率，零 alpha）≠ 赚钱，庄家抽水吃光利润。 */
+function _hpFavOdds(p){
+  try{
+    const e = p && p.odds && p.odds.eu; if(!e) return null;
+    let rows;
+    if (e['#'] || e.c){ const ks=e['#']||e.c, rs=e.r||e.rows; if(!ks||!rs) return null;
+      const I={}; ks.forEach((c,i)=>I[c]=i); const ai=I['a'],bi=I['b'],ci=I['c']; rows=rs.map(r=>({a:+r[ai],b:+r[bi],c:+r[ci]})); }
+    else if (Array.isArray(e)){ rows=e.map(r=>({a:+r.a,b:+r.b,c:+r.c})); }
+    else return null;
+    const favs=[]; for(const r of rows){ const a=r.a,b=r.b,c=r.c; if(![a,b,c].every(x=>isFinite(x)&&x>1)) continue; favs.push(Math.min(a,b,c)); }
+    if(!favs.length) return null; favs.sort((x,y)=>x-y); return favs[Math.floor(favs.length/2)];
+  }catch(e){ return null; }
+}
+function computeHardpoolTruth(){
+  const B = { '精选':[], '优选':[], '全部':[] };
+  for (const m of (typeof MATCHES!=='undefined'?MATCHES:[])){
+    const tid = m.tid;
+    const p = (typeof OFFLINE_PACK!=='undefined'&&OFFLINE_PACK)?OFFLINE_PACK[tid]:null;
+    const a = p?p.an:null; if(!a) continue;
+    if(!a.dirCode || a.dirCode==='D') continue;
+    const hc = a.grade_hcap_a; if(hc==null || Math.abs(hc)<0.8) continue;
+    if((hc>0?'W':'L')!==a.dirCode) continue;
+    const hs=a.heatSignal||{}; if(hs.strength>=2 && hs.dir===a.dirCode) continue;   // 拥挤陷阱剔除
+    const mk=Math.max(a.mk_h||0,a.mk_d||0,a.mk_a||0); const tier=(mk>=0.80)?'精选':'优选';
+    let act=null;
+    if(String(m.state)==='-1' && m.home_score!=null && m.away_score!=null && isFinite(+m.home_score))
+      act=(+m.home_score>(+m.away_score)?'W':((+m.home_score)<(+m.away_score)?'L':'D'));
+    else if(typeof FIN_MAP!=='undefined' && FIN_MAP[tid]){ const f=FIN_MAP[tid]; act=(f.hs>f.as?'W':(f.hs<f.as?'L':'D')); }
+    if(act==null) continue;                                  // 未完场
+    const hit=(a.dirCode===act)?1:0;
+    const fo=_hpFavOdds(p);
+    const rec={tier,hit,fo,mk:mk*100}; B[tier].push(rec); B['全部'].push(rec);
+  }
+  function stat(arr){
+    const n=arr.length, hits=arr.filter(x=>x.hit).length;
+    const rate=n?(hits/n*100):null;
+    const avgMk=n?(arr.reduce((s,x)=>s+x.mk,0)/n):null;
+    const wOdds=arr.filter(x=>x.fo!=null);
+    const avgOdds=wOdds.length?(wOdds.reduce((s,x)=>s+x.fo,0)/wOdds.length):null;
+    const be=avgOdds?(100/avgOdds):null;
+    const roi=wOdds.length?((wOdds.reduce((s,x)=>s+(x.hit?(x.fo-1):(-1)),0)/wOdds.length)*100):null;
+    return {n,hits,rate,avgMk,avgOdds,be,roi};
+  }
+  return { 精选:stat(B['精选']), 优选:stat(B['优选']), 全部:stat(B['全部']) };
+}
+function hardpoolTruthBanner(){
+  try{
+    const S=computeHardpoolTruth(); const f=S['全部']; if(!f||!f.n) return '';
+    const _c=v=>(v==null)?'var(--mut)':(v>=0?'var(--grn)':'var(--red)');
+    const _p=v=>(v==null)?'—':(Math.round(v*10)/10)+'%';
+    const _o=v=>(v==null)?'—':(Math.round(v*1000)/1000).toFixed(3);
+    const _r=v=>(v==null)?'—':(v>0?'+':'')+(Math.round(v*10)/10)+'%';
+    const verdict=(f.roi!=null&&f.roi<0)?'🔴 实际亏钱（庄家抽水吃光利润）':((f.roi!=null&&f.roi>0)?'🟢 实际盈利':'—');
+    const mkTxt=(f.avgMk!=null)?Math.round(f.avgMk)+'%':'—';
+    return `<div style="margin:0 0 10px;padding:10px 12px;border:1px solid var(--red);border-radius:8px;background:rgba(248,81,73,.06)">
+      <b style="color:var(--red)">⚠ 真实战绩（已完场·硬方向池·实时复算）</b>
+      <span style="font-size:12px;color:var(--mut)">　方向命中 <b style="color:${_c(f.roi)}">${_p(f.rate)}</b> ｜ 平均头号概率 <b>${mkTxt}</b> ｜ 平均热门实赔 <b>${_o(f.avgOdds)}</b> ｜ 盈亏平衡需 <b style="color:var(--yel)">${_p(f.be)}</b> ｜ 实际 ROI <b style="color:${_c(f.roi)}">${_r(f.roi)}</b> ｜ 样本 ${f.n} 场</span>
+      <div style="font-size:12px;margin-top:4px;color:var(--mut)">📌 方向命中看着高，本质只是「挑头号概率 ${mkTxt} 的超级热门，它们本来就赢这么多（零 alpha）」。庄家实赔只给 ${_o(f.avgOdds)}，要 ${_p(f.be)} 命中才回本，你只中 ${_p(f.rate)} ⇒ <b style="color:var(--red)">${verdict}，别被方向命中率骗了，看 ROI。</b></span>
+      ${f.n>=20?`<div style="font-size:12px;margin-top:3px;color:var(--mut)">精选 ${_p(S['精选'].rate)}（${S['精选'].n}场·ROI ${_r(S['精选'].roi)}）｜优选 ${_p(S['优选'].rate)}（${S['优选'].n}场·ROI ${_r(S['优选'].roi)}）</div>`:`<div style="font-size:11px;margin-top:3px;color:var(--mut)">（样本不足 20 场，数值仅供参考，莫当结论）</div>`}
+    </div>`;
+  }catch(e){ return ''; }
+}
+function pickPanelHTML(hard, plan, dir, lib, RD){
+  /* ★ 2026-10-10 分流：未开赛+进行中 = 可出手推荐；已完赛 = 当日赛果回看（不再当推荐，只回看赛果/命中）。 */
+  const hardAct = hard.filter(x=>x.ph !== 'fin'), hardFin = hard.filter(x=>x.ph === 'fin');
+  const planAct = plan.filter(x=>x.ph !== 'fin'), planFin = plan.filter(x=>x.ph === 'fin');
+  const pp = hardAct.filter(x=>x.tier==='premium'), ps = hardAct.filter(x=>x.tier==='select');
+  const ppT1 = pp.filter(x=>x.isT1);   // ★ 精选·下注级 = 精选 ∩ 引擎 tier=1
+  const ppT1m85 = pp.filter(x=>x.isT1 && x.mk >= 85);   // ★ 2026-10-09g：最硬子集 = 下注级 ∩ 头号≥85
+  const pP = planAct.filter(x=>x.level==='PICK'), pM = planAct.filter(x=>x.level==='MID'), pS = planAct.filter(x=>x.level==='SMALL');
+  /* ★ 今日竞彩池：这批才是用户真能在竞彩下注的场次（精选/优选池实测 0 场竞彩 —— 深盘判据依赖亚盘 grade_hcap_a，
+     竞彩场次多缺亚盘数据故被过滤，这也是"精选里看不到让球怎么买"的根因，故单独成段）。 */
+  let jcAll = []; try{ jcAll = buildJcPool(); }catch(e){ jcAll = []; }
+  const sc = (RD && RD.pickScan) ? RD.pickScan : null;
+  const pdArr = (RD && RD.pickDaily) ? RD.pickDaily : [];
+  const ddArr = (RD && RD.deepHist && RD.deepHist.daily) ? RD.deepHist.daily : [];
+  const sP = sc && sc.pd_mk80, sS = sc && sc.pd, sT1 = sc && sc.pd_t1_mk80, sT1m85 = sc && sc.pd_t1_mk85;
+  /* 自传三线索历史回测：跨日 join 受限（API tid 重编）样本极少，n<20 的口径不展示（避免 1/3=33% 这种假数误导）。 */
+  const pc = (RD && RD.planCalib) ? RD.planCalib.filter(x => x.n >= 20) : [];
+  const pcHTML = pc.length ? `<div style="margin:6px 0 2px;font-size:12px">${pc.map(x=>{const lb={PICK:'自传精选推荐',MID:'自传加重',SMALL:'自传小注'}[x.k]||x.k; const col={PICK:'var(--red)',MID:'var(--yel)',SMALL:'var(--mut)'}[x.k]; return `<span style="display:inline-block;margin:0 10px 4px 0">${lb}：方向 <b style="color:${col}">${x.rate}%</b> <span style="color:var(--mut)">(${x.hit}/${x.n})</span>${x.roi!=null?` · ROI <b style="color:${x.roi>0?'var(--grn)':'var(--red)'}">${x.roi>0?'+':''}${x.roi}%</b>`:''}</span>`;}).join('')}</div>` : `<div style="margin:6px 0 2px;font-size:12px;color:var(--mut)">自传三线索历史回测：①大热必死依赖北单当日快照、无历史存档→PICK 档恒缺样本，诚实标注「无法验证」；②③(聪明钱背离+权威分歧)命中率来自 backtest_plan.json 离线回测（MID 27/SMALL 186 场），已如实展示，不编数。</div>`;
+  /* ★ 排序切换条：默认按开赛时间（早→晚），可切回强度优先 */
+  const _sortMode = (window._pickSort === 'strength') ? 'strength' : 'time';
+  /* ★ 2026-10-10：盘口快照时刻条 —— 回答「这批精选是拿几点几分的盘口算的」。
+     机制实情：线上是静态托管（无同源代理）→ 页面走烘焙快照口径，精选/优选读 packs[tid].an；
+     服务端每 5 分钟重抓球探盘口、每 15 分钟全量重抓并重算一次，页面检测到新版本会自动重载。
+     ⇒ 精选是「批次式跟随临场」，不是逐秒实时。把这批盘口的时刻印出来，
+       免得把 45 分钟前的旧盘口当成此刻的临场盘口在看。 */
+  const _snapInner = _pickSnapInner();
+  const _sortBar = `<div style="margin:0 0 10px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:12px">
+      <b style="color:var(--mut)">排序</b>：
+      <b onclick="setPickSort('time')" style="cursor:pointer;color:${_sortMode==='time'?'var(--acc)':'var(--mut)'};border-bottom:${_sortMode==='time'?'2px solid var(--acc)':'none'}">⏰ 开赛时间（早→晚）</b>
+      　|　
+      <b onclick="setPickSort('strength')" style="cursor:pointer;color:${_sortMode==='strength'?'var(--acc)':'var(--mut)'};border-bottom:${_sortMode==='strength'?'2px solid var(--acc)':'none'}">💪 强度优先（精选/档位 · 头号概率）</b>
+      <span style="color:var(--mut);margin-left:8px">当前：<b style="color:var(--acc)">${_sortMode==='time'?'开赛时间':'强度优先'}</b></span>
+    </div>`;
+  /* ★ 让球口径说明：解释"方向对但让球不准"的根因，以及本列怎么读 */
+  const _hcapNote = `<p class="note">🎯 <b>「让球怎么买」怎么读</b>（这是"方向对、让球却算不准"的根因）：
+    竞彩/整数盘只卖<b>整数让球</b>（让1球、让2球…），而「亚盘盘口」是连续盘（如 -1.25 = 一球球半），<b>两者不是一回事</b>：
+    模型看主胜、实际只赢 1 球，买「主让1球」就是<b>让平走水</b>（退还本金，白买）。
+    本列：①优先取<b>竞彩官方让球数</b>（hhad.goalLine，即你能真买到的那一档）；非竞彩场次用亚盘盘口取整<b>推算</b>，并如实标注「亚盘推算·非官方」。
+    ②用模型 λ/μ 算该让球数下的 <b>让胜 / 让平 / 让负</b> 三项概率，<b style="color:var(--grn)">绿色 = 概率最高项</b>；
+    <b style="color:var(--red)">让平 ≥28% 会标 ⚠走水</b>（该档风险高，慎买或改买不让球胜平负）。
+    已完赛场次额外给出<b>真实比分对应的让球结果 + ✓/✗</b>（与赛前模型建议对撞，不马后炮改建议）。
+    ⚠ 口径声明：这是<b>模型推算概率</b>，<b>不是单独标定过的让球命中率</b>——上方 96%/85% 那几个数是胜平负方向的实测，别混为一谈。
+    另：本列新增「<b>估算进球 主λ/客μ/共</b>」——来自模型 Dixon-Coles 预期进球（λ+μ 即预期总进球，越大盘口越深），供你判断让球深浅与大小球。
+    <b style="color:var(--red)">诚实提示</b>：模型 λ/μ 锚定在盘口线（λ−μ≈盘口），故在盘口线本身让胜/让负本就<b>约五五开</b>，硬选一边等同硬币；只有某侧概率<b>≥55%</b>才标绿算"有明确倾向"，否则标「均势·勿重注」，不把 50% 的硬币当信号。</p>`;
+  /* ★ 让几球最稳（2026-10-18 刷新·修正盘口约定）：用 _replay_finish(9180场·8615完场·5846有亚盘) 实测每个盘口线的"让胜/让平/让负"。
+     盘口约定已用欧赔核验：a>0=主队让球(主热门)，a<0=客队让球(客热门)，|a|=让球数。
+     核心结论：① 买<b>让球盘(穿盘)</b>浅盘最稳（0.5→55.7% / 0.75→59.9%），中深盘(1.0~1.5)穿盘反而差（40~49%，且1.0/2.0有20~27%走水）；
+     ② 深盘(≥2)热门方<b>赢球率</b>极高（2→79% / 2.5→89% / 3→92%）是"大热门本来就常赢"的常识，不是模型 alpha；
+     ⇒ 诚实口径：买让球选<b>浅盘</b>，深盘适合买<b>独赢/胜平负</b>而非让球。表为静态标定（2026-10-18刷新），与实时盘无关。 */
+  const _hcapStableTable = `<div style="font-weight:700;margin:14px 0 4px;color:var(--acc)">📐 让几球最稳？（8615 场已完场·5846 场有亚盘真实标定 · 让球方 = 热门方）</div>
+   <table class="htab"><thead><tr><th>让球线</th><th>样本</th><th>让胜(穿盘)</th><th>让平(走水)</th><th>让负(输盘)</th><th>热门方赢球率</th><th>结论</th></tr></thead><tbody>
+     <tr><td>0.25</td><td>1588</td><td style="color:var(--red)">47.9%</td><td>0%</td><td>52.1%</td><td>47.9%</td><td>平手变体·略偏输盘</td></tr>
+     <tr><td>0.5</td><td>1177</td><td style="color:var(--grn)">55.7%</td><td>0%</td><td>44.3%</td><td>55.7%</td><td>浅盘·穿盘最稳之一</td></tr>
+     <tr><td>0.75</td><td>943</td><td style="color:var(--grn)">59.9%</td><td>0%</td><td>40.1%</td><td>59.9%</td><td>浅盘·穿盘最稳</td></tr>
+     <tr><td>1.0</td><td>643</td><td style="color:var(--red)">40.1%</td><td style="color:var(--yel)">26.6%</td><td>33.3%</td><td>66.7%</td><td>走水多·穿盘差</td></tr>
+     <tr><td>1.25</td><td>379</td><td>48.0%</td><td>0%</td><td>52.0%</td><td>72.6%</td><td>深盘·穿盘一般</td></tr>
+     <tr><td>1.5</td><td>507</td><td>48.7%</td><td>0%</td><td>51.3%</td><td>71.4%</td><td>深盘·穿盘一般</td></tr>
+     <tr><td>1.75</td><td>168</td><td style="color:var(--grn)">51.2%</td><td>0%</td><td>48.8%</td><td>79.2%</td><td>深盘·穿盘尚可</td></tr>
+     <tr><td>2.0</td><td>130</td><td style="color:var(--red)">39.2%</td><td style="color:var(--yel)">20.0%</td><td>40.8%</td><td>79.2%</td><td>走水多·穿盘差</td></tr>
+     <tr><td>2.5</td><td>117</td><td style="color:var(--grn)">53.0%</td><td>0%</td><td>47.0%</td><td>88.9%</td><td>大热·穿盘尚可</td></tr>
+     <tr><td>3.0</td><td>118</td><td style="color:var(--grn)">50.8%</td><td style="color:var(--yel)">6.8%</td><td>42.4%</td><td>91.5%</td><td>大热·样本小</td></tr>
+   </tbody></table>
+   <p class="note">📌 <b>怎么读这张表</b>：①<b>让胜(穿盘)</b>=让球方净胜 > 让球数（买"主让1球"要赢盘=主队净胜≥2）；<b>让平(走水)</b>=恰好等于（退本金）；<b>让负(输盘)</b>=净胜 < 让球数。
+     ② <b>"让几球最稳"的诚实答案 = 浅盘（0.5 / 0.75）让球穿盘最可靠（≈56~60%）</b>；中深盘(1.0~1.5)让球方常赢球但<b>赢不够盘</b>，穿盘反而只有 40~49%（且 1.0/2.0 还有 20~27% 走水）；深盘(≥2)热门方赢球率极高(79~92%)但穿盘率回到 ~49~54%。
+     ③ 上方"精选96%/优选85%/深盘81.7%"是<b>深盘热门方的"赢球率"期望</b>（大热门本来就常赢，不是模型多厉害的 alpha）；它<b>不等于</b>让球穿盘命中率。
+     所以：<b>买让球选浅盘，买独赢/胜平负才考虑深盘大热门</b>。表为静态标定（数据源 9180 场完场·2026-10-18 刷新），仅作历史参考，不替代实时盘口。</p>`;
+  const hist = (sP||sS) ? `<div class="rstats" style="margin-top:8px">
+      ${sP?`<div class="rcard"><div class="rn" style="color:var(--grn)">${sP.rate}%</div><div class="rl">精选 · 纯深盘∩头号≥80%</div><div class="rr" style="color:green">方向命中 ${sP.hit}/${sP.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">7870 场完场真值标定</div></div>`:''}
+      ${sT1?`<div class="rcard" style="border-color:var(--grn)"><div class="rn" style="color:var(--grn)">${sT1.rate}%</div><div class="rl">精选·下注级 · ∩模型tier=1</div><div class="rr" style="color:green">方向命中 ${sT1.hit}/${sT1.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">pd_t1_mk80 · 最硬子集</div></div>`:''}
+      ${sT1m85?`<div class="rcard" style="border-color:var(--grn);background:linear-gradient(135deg,var(--bg),rgba(0,128,0,.08))"><div class="rn" style="color:var(--grn)">${sT1m85.rate}%</div><div class="rl">精选·下注级·头号≥85</div><div class="rr" style="color:green">方向命中 ${sT1m85.hit}/${sT1m85.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">pd_t1_mk85 · 最最硬子集</div></div>`:''}
+      ${sS?`<div class="rcard"><div class="rn" style="color:var(--acc)">${sS.rate}%</div><div class="rl">优选 · 纯深盘(方向一致·无大热)</div><div class="rr" style="color:green">方向命中 ${sS.hit}/${sS.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">同上标定 · 拥挤对照 ${sc&&sc.crowd?sc.crowd.rate+'%':'48%'}(深盘+大热)</div></div>`:''}
+    </div>` : '<p class="note">历史标定数据加载中…（复盘库未就绪时暂隐，稍后重开即可见）</p>';
+  /* ★ 2026-10-09e：精选/优选 逐日命中（自我证伪）—— 与头条 pickScan 同谓词，逐日稳定性回答"是否靠运气" */
+  const pdDailyHTML = (() => {
+    const _d = pdArr.filter(x => (x.selN > 0 || x.premN > 0 || x.t1N > 0)).slice(-20);
+    if (!_d.length) return '';
+    const _avg = (k) => { const xs = _d.map(x => x[k]).filter(v => v != null); return xs.length ? Math.round(xs.reduce((s, v) => s + v, 0) / xs.length) : null; };
+    const aPrem = _avg('premRate'), aSel = _avg('selRate'), aT1 = _avg('t1Rate'), aCrowd = _avg('crowdRate');
+    return `<div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">📈 精选/优选 逐日命中（自我证伪 · 近 ${_d.length} 天有样本日）</div>
+   <table class="htab"><thead><tr><th>日期</th><th>精选(头号≥80)</th><th>命中率</th><th>精选·下注级(t1)</th><th>命中率</th><th>优选(纯深盘)</th><th>命中率</th><th>拥挤(深盘+大热)</th><th>命中率</th></tr></thead><tbody>
+     ${_d.map(x => `<tr>
+       <td>${x.date}</td>
+       <td>${x.premN ? x.premHit + '/' + x.premN : '—'}</td>
+       <td style="color:${x.premRate != null && x.premRate >= 70 ? 'green' : 'var(--red)'}">${x.premRate != null ? x.premRate + '%' : '—'}</td>
+       <td>${x.t1N ? x.t1Hit + '/' + x.t1N : '—'}</td>
+       <td style="color:${x.t1Rate != null && x.t1Rate >= 70 ? 'green' : 'var(--red)'}">${x.t1Rate != null ? x.t1Rate + '%' : '—'}</td>
+       <td>${x.selN ? x.selHit + '/' + x.selN : '—'}</td>
+       <td style="color:${x.selRate != null && x.selRate >= 70 ? 'green' : 'var(--red)'}">${x.selRate != null ? x.selRate + '%' : '—'}</td>
+       <td>${x.crowdN ? x.crowdHit + '/' + x.crowdN : '—'}</td>
+       <td style="color:${x.crowdRate != null && x.crowdRate < 55 ? 'var(--red)' : 'inherit'}">${x.crowdRate != null ? x.crowdRate + '%' : '—'}</td>
+     </tr>`).join('')}
+   </tbody></table>
+   <p class="note">近 ${_d.length} 天日均：精选 <b style="color:green">${aPrem != null ? aPrem + '%' : '—'}</b> · 精选·下注级 <b style="color:green">${aT1 != null ? aT1 + '%' : '—'}</b> · 优选 <b style="color:green">${aSel != null ? aSel + '%' : '—'}</b> · 拥挤 <b style="color:var(--red)">${aCrowd != null ? aCrowd + '%' : '—'}</b>。证明"最硬方向池"稳定可复现（非单日运气）；拥挤池系统性劣于精选/优选，是面板剔除大热确认的依据。</p>`;
+  })();
+  /* ★ 2026-10-09f：纯深盘视图逐日表并一屏 —— 与「纯深盘筛选视图」同口径(deepDaily)，无需切视图 */
+  const deepDailyHTML = (() => {
+    const _d = ddArr.filter(x => (x.pureN > 0)).slice(-20);
+    if (!_d.length) return '';
+    const _avg = (k) => { const xs = _d.map(x => x[k]).filter(v => v != null); return xs.length ? Math.round(xs.reduce((s, v) => s + v, 0) / xs.length) : null; };
+    const aPure = _avg('pureRate'), aCrowd = _avg('crowdRate');
+    return `<div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">📊 纯深盘逐日（同「纯深盘筛选视图」· 已并至此屏）</div>
+   <table class="htab"><thead><tr><th>日期</th><th>纯深盘</th><th>命中率</th><th>拥挤</th><th>命中率</th></tr></thead><tbody>
+     ${_d.map(x => `<tr>
+       <td>${x.date}</td>
+       <td>${x.pureN ? x.pureHit + '/' + x.pureN : '—'}</td>
+       <td style="color:${x.pureRate != null && x.pureRate >= 70 ? 'green' : 'var(--red)'}">${x.pureRate != null ? x.pureRate + '%' : '—'}</td>
+       <td>${x.crowdN ? x.crowdHit + '/' + x.crowdN : '—'}</td>
+       <td style="color:${x.crowdRate != null && x.crowdRate < 55 ? 'var(--red)' : 'inherit'}">${x.crowdRate != null ? x.crowdRate + '%' : '—'}</td>
+     </tr>`).join('')}
+   </tbody></table>
+   <p class="note">近 ${_d.length} 天纯深盘日均 <b style="color:green">${aPure != null ? aPure + '%' : '—'}</b> · 拥挤日均 <b style="color:var(--red)">${aCrowd != null ? aCrowd + '%' : '—'}</b>。（与本屏上表「优选/拥挤」列同口径；原仅在「纯深盘筛选视图」可见，现合并到此屏，无需切视图。）</p>`;
+  })();
+  /* ★ 2026-10-28 双栏分离（用户选A·晨间锁定快照 + 实时监测）：
+     洋哥自传三线索(PICK/MID/SMALL)靠 stakePlan 实时信号逐场翻牌，随资金流跳变是特性；
+     首次打开当天把当前 PICK/MID/SMALL 集合锁进 localStorage(按日期)，整日不再变，作稳定参考；
+     下方 pP/pM/pS 仍按实时计算 =「实时监测」。锁定=首次打开当天（非严格09:00）。 */
+  const _dOf2 = ds => { const d = String(ds == null ? '' : ds).replace(/[^0-9]/g, '').slice(0, 8); return d.length === 8 ? (d.slice(4, 6) + '-' + d.slice(6, 8)) : String(ds == null ? '—' : ds); };
+  const todayLabel = _dOf2((typeof panelDay === 'function') ? panelDay() : ((typeof todayStr === 'function' ? todayStr() : '')));
+  const _snapKey = 'wb_pickSnap2_' + todayLabel;
+  let _snap = null;
+  try { const _s = localStorage.getItem(_snapKey); if (_s) _snap = JSON.parse(_s); } catch(e){}
+  const _livePickTids = {};
+  pP.forEach(r => { if (r.tid) _livePickTids[r.tid] = 'PICK'; });
+  pM.forEach(r => { if (r.tid) _livePickTids[r.tid] = 'MID'; });
+  pS.forEach(r => { if (r.tid) _livePickTids[r.tid] = 'SMALL'; });
+  if (!_snap || !Array.isArray(_snap) || !_snap.length){
+    _snap = Object.keys(_livePickTids).map(tid => ({ tid: tid, level: _livePickTids[tid] }));
+    try { localStorage.setItem(_snapKey, JSON.stringify(_snap)); } catch(e){}
+  }
+  function _snapLookup(tid){
+    try {
+      const _m = (typeof MATCHES !== 'undefined' && MATCHES) ? MATCHES.find(x => x && String(x.tid) === String(tid)) : null;
+      if (_m) return { home: displayTeam(_m,'home'), away: displayTeam(_m,'away'), time: String(_m.kickoff||'').slice(-5)||'—', date: _dOf2(_m && (_m._day || _m.day)) };
+      const _p = (typeof OFFLINE_PACK!=='undefined'&&OFFLINE_PACK)?OFFLINE_PACK[tid]:null;
+      const _a = _p?_p.an:null;
+      if (_a) return { home: (_a.home||''), away:(_a.away||''), time:'—', date:'' };
+    } catch(e){}
+    return null;
+  }
+  let snapHTML = '<div style="font-weight:700;margin:14px 0 4px;color:#16a34a">📌 今日精选快照（' + todayLabel + '·首次打开当天锁定·整日不变）</div>';
+  snapHTML += '<div style="font-size:11px;color:var(--mut);margin:0 0 6px;line-height:1.5">以下为今日<b>首次打开看板时锁定的 PICK/MID/SMALL 清单</b>，整日不再随资金流翻牌，作稳定参考；下方「实时监测」段（精选推荐 / 优选加重 / 小注）仍逐场随赔率·资金实时变化。</div>';
+  if (!_snap.length){
+    snapHTML += '<p class="note">今日锁定时刻暂无 PICK/MID/SMALL 场次（若此后出现破绽盘，会在下方实时监测段显示）。</p>';
+  } else {
+    snapHTML += '<table class="htab"><thead><tr><th>对阵</th><th>锁定级别</th><th>模型方向</th></tr></thead><tbody>';
+    for (const s of _snap){
+      const info = _snapLookup(s.tid);
+      const _p = (typeof OFFLINE_PACK!=='undefined'&&OFFLINE_PACK)?OFFLINE_PACK[s.tid]:null;
+      const _a = _p?_p.an:null;
+      const _dir = (_a && _a.dirCode && _a.dirCode!=='D' && _a.dirCode!=='—') ? labelWDL(_a.dirCode) : '—';
+      const _lvC = s.level==='PICK' ? '#e54545' : (s.level==='MID' ? '#f97316' : '#8b98a9');
+      const _lvBg = s.level==='PICK' ? '#fee2e2' : (s.level==='MID' ? '#fef3c7' : '#f1f5f9');
+      const team = info ? ('<b>'+info.home+'</b> vs <b>'+info.away+'</b><div style="font-size:10px;opacity:.55">'+info.date+' '+(info.time&&info.time!=='00:00'?info.time:'')+'</div>') : ('tid '+s.tid);
+      snapHTML += '<tr><td>'+team+'</td><td><span style="background:'+_lvBg+';color:'+_lvC+';padding:2px 8px;border-radius:6px;font-weight:700;font-size:12px">'+s.level+'</span></td><td>'+_dir+'</td></tr>';
+    }
+    snapHTML += '</tbody></table>';
+  }
+  return `<div style="margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)">
+      <b style="color:var(--acc)">⭐ 今日优选精选</b>
+      <span style="font-size:12px;color:var(--mut)">　精选 <b style="color:var(--acc)">${pp.length}</b> 场（其中下注级 <b style="color:var(--grn)">${ppT1.length}</b> · 头号≥85 <b style="color:var(--grn)">${ppT1m85.length}</b>） · 优选 <b>${ps.length}</b> 场 · 洋哥自传问题盘 <b>${planAct.length}</b> 场 · 模型方向·研究参考 <b style="color:#6aa0ff">${dir.length}</b> 场 · <b style="color:var(--acc)">今日竞彩 ${jcAll.length}</b> 场</span>
+    </div>
+    ${hardpoolTruthBanner()}
+    <div style="margin:0 0 8px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:11.5px;color:var(--mut)">🕒 实时欧赔4家（365/立博/威廉/英特）更新于 <b style="color:var(--acc)">${(typeof window!=='undefined'&&window.__coLiveUpdated)?window.__coLiveUpdated:'构建快照'}</b> · 每3分钟自动刷新 · 表格「🟠实时欧赔4家」列显示各家主胜即时赔率（▲升/▼降 = 对比初盘）</div>
+    <div id="pickSnapBar" style="margin:0 0 10px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:12px;color:var(--mut)">${_snapInner}</div>
+    ${_sortBar}
+    <div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">🎯 今日竞彩 · 让球到底怎么买（官方让球数 · ${jcAll.length} 场 · 这是你真能下注的那批）</div>
+    ${_jcTbl(jcAll, '今日暂无竞彩开售场次（或竞彩数据未同步）。')}
+    <p class="note"><b>为什么单独列这一段：</b>上方精选/优选的深盘判据依赖<b>亚盘盘口</b>，而竞彩场次大多没有亚盘数据 → 实测<b>精选池里一场竞彩都没有</b>，这就是你在精选里"看不到让球该怎么买"的根因。
+      本段直接取<b>竞彩官方让球数</b>（hhad.goalLine，如 主让1球），并给出该档的 <b>让胜/让平/让负</b> 与<b>不让球 主胜/平/客胜</b> 两组概率，
+      再按 <b>EV = 模型概率 × 官方赔率 − 1</b> 直接告诉你该买哪一档（<b style="color:var(--grn)">EV&gt;0 才值得下</b>）。
+      ⚠ <b>"让胜/让平/让负"一律以主队为基准</b>（竞彩口径）：如「客让1球」时，<b>让胜 = 主队不败</b>（赢或平都算赢），别按字面理解成客队赢 —— 这是让球最容易读反的地方。
+      ⚠ 三条口径声明：①<b>让平 = 走水</b>（退还本金），概率 ≥30% 时本段会强制改建议「买不让球」，不让你白买；
+      ②λ/μ 优先取<b>官方不让球(had)赔率拟合</b>——这是<b>跨市场独立推断</b>；若某场只有让球盘(hhad)，反解 λ/μ 会<b>自证循环</b>（算出来就是官方隐含概率，无增量），此时已如实标注为「仅参考」；
+      ③EV 是<b>模型概率 vs 官方赔率</b>的对比，未经完场回测标定，<b>不等于命中率</b>，与上方 96%/85% 那类实测数别混用。</p>
+    ${_hcapNote}
+    ${_hcapStableTable}
+    ${hist}
+    <div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">🥇 精选（纯深盘 ∩ 市场头号≥80% · 实测 ${sP?sP.rate+'%':'96%'}）</div>
+    ${_pickTbl(pp, '当日暂无「精选」级场次（纯深盘且市场头号≥0.80）。空手不硬凑。')}
+    <div style="font-weight:600;margin:10px 0 2px;color:var(--grn)">📌 精选·下注级（∩模型下注级 tier=1 · 实测 ${sT1?sT1.rate+'%':'96%'} · 今日 ${ppT1.length} 场）</div>
+    ${_pickTbl(ppT1, '今日精选中暂无「模型下注级(tier=1)」场次（最硬子集，宁缺毋滥，空手不硬凑）。')}
+    <div style="font-weight:600;margin:10px 0 2px;color:var(--grn)">📌📌 精选·下注级·头号≥85（∩tier=1 且市场头号≥85% · 实测 ${sT1m85?sT1m85.rate+'%':'—'} · 今日 ${ppT1m85.length} 场 · 全池最硬）</div>
+    ${_pickTbl(ppT1m85, '今日最硬子集（下注级 ∩ 头号≥85%）为空 —— 这是常态，样本本就稀少，宁缺毋滥。')}
+    <div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">🥈 优选（纯深盘·方向一致·无大热确认 · 实测 ${sS?sS.rate+'%':'85%'}）</div>
+    ${_pickTbl(ps, '当日暂无「优选」级纯深盘场次。')}
+    <div style="font-weight:700;margin:16px 0 4px;color:#6aa0ff">🔵 模型方向·研究参考（dir 清晰·conf≥50·非深盘/非问题盘·无真实资金源·非投注信号）</div>
+    ${_pickTbl(dir, '当日暂无仅模型有方向、未达深盘或问题盘阈值的场次。')}
+    <p class="note">🔵 <b>模型方向·研究参考</b>：以上精选/优选靠「深盘」或「问题盘三线索」筛出，门槛高、日常偏少。但模型对部分场<b>另有清晰方向</b>（dir=W/D/L 且 conf≥50）却因盘口不够深、或没触发问题盘而被上方排除——这些单列在此作<b>研究背景参考，非投注信号</b>（无北单/必发真实资金源确认）。欧联/欧协联等正常盘居多之夜，这一档是看模型态度的主要窗口。</p>
+    ${hardFin.length ? `<div style="font-weight:700;margin:18px 0 4px;color:var(--acc)">🏁 今日已完赛 · 精选/优选赛果回看（${hardFin.length} 场 · 仅回看，不再是推荐）</div>
+      ${_pickTbl(hardFin, '')}
+      <p class="note">已完赛场次<b>不计入上方「可出手」推荐</b>（按你的要求：未开赛/已开赛才算推荐，别等踢完才出现在精选里）；这里只回看当日真实赛果，并把「赛前方向 vs 实际赛果」对撞成 <b style="color:var(--grn)">✓命中</b> / <b style="color:var(--red)">✗打脸</b>；<b>同时在比分格下方单列「赛前比分预测 Top3 → 实际比分是否命中（首推✓ / 在Top3 / 未进Top3）」</b>——预测为赛前锁定值（引擎 Dixon-Coles 分布），不是赛后补算，专门方便赛后核对比分预测有没有中。</p>` : ''}
+    <p class="note"><b>为什么这两档最硬：</b>7870 场完场真值标定 ——「深盘热门方==模型方向」单信号方向命中 85%，再叠加「市场头号概率≥0.80」抬到 <b>96%</b>；而深盘一旦同时被大热确认（拥挤交易），三信号全中反而砸到 <b style="color:var(--red)">48%</b>（散户全压强队、价值被吃光）。故本面板<b>只收无大热确认的纯深盘</b>。</p>
+    ${pdDailyHTML}
+    ${deepDailyHTML}
+    ${backtestPanelHTML()}
+    ${snapHTML}
+    <div style="font-weight:700;margin:18px 0 4px;color:var(--acc)">📜 洋哥自传 · 问题盘三线索（自传原文"10% 的精选推荐"）</div>
+    <p class="note">自传原文："90%的比赛…正常盘…建议投资金额为本金的 1/20"；"另外10%的比赛，一旦出现破绽，出现问题盘，<b>也就是精选推荐</b>，就要把握住，尽可能的将利润扩大…为&lt;本金的 1/3&gt;。" 三条<b>相互独立</b>的线索：①大热必死（洋哥定性：北单真实超买&gt;该场返还率缺口·自传174行，≥动态门槛即确认）②聪明钱背离（权威组vs大众组定价差≥4pt）③权威分歧（权威公司离散≥0.70且&gt;大众离散）。阈值全部取自自传真实案例实测复算（engine.js stakePlan）。
+    ⚠ <b>回测诚实结论（上方「回测验证」面板·数据说了算）</b>：①大热必死（北单真实超买·站对面）才是<b>可反买的破绽盘</b>（calib 460场·n=50·1X2站对面70%命中、≥20pt 75%/+18%；机制=过热方兑现率25%→8%）；②赔率抬升型 / ③市场大热 的"热门方"是<b>真实强队</b>，反买仅 3.2%/2.3% 命中、ROI −88%/−90% → <b>绝对不可站对面，本板对②③只走正路·随模型方向</b>。${pcHTML}</p>
+    <div style="font-weight:600;margin:10px 0 2px;color:var(--red)">🔴 精选推荐（三线合流 · 本金 1/3）</div>
+    ${_planTbl(pP, '当日暂无三线合流的"精选推荐"级场次（自传本就说这是 10% 的小概率机会，日常不多，不可常态化。空手即是赢）。')}
+    <div style="font-weight:600;margin:10px 0 2px;color:var(--yel)">🟡 优选·加重（两线 · 本金 1/10）</div>
+    ${_planTbl(pM, '当日暂无两线合流场次。')}
+    <div style="font-weight:600;margin:10px 0 2px;color:var(--mut)">⚪ 小注（一线 · 本金 1/20）</div>
+    ${_planTbl(pS, '当日暂无单线索场次。')}
+    ${planFin.length ? `<div style="font-weight:700;margin:18px 0 4px;color:var(--acc)">🏁 今日已完赛 · 自传三线索赛果回看（${planFin.length} 场 · 仅回看，不再是推荐）</div>
+      ${_planTbl(planFin, '')}` : ''}
+    <p class="note">⚠ 口径提醒：左侧「精选/优选」硬方向池是<b>可回测、有实测命中率</b>的那部分（7870 场真值）；右侧自传三线索是<b>实时信号</b>（①依赖北单当日资金快照、②③依赖当轮多公司盘口），历史同口径样本取决于能否 join 到历史盘口，样本不足时<b>不给命中率承诺</b>（给不出就是给不出，不编数）。两侧独立，别相加当同一概率。</p>
+    ${pickLibHTML(lib)}
+    <p class="note">仅参考，非投资建议。</p>`;
+}
+async function openPicks(){
+  try{ _htAbort = false; resolvePredictions(); }catch(e){}
+  const todo = MATCHES.filter(m => !m.analysis && (hasPackOdds(m.tid) || jcHasOdds(m) || m.odds || t7HasOdds(m)));
+  _htRest = _htAnalyze(todo, 120);
+  if (_htRest.length) setTimeout(_htDrain, 40);
+  $('pickContent').innerHTML = '<p class="note">分析中…（正在合并明细包以取得洋哥自传三线索）</p>';
+  $('pickModal').classList.add('show');
+  try { await _ensureDetail(); const _dm = window.__BAKE_DETAIL__ || {}; for (const _t in _dm) _mergeDetail(_t); } catch(e){}
+  let RD = null; try { RD = window.REVIEW_DATA || await _ensureReviewData(); } catch(e){}
+  const _render = () => {
+    try {
+      _pickRows = {};                     // 每轮重建行索引，避免残留已移除的场次
+      const hard = buildHardPool(), plan = buildPlanPool(), dir = buildDirPool();
+      const lib = pickLibSync(hard.concat(plan, dir));
+      $('pickContent').innerHTML = pickPanelHTML(hard, plan, dir, lib, RD);
+    } catch(e){ $('pickContent').innerHTML = '<p class="note">生成失败：' + (e && e.message || e) + '</p>'; }
+  };
+  window._pickReRender = _render;   // ★ 供排序切换按钮 setPickSort 调用重渲
+  _render();
+  if (_htRest && _htRest.length) setTimeout(_render, 1600);   // 后台补算完再刷一次
+  /* 实时比分节拍：30s 就地刷比分格（主列表 60s 拉一次实时源，30s 足够跟上且不抖）。 */
+  try{ if (_pickPoll) clearInterval(_pickPoll); }catch(e){}
+  _pickPoll = setInterval(() => {
+    try{
+      const md = document.getElementById('pickModal');
+      if (!md || !md.classList.contains('show')){ clearInterval(_pickPoll); _pickPoll = null; return; }
+      _pickScoreTick();
+    }catch(e){}
+  }, 30000);
+}
+function closePicks(){
+  const _m = $('pickModal'); if (_m) _m.classList.remove('show');
+  try{ if (_pickPoll) clearInterval(_pickPoll); }catch(e){}
+  _pickPoll = null;
+}
+/* ★ 2026-10-25：结构下盘·常驻可下注板块（与破绽反买框架正交的独立结构边缘）。
+   列表只收即将开赛(state≠完场)场，按开赛时间排序；点击行跳主看板定位。标定数字取自 STRUCT_DOWN_RECORD。 */
+function _sdStatCard(lab, val, color){
+  return '<div style="flex:1 1 120px;min-width:110px;background:rgba(47,170,106,.08);border:1px solid '+color+';border-radius:8px;padding:8px 10px">'
+    + '<div style="font-size:11px;color:var(--mut)">'+lab+'</div>'
+    + '<div style="font-size:18px;font-weight:800;color:'+color+'">'+val+'</div></div>';
+}
+// ★ 2026-11-02 融合《足球财富·欧赔与亚盘足彩研究》方法论：结构下盘·提质门禁。
+//   与 _roi_picks.cjs sdQualityGate 同源（CVM权威2649完场, 60/40时序留出双侧成立）：
+//     基线 结构下盘 命中57.8%/ROI+14.8%(n=987) → 仅留 (公司分歧weightedDivScore≥0.2 或 |真实盘口|<0.5)
+//     → 命中66.3%/ROI+31.6%(全量), HOLDOUT 68.7%/+34.0%。机制见 _roi_picks.cjs 注释。
+//   注意：亚盘升盘降盘/升水降水单独用是噪声，不接；只接欧赔分歧(company_div)+盘口深浅(grade_hcap_a)。
+function _sdQualityGate(a){
+  if (!a) return false;
+  const cd = a.company_div;
+  const div = (cd && typeof cd.weightedDivScore === 'number') ? cd.weightedDivScore : null;
+  const hcap = a.grade_hcap_a != null ? Math.abs(+a.grade_hcap_a) : null;
+  if (div != null && div >= 0.2) return true;
+  if (hcap != null && hcap < 0.5) return true;
+  return false;
+}
+function _sdHiCard(picks){
+  const hi = picks.filter(r=>r.star===3);
+  if (!hi.length) return '';
+  const SPB = (typeof window !== 'undefined' && window.SD_PICK_BACKTEST && window.SD_PICK_BACKTEST.groups) ? window.SD_PICK_BACKTEST : null;
+  const pb = SPB ? SPB.groups['精选收紧(下盘&dir≠W&tier≠1)'] : null;
+  // ★ 2026-11-02 提质后口径真值（CVM权威烘焙）：结构下盘 命中66.3%/ROI+31.6%/n=484
+  const rt = pb ? pb.rate : '66.3', ro = pb ? pb.roi : '31.6', nn = pb ? pb.n : 484;
+  return '<div style="background:linear-gradient(135deg,#0f7a45,#2faa6a);border-radius:10px;padding:10px 12px;margin:6px 0 12px;box-shadow:0 2px 8px rgba(47,170,106,.35)">'
+    + '<div style="font-weight:800;color:#fff;font-size:14px;margin-bottom:6px">🔥 高置信精选（结构下盘·提质：欧赔分歧≥0.2 或 浅盘|h|<0.5 · 盘口判下盘 · 排除反向必死段 · 回测命中 '+rt+'% / ROI +'+ro+'% · n='+nn+' · ★★★）</div>'
+    + hi.map(r=>'<div onclick="closeStructDown();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px solid rgba(255,255,255,.22)">'
+        + '<span style="color:#eafff2">'+esc(r.league)+' · '+esc(r.home)+' <span style="opacity:.7">vs</span> '+esc(r.away)+'</span>'
+        + '<span style="color:#fff;font-weight:700;white-space:nowrap">'+r.pg.toFixed(2)+' · '+esc(r.bet)+'</span></div>').join('')
+    + '<div style="margin-top:6px;font-size:11px;color:#d7ffe9">点任一行直接定位主看板该场实时盘口 · 本金 1/4 · 不碰 t1 终局门</div>'
+    + '</div>';
+}
+function _structDownTodayPicks(){
+  const out = [];
+  for (const m of (globalThis.MATCHES || [])){
+    const a = m.analysis || (packAnalysis(m.tid) || {});
+    if (!a || a.pan_gap == null || !isFinite(+a.pan_gap)) continue;
+    const g = +a.pan_gap;
+    if (!(g >= -0.4 && g < -0.13 && a.pan_predict === '下盘' && _sdQualityGate(a))) continue;   // 只收精品（盘口明确支持下盘 + 提质门禁）
+    if (String(m.state) === '-1') continue;                                // 只收即将开赛
+    /* ★ 精选护栏：排除模型挺让球方(dirCode=W) 与 t1 终局门已触发(tier=1) 的反向必死段 */
+    const _dc = (a.dirCode || '—'), _t1 = (a.tier != null ? a.tier : (a.grade_tier != null ? a.grade_tier : ''));
+    if (_dc === 'W' || String(_t1) === '1') continue;
+    const num = v => (v == null || v === '' || isNaN(+v)) ? null : +v;
+    const p1 = num(a.p1), h1 = num(a.h1), a0 = num(a.a0);
+    const line = (p1 != null ? p1 : a0);
+    if (line == null) continue;
+    const upSide = line > 0 ? 'W' : 'L';
+    const recvTeam = upSide === 'W' ? displayTeam(m,'home') : displayTeam(m,'away');
+    const downW = (h1 != null) ? +(2 - h1).toFixed(2) : null;
+    const bet = '下盘(受让·' + recvTeam + ')' + (downW != null && downW > 1.01 ? (' @' + downW.toFixed(2)) : '');
+    out.push({ tid:m.tid, g, star: 3, league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'), bet });
+  }
+  return out;
+}
+function showStructDownAlert(){
+  const picks = _structDownTodayPicks();
+  const _b = document.getElementById('btnStructDown');
+  if (_b){
+    let badge = document.getElementById('btnStructDownBadge');
+    if (!badge){
+      badge = document.createElement('span'); badge.id = 'btnStructDownBadge';
+      badge.style.cssText = 'position:absolute;top:-7px;right:-9px;min-width:18px;height:18px;line-height:18px;text-align:center;background:#e54545;color:#fff;border-radius:9px;font-size:11px;font-weight:800;padding:0 4px;box-shadow:0 1px 3px rgba(0,0,0,.3)';
+      _b.style.position = 'relative'; _b.appendChild(badge);
+    }
+    if (picks.length){ badge.style.display = 'inline-block'; badge.textContent = picks.length > 99 ? '99+' : String(picks.length); }
+    else badge.style.display = 'none';
+  }
+  if (!picks.length) return;
+  const key = 'sd_alert_' + (typeof todayStr === 'function' ? todayStr() : '');
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  const hi = picks.filter(p=>p.star===3).length;
+  let b = document.getElementById('sdAlertBanner');
+  if (!b){
+    b = document.createElement('div'); b.id = 'sdAlertBanner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#0f7a45,#2faa6a);color:#fff;font-weight:700;padding:9px 44px 9px 14px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer';
+    b.onclick = function(){ try{ openStructDown(); }catch(e){} };
+    const x = document.createElement('span'); x.textContent = '✕';
+    x.style.cssText = 'position:absolute;top:50%;right:12px;transform:translateY(-50%);cursor:pointer;font-size:16px;opacity:.85';
+    x.onclick = function(e){ e.stopPropagation(); b.style.display = 'none'; };
+    b.appendChild(x);
+    document.body.appendChild(b);
+  }
+  let t = document.getElementById('sdAlertText');
+  if (!t){ t = document.createElement('span'); t.id = 'sdAlertText'; b.insertBefore(t, b.firstChild); }
+  t.textContent = '🔥 今日 ' + picks.length + ' 场结构下盘精选（含 ' + hi + ' 场 ★★★ 高置信 B2 深区）已就绪 · 点此查看 →';
+}
+function _sdFmtTs(ts){
+  const s = String(ts||'');
+  if (/^\d{12}$/.test(s)) return s.slice(4,6)+'-'+s.slice(6,8)+' '+s.slice(8,10)+':'+s.slice(10,12);
+  if (/^\d{8}$/.test(s)) return s.slice(4,6)+'-'+s.slice(6,8);
+  return s || '—';
+}
+// ★ 2026-11-02 临场重判（与 _roi_picks.cjs sdLiveRejudge 同源，用户："能抓住实时、据不同时刻变化判断"）。
+//   CVM权威583样本(结构下盘·质量门禁)60/40留出验证：
+//     有实质变动(|dp|>=0.05 或 |dh|>=0.05) → 留出 75.7%/+50.4%(n=111)，强于基线 68.5%/+33.8%；
+//     无变动(平盘平水)            → 留出 61.5%/+19.5%(n=123)，仍正、弱于基线；
+//     所有 dp/dh 方向桶(升盘/降盘/升水/降水)留出 71~83%/+36~+72%，**无一为负** →
+//     ★ 结论：临场只做【强确认(有变动) / 维持(无变动) / 待确认(数据未齐)】三档，不做"撤"
+//       （数据不支持"降水就撤下盘"的书上想当然；撤会误杀好单，见 validate_rejudge2.js 9宫格）。
+function sdLiveRejudge(a){
+  if (!a) return { qualify:false };
+  const gap = a.pan_gap != null ? +a.pan_gap : null;
+  if (gap == null || !(gap >= -0.4 && gap < -0.13)) return { qualify:false };
+  if (!(a.pan_predict === '下盘' || a.pan_predict === '观望')) return { qualify:false };
+  if (!_sdQualityGate(a)) return { qualify:false };
+  if (String(a.dirCode || '—') === 'W') return { qualify:false };
+  const t1 = (a.tier != null ? a.tier : (a.grade_tier != null ? a.grade_tier : ''));
+  if (String(t1) === '1') return { qualify:false };
+  const n = v => (v == null || v === '' || isNaN(+v)) ? null : +v;
+  const a0 = n(a.a0), h0 = n(a.h0), p1 = n(a.p1), h1 = n(a.h1);
+  if (a0 == null || h0 == null || p1 == null || h1 == null) {
+    return { qualify:true, verdict:'pending', tag:'临场待确认', color:'#94a3b8',
+      reason:'盘路数据未齐（缺初盘/临场帧）·维持基础判定', dp:null, dh:null };
+  }
+  const dp = +((p1 - a0).toFixed(3)), dh = +((h1 - h0).toFixed(3));
+  const moved = (Math.abs(dp) >= 0.05 || Math.abs(dh) >= 0.05);
+  if (moved) {
+    return { qualify:true, verdict:'strong', tag:'临场确认·盘路变动', color:'#2faa6a',
+      reason:'盘口/水位实质变动(｜dp｜≥0.05 或 ｜dh｜≥0.05)·市场在参与 → 结构下盘更易兑现（CVM留出 75.7%/+50.4%）',
+      dp, dh };
+  }
+  return { qualify:true, verdict:'normal', tag:'临场维持·平盘平水', color:'#94a3b8',
+    reason:'盘路无实质变动(｜dp｜<0.05 且 ｜dh｜<0.05)·市场无参与 → 维持基线判定（CVM留出 61.5%/+19.5%，仍正）',
+    dp, dh };
+}
+// ★ 2026-11-02 下注复盘：亚盘「下盘(受让)」赢盘结算（与 _roi_picks.cjs betResult/betProfit 严格同源）。
+//   下盘赢盘 = 让球方净胜 < 盘口。hcap=真实盘口、water=上盘水位；返还率 1.90 → 下盘赔率 = 1+(1.90-water)。
+//   0.25/0.75 盘拆半注各结算，整数盘走水退本。返回 {u,pl,odd,label}；缺比分/盘口返回 null。
+function sdSettleLower(r){
+  if (!r || r.hs == null || r.as == null || r.p1 == null) return null;
+  const hcap = +r.p1, hs = +r.hs, as = +r.as;
+  const water = (r.h1 != null) ? +r.h1 : 0.95;                 // 缺水位按 0.95 兜（下盘水 ≈1.05）
+  const odd = 1 + (1.90 - water);
+  const favDiff = hcap > 0 ? (hs - as) : (as - hs);             // 让球方净胜
+  const mag = Math.abs(hcap);
+  // 纯结果：下盘赢盘需 favDiff < line
+  const uHalf = (line) => (favDiff < line ? 1 : (favDiff === line ? 0 : -1));
+  // 单注盈亏：赢→odd-1 / 走→0 / 输→-1
+  const pHalf = (line) => { const o = uHalf(line); return o === 1 ? (odd - 1) : (o === 0 ? 0 : -1); };
+  const frac = mag - Math.floor(mag);
+  let u, pl;
+  if (frac === 0.25 || frac === 0.75){
+    u  = 0.5 * uHalf(mag - 0.25) + 0.5 * uHalf(mag + 0.25);
+    pl = 0.5 * pHalf(mag - 0.25) + 0.5 * pHalf(mag + 0.25);
+  } else {
+    u  = uHalf(mag);
+    pl = pHalf(mag);
+  }
+  // 保留全精度（与 _roi_picks.cjs betProfit 严格一致），展示时才取 2 位，避免 ROI 汇总被舍入拖动
+  return { u:+u.toFixed(3), pl, odd,
+    label: u > 0 ? '赢盘' : (u === 0 ? '走盘' : '输盘') };
+}
+// 复盘汇总：命中/输/走 + 命中率（剔除走盘）+ 均注 ROI + 标准误
+function sdFinStat(rows){
+  let win=0, lose=0, push=0, pr=0, n=0;
+  for (const r of rows){
+    if (!r.settle) continue;
+    n++;
+    if (r.settle.u > 0) win++; else if (r.settle.u < 0) lose++; else push++;
+    pr += r.settle.pl;
+  }
+  const dec = win + lose;
+  return { n, win, lose, push,
+    rate: dec ? +(win/dec*100).toFixed(1) : null,
+    roi:  n ? +(pr/n*100).toFixed(1) : null,
+    se:   dec ? +(100/Math.sqrt(dec)).toFixed(1) : null };
+}
+/* ★★ 2026-11-03 推荐复盘（用户：「你的下注板块，我怎么知道你哪些推荐对，哪些错，这样怎么复盘啊」）
+   为什么必须独立一块：结构下盘弹窗/优选精选只列「即将开赛」，比赛一打完滚出 bake 窗口 → 推荐凭空消失，
+   用户永远看不到自己那注是赢是输。
+   数据链：_roi_picks.cjs capture（只登记 state=0 且 kickoff>now 的场，落 captured_at）
+          → settle（gqj2 权威赛果回填 result/hs/as/pl）→ _gen_review_board.cjs 聚合
+          → 摘要内联 window.REVIEW_SUMMARY，逐条外置 review_board.js 按需加载。
+   ★ 口径铁律：pre（captured_at < kickoff，赛前真登记）才算前瞻业绩；post 是开赛后补登的回测。
+     两者分开列，绝不混算——否则又会变成"拿回测冒充命中率"。 */
+let _RB_QUEUE = null;
+function _loadReviewBoard(cb){
+  if (window.REVIEW_BOARD) { try{ cb(window.REVIEW_BOARD); }catch(e){} return; }
+  if (_RB_QUEUE) { _RB_QUEUE.push(cb); return; }
+  _RB_QUEUE = [cb];
+  const s = document.createElement('script');
+  s.src = 'review_board.js?v=' + (window.__SHELL__ || ('' + Date.now()));
+  s.onload  = () => { const q = _RB_QUEUE || []; _RB_QUEUE = null; q.forEach(f => { try{ f(window.REVIEW_BOARD || null); }catch(e){} }); };
+  s.onerror = () => { const q = _RB_QUEUE || []; _RB_QUEUE = null; q.forEach(f => { try{ f(null); }catch(e){} }); };
+  document.head.appendChild(s);
+}
+function openRecap(){
+  const M = $('recapModal'); if (!M) return;
+  M.classList.add('show');
+  const c = $('recapContent');
+  if (c) c.innerHTML = '<p class="note">正在加载逐条明细…</p>';
+  _loadReviewBoard(() => _recapRender('all', null));
+}
+function closeRecap(){ const m = $('recapModal'); if (m) m.classList.remove('show'); }
+function _recapToggle(dkey){
+  const e = document.getElementById('recapDay_' + dkey); if (!e) return;
+  e.style.display = (e.style.display === 'none') ? 'block' : 'none';
+}
+/* 账本 kickoff 是 Unix 秒 → 上海时间 MM-DD HH:MM（沿用 epoch+8h 口径，不用本地时区，避免跨设备漂移） */
+function _recapTime(ko){
+  if (!ko) return '—';
+  const d = new Date((+ko + 8 * 3600) * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+}
+function _recapRender(filter, openDay){
+  const cont = $('recapContent'); if (!cont) return;
+  const S  = window.REVIEW_SUMMARY || null;
+  const RB = window.REVIEW_BOARD || null;
+  if (!S && !RB){ cont.innerHTML = '<p class="note">复盘数据尚未生成（每日刷新跑 _gen_review_board.cjs 后出现）。</p>'; return; }
+  const T  = (S && S.total) || {};
+  const P  = (S && S.total_pre) || {};
+  const O  = (S && S.total_post) || {};
+  const KT = (S && S.kinds_total) || {};
+  // ★ 逐条在 REVIEW_BOARD.rows（含 picks），REVIEW_BOARD.days / REVIEW_SUMMARY.days 只有按天汇总。
+  const days = (RB && RB.rows && RB.rows.length) ? RB.rows : ((RB && RB.days) || (S && S.days) || []);
+  const hasRows = !!(RB && RB.rows && RB.rows.some(d => (d.picks || []).length));
+
+  const cHit = v => v == null ? 'var(--mut)' : (v >= 50 ? 'var(--grn)' : (v >= 45 ? 'var(--yel)' : 'var(--red)'));
+  const cRoi = v => v == null ? 'var(--mut)' : (v > 0 ? 'var(--grn)' : (v === 0 ? 'var(--yel)' : 'var(--red)'));
+  const sg = v => v == null ? '—' : ((v >= 0 ? '+' : '') + v + '%');
+  const card = (label, big, bigCol, sub) =>
+    '<div style="flex:1 1 150px;min-width:150px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 10px">'
+    + '<div style="font-size:11px;color:var(--mut)">' + label + '</div>'
+    + '<div style="font-size:18px;font-weight:800;color:' + bigCol + ';line-height:1.25">' + big + '</div>'
+    + (sub ? '<div style="font-size:10.5px;color:var(--mut);margin-top:2px;line-height:1.4">' + sub + '</div>' : '')
+    + '</div>';
+
+  // ---- 顶部读数：赛前登记 vs 全量 vs 待结算 ----
+  let html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 8px">';
+  html += card('赛前登记 · 真业绩', (P.n || 0) + ' 注',
+    P.n ? cHit(P.rate) : 'var(--mut)',
+    P.n ? ('命中 <b style="color:' + cHit(P.rate) + '">' + (P.rate == null ? '—' : P.rate + '%') + '</b> ±' + (P.se == null ? '—' : P.se)
+         + ' ｜ ROI <b style="color:' + cRoi(P.roi) + '">' + sg(P.roi) + '</b>') : '暂无赛前登记样本');
+  html += card('全量（含开赛后补登）', (T.n || 0) + ' 注',
+    T.n ? cHit(T.rate) : 'var(--mut)',
+    T.n ? ('命中 ' + (T.rate == null ? '—' : T.rate + '%') + ' ±' + (T.se == null ? '—' : T.se)
+         + ' ｜ ROI ' + sg(T.roi)) : '—');
+  html += card('待结算', (T.pending || 0) + ' 注', (T.pending ? 'var(--yel)' : 'var(--mut)'),
+    '赢 ' + (T.wins || 0) + ' / 输 ' + (T.losses || 0) + ' / 走 ' + (T.pushes || 0));
+  html += card('覆盖', (S ? (S.days_kept || 0) : days.length) + ' 天', 'var(--acc)',
+    '更新 ' + ((S && S.generated) ? String(S.generated).slice(5, 16).replace('T', ' ') : '—'));
+  html += '</div>';
+
+  // ---- 真实可下注边（2026-11-03 顶到最前）----
+  const RE = (S && S.realEdge) || null;
+  const BT = (S && S.betTrack) || null;
+  const MT = (S && S.monitorTrack) || null;
+  if (RE) {
+    const r = RE.all, g = RE.gapLt0, gn = RE.gapNull;
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 8px">';
+    html += card('★ 真实可下注边 · 平手盘', (r.n || 0) + ' 注', (r.n ? cHit(r.rate) : 'var(--mut)'),
+      r.n ? ('命中 <b style="color:' + cHit(r.rate) + '">' + r.rate + '%</b> ±' + r.se + ' ｜ ROI <b style="color:' + cRoi(r.roi) + '">' + sg(r.roi) + '</b> '
+        + (r.roiSig ? '<b style="color:var(--grn)">显著+</b>' : '<b style="color:var(--yel)">跨0</b>')) : '—');
+    html += card('└ 机制验证 gap<0', (g.n || 0) + ' 注', (g.n ? cHit(g.rate) : 'var(--mut)'),
+      g.n ? ('命中 ' + g.rate + '% ±' + g.se + ' ｜ ROI ' + sg(g.roi)) : '窗口内仅 ' + g.n + ' 注');
+    html += card('└ 缺 gap 字段', (gn.n || 0) + ' 注', 'var(--yel)',
+      gn.n ? ('命中 ' + gn.rate + '% ｜ ROI ' + sg(gn.roi) + ' · 机制未验证') : '—');
+    html += card('下注战绩(平手盘)', (BT ? BT.n : 0) + ' 注', 'var(--acc)',
+      BT ? ('命中 ' + (BT.rate == null ? '—' : BT.rate + '%') + ' ｜ ROI ' + sg(BT.roi)) : '—');
+    html += card('监测信号(降级)', (MT ? MT.n : 0) + ' 注', 'var(--mut)',
+      MT ? ('命中 ' + (MT.rate == null ? '—' : MT.rate + '%') + ' ｜ ROI ' + sg(MT.roi) + ' · 不下注') : '—');
+    html += '</div>';
+    html += '<div style="font-size:11px;line-height:1.5;background:#2a1d12;border:1px solid #6b4a1f;border-radius:8px;padding:7px 10px;margin-bottom:8px;color:#f0c987">'
+      + '<b>唯一经 CVM 样本外验证的真实 Edge = 平手盘</b>（|盘口|=0 且实际盘比公平盘浅 pan_gap&lt;0，买受让方）：CVM 99注 命中 63.6% / ROI +21.3%，训练(+19.7%)与留出(+22.0%)两段同向。'
+      + '本看板自 11-03 起<b>只把平手盘写进账本作可下注信号</b>，结构下盘/深盘上盘全部降级为「监测·不下注」。'
+      + '⚠ 诚实缺口：本窗口平手盘的 pan_gap 字段大量缺失，机制(gap&lt;0)只在少数注上验证、且那部分 ROI 为负(SE±20% 不显著)；真边主要靠 CVM 样本外佐证，<b>赛前登记(pre)平手盘仅数注，实时前瞻战绩尚未建立</b>。'
+      + '</div>';
+  }
+
+  // ---- 诚实提示：pre 才是业绩 ----
+  const _preSig = (P.rate != null && P.se != null) ? ((P.rate - 1.96 * P.se) > 50) : null;
+  const _preRoiSig = (P.roi != null && P.se != null) ? ((P.roi - 1.96 * P.se) > 0) : null;
+  html += '<div style="font-size:11.5px;line-height:1.55;background:#1d2330;border:1px solid #3a4557;border-radius:8px;padding:8px 10px;margin-bottom:8px">'
+    + '<b style="color:#22d3ee">怎么看这张表：</b>'
+    + '只有「赛前登记」算前瞻业绩——这批注单是在开赛前登记进账本的。'
+    + (P.n ? ('当前 <b>' + P.n + '</b> 注、命中 <b style="color:' + cHit(P.rate) + '">' + P.rate + '%</b> ±' + P.se
+        + '、ROI <b style="color:' + cRoi(P.roi) + '">' + sg(P.roi) + '</b>，'
+        + (_preSig ? '<b style="color:var(--grn)">命中显著高于 50%</b>' : '<b style="color:var(--yel)">统计上不显著（CI 跨 50%）</b>')
+        + (_preRoiSig ? '，ROI 显著为正' : '，ROI 也跨 0') + '。') : '')
+    + ' 而「开赛后补登」的 ' + (O.n || 0) + ' 注是回测样本（事后按赛前信息复算），只能检验方法对不对，<b>不能当战绩</b>。'
+    + ' 窗口级汇总：' + Object.keys(KT).map(k => k + ' ' + KT[k].n + '注/' + (KT[k].rate == null ? '—' : KT[k].rate + '%') + '/' + sg(KT[k].roi)).join('；')
+    + '。</div>';
+
+  if (!hasRows){
+    html += '<p class="note">逐条明细还没加载到（review_board.js 缺失或未生成）。摘要读数仍是准确的。</p>';
+    cont.innerHTML = html; return;
+  }
+
+  // ---- 筛选 ----
+  const fb = (k, txt) => '<button class="sec" style="padding:3px 10px;font-size:11.5px;' +
+    (filter === k ? 'background:#22d3ee;color:#06202a;border-color:#22d3ee;font-weight:800' : '') +
+    '" onclick="_recapRender(\'' + k + '\',\'' + (openDay || '') + '\')">' + txt + '</button>';
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px">'
+    + fb('all', '全部') + fb('bet', '★ 只看下注边') + fb('lose', '✗ 只看输的') + fb('win', '✓ 只看赢的')
+    + fb('pre', '赛前登记') + fb('pending', '⏳ 待结算')
+    + '<span style="font-size:11px;color:var(--mut);align-self:center;margin-left:4px">点日期行展开/收起逐条</span></div>';
+
+  // ---- 逐天 ----
+  const matchF = p => filter === 'all' ? true
+    : filter === 'bet' ? p.bet === true
+    : filter === 'lose' ? p.res === 'lose'
+    : filter === 'win' ? p.res === 'win'
+    : filter === 'pre' ? p.pre === true
+    : filter === 'pending' ? !p.res : true;
+
+  const rowHtml = (p) => {
+    const resTxt = p.res === 'win' ? '✓ 赢' : (p.res === 'lose' ? '✗ 输' : (p.res === 'push' ? '= 走' : '⏳ 待'));
+    const resCol = p.res === 'win' ? 'var(--grn)' : (p.res === 'lose' ? 'var(--red)' : (p.res === 'push' ? 'var(--gry)' : 'var(--yel)'));
+    const score  = (p.hs != null && p.as != null) ? (p.hs + '-' + p.as) : '—';
+    const hcTxt  = (p.hc == null) ? '—'
+      : (p.hc === 0 ? '平手' : ((p.hc > 0 ? '主让' : '客让') + Math.abs(p.hc)));
+    const wTxt   = (p.w == null) ? '—' : p.w.toFixed(2);
+    const plTxt  = (p.pl == null) ? '—' : ((p.pl >= 0 ? '+' : '') + p.pl.toFixed(2));
+    const plCol  = (p.pl == null) ? 'var(--mut)' : (p.pl > 0 ? 'var(--grn)' : (p.pl < 0 ? 'var(--red)' : 'var(--gry)'));
+    const preTag = p.pre ? '<span style="color:#22d3ee">赛前</span>' : '<span style="color:var(--gry)">赛后</span>';
+    const kCol   = p.k === '平手盘' ? '#f5a623' : (p.k === '结构下盘' ? '#2faa6a' : (p.k === '深盘上盘' ? '#3a8ee6' : (p.k === '监测-结构下盘' || p.k === '监测-深盘上盘' || p.k === '监测-平手小联' ? '#5b6b7a' : '#a855f7')));
+    const side   = (p.k === '深盘上盘' || p.k === '监测-深盘上盘') ? '上盘(让球方)' : '下盘(受让方)';
+    return '<tr onclick="closeRecap();try{jumpToMatch(\'' + p.tid + '\')}catch(e){}" style="cursor:pointer" title="点击跳到主看板该场">'
+      + '<td style="white-space:nowrap;color:var(--mut)">' + _recapTime(p.ko) + '</td>'
+      + '<td style="white-space:nowrap;color:var(--mut)">' + esc(p.lg || '—') + '</td>'
+      + '<td style="text-align:left">' + esc(p.h || '?') + ' <span style="color:var(--gry)">vs</span> ' + esc(p.a || '?') + '</td>'
+      + '<td style="color:' + kCol + ';font-weight:700;white-space:nowrap">' + esc(p.k || '—') + '</td>'
+      + '<td style="white-space:nowrap">' + hcTxt + '</td>'
+      + '<td style="white-space:nowrap">' + wTxt + '</td>'
+      + '<td style="white-space:nowrap;font-size:10.5px;color:var(--mut)">' + side + '</td>'
+      + '<td style="white-space:nowrap">' + preTag + '</td>'
+      + '<td style="font-weight:700;white-space:nowrap">' + score + '</td>'
+      + '<td style="white-space:nowrap;font-weight:800;color:' + resCol + '">' + resTxt + '</td>'
+      + '<td style="white-space:nowrap;font-weight:700;color:' + plCol + '">' + plTxt + '</td>'
+      + '</tr>';
+  };
+
+  let shown = 0;
+  for (const d of days){
+    const picks = (d.picks || []).filter(matchF);
+    if (!d.picks || !d.picks.length) continue;                       // 只有摘要没有逐条的日子跳过
+    if (!picks.length) continue;
+    shown += picks.length;
+    const a = d.all || {};
+    const isOpen = (openDay ? d.date === openDay : false);
+    html += '<div style="margin:12px 0 0">'
+      + '<div onclick="_recapToggle(\'' + d.date + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:6px 9px">'
+      + '<b style="color:#22d3ee;font-size:13px">' + (d.label || d.date) + '</b>'
+      + '<span style="font-size:11.5px;color:var(--mut)">' + (a.n || picks.length) + ' 注 · 赢' + (a.wins || 0) + ' 输' + (a.losses || 0) + ' 走' + (a.pushes || 0)
+      + ((a.pending || 0) ? ' 待' + a.pending : '') + '</span>'
+      + '<span style="font-size:11.5px">命中 <b style="color:' + cHit(a.rate) + '">' + (a.rate == null ? '—' : a.rate + '%') + '</b></span>'
+      + '<span style="font-size:11.5px">ROI <b style="color:' + cRoi(a.roi) + '">' + sg(a.roi) + '</b></span>'
+      + (a.pre && a.pre.n ? '<span style="font-size:10.5px;color:var(--mut)">其中赛前登记 ' + a.pre.n + ' 注</span>' : '')
+      + '<span style="margin-left:auto;font-size:11px;color:var(--mut)">' + (isOpen ? '收起 ▲' : '展开 ▼') + '</span>'
+      + '</div>'
+      + '<div id="recapDay_' + d.date + '" style="display:' + (isOpen ? 'block' : 'none') + ';overflow-x:auto">'
+      + '<table class="tbl" style="width:100%;margin-top:4px"><thead><tr>'
+      + '<th>开赛</th><th>联赛</th><th>对阵</th><th>窗口</th><th>盘口</th><th>上盘水</th><th>推荐</th><th>登记</th><th>比分</th><th>结果</th><th>本注盈亏</th>'
+      + '</tr></thead><tbody>' + picks.map(rowHtml).join('') + '</tbody></table></div></div>';
+  }
+  if (!shown) html += '<p class="note">当前筛选下没有符合条件的注单。</p>';
+  cont.innerHTML = html;
+}
+
+// 亚盘盘路轨迹：初盘(a0/h0) → 临场(p1/h1) 的盘口/水位演变（《足球财富》盘路语义）。
+// 返回 { hcapFrom,hcapTo,waterFrom,waterTo,dp,dh,label,color }；缺字段返回 null。
+function panluTrail(a){
+  if (!a) return null;
+  const n = v => (v==null||v===''||isNaN(+v)) ? null : +v;
+  const a0=n(a.a0), h0=n(a.h0), p1=n(a.p1), h1=n(a.h1);
+  if (a0==null||h0==null||p1==null||h1==null) return null;
+  const dp = p1 - a0, dh = h1 - h0;
+  let label, color;
+  if (Math.abs(dp) < 0.05 && Math.abs(dh) < 0.05) { label='平盘平水'; color='#94a3b8'; }
+  else if (dp > 0.05 && dh < -0.05) { label='升盘降水'; color='#f59e0b'; }   // 控赔·看好上盘
+  else if (dp > 0.05 && dh > 0.05) { label='升盘升水'; color='#a855f7'; }     // 阻上
+  else if (dp < -0.05 && dh < -0.05) { label='降盘降水'; color='#f97316'; }   // 控赔·看好上盘
+  else if (dp < -0.05 && dh > 0.05) { label='降盘升水'; color='#38bdf8'; }   // 阻上·利下盘
+  else if (Math.abs(dp) >= 0.05) { label = dp>0?'升盘':'降盘'; color='#a855f7'; }
+  else { label = dh>0?'升水':'降水'; color='#38bdf8'; }
+  return { hcapFrom:a0, hcapTo:p1, waterFrom:h0, waterTo:h1, dp:+dp.toFixed(3), dh:+dh.toFixed(3), label, color };
+}
+// 盘路轨迹 HTML（小标签 + 初→临 盘口/水位）
+function panluTrailHtml(a){
+  const t = panluTrail(a); if (!t) return '<td>—</td>';
+  const fmtH = v => (v>0?'主让':'客让')+Math.abs(v).toFixed(2).replace(/0$/,'');
+  const moved = (Math.abs(t.dp)>=0.05 || Math.abs(t.dh)>=0.05);
+  const tip = '《足球财富》盘路演变·初盘→临场：盘口 '+fmtH(t.hcapFrom)+'→'+fmtH(t.hcapTo)
+    +'｜上盘水 '+t.waterFrom.toFixed(2)+'→'+t.waterTo.toFixed(2)
+    +'。升盘降水/降盘降水=庄家控赔(看好上盘)；升盘升水/降盘升水=阻上。';
+  return '<td style="font-size:11px;white-space:nowrap" title="'+tip+'">'
+    + '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-weight:700;color:#fff;background:'+t.color+';font-size:10.5px">'+t.label+'</span> '
+    + '<span style="color:#64748b">'+(moved?('盘'+fmtH(t.hcapFrom)+'→'+fmtH(t.hcapTo)+'·水'+t.waterFrom.toFixed(2)+'→'+t.waterTo.toFixed(2)):'盘路未动')+'</span></td>';
+}
+function openStructDown(){
+  try{ _htAbort = false; resolvePredictions(); }catch(e){}
+  const todo = MATCHES.filter(m => !m.analysis && (hasPackOdds(m.tid) || jcHasOdds(m) || m.odds || t7HasOdds(m)));
+  _htRest = _htAnalyze(todo, 200);
+  if (_htRest.length) setTimeout(_htDrain, 40);
+  const rows = [];
+  for (const m of MATCHES){
+    const a = m.analysis || (packAnalysis(m.tid) || {});
+    if (!a || a.pan_gap == null || !isFinite(+a.pan_gap)) continue;
+    const g = +a.pan_gap;
+    if (!(g >= -0.4 && g < -0.13 && (a.pan_predict === '下盘' || a.pan_predict === '观望') && _sdQualityGate(a))) continue;
+    if (String(m.state) === '-1') continue;                 // 只收即将开赛
+    /* ★ 精选收紧护栏：排除「模型挺让球方(dirCode=W，回测 44% 命中/ROI−4%)」与
+       「t1 终局门已触发(tier=1，回测 28% 命中/ROI−37%)」两段反向必死（即"不碰 t1 终局门"铁律的实证）。 */
+    const _dc = (a.dirCode || '—'), _t1 = (a.tier != null ? a.tier : (a.grade_tier != null ? a.grade_tier : ''));
+    if (_dc === 'W' || String(_t1) === '1') continue;
+    const num = v => (v == null || v === '' || isNaN(+v)) ? null : +v;
+    const p1 = num(a.p1), h1 = num(a.h1), a0 = num(a.a0);
+    const line = (p1 != null ? p1 : a0);
+    if (line == null) continue;
+    const upSide = line > 0 ? 'W' : 'L';                     // 让球方=上盘
+    const recvSide = upSide === 'W' ? 'L' : 'W';             // 受让方=下盘
+    const recvTeam = recvSide === 'W' ? displayTeam(m,'home') : displayTeam(m,'away');
+    const downW = (h1 != null) ? +(2 - h1).toFixed(2) : null;
+    const bet = '下盘(受让·' + recvTeam + ')' + (downW != null && downW > 1.01 ? (' @' + downW.toFixed(2)) : '');
+    const pick = (a.pan_predict === '下盘');                 // 盘口明确支持下盘=精选（与洋哥"受让"主线同侧）
+    const star = pick ? 3 : 0;                              // 精选全部为 B2 深区★★★（回测该口径下 下盘精选 100% 落在 B2）
+    // ★ 2026-11-02 临场重判：据盘中 dp/dh 给「确认/维持/待确认」，随 bake 刷新实时变化
+    const lj = sdLiveRejudge(a);
+    rows.push({ tid:m.tid, ts:kickTs(m), league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      pg:g, p1:line, h1:h1, a0:num(a.a0), h0:num(a.h0), downW, recvTeam, bet, pick, star, dirCode:_dc, tier:String(_t1),
+      verdict:(lj && lj.verdict)||'pending', ljTag:(lj && lj.tag)||'临场待确认', ljColor:(lj && lj.color)||'#94a3b8',
+      ljReason:(lj && lj.reason)||'', ljDp:(lj && lj.dp), ljDh:(lj && lj.dh) });
+  }
+  // ★ 2026-11-02 下注复盘段：把「已完赛 + 符合结构下盘口径」的场次逐场结算下盘输赢，
+  //   让每条推荐打完都能对账（推荐→实际比分→下盘结算）。与实时段同源（同口径同护栏）。
+  const finRows = [];
+  for (const m of MATCHES){
+    if (String(m.state) !== '-1') continue;              // 只收已完赛
+    const hs = m.home_score, as = m.away_score;
+    if (hs == null || as == null) continue;              // 无比分不结算（待源站回补）
+    const a = m.analysis || (packAnalysis(m.tid) || {});
+    if (!a || a.pan_gap == null || !isFinite(+a.pan_gap)) continue;
+    const g = +a.pan_gap;
+    if (!(g >= -0.4 && g < -0.13 && (a.pan_predict === '下盘' || a.pan_predict === '观望') && _sdQualityGate(a))) continue;
+    const _dc = (a.dirCode || '—'), _t1 = (a.tier != null ? a.tier : (a.grade_tier != null ? a.grade_tier : ''));
+    if (_dc === 'W' || String(_t1) === '1') continue;   // 与实时段同源护栏
+    const num = v => (v == null || v === '' || isNaN(+v)) ? null : +v;
+    // ★ 结算用真实盘口/真实水位（grade_hcap_a / grade_water_a），与 _roi_picks 账本口径一致；缺真实盘口才回退临场 p1/h1
+    const realH = num(a.grade_hcap_a), realW = num(a.grade_water_a);
+    const p1 = realH != null ? realH : num(a.p1);
+    const h1 = realW != null ? realW : num(a.h1);
+    if (p1 == null) continue;
+    const upSide = p1 > 0 ? 'W' : 'L';
+    const recvSide = upSide === 'W' ? 'L' : 'W';
+    const recvTeam = recvSide === 'W' ? displayTeam(m,'home') : displayTeam(m,'away');
+    const downW = (h1 != null) ? +(2 - h1).toFixed(2) : null;
+    const bet = '下盘(受让·' + recvTeam + ')' + (downW != null && downW > 1.01 ? (' @' + downW.toFixed(2)) : '');
+    const pick = (a.pan_predict === '下盘');
+    const star = pick ? 3 : 0;
+    const lj = sdLiveRejudge(a);
+    finRows.push({ tid:m.tid, ts:kickTs(m), league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      hs:+hs, as:+as,
+      pg:g, p1:p1, h1:h1, a0:num(a.a0), h0:num(a.h0), downW, recvTeam, bet, pick, star,
+      verdict:(lj && lj.verdict)||'pending', ljTag:(lj && lj.tag)||'临场待确认', ljColor:(lj && lj.color)||'#94a3b8',
+      ljReason:(lj && lj.reason)||'', ljDp:(lj && lj.dp), ljDh:(lj && lj.dh),
+      settle: sdSettleLower({ hs:+hs, as:+as, p1:p1, h1:h1 }) });
+  }
+  finRows.sort((x,y)=> String(y.ts||'').localeCompare(String(x.ts||'')));
+  const finStat = sdFinStat(finRows);
+  const finPicks = finRows.filter(r=>r.pick);
+  const finPickStat = sdFinStat(finPicks);
+  rows.sort((x,y)=> (y.pick?1:0)-(x.pick?1:0) || (y.star-x.star) || String(x.ts||'').localeCompare(String(y.ts||'')));
+  const picks = rows.filter(r=>r.pick);
+  const pool  = rows.filter(r=>!r.pick);
+  const starTxt = s => s>=3 ? '★★★' : s===2 ? '★★' : '★';
+  const _ljCell = r => {
+    if (!r.verdict || r.verdict === 'pending') return '<td style="font-size:10.5px;white-space:nowrap"><span style="display:inline-block;padding:1px 5px;border-radius:6px;font-weight:700;color:#94a3b8;background:#1e2a3a;border:1px solid #64748b;font-size:10px" title="'+esc(r.ljReason||'临场数据未齐·维持基础判定')+'">⏳待确认</span></td>';
+    const _m = (r.ljDp!=null || r.ljDh!=null) ? ('｜dp='+(r.ljDp!=null?r.ljDp.toFixed(2):'—')+'｜dh='+(r.ljDh!=null?r.ljDh.toFixed(2):'—')) : '';
+    return '<td style="font-size:10.5px;white-space:nowrap"><span style="display:inline-block;padding:1px 5px;border-radius:6px;font-weight:700;color:#fff;background:'+r.ljColor+';font-size:10px" title="'+esc(r.ljReason||'')+_m+'">'+(r.verdict==='strong'?'🟢确认':'⚪维持')+'</span></td>';
+  };
+  const _rowHtml = (r, showStar) => '<tr onclick="closeStructDown();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer" title="点击定位到主看板该场实时盘口">'
+             + '<td>'+_sdFmtTs(r.ts)+'</td><td>'+esc(r.league)+'</td><td>'+esc(r.home)+'</td><td>'+esc(r.away)+'</td>'
+             + (showStar ? '<td style="color:#f59e0b;font-weight:800;letter-spacing:1px">'+starTxt(r.star)+'</td>' : '<td>—</td>')
+             + '<td style="color:#2faa6a;font-weight:700">'+r.pg.toFixed(2)+'</td>'
+             + '<td>'+(r.p1>0?'主让':'客让')+Math.abs(r.p1).toFixed(2).replace(/0$/,'')+'</td>'
+             + '<td>'+(r.h1!=null?r.h1.toFixed(2):'—')+'</td>'
+             + panluTrailHtml({ a0:r.a0, h0:r.h0, p1:r.p1, h1:r.h1 })
+             + _ljCell(r)
+             + '<td style="color:#2faa6a;font-weight:700">'+esc(r.bet)+'</td>'
+             + '<td style="vertical-align:top;font-size:10px">'+_comboTierCell(r)+'</td>'
+             + '</tr>';
+  const _tbl = (list, showStar) => '<table class="tbl" style="width:100%"><thead><tr>'
+             + '<th>开赛</th><th>联赛</th><th>主队</th><th>客队</th><th>星级</th><th>盘分差</th><th>让球</th><th>上盘水</th><th>盘路演变(初→临)</th><th>临场重判</th><th>推荐(下盘/受让)</th><th>系统方向<br><span style="font-size:9px;font-weight:400">监测·只读·不提供买法</span></th>'
+             + '</tr></thead><tbody>'
+             + list.map(r=>_rowHtml(r, showStar)).join('')
+             + '</tbody></table>';
+  // ★ 复盘行：多两列——赛果(实际比分) + 下盘结算(赢/走/输 + 本注盈亏)
+  const _settleCell = r => {
+    if (!r.settle) return '<td style="color:var(--mut)">—</td>';
+    const c = r.settle.label === '赢盘' ? '#2faa6a' : (r.settle.label === '走盘' ? '#64748b' : '#e54545');
+    const plTxt = r.settle.pl > 0 ? ('+'+r.settle.pl.toFixed(2)) : r.settle.pl.toFixed(2);
+    const plCol = r.settle.pl > 0 ? '#2faa6a' : (r.settle.pl < 0 ? '#e54545' : '#64748b');
+    return '<td style="text-align:center;white-space:nowrap"><b style="color:'+c+'">'+r.settle.label+'</b>'
+      + '<br><span style="font-size:10px;color:'+plCol+'">本注 '+plTxt+'</span></td>';
+  };
+  const _finRowHtml = r => '<tr onclick="closeStructDown();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer">'
+             + '<td>'+_sdFmtTs(r.ts)+'</td><td>'+esc(r.league)+'</td><td>'+esc(r.home)+'</td><td>'+esc(r.away)+'</td>'
+             + '<td>'+(r.pick ? '★★★' : '·')+'</td>'
+             + '<td>'+(r.p1>0?'主让':'客让')+Math.abs(r.p1).toFixed(2).replace(/0$/,'')+'</td>'
+             + '<td style="font-size:12px;white-space:nowrap"><b style="font-size:13px">'+r.hs+':'+r.as+'</b></td>'
+             + _settleCell(r)
+             + '<td style="vertical-align:top;font-size:10px">'+_comboTierCell(r)+'</td>'
+             + '</tr>';
+  const _finTbl = (list) => '<table class="tbl" style="width:100%"><thead><tr>'
+             + '<th>开赛</th><th>联赛</th><th>主队</th><th>客队</th><th>档</th><th>让球</th><th>赛果</th><th>下盘结算·本注盈亏</th><th>系统方向<br><span style="font-size:9px;font-weight:400">监测·只读·不提供买法</span></th>'
+             + '</tr></thead><tbody>'
+             + list.map(_finRowHtml).join('')
+             + '</tbody></table>';
+  const SDR = (typeof window !== 'undefined' && window.STRUCT_DOWN_RECORD) ? window.STRUCT_DOWN_RECORD : null;
+  const sum = (SDR && SDR.summary) || { n:832, rate:'58.1', roi:'19.2', ciLo:'12.7', ciHi:'25.7' };
+  const finN = (SDR && SDR.rows) ? SDR.rows.length : sum.n;
+  const SPB = (typeof window !== 'undefined' && window.SD_PICK_BACKTEST && window.SD_PICK_BACKTEST.groups) ? window.SD_PICK_BACKTEST : null;
+  const pickBt = SPB ? SPB.groups['精选收紧(下盘&dir≠W&tier≠1)'] : null;
+  const html =
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 14px">'
+    + _sdStatCard('精选', picks.length+' 场', '#2faa6a')
+    + _sdStatCard('候选池', pool.length+' 场', '#64748b')
+    + _sdStatCard('精选命中', (pickBt ? pickBt.rate : '63.7')+'%', '#2faa6a')
+    + _sdStatCard('精选 ROI', '+'+(pickBt ? pickBt.roi : '28.9')+'%', '#2faa6a')
+    + _sdStatCard('精选 n', (pickBt ? pickBt.n : '80')+' 场', '#36c275')
+    + _sdStatCard('标定命中', sum.rate+'%', '#0ea5e9')
+    + _sdStatCard('窗口', 'pan_gap∈[-0.4,-0.13)·提质', '#64748b')
+    + _sdStatCard('仓位/纪律', '本金1/4·不碰t1', '#f59e0b')
+    + (finStat.n ? _sdStatCard('已完赛复盘', finStat.win+'赢/'+finStat.push+'走/'+finStat.lose+'输 · '+(finStat.rate!=null?finStat.rate+'%':'—'), '#e54545') : '')
+    + '</div>'
+    + _sdHiCard(picks)
+    + (picks.length
+        ? ('<div style="font-weight:700;color:#2faa6a;margin:6px 0 4px">🟢 结构下盘精选（明确下盘方向 · 与洋哥"受让"主线同侧 · 本金 1/4）</div>'
+           + '<div style="font-size:11px;color:var(--mut);margin-bottom:4px">精选 = 盘口判下盘 且 排除「模型挺让球方(dirCode=W·回测44%)」与「t1终局门已触发(tier=1·回测28%)」两段反向必死（即"不碰t1终局门"铁律的实证）。真实完场回测 n='+(pickBt?pickBt.n:'80')+' 命中 '+(pickBt?pickBt.rate:'63.7')+'% / ROI +'+(pickBt?pickBt.roi:'28.9')+'%（全窗口基线仅 58.1%/+19.2%，精选提升 +5.6pt 命中 +9.7pt ROI）。</div>'
+           + _tbl(picks, true))
+        : '<p class="note">当前没有符合「盘口判下盘 + 排除反向必死段」的<b>即将开赛</b>结构下盘精选；下方候选池为盘口观望且同样排除反向段的结构偏浅场，仅观察不下注。</p>')
+    + (pool.length
+        ? ('<div style="font-weight:700;color:#64748b;margin:10px 0 4px">⚪ 候选池（结构偏浅 · 盘口观望 · 已排除反向必死段 · 仅观察不下注）</div>' + _tbl(pool, false))
+        : '')
+    + (finRows.length
+        ? ('<div style="font-weight:700;color:#e54545;margin:16px 0 4px">🏁 已完赛复盘（'+finRows.length+' 场 · 逐场对账：推荐→赛果→下盘结算）'
+           + (finStat.rate!=null ? ('　命中 <b style="color:'+(finStat.rate>=55?'#2faa6a':'#e54545')+'">'+finStat.rate+'%</b>（'+finStat.win+'/'+(finStat.win+finStat.lose)+'·'+finStat.push+'走） · ROI '+(finStat.roi!=null?((finStat.roi>=0?'+':'')+finStat.roi+'%'):'—')+' · ±'+(finStat.se||'—')) : '')
+           + ' · ★精选命中 '+(finPickStat.rate!=null?finPickStat.rate+'%':'—')+'</div>'
+           + '<div style="font-size:11px;color:var(--mut);margin-bottom:4px">同上方口径（pan_gap∈[-0.4,-0.13)·提质门禁·排除反向必死段）逐场结算下盘(受让)输赢。0.25/0.75盘拆半注、整数盘走水退本，ROI 按真实水位逐注累计——这就是"每条推荐到底对不对、盈亏几何"的对账表。点数随 bake 完场比分自动刷新。</div>'
+           + _finTbl(finRows))
+        : '<div style="font-weight:700;color:#64748b;margin:16px 0 4px">🏁 已完赛复盘（暂无已完赛且符合口径的结构下盘场次——完赛后自动逐场对账）</div>')
+    + '<p class="note" style="margin-top:12px">📊 精选口径：pan_gap∈[-0.4,-0.13) 且 pan_predict==="下盘" 且 dirCode≠"W" 且 tier≠1 + 提质门禁(欧赔分歧≥0.2 或 浅盘|h|<0.5)；标定回溯池 '+finN+' 场（bake 真实完场），与「建议层战绩·结构下盘标定战绩」一致。本列表为<b>实时</b>信号，赛果需临场验证，<b>本金 1/4 · 不碰 t1 终局门 0.72</b>。</p>'
+    + '<p class="note" style="margin-top:8px;color:#0ea5e9">⚡ <b>临场重判</b>（据《足球财富》盘路演变，实时捕捉）：初盘(a0/h0)→临场(p1/h1)盘路实质变动(｜盘口｜≥0.05 或 ｜水位｜≥0.05) → <b style="color:#2faa6a">🟢临场确认</b>（CVM权威583样本·留出集 75.7%/+50.4% n=111）；无变动 → <b>⚪临场维持</b>（61.5%/+19.5% n=123，仍正）。所有方向桶(升/降/升水/降水)留出 71~83%/+36~+72% <b>无一为负</b>，故<b>不做"撤"</b>（书"降水就撤下盘"在数据上不成立，撤会误杀好单）。逐帧轨迹见场次明细「赔率/让盘轨迹」。</p>';
+  $('structDownContent').innerHTML = html;
+  $('structDownModal').classList.add('show');
+}
+function closeStructDown(){ const _m=$('structDownModal'); if(_m)_m.classList.remove('show'); }
+/* ═══════════ 三盘资金 · 过热板（★ 与参考软件 1:1：强队 | 判定「正式过热 +N」| 结果） ═══════════
+   ★ 2026-10-28 口径终定（用户截图实证）：参考软件里尔 +7 / 兰斯 +6 / 毕尔巴鄂 +4，全是【强队】、数字都是个位数。
+     ⇒ 判定数 N = 北单占比 − 公平胜率 − 返还率缺口（超出门槛的点数），**不是绝对偏差**。
+       例：占比 59.7% − 公平 44.6% = +15.1pt 绝对偏差，缺口 8.6pt → 判定「正式过热 +6.5」。
+     ⇒ 只标【强队（让球方）被超买】的场次；弱队过热/平过热一律不标（参考软件「强队」列同理）。
+   ★ 买法：强队被超买 → 反买它 → 走下盘受让（买强队的对手）。洋哥"大热必死"原法。
+   ★ 洋哥方法论（自传《盘赔我见》逐字读通）：
+     ① 三盘＝竞彩(资金趋势) + 365(异常操盘) + 北单赔率池(100%真实占比)；切勿从三盘起步。
+     ② 北单热度 = 占比 − 公平胜率（引擎 an.yg.triFlow.maxFlow），已用洋哥亲举 3 例 3/3 对齐。
+     ③ 大热必死两道触发(任一)：daHot(heatExcess>缺口) 或 盘级偏差≥2级(15pt=isDanger)；超得越多越强，无上界。
+   ★ 护栏：① heatSrc==='beidan'（澳客 ppi 是计算热度会刷 +89pt 垃圾）；② bdDirOk===true（北单错行假热）；
+     ③ 只收强队侧（弱队过热不构成大热必死）。北单仅覆盖 ~66/3300 场，故标记只出现在这些场（参考软件同理）。 */
+/* ★★★ 2026-10-29 口径终校（用户暴怒点：参考软件 +4/+7，我却给 +30/+40，后又误÷4.7 给 +1.4级）
+   ⚠ 关键纠正：参考软件「正式过热 +N」的 N = 净超买点数（pt），**不是盘级**，绝不可÷4.7！
+   判据（洋哥原话《盘赔我见》）：
+     · 洋哥热度系统 = 北单赔率池 vs 365 同返还率换算的偏离；且他明言「必发并不能反应球队购买热度」→ 正确源是北单，非必发。
+     · 亲举「异常大热」案例：莫尔德北单赔率被打偏到半球中水（公平是平手盘）——那只是 1 个盘级偏差≈4.7pt，他就叫"异常大热"了。
+       ⇒ 若 +N 是盘级，则里尔+7=+7盘级≈1.75球偏差才算大热，荒谬。故 +N 必为净超买 pt。
+     · 里尔：占比59.7%−公平44.6%=+15.1pt 绝对偏差，缺口8.6pt → 净超买 +6.5pt ≈ 参考 +7（个位数，与截图一致）。
+   换算：N(pt) = 北单占比 − 公平胜率 − 返还率缺口。例：占比−公平=22.3pt、缺口8.3pt → 净超买 +14.0pt（直接显示 +14.0pt，不再÷4.7）。
+   ★ 4.7pt 仅在"盘口偏差 pan_gap"语境下 = 1 盘级（0.25球），与资金净超买 pt 是两个概念，切勿混用。 */
+/* ★ 2026-10-29 终校（对照洋哥原话《盘赔我见》）：
+   参考软件「正式过热 +N」的 N = 净超买点数（pt）= 北单占比 − 公平胜率 − 返还率缺口，
+   **不是盘级**（绝不可 ÷4.7）。
+   判据：洋哥亲举"异常大热"案例（莫尔德北单赔率被打偏到半球中水 vs 公平平手盘）只=1盘级偏差≈4.7pt，
+   他即称"异常大热"；若+N是盘级，则里尔+7=+7盘级≈1.75球偏差才算大热，荒谬。
+   故 N 必为 pt：里尔净超买 6.5pt≈参考+7、毕尔巴鄂 4pt≈+4、兰斯 6pt≈+6（个位数，与截图一致）。
+   本函数现直接返回净超买 pt（不再换算盘级）。盘口偏差 pan_gap 另走一套，不受影响。 */
+function _ptToLvl(pt){
+  if (pt == null || !isFinite(+pt)) return null;
+  return +(+pt).toFixed(1);
+}
+/* ★★ 2026-10-31 八修·全板唯一量出口（用户"问一次错一次"的根因收口）：
+   此前「热度/超买」在全板有 6 个出口，5 个用**绝对偏差 heatExcess**（未扣返还率缺口）、1 个用净超买 →
+   同一场在这几处读数不同（差约 8pt），档位门槛还两套（18/8/2 vs 6/4）。每次只补一个出口，其余仍在用旧量，
+   于是"修完一处、用户又在另一处看到 10 几 pt"。
+   铁律：**全板任何"热度/超买"主显数字一律走本函数取净超买；若确需展示绝对偏差，必须显式标注"绝对偏差·未扣缺口"**。 */
+function _ygNet(x){
+  try{
+    if (!x) return null;
+    if (x.netPt != null && isFinite(+x.netPt)) return +(+x.netPt).toFixed(1);          // ★ 引擎权威值优先
+    const ex  = (x.excessPt != null) ? +x.excessPt : ((x.heatExcessEff != null) ? +x.heatExcessEff : (x.heatExcess != null ? +x.heatExcess : null));
+    if (ex == null) return null;
+    if (x.heatUsable === false) return null;                                            // ★ 非真实资金源不出数字
+    const gap = (x.heatGap != null && isFinite(+x.heatGap)) ? +x.heatGap : 0;
+    return +(+(ex - gap)).toFixed(1);
+  }catch(e){ return null; }
+}
+/* 绝对偏差（未扣缺口）——只作副行对照，调用方必须在文案里写明"绝对偏差·未扣缺口" */
+function _ygRaw(x){
+  try{
+    if (!x) return null;
+    if (x.excessPt != null && isFinite(+x.excessPt)) return +(+x.excessPt).toFixed(1);
+    const v = (x.heatExcessEff != null) ? +x.heatExcessEff : (x.heatExcess != null ? +x.heatExcess : null);
+    return v == null ? null : +v.toFixed(1);
+  }catch(e){ return null; }
+}
+function _fundHeat(tid){
+  try{
+    const _pk = OFFLINE_PACK && OFFLINE_PACK[tid] && OFFLINE_PACK[tid].an;
+    const _raw = window.__BAKE_RAW__ && window.__BAKE_RAW__.packs && window.__BAKE_RAW__.packs[tid] && window.__BAKE_RAW__.packs[tid].an;
+    const an = (_pk && (_pk.yg || _pk.ygMin)) ? _pk : (_raw || _pk);   // 首屏只有 ygMin(轻量)，明细包到位后才有完整 yg
+    const yg = an && (an.yg || an.ygMin);                              // ★ gen_index 把 yg 拆进懒加载，首屏只剩 ygMin，兼容读取
+    // ★ 洋哥三盘·北单赔率池热度：只认北单真实占比源；bdDirOk=true 才是干净配对(排除北单错行假热)
+    if (!yg || yg.heatSrc !== 'beidan' || yg.bdDirOk !== true) return null;
+    const tf = yg.triFlow;
+    // ★ 统一口径（2026-10-29 终校）：头条「+N」= 洋哥净超买 (北单占比−公平胜率−返还率缺口) 点数（pt），
+    //   与三盘列/过热榜/历史榜完全一致（对标参考软件 +4/+6/+7，N 即净超买 pt，非盘级、绝不÷4.7）。
+    //   maxFlow(北单SP−欧赔即时流速差) 仅作副行「流速」参考，不再当头条量级——
+    //   否则与 heatExcess 背离时(如 he=-13 而 maxFlow=13)会误报过热，与三盘列自相矛盾。
+    /* ★★ 2026-10-31 七修：本板头条数字必须**直接取引擎 netPt**，不得自己在 UI 里另算一遍。
+       旧写法用 yg.heatExcess − heatGap 自算，还拿 triFlow.maxFlow(流速差·另一个口径)兜底 →
+       与引擎 netPt 对不上（实测同一场 UI 给 +12.6pt、引擎 netPt 只有 +6.0pt），
+       且 maxFlow 兜底绕过了 heatUsable/25pt 护栏 = 板上出现无真实资金源的假数字。 */
+    const net = (yg.netPt != null && isFinite(+yg.netPt)) ? +yg.netPt : null;
+    if (net == null) return null;                      // ★ 无引擎净超买 → 本场不进板
+    const ex  = (yg.excessPt != null) ? +yg.excessPt : ((yg.heatExcess != null) ? +yg.heatExcess : null);   // 绝对偏差（副行展示）
+    if (ex == null) return null;
+    const gap = (yg.heatGap != null && isFinite(+yg.heatGap)) ? +yg.heatGap : 0;
+    const over = +net.toFixed(1);
+    // ★ 兜底护栏（引擎已对 maxFlow>25 置空；此处再拦旧 bake 残留）：物理不可能值不出板
+    if (Math.abs(over) > 25) return null;
+    /* ★ 2026-10-30 终校·三盘合流门控（洋哥自传197-199行"切勿从三盘作为起点"）：
+       洋哥大热必死 = ①盘资金趋势同指 + ②盘365不设防(异常) + ③盘北单大热(差值>缺口)。
+       此前本板把「③盘单因子(差值>缺口)」当大热必死，弗拉门戈等赛前单即因此误判
+       （只有③、无①② → 实为单因子拥挤，非三盘合流）。修正：
+       - daHot 仍为③盘定性（差值>缺口），但 bigHot(大热必死) 必须三盘合流：
+         pan2.side 或 jc.hotSide 与北单热门方同指 且 pan2.def∈(flat,fade)（二盘不设防）。
+       - 缺二盘(pan2 null)时不算大热必死（数据不足以三盘合流），降级「拥挤观察」。
+       - 二盘跟随降水(follow)=正常吃水盘，不算大热必死。 */
+    const daHot = yg.daHot === true;
+    const extreme = !!(tf && tf.isDanger === true);    // 盘级偏差≥2级·极端过热
+    const _pan = yg.pan2 || null;
+    const _side1 = (_pan && _pan.side && yg.heatSide && _pan.side === yg.heatSide)
+                || (yg.jc && yg.jc.hotSide && yg.heatSide && yg.jc.hotSide === yg.heatSide);
+    const _noDefend = !!(_pan && (_pan.def === 'flat' || _pan.def === 'fade'));
+    const bigHot = daHot && _side1 && _noDefend;       // ★ 三盘合流才算大热必死
+    /* ★ 2026-10-30：单因子（仅③盘）拥挤但未三盘合流 → 标"拥挤·未合流"，不标大热必死 */
+    const soloHot = daHot && !bigHot;
+    const lvl = _ptToLvl(over);
+    return { excess:ex, gap, over, lvl, side:(tf&&tf.maxSide)||yg.heatSide||null, maxFlow:(tf?tf.maxFlow:null), daHot, extreme, bigHot, soloHot, triFlowOK: !!_side1, panDef: (_pan?_pan.def:null) };
+  }catch(e){ return null; }
+}
+/* ★ 2026-10-29 分级标尺（按【净超买 pt】）：
+   参考软件实测里尔 +7pt（必发级）、毕尔巴鄂 +4pt（显著），同口径 = 北单占比−公平胜率−返还率缺口。
+   档位：≥+6pt 必发级 / +4~+6pt 显著 / +3~+4pt 警戒 / +2~+3pt 偏热（观察）／<+2pt 不标。
+   入参 = 净超买 pt，绝不÷4.7、不叫"级"。 */
+function _fpGrade(lvl){
+  const o = (lvl!=null && isFinite(+lvl)) ? +lvl : 0;
+  if (o >= 6) return { level:'extreme',    tag:'必发级', desc:'必发可能性最大', color:'#dc2626', bg:'#fee2e2' };
+  if (o >= 4) return { level:'significant',tag:'显著',   desc:'意义很大',       color:'#ea580c', bg:'#ffedd5' };
+  if (o >= 3) return { level:'alert',      tag:'警戒',   desc:'开始警醒',       color:'#ca8a04', bg:'#fef9c3' };
+  if (o >= 2) return { level:'warm',       tag:'偏热',   desc:'洋哥2级大热线',   color:'#0891b2', bg:'#e0f2fe' };
+  return null;
+}
+/* 三盘资金·过热板（★ 与参考软件 1:1 同构：强队 | 判定 | 结果）
+   参考软件截图实证：里尔「正式过热 +7」、兰斯 +6、毕尔巴鄂 +4 —— 全是【强队】、数字都是个位数。
+   ⇒ 它标的是「强队被散户超买」这一种情形，且 "+N" = 超出返还率缺口的点数，不是绝对偏差。
+   本函数严格按此口径：
+     ① 只收【过热方 = 强队(让球方/低赔方)】的场次（弱队过热一律不标，参考软件也不标）；
+     ② N = 北单占比 − 公平胜率 − 返还率缺口（yg.heatGap），与参考软件 +4/+6/+7 同量级同口径；
+     ③ N ≥ 4 才标「正式过热 +N」（对齐参考软件 +4 开始警醒；低于 +4 视为未明显超买，不硬凑）；
+     ④ 分级标尺：+4~+4.9 警戒(黄) / +5~+5.9 显著·意义大(橙) / ≥+6 必发级·必发可能性最大(红)；
+     ④ 买法固定：强队被超买 → 反买它 → 「走下盘受让」买对手(受让方/弱队)，这是洋哥"大热必死"原法。 */
+function _fundPlateTodayPicks(opt){
+  const onlyFlip = !!(opt && opt.onlyFlip);   // ★ 2026-10-31 七修：true=只收「盘口翻转」档（独立观察区，不进过热主榜）
+  const rows=[];
+  for (const m of MATCHES){
+    const h=_fundHeat(m.tid);
+    if (!h) continue;
+    if (String(m.state)==='-1') continue;             // 只收即将开赛
+    const a=m.analysis||packAnalysis(m.tid)||{};
+    const exph=(a.exp_hcap!=null && isFinite(+a.exp_hcap)) ? +a.exp_hcap : null;
+    if (exph==null) continue;                          // 无亚盘(无强弱)不标
+    const favTeam = exph>0 ? '主' : '客';              // 强队 = 让球方(盘口方)
+    const hiTeam  = h.side==='W'?'主':(h.side==='L'?'客':'平');   // 被超买方
+    if (hiTeam !== favTeam) continue;                  // ★ 只标「强队被超买」——这一条就是"不该的一大把"的根治
+    if (!(h.lvl >= 3)) continue;                       // ★ 净超买 ≥+3pt 起标（对齐历史登记门槛，赛前即可见所有将被登记的过热场；≥+4 显著 / ≥+6 必发级）
+    /* ★★ 2026-10-31 七修·翻转型不进过热主榜（用户质问"哪来那么多10几pt、5以上大把"→ 全量分布查证的硬结论）：
+       北单干净样本 131 场里，净超买 ≥+8 的 21 场 **100% 是翻转型**；真·热门方超买 76 场 p50=−12.6、
+       ≥+5 仅 1 场、≥+10 零场。⇒ 板上所有"+10 几""5 以上大把"全部来自翻转型。
+       翻转型 = 北单把**冷门方(受让方)**买到盘口翻转，不是洋哥定义的"热门方(强队)被散户超买"；
+       冷门方公平胜率低 → 同样资金量算出的偏离天然更大（数字看着吓人但含义不同），
+       且多集中在挪超/爱超/智甲/墨超等小联赛（洋哥原文《北单赔率池》明写"小比赛慎用"）。
+       故：主榜只留真·热门方超买；翻转型单独进下方「🔄 盘口翻转·观察」区，不占过热名额、不参与过热排序。 */
+    const _isFlip = (function(){ try{ return !!(((m.analysis||packAnalysis(m.tid)||{}).yg||{}).bdFlipSane); }catch(e){ return false; } })();
+    if (onlyFlip ? !_isFlip : _isFlip) continue;
+    const strongTeam = displayTeam(m, favTeam==='主'?'home':'away');
+    const oppTeam    = displayTeam(m, favTeam==='主'?'away':'home');
+    rows.push({
+      tid:m.tid, ts:kickTs(m), league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      strong:strongTeam, opp:oppTeam, exph,
+      over:h.over, lvl:h.lvl, excess:h.excess, gap:h.gap,
+      /* ★ 2026-10-29 洋哥判据二（自证列）：北单隐含盘口 vs 365期望盘口的**盘级差**（0.25球=1级）。
+         洋哥《盘赔我见》明言「换算亚盘后达到两个盘级的偏差」即异常大热（莫尔德案例：公平平手盘、北单打到半球中水=2级）。
+         与「净超买pt」是两个独立刻度：pt 看资金占比偏离、级差看盘口被买深了多少 —— 两者同向时信号最硬。 */
+      lvlDiff:(function(){ try{ const _ld=((m.analysis||packAnalysis(m.tid)||{}).yg||{}).lvlDiff; return (_ld&&_ld.bd!=null)?+_ld.bd:null; }catch(e){ return null; } })(),
+      lvlFull:(function(){ try{ return ((m.analysis||packAnalysis(m.tid)||{}).yg||{}).lvlDiff||null; }catch(e){ return null; } })(),
+      heatExcessAlt:(function(){ try{ const _v=((m.analysis||packAnalysis(m.tid)||{}).yg||{}).heatExcessAlt; return (_v!=null)?+_v:null; }catch(e){ return null; } })(),
+      heatExcessAltSide:(function(){ try{ return ((m.analysis||packAnalysis(m.tid)||{}).yg||{}).heatExcessAltSide||null; }catch(e){ return null; } })(),
+      /* ★ 2026-10-31 翻转型标记：北单把弱势方买到翻转盘口（bdFlipSane）。实测今日 ≥+6pt 的场里绝大多数是它，
+         且集中在挪超/爱超/智甲/墨超等小联赛（洋哥原文"小比赛慎用"）。它 ≠ 洋哥定义的"热门方(强队)被超买"，
+         必须单独成档展示，不能占"正式过热/必发级"名额 —— 否则板上会呈现"一片必发级"的假象。 */
+      flip:_isFlip,
+      /* ★ 一盘·竞彩官方锚点：竞彩归一股 vs 365归一 在同一方上的资金倾斜pt（正=竞彩散户更看好该方） */
+      jcDev:(function(){ try{ const _jc=((m.analysis||packAnalysis(m.tid)||{}).yg||{}).jc; return (_jc&&_jc.dev!=null)?+_jc.dev:null; }catch(e){ return null; } })(),
+      hcapTxt:(exph>0?'主让':'客让')+Math.abs(exph).toFixed(2),
+      /* ★ 2026-10-30 终校·三盘合流区分：只有三盘合流(大热必死)才标"正式过热"；
+         仅③盘单因子(差值>缺口)未合流 → 标"拥挤·未合流"（洋哥明言三盘须合流，弗拉门戈即此误判）。 */
+      /* ★ 2026-10-31：翻转型优先单列（不占"正式过热/必发级"名额） */
+      verdict:(function(){
+        try{ if ((((m.analysis||packAnalysis(m.tid)||{}).yg)||{}).bdFlipSane) return '盘口翻转 +'+h.lvl.toFixed(1)+'pt'; }catch(e){}
+        return (h.bigHot
+          ? (h.lvl>=6?'必发级·正式过热 +':'正式过热(三盘合流) +')+h.lvl.toFixed(1)+'pt'
+          : (h.soloHot ? '拥挤·未合流(仅北单) +'+h.lvl.toFixed(1)+'pt'
+                       : (h.lvl>=6?'必发级·正式过热 +':(h.lvl>=4?'正式过热 +':'过热警戒 +'))+h.lvl.toFixed(1)+'pt'));
+      })(),
+      /* ★ 2026-10-30 修（弗拉门戈赛前单惨败·用户抓包）：不再给「反买·下盘受让」买法——
+         机械反买已被自家回测证伪（287场加护栏后翻负 −26.2%），且首个赛前实测单（弗拉门戈，
+         瓦斯科 1:4）即穿盘惨败。本板只发拥挤警告：动作=不追高、勿重仓超买方。 */
+      bet:(_isFlip ? '仅观察·不追高' : '拥挤警告·不追高·'+strongTeam),
+      bigHot:h.bigHot, extreme:h.extreme, soloHot:h.soloHot,
+      grade:_fpGrade(h.lvl)                              // ★ 分级按净超买 pt
+    });
+  }
+  rows.sort((x,y)=> y.lvl-x.lvl);
+  return rows;
+}
+/* ★ 2026-10-29 赛前覆盖双修之一：「方向背离·观察」档（用户"为什么非得赛后才给"的真根因之一）。
+   现状：bdDirOk=false（北单热门方与欧赔热门方相反）的场被 _fundHeat 整体拒绝 → 板上完全看不到。
+   但其中有一类是【公众资金对抗机构】的真背离（如 10-30 埃弗顿vs纽卡：北单 45% 押客、机构却定主热门，
+   净超买 +12.6pt 赛前 16:31 就算出来了，只是被护栏隐藏），另一类是北单错行（"奥地利"歧义名等）。
+   两类肉眼难分 → 全部以橙色「观察」档展示，明示：疑似错行或公众对抗机构，不构成信号、不可机械反买。
+   回测事实（记忆铁律）：同侧子集加护栏后翻负 −26.3%，故本档仅透明化、绝不给买法。 */
+function _fundPlateDiverge(){
+  const rows=[];
+  for (const m of MATCHES){
+    if (String(m.state)==='-1') continue;             // 只收赛前/赛中
+    let yg=null;
+    try{
+      const _pk = OFFLINE_PACK && OFFLINE_PACK[m.tid] && OFFLINE_PACK[m.tid].an;
+      const _raw = window.__BAKE_RAW__ && window.__BAKE_RAW__.packs && window.__BAKE_RAW__.packs[m.tid] && window.__BAKE_RAW__.packs[m.tid].an;
+      const an = (_pk && (_pk.yg || _pk.ygMin)) ? _pk : (_raw || _pk);
+      yg = an && (an.yg || an.ygMin);
+    }catch(e){ continue; }
+    if (!yg || yg.heatSrc !== 'beidan') continue;     // 只认北单真实资金源
+    if (yg.bdDirOk !== false) continue;               // 本档只收方向相反的
+    const ex = (yg.heatExcess != null) ? +yg.heatExcess : null;
+    if (ex == null) continue;
+    if (Math.abs(ex) > 25) continue;                  // 物理上限护栏（错行放大）
+    const gap = (yg.heatGap != null && isFinite(+yg.heatGap)) ? +yg.heatGap : 0;
+    const net = +(ex - gap).toFixed(1);               // ★ 洋哥口径：差值−返还率缺口 = 净超买
+    /* ★ 门槛 3pt → 1.5pt（2026-10-29 实测下调）：本档是「只看不动」的监测档，不是信号档。
+       实测 3 场背离场净超买仅 1.9/0.4/1.8pt（原始 ex 减返还率缺口后所剩无几），3pt 门槛把
+       全部赛前背离信息卡没了 —— 那正是用户问的"赛前为什么不给"的最后一环。监测档宁可多显、
+       明示不可下注；信号档（主榜 ≥+3pt）门槛不动。 */
+    if (Math.abs(net) < 1.5) continue;
+    const bdSide = yg.bdFav==='W'?'主':(yg.bdFav==='L'?'客':'平');
+    const euSide = yg.euFav==='W'?'主':(yg.euFav==='L'?'客':(yg.euFav?'平':'?'));
+    rows.push({
+      tid:m.tid, ts:kickTs(m), league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      ex, gap, net,
+      bdSide, euSide,
+      bdTeam: bdSide==='主'?displayTeam(m,'home'):(bdSide==='客'?displayTeam(m,'away'):'平局'),
+      share:(yg.heatShare!=null)?+yg.heatShare:null,
+      /* ★ 盘级差（洋哥判据二）辅助判错行：错行/贴错场次时北单隐含盘口与365期望盘口会离谱偏离（|级差|常 ≥3）；
+         真"公众对抗机构"级差通常温和（≤2）。仅提示，不自动裁决。 */
+      lvlDiff:(yg.lvlDiff&&yg.lvlDiff.bd!=null)?+yg.lvlDiff.bd:null,
+      lvlFull:yg.lvlDiff||null,
+      heatExcessAlt:(yg.heatExcessAlt!=null)?+yg.heatExcessAlt:null,
+      heatExcessAltSide:yg.heatExcessAltSide||null,
+      swapped:false
+    });
+  }
+  rows.sort((x,y)=> Math.abs(y.ex)-Math.abs(x.ex));
+  return rows;
+}
+/* ★ 2026-10-29 赛前覆盖双修之二：「北单让球池」覆盖档。
+   北单对强弱悬剩场只开让球胜平负（rq≠0），口径与胜平负池不同（占比是让球后的），绝不能算净超买。
+   本档纯展示在售让球池资金分布，让这批场赛前至少【看得见】北单钱往哪流。 */
+function _fundPlateRqCover(){
+  const rows=[];
+  if (typeof getBeidanRq !== 'function') return rows;   // 旧引擎兜底
+  for (const m of MATCHES){
+    if (String(m.state)==='-1') continue;
+    /* ★ 必须用 displayTeam（MATCHES 列表项键是 homeId/homeRaw，cleanTeam 只认 home_team_id → 恒"未知队"，实测踩坑） */
+    const r = getBeidanRq(displayTeam(m,'home'), displayTeam(m,'away'), cleanLeague(m));
+    if (!r || !r.pct) continue;
+    // swapped 行的 pct=[胜,平,负] 是相对 r.home（=实际客队）→ 换算回实际主客
+    const pct = r.swapped ? [r.pct[2], r.pct[1], r.pct[0]] : r.pct;
+    const rqV = (r.swapped && r.rq!=null) ? -r.rq : r.rq;   // 让球值同样随主客换向
+    rows.push({
+      tid:m.tid, ts:kickTs(m), league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      rq:rqV, pct,
+      no:r.no
+    });
+  }
+  rows.sort((x,y)=> String(x.ts).localeCompare(String(y.ts)));
+  return rows;
+}
+/* ★ 2026-10-29 洋哥判据「实时读数」：主榜为空时也能看见查表法/双口径在真实算。
+   列出当前有真实资金源（北单/必发）且已算出盘级差的未完赛场（最多 10 场）：
+   判据一两口径（归一差 / Excel表口径）、判据二三口径（vsReal / table / linear）、盘口对照与坏行标记。
+   目的：让"板子到底算没算"可被用户直接自审，而不是只能看空榜猜。 */
+function _fundPlateYgReadout(){
+  const rows=[];
+  for (const m of MATCHES){
+    if (String(m.state)==='-1') continue;
+    /* ★ 首屏只有 ygMin（白名单轻量版），完整 yg 在懒加载明细包 → 必须兼容读取，否则恒空（实测踩坑） */
+    let y=null; try{ const _an=m.analysis||packAnalysis(m.tid); y=_an?(_an.yg||_an.ygMin||null):null; }catch(e){}
+    if (!y) continue;
+    if (y.heatSrc!=='beidan' && y.heatSrc!=='betfa') continue;   // 只收真实资金源（禁 ppi 代理）
+    const ld=y.lvlDiff||null; if (!ld) continue;
+    if (ld.vsReal==null && ld.table==null && ld.bd==null) continue;
+    rows.push({
+      tid:m.tid, ts:kickTs(m), league:cleanLeague(m),
+      home:displayTeam(m,'home'), away:displayTeam(m,'away'),
+      norm:(y.heatExcess!=null)?+y.heatExcess:null,
+      alt:(y.heatExcessAlt!=null)?+y.heatExcessAlt:null,
+      lvlFull:ld, src:y.heatSrc
+    });
+  }
+  rows.sort((a,b)=> Math.abs(b.norm||0)-Math.abs(a.norm||0));
+  return rows.slice(0,10);
+}
+/* ★ 2026-10-29 北单覆盖率体检（用户追问"赛前为什么给不出"的诚实答案）：
+   把「数据源有多少 → 配对上多少 → 各档剩多少」整条漏斗摆到板上，不再让空榜看起来像"没算"。
+   实测（10-29 18:40）：北单在售 17 行 → 胜平负池 12 / 让球池 5 → 配对上比赛 10 场 →
+   方向同侧(可判信号) 7 / 方向背离(观察) 3 → 净超买≥门槛 0。漏斗每一层的损耗都真实存在。 */
+function _fundPlateCoverage(){
+  const bd = (typeof BD_ROWS !== 'undefined' && BD_ROWS) ? BD_ROWS : [];
+  const total = bd.length;
+  let rqPool = 0, winPool = 0;
+  for (const r of bd){ if (r.rq !== 0 && r.rq != null) rqPool++; else winPool++; }
+  const OP = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK : {};
+  let pre = 0, paired = 0, dirOk = 0, dirFalse = 0, betfaN = 0;
+  for (const m of MATCHES){
+    if (String(m.state) === '-1') continue;
+    pre++;
+    const a = OP[m.tid] && OP[m.tid].an; if (!a) continue;
+    const y = a.yg || a.ygMin; if (!y) continue;
+    /* ★ 2026-10-30：必发那条腿此前整条断掉（okooo WAF 对桌面 UA 返 405 → betfa 恒为 []），
+       已修（移动端 UA+Accept+Referer）。这里把两源都算进漏斗，用户能自证"必发接回来了"，
+       但本板（三盘·洋哥口径）**只收北单**：洋哥明言「必发并不能反应球队购买热度」，
+       故必发只供热度榜/PPI，不进本板判级 —— 写清楚，别让人以为数据丢了。 */
+    if (y.heatSrc === 'betfa'){ betfaN++; continue; }
+    if (y.heatSrc !== 'beidan') continue;
+    paired++;
+    if (y.bdDirOk === false) dirFalse++; else dirOk++;
+  }
+  return { total, rqPool, winPool, pre, paired, dirOk, dirFalse, betfaN };
+}
+/* ★ 2026-10-28 三盘资金·过热板「历史复盘」区（用户："看不到历史，怎么复盘"）。
+   数据源 window.__FUNDPLATE_HISTORY__（gen_index 每轮构建 upsert：当天登记 → 开赛后回填）。
+   结算口径 = 本板买法「走下盘受让」：下盘净胜 =（受让方进球 + |让球|）− 让球方进球；
+     >0 赢盘 / =0 走盘 / <0 输盘。ROI 按每场 1 注、亚盘水位 0.90 粗算（赢 +0.90 / 输 −1 / 走盘 0）。
+   ★ 为什么历史短：北单真实资金只覆盖当轮在售场次，历史完场比赛在引擎里已无北单匹配
+     （实测 3369 场完场仅 1 场有北单源），事后无法重算 → 只能从上线日起逐日累积，这点必须诚实标注。 */
+function fundplateHistoryHTML(){
+  /* 历史板队名解码：优先 decodeName（PUA 单源、无缓存），再回退 _histName(normTeamName)。
+     ★ 坑（2026-10-28 实测）：normTeamName 的 TEAM_CANON 缓存可能存到「剥标签失败」的原始串，
+       导致个别场次直接渲染出 <span class="review">&#xe960;</span> 这种字面 HTML。故此处绕开缓存。 */
+  const _fpName = function(id, zh, zht){
+    let v = '';
+    try{ if (typeof decodeName === 'function') v = decodeName(zh) || ''; }catch(_e){}
+    if (!v || v.length < 2){
+      try{ if (typeof _histName === 'function') v = _histName(id, zh, zht) || ''; }catch(_e){}
+    }
+    return String(v || '').replace(/<[^>]+>/g, '').replace(/&#x?[0-9a-fA-F]+;/g, '').trim();
+  };
+  const H = (typeof window !== 'undefined' && window.__FUNDPLATE_HISTORY__) || {};
+  const items = Array.isArray(H) ? H : (H.items || []);
+  const _empty = '<div style="margin:14px 0;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;font-size:12.5px;color:var(--mut);line-height:1.85">'
+    + '<b style="color:var(--acc)">📜 历史复盘</b>：暂无已登记场次。<br>'
+    + '原因：北单真实资金<b>只覆盖当轮在售场次</b>，历史完场比赛在引擎里已没有北单匹配，事后无法重算 —— 所以本板只能「<b>当天登记 → 开赛后回填</b>」，从上线日起逐日累积。</div>';
+  if (!items.length) return _empty;
+  /* ★ 2026-10-30 修（用户抓包「昨天对的全部赛后登记」）：此前赢盘率/ROI 把赛后补登的场次
+     也算进成绩——事后登记毫无预测价值，昨天 4 个 win 全是开赛后才录入的（门槛首次上线时
+     的回溯补登），唯一赛前登记的真单（弗拉门戈）反而惨败。
+     修正：赢盘率/ROI/输赢盘计数 **只统计赛前登记(post===false)** 的场次；
+     赛后补登照常展示但标记「不计成绩」。 */
+  const _kickTsH = function(e){
+    try{
+      const d = String(e.day||''), t = String(e.kickoff||'');
+      if (d.length < 8 || t.length < 4) return null;
+      return new Date(+d.slice(0,4), +d.slice(4,6)-1, +d.slice(6,8), +t.slice(0,2), +t.slice(3,5)).getTime();
+    }catch(_e){ return null; }
+  };
+  const _isPre = function(e){
+    if (!e.ts) return false;
+    const kt = _kickTsH(e);
+    return kt != null && (e.ts*1000) <= kt;
+  };
+  const decAll = items.filter(e=> e.result==='win' || e.result==='lose');
+  const dec = decAll.filter(_isPre);                     // 只有赛前登记才计成绩
+  const nWin = dec.filter(e=> e.result==='win').length;
+  const nLose = dec.filter(e=> e.result==='lose').length;
+  const nPush = items.filter(e=> e.result==='push' && _isPre(e)).length;
+  const nPend = items.length - decAll.length - items.filter(e=> e.result==='push').length;
+  const rate = dec.length ? Math.round(nWin/dec.length*1000)/10 : null;
+  const roi = (dec.length+nPush) ? Math.round((nWin*0.9 - nLose)/(dec.length+nPush)*1000)/10 : null;
+  const nStrong = items.filter(e=> +e.over>=8).length;
+  /* ★ 2026-10-29 登记时机透明化（用户质疑"是本来就有，还是比赛开始后才加进去的"）：
+     ts = 首次登记时刻（gen_index upsert 不再覆盖）；与开赛时间(day+kickoff)对比，
+     晚于开赛 = ⚠赛后补登（多为数据中断/自清空 bug 修复后的重录），规则本身不看赛果。 */
+  const _kickTs = function(e){
+    try{
+      const d = String(e.day||''), t = String(e.kickoff||'');
+      if (d.length < 8 || t.length < 4) return null;
+      return new Date(+d.slice(0,4), +d.slice(4,6)-1, +d.slice(6,8), +t.slice(0,2), +t.slice(3,5)).getTime();
+    }catch(_e){ return null; }
+  };
+  const _regInfo = function(e){
+    const rt = e.ts ? new Date(e.ts*1000) : null;
+    if (!rt) return { txt:'', post:null };
+    const kt = _kickTs(e);
+    const post = (kt != null && rt.getTime() > kt);
+    const p2 = function(n){ return String(n).padStart(2,'0'); };
+    return { post: post,
+      txt: '<div style="font-size:10px;opacity:.68;margin-top:1px">登记 '+p2(rt.getMonth()+1)+'-'+p2(rt.getDate())+' '+p2(rt.getHours())+':'+p2(rt.getMinutes())
+         + (post ? ' <b style="color:#b45309">⚠赛后补登</b>' : '') + '</div>' };
+  };
+  const nPre = items.filter(e=> _regInfo(e).post === false).length;
+  const nPost = items.filter(e=> _regInfo(e).post === true).length;
+  const _kpi=(n,v,c)=>'<span style="display:inline-block;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:5px 10px;margin:0 6px 6px 0;font-size:11.5px">'
+    +'<span style="opacity:.6">'+n+'</span> <b style="color:'+(c||'var(--txt)')+';font-size:14px">'+v+'</b></span>';
+  /* ★★ 2026-11-01 双向真结算（用户："赛前预测的比赛赛果出了很多，你发现问题没有"）：
+     本板默认买法一直是「强队被超买 → 反买它 → 走去下盘受让」。用 51 场**赛前登记**的
+     真结算按真实盘口+真实水位重算：押受让方 35.3% / ROI −29.0%；押让球方 64.7% / ROI +23.2%。
+     方向是反的。此处把两边并列摆出来，不再只报有利的一边。 */
+  const _S = H.summary || {};
+  const _preL = _S.pre || null, _preU = _S.preUpper || null;
+  const _fpct = x => (x == null) ? '—' : ((x > 0 ? '+' : '') + x + '%');
+  const sum = _kpi('已登记', items.length+' 场')
+    + _kpi('赛前登记', nPre+' 场', '#16a34a')
+    + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
+    + _kpi('赛前已结算', (dec.length+nPush)+' 场（待结算 '+nPend+'）')
+    + (_preL ? _kpi('赛前·押受让方', (_preL.hit==null?'—':_preL.hit+'%')+' / '+_fpct(_preL.roi), (_preL.roi>0?'#16a34a':'#dc2626')) : '')
+    + (_preU ? _kpi('赛前·押让球方', (_preU.hit==null?'—':_preU.hit+'%')+' / '+_fpct(_preU.roi), (_preU.roi>0?'#16a34a':'#dc2626')) : '');
+  const rows = items.slice().sort(function(p,q){
+    const ps = (p.result==='win'||p.result==='push'||p.result==='lose') ? 1 : 0;
+    const qs = (q.result==='win'||q.result==='push'||q.result==='lose') ? 1 : 0;
+    if (ps !== qs) return qs - ps;                       // 已结算置顶
+    return String(q.day||'').localeCompare(String(p.day||''));
+  }).map(function(e){
+    let homeD=e.home||'', awayD=e.away||'', lgD=e.league||'';
+    homeD = _fpName(e.homeId, e.home, e.homeZht) || homeD;
+    awayD = _fpName(e.awayId, e.away, e.awayZht) || awayD;
+    lgD   = _fpName(null, e.league, '') || lgD;
+    const strong = e.strongIsHome ? homeD : awayD;       // 强队 = 让球方
+    const opp    = e.strongIsHome ? awayD : homeD;       // 买法 = 下盘受让方
+    const sc = (e.hs!=null && e.as!=null) ? (e.hs+':'+e.as) : '—';
+    /* ★ 2026-11-01：显示**真实盘口**（此前显示的是模型期望盘口，"主让0.54"这种真实市场不存在）。 */
+    const _hcNum = (e.realHcap != null) ? +e.realHcap : (e.exph != null ? +e.exph : null);
+    const _hcTxt = (_hcNum == null) ? (e.hcapTxt||'—')
+      : (Math.abs(_hcNum) < 0.01 ? '平手' : ((_hcNum>0?'主让':'客让') + Math.abs(_hcNum).toFixed(2)));
+    const _hcSrc = (e.hcapSrc === 'market') ? '' : '<span style="color:#b45309;font-size:9.5px"> 模型盘口</span>';
+    /* ★ 2026-11-01 修：结果列不再只写"下盘"，同时给两个方向，避免读者以为那是推荐。 */
+    let rs='待结算 ⏳', rc='#94a3b8', bg='transparent';
+    if (e.result==='win'){ rs='受让方赢盘 '+(e.underMargin>0?'+'+e.underMargin:e.underMargin); rc='#16a34a'; bg='rgba(22,163,74,.10)'; }
+    else if (e.result==='push'){ rs='走盘 0'; rc='#b45309'; bg='rgba(180,83,9,.10)'; }
+    else if (e.result==='lose'){ rs='让球方赢盘 '+(e.underMargin); rc='#dc2626'; bg='rgba(220,38,38,.10)'; }
+    const margin = (e.underMargin!=null) ? ('<div style="font-size:10px;opacity:.6">受让方净胜 '+e.underMargin+'</div>') : '';
+    const _eLvl = _ptToLvl(e.over);
+    const _hg = _fpGrade(_eLvl);
+    const _hCol = _hg ? _hg.color : '#e54545';
+    const _hTag = _hg ? (' <span style="font-size:10px;font-weight:700;color:'+_hg.color+'">'+_hg.tag+'</span>') : '';
+    const _ri = _regInfo(e);
+    return '<tr style="border-top:1px solid var(--line);background:'+bg+'">'
+      +'<td style="padding:6px 7px;white-space:nowrap;opacity:.85">'+esc((e.day||'')+' '+(e.kickoff||''))+_ri.txt+'</td>'
+      +'<td style="padding:6px 7px;font-size:12px">'+esc(lgD)+'<div style="font-size:10px;opacity:.55">'+esc(_hcTxt)+_hcSrc+(e.water!=null?(' · 水'+ (+e.water).toFixed(2)):'')+'</div></td>'
+      +'<td style="padding:6px 7px"><b>'+esc(homeD)+'</b> vs <b>'+esc(awayD)+'</b></td>'
+      +'<td style="padding:6px 7px;font-weight:800">'+esc(strong)+'</td>'
+      +'<td style="padding:6px 7px"><span style="color:'+_hCol+';font-weight:800;white-space:nowrap">+'+(_eLvl==null?'—':_eLvl.toFixed(1))+'pt</span>'+_hTag
+      /* ★ 2026-10-31 七修·历史口径标记：10-31 之前登记的条目是**旧口径**（未扣返还率缺口，普遍虚高约 8pt），
+         与今日主榜的净超买不可直接比较。用户质问"哪来那么多10几pt"——查证后确认：板上 ≥+10pt 的 33 次
+         全部出自本历史区，是旧口径遗留值，不是今日信号。逐条标灰，不再误导。 */
+      + (function(){ const _d=String(e.day||''); const _dN=/^\d{2}-\d{2}$/.test(_d)?('2026-'+_d):_d;
+          return (_dN < '2026-10-31') ? '<div style="font-size:10px;color:#94a3b8;line-height:1.3">旧口径·未扣缺口<br>约虚高 8pt</div>' : ''; })()
+      +'</td>'
+      /* ★ 2026-10-30 修（用户抓包"错的这两场都是下盘受让"）：历史板买法列不再显示
+         「下盘受让·opp」——那是机械反买世界观（已被回测证伪）。改「拥挤警告」，
+         并如实标注该场是否赛前登记（赛前登记才有预测意义；赛后补登无价值）。 */
+      +'<td style="padding:6px 7px;color:#b45309;font-weight:700">拥挤警告·不追高·'+esc(strong)+'</td>'
+      +'<td style="padding:6px 7px;white-space:nowrap;font-weight:700">'+esc(sc)+'</td>'
+      +'<td style="padding:6px 7px;font-weight:800;color:'+rc+';white-space:nowrap">'+rs+margin+'</td>'
+      +'</tr>';
+  }).join('');
+  let h = '<div style="margin:16px 0 4px;padding:12px 14px;background:linear-gradient(135deg,#141b26,#111823);border:1px solid var(--line);border-radius:12px;color:#dbe6f2">';
+  h += '<div style="font-weight:800;font-size:14.5px;margin-bottom:2px">📜 历史复盘 · 过热拥挤追踪（不再作反买/下盘受让记录）'
+     + '<span style="opacity:.55;font-weight:400;font-size:11.5px;margin-left:6px">每日自动登记过热场 → 开赛后回填真实比分；<b style="color:#2faa6a">历史永久保留</b>，跨天/跨周不清空（如 10-30 仍可回看 10-29）</span></div>';
+  h += '<div style="margin:0 0 9px;padding:9px 11px;background:rgba(220,38,38,.13);border:1px solid rgba(220,38,38,.5);border-radius:9px;font-size:11.8px;line-height:1.75;color:#ffd9d9">'
+     + '<b style="font-size:12.5px">🔴 2026-11-01 实盘对账结论：本板原买法「强队被超买 → 反买它 → 买下盘受让」方向是反的。</b><br>'
+     + '用 <b>' + (nPre||0) + '</b> 场<b>赛前登记</b>、已结算 <b>' + (dec.length+nPush) + '</b> 场，按<b>真实亚盘盘口 + 真实水位</b>逐注结算：'
+     + (_preL ? ('押<b>受让方</b>（原买法）命中 <b>' + (_preL.hit==null?'—':_preL.hit+'%') + '</b> · ROI <b style="color:#ff8a8a">' + _fpct(_preL.roi) + '</b>（' + _preL.n + ' 注）') : '')
+     + (_preU ? (' ｜ 押<b>让球方</b>（过热强队本身）命中 <b>' + (_preU.hit==null?'—':_preU.hit+'%') + '</b> · ROI <b style="color:#7ee2a8">' + _fpct(_preU.roi) + '</b>') : '')
+     + '<br><b>旁证</b>：286 场历史回测加护栏后同一方向 −26.2%；赛前实测三连穿（拉齐奥 2:6、弗拉门戈 1:4、格雷米奥 2:0 下盘全输）。'
+     + '<b>所以本板从今天起不再给「下盘受让」买法</b>，只作拥挤度追踪。'
+     + '</div>';
+  h += '<div style="font-size:11.5px;opacity:.72;line-height:1.7;margin:2px 0 8px">'
+     + '<b style="color:#ffb4b4">★ 结算口径（2026-11-01 已修）：</b>'
+     + '此前结算盘口取 <b>an.exp_hcap（模型期望盘口）</b>，不是市场真实亚盘盘口 —— 实测两者中位差 <b>0.31 球</b>、P90 差 0.53、最大 2.08，'
+     + '板面还出现过「主让0.54」这种真实市场不存在的盘口，算出来的赢盘率与 ROI 因此不可信。'
+     + '现已改用 <b>grade_hcap_a（真实盘口）+ grade_water_a（上盘水位）</b>，赔率按 <b>上盘 1+水位 / 下盘 1+(1.90−水位)</b> 计，不设固定水位假设。'
+     + '<br>每行日期下方标注<b>登记时刻</b>（= 首次写入本板的构建时间，登记规则只看资金热度、不看赛果）；'
+     + '<b style="color:#b45309">⚠赛后补登</b> = 该时刻晚于开赛时间，可逐条自审是否存在马后炮。'
+     + '<br><b style="color:#ffb4b4">成绩口径：赢盘率/ROI <u>只统计赛前登记</u>的场次，赛后补登一律不参与成绩。</b></div>';
+  /* ★ 2026-10-31 七修·历史口径警示条（用户"哪来那么多10几pt、5以上大把"查证结论）：
+     板上 ≥+10pt 的数字 33 次全部来自本历史区，是 10-31 之前**旧口径**的登记值
+     （旧口径 = 占比−公平胜率的绝对偏差，未扣返还率缺口 6.5~11.4pt，中位 8.0 → 系统性虚高约 8pt）。
+     10-31 起已统一为净超买（= 绝对偏差 − 缺口，对齐参考软件 里尔+7/毕尔巴鄂+4）。
+     历史值不能重算（当时赔率快照已不可用），故逐条标注，不再让新旧数字混在一页上互相打架。 */
+  h += '<div style="margin:0 0 8px;padding:8px 10px;background:rgba(180,83,9,.14);border:1px solid rgba(180,83,9,.45);border-radius:8px;font-size:11.5px;line-height:1.7;color:#f4d3a3">'
+     + '⚠ <b>口径断点：2026-10-31 之前的历史条目是旧口径</b>（未扣「返还率缺口」，典型虚高 <b>约 8pt</b>），'
+     + '与上方今日主榜的<b>净超买 pt</b> <u>不是同一个量</u>，不可直接比较、也不能拿来当今日门槛。'
+     + '旧口径下常见的 +15~+25pt，换成新口径多半只有 +7~+17pt。历史登记时刻的赔率快照已无法重算，故如实标注而非改数。</div>';
+  h += '<div style="margin-bottom:2px">'+sum+'</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+     + '<thead><tr style="color:var(--mut);font-size:11px;text-align:left">'
+     + '<th style="padding:5px 7px;font-weight:500">日期/开赛</th>'
+     + '<th style="padding:5px 7px;font-weight:500">联赛</th>'
+     + '<th style="padding:5px 7px;font-weight:500">对阵</th>'
+     + '<th style="padding:5px 7px;font-weight:500">强队(过热方)</th>'
+     + '<th style="padding:5px 7px;font-weight:500">判定</th>'
+     + '<th style="padding:5px 7px;font-weight:500">拥挤警告</th>'
+     + '<th style="padding:5px 7px;font-weight:500">比分</th>'
+     + '<th style="padding:5px 7px;font-weight:500">结算（真实盘口）</th>'
+     + '</tr></thead><tbody>'+rows+'</tbody></table>';
+  if (dec.length===0){
+    h += '<div style="font-size:11.5px;opacity:.6;line-height:1.75;margin-top:8px">⏳ 目前只有登记、还没有结算样本——开赛后下一轮构建会自动回填比分。'
+       + '<b style="opacity:.9">为什么历史不能回溯</b>：北单真实资金只覆盖当轮在售场次，历史完场在引擎里已无北单匹配（3369 场完场仅 1 场可算），事后算不出来。</div>';
+  }
+  h += '</div>';
+  return h;
+}
+function showFundPlateAlert(){
+  // ★ 过热扫描依赖 odds.eu（在 bake_detail.js）；明细未加载时无信号，需确保加载后再算角标。
+  if (!window.__BAKE_DETAIL__){
+    try{ _ensureDetail().then(function(){ try{ showFundPlateAlert(); }catch(e){} }).catch(function(){}); }catch(e){}
+    return;
+  }
+  const picks=_fundPlateTodayPicks();
+  const _b=document.getElementById('btnFundPlate');
+  if (_b){
+    let badge=document.getElementById('btnFundPlateBadge');
+    if (!badge){ badge=document.createElement('span'); badge.id='btnFundPlateBadge';
+      badge.style.cssText='position:absolute;top:-7px;right:-9px;min-width:18px;height:18px;line-height:18px;text-align:center;background:#a855f7;color:#fff;border-radius:9px;font-size:11px;font-weight:800;padding:0 4px;box-shadow:0 1px 3px rgba(0,0,0,.3)';
+      _b.style.position='relative'; _b.appendChild(badge); }
+    const hot=picks.length;   // 角标 = 「正式过热 +N」场数（与参考软件同口径：只数强队被超买）
+    if (hot){ badge.style.display='inline-block'; badge.textContent=hot>99?'99+':String(hot); }
+    else badge.style.display='none';
+  }
+}
+function openFundPlate(){
+  try{ _htAbort=false; resolvePredictions(); }catch(e){}
+  const todo=MATCHES.filter(m=>!m.analysis && (hasPackOdds(m.tid)||jcHasOdds(m)||m.odds||t7HasOdds(m)));
+  _htRest=_htAnalyze(todo,200);
+  if (_htRest.length) setTimeout(_htDrain,40);
+  // ★ 赔率明细在 bake_detail.js（window.__BAKE_DETAIL__），未分析场次 OFFLINE_PACK 无 odds；
+  //   过热扫描依赖 odds.eu，必须先确保明细就位再渲染，否则恒为 0 行。
+  if (!window.__BAKE_DETAIL__){
+    try{ $('fundPlateContent').innerHTML='<p class="note">正在加载赔率明细（首次打开约 1~2 秒）…</p>'; $('fundPlateModal').classList.add('show'); }catch(e){}
+    _ensureDetail().then(function(){ try{ openFundPlate(); }catch(e){} }).catch(function(){ try{ openFundPlate(); }catch(e){} });
+    return;
+  }
+  const rows=_fundPlateTodayPicks();
+  const dRows=_fundPlateDiverge();          // ★ 方向背离·观察档（bdDirOk=false 但有北单真实资金）
+  const qRows=_fundPlateRqCover();          // ★ 北单让球池覆盖档（rq≠0，纯展示）
+  const cov=_fundPlateCoverage();           // ★ 北单覆盖率漏斗（诚实展示数据源有多少）
+  const nAll=rows.length;
+  const nStrong=rows.filter(r=>r.lvl>=6).length;   // 必发级（≥+6pt）
+  const _sc=(n,v,c)=>'<div class="rcard"><div class="rn" style="color:'+(c||'#8b98a9')+'">'+v+'</div><div class="rl">'+n+'</div></div>';
+  /* ★ 洋哥判据二·盘级差自证格：0.25球=1级，|≥2级|=洋哥「异常大热」（莫尔德案例即2级） */
+  /* ★ 2026-10-29 洋哥查表法三口径并列：主显 vsReal（洋哥 Excel 原图口径：北单换算查表等级 − 365真实亚盘等级；
+       热刺案例实测复现图上 −5 级 = 北单平半1级 − 365主让1.5球6级），无真实盘口时回退 table（两侧同法），
+       linear 作连续映射对照（原文"盘无定式"，故并列不独信）。 */
+  const _lvCell=(v, full)=>{
+    if (v==null || !isFinite(+v)) return '';
+    const f = full || {};
+    const useVsReal = (f.vsReal != null);
+    const main = useVsReal ? +f.vsReal : (f.table != null ? +f.table : +v);
+    const hard = Math.abs(main) >= 2;
+    const insane = Math.abs(main) >= 8;   // 8 级 = 2 球，物理上不可能由单一资金偏差造成 → 错行/坏行
+    let s = '<br><span style="color:'+(hard?'#dc2626':'#7c3aed')+';font-weight:'+(hard?'800':'400')+'">'
+          + (useVsReal ? '盘级差(洋哥原图·vs真实盘口) ' : '盘级差(查表法) ')
+          + (main>0?'+':'') + main.toFixed(0) + ' 级'
+          + (insane ? ' ⚠数值异常·疑似错行' : (hard?' ✅洋哥判据二':'')) + '</span>';
+    if (f.flip)
+      s += '<br><span style="color:#dc2626;font-size:10px;font-weight:700">⚠ 北单与365上盘方向相反（错行特征，非真实盘级偏差）</span>';
+    if (f.bdTag || f.euTag)
+      s += '<br><span style="opacity:.62;font-size:10px">北单'+esc(f.bdTag||'?')+' ↔ 365'+esc(f.euTag||'?')+'</span>';
+    if (useVsReal && f.euRealLvl != null)
+      s += '<br><span style="opacity:.62;font-size:10px">365实盘 '+(f.euRealLvl>0?'主让':'客让')+Math.abs(f.euRealLvl*0.25).toFixed(2)+'球</span>';
+    if (f.linear != null && Math.abs(+f.linear - main) >= 0.5)
+      s += '<br><span style="opacity:.55;font-size:10px">线性映射对照 '+((+f.linear)>0?'+':'')+(+f.linear).toFixed(2)+' 级</span>';
+    return s;
+  };
+  /* ★ 判据一双口径并列：heatExcess=归一差（自传美伊 15.54 口径，引擎现用）；
+       heatExcessAlt=换算后隐含−365不归一隐含（洋哥 Excel 表口径，热刺 −18.3）。两者差约 1pt，并列供对账。 */
+  const _altCell=(v, side)=>{
+    if (v==null || !isFinite(+v)) return '';
+    const nm = side==='W'?'主':(side==='D'?'平':(side==='L'?'客':''));
+    const bad = Math.abs(+v) > 40;   // 物理上限（洋哥旗舰案例 ~15.5pt；>40 必为错行/坏行，如奥胡斯费马 61.9）
+    return '<br><span style="opacity:.72;font-size:10px;color:'+(bad?'#dc2626':'#7c3aed')+'">Excel表口径(换算后隐含−365不归一) '
+         + ((+v)>0?'+':'') + (+v).toFixed(1) + 'pt' + (nm?('['+nm+']'):'') + (bad?' ⚠疑似错行':'') + '</span>';
+  };
+  /* 背离档盘级差主口径：优先 vsReal（洋哥原图），回退 table，最后才是线性值 */
+  const _dvMain=(r)=>{
+    const f = r && r.lvlFull;
+    if (f && f.vsReal != null) return +f.vsReal;
+    if (f && f.table  != null) return +f.table;
+    return (r && r.lvlDiff != null) ? +r.lvlDiff : null;
+  };
+  /* ★ 一盘·竞彩官方资金倾斜格（正=竞彩散户比365更看好该方） */
+  const _jcCell=(v)=>{
+    if (v==null || !isFinite(+v)) return '';
+    return '<br><span style="color:'+((+v)>0?'#ea580c':'#0891b2')+'">一盘·竞彩倾斜 ' + ((+v)>0?'+':'') + (+v).toFixed(1) + 'pt</span>';
+  };
+  /* ★ 2026-10-31：翻转型用紫色单独样式，不占用"必发级(红)/正式过热(橙)"配色 */
+  const _row=(r)=>{ const _g = r.flip ? {color:'#7c3aed',bg:'#ede9fe',tag:'翻转型'} : (r.grade||_fpGrade(r.lvl)||{color:'#e54545',bg:'#fdeaea'});
+    return '<tr onclick="closeFundPlate();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer" title="点击定位到主看板该场实时盘口">'
+    +'<td>'+esc(r.ts)+'</td><td>'+esc(r.league)+'</td>'
+    +'<td style="font-weight:800">'+esc(r.strong)+' <span style="font-size:10px;color:#a855f7;font-weight:700">'+(r.flip?'让球方':'强队')+'</span></td>'
+    /* ★ 2026-10-31 八修（用户截图质问"盘口翻转 +12.6pt · 必发级 有这么夸张吗"）：
+       翻转型此前仍会把 _fpGrade 的「必发级/显著」标签拼在徽章后面，读起来像"顶级信号"——
+       但翻转型不是洋哥定义的"强队(热门方)被散户超买"，它连过热名额都不占，**根本不该判级**。
+       故 flip 行徽章只给「观察档·不判级」，且不给「✅ 三盘合流」绿勾
+       （翻转型的合流只说明资金方向自洽，不构成大热必死——冷门方基数低，同样资金算出的偏离天然更大）。 */
+    +'<td><span style="background:'+_g.bg+';color:'+_g.color+';font-weight:800;padding:2px 8px;border-radius:4px;white-space:nowrap">'+esc(r.verdict)+(r.flip?' · 观察档·不判级':(r.grade&&r.grade.tag?(' · '+r.grade.tag):''))+'</span>'
+    +(r.flip
+        ? '<div style="font-size:10px;color:#7c3aed;margin-top:2px">🔁 北单买的是<b>冷门方(受让方)</b>，不是强队被超买 → 不构成「大热必死」、不占过热名额</div>'
+        : (r.soloHot?'<div style="font-size:10px;color:#b45309;margin-top:2px">⚠ 仅北单超买·未三盘合流（缺①盘同指或②盘设防）</div>':'')
+          +(r.bigHot?'<div style="font-size:10px;color:#dc2626;margin-top:2px">✅ 三盘合流（①同指+②不设防+③北单大热）</div>':''))
+    +'</td>'
+    +'<td>'+esc(r.hcapTxt)+'</td>'
+    +'<td style="color:var(--mut)">待定</td>'
+    +'<td style="color:#2faa6a;font-weight:800">'+esc(r.bet)+'</td>'
+    +'<td style="color:var(--mut);font-size:11px">占比−公平=+'+(+r.excess).toFixed(1)+'pt − 缺口'+(+r.gap).toFixed(1)+'pt = <b style="color:#c2410c">+'+r.lvl.toFixed(1)+'pt</b> 净超买'
+    + _altCell(r.heatExcessAlt, r.heatExcessAltSide)
+    + _lvCell(r.lvlDiff, r.lvlFull)
+    + _jcCell(r.jcDev)
+    +'</td>'
+    +'<td style="vertical-align:top;font-size:10px">'+_monitorTierCell()+'</td>'
+    +'</tr>'; };
+  /* ★ 2026-10-30 判定准确率自证横幅（用户复盘"弗拉门戈/格雷米奥两场全错"后必须有）：
+     读过热历史已结算条目的真实胜率，<45% 红色警告——告诉用户这个信号目前赚没赚钱，
+     不许再用"洋哥口径"包装一个实测只有三成胜率的信号。 */
+  const _truthBanner = (function(){
+    try{
+      /* ⚠ 必须用 window.OVERHEAT_HISTORY（模板 791 行已赋值）。gen_index 用 Python str.replace
+         会替换占位符的**所有出现**（含注释与代码引用）→ 替成 JSON 字面量即 SyntaxError 崩全页。 */
+      const H = (typeof window !== 'undefined') ? (window.OVERHEAT_HISTORY || null) : null;
+      const items = H ? (H.items || H) : null;
+      const arr = items ? (Array.isArray(items) ? items : Object.values(items)) : [];
+      const done = arr.filter(e => e && (e.result != null || e.hit != null));
+      if (done.length < 5) return '';
+      const w = done.filter(e => { const r = (e.result != null ? e.result : e.hit); return (r === 'win' || r === 1 || r === 'W' || r === true); }).length;
+      const rate = Math.round(w / done.length * 100);
+      const bad = rate < 45;
+      return '<div style="margin:0 0 10px;padding:9px 12px;border:1.5px solid ' + (bad ? '#e54545' : 'var(--grn)') + ';border-radius:8px;background:' + (bad ? 'rgba(229,69,69,.10)' : 'rgba(54,194,117,.08)') + ';font-size:12.5px;line-height:1.7">'
+        + (bad
+          ? '🔴 <b style="color:#e54545">本板块历史判定胜率仅 ' + rate + '%（' + w + '/' + done.length + ' 场已结算）</b>。已按洋哥原文把门槛收紧到完整三盘合流（①盘真实流速 + ②365不设防 + ③北单差值>缺口或盘级差≥2），但<b>历史数据证明"过热必死"并不成立</b>——本板<b>仅作问题盘观察参考，不提供任何买法，切勿据此反买</b>。'
+          : '🟢 历史判定胜率 ' + rate + '%（' + w + '/' + done.length + ' 场已结算）。仍须三盘合流才出手，本板不提供买法。')
+        + '</div>';
+    }catch(e){ return ''; }
+  })();
+  /* ★ 2026-10-31 错因复盘（数据取自 fundplate_history 原始登记：over/excess/gap 三值，非事后倒推） */
+  const _caseReview = '<details style="margin:8px 0 12px;border:1px solid #5b2c2c;border-radius:8px;background:#241a1a;padding:8px 12px">'
+    + '<summary style="cursor:pointer;font-size:13px;font-weight:800;color:#ff9b9b">🔍 10-30 两场反买全错 · 错因逐条复盘（点开）</summary>'
+    + '<div style="font-size:12px;line-height:1.9;color:#e8d5d5;margin-top:6px">'
+    + '<div><b style="color:#fff">① 瓦斯科 1:4 弗拉门戈</b>（巴西甲，强队=弗拉门戈，客让0.47）：绝对偏差 9.8pt − 返还率缺口 6.7pt = <b style="color:#ffd166">净超买仅 +3.1pt</b>。你给的参考软件标尺里 <b>+4 才算"正式过热"</b>（毕尔巴鄂 +4、里尔 +7），+3.1 只是"警戒档"。旧口径却拿"9.8&gt;6.7"这个单因子就判了大热必死 → <b style="color:#ff6b6b">错在强度门槛缺失</b>，现已加「净超买 ≥+4pt」硬门槛。</div>'
+    + '<div><b style="color:#fff">② 格雷米奥 2:0 巴拉纳竞技</b>（强队=格雷米奥，主让0.30）：偏差 22pt − 缺口 7pt = <b style="color:#ffd166">净超买 +15pt</b>，确实过门槛。但当时 <b>①盘没有真实资金流速、②盘365也没验过设防</b> 就下了"必死"结论 → 强队两球直接穿盘。现规则：①②缺一即降级为"预警"，只观察、不反买。</div>'
+    + '<div style="margin-top:4px;color:#ffd166"><b>结论</b>：这两场不是运气问题，是<b>强度门槛</b>和<b>三盘合流</b>两条都没焊死。现已焊死：<b>正式过热 = 净超买 ≥+4pt</b>；<b>大热必死 = 正式过热 + ①盘真实流速同指 + ②盘365不设防</b>，缺一即只预警。</div>'
+    + '</div></details>';
+  /* ★ 2026-10-31 用户要求「好好定义清楚」：把热度分档阈值 + 问题盘筛选流程一次写死在板上（此前板上有两套互相打架的标尺）。
+     净超买 pt = 北单真实资金占比 − 公平胜率 − 返还率缺口。锚点：参考软件 毕尔巴鄂+4 / 里尔+7 标"正式过热"；
+     洋哥案例 莫尔德净+8.4、美伊净+5.5。翻转型（北单把弱势方买到翻转盘口）单独成档，不占"正式过热"名额。 */
+  const _scaleDef = (function(){
+    const c = { e:0, f:0, m:0, s:0, n:0 };
+    (rows||[]).forEach(function(r){
+      const v = (r&&r.lvl!=null&&isFinite(+r.lvl)) ? +r.lvl : null;
+      if (v==null) return;
+      if (v>=6) c.e++; else if (v>=4) c.f++; else if (v>=2) c.m++; else if (v>=0) c.s++; else c.n++;
+    });
+    const row = function(rng, name, col, bg, desc, cnt){
+      return '<tr>'
+        + '<td style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.08);font-weight:800;color:'+col+';white-space:nowrap">'+rng+'</td>'
+        + '<td style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.08);background:'+bg+';color:'+col+';font-weight:800;white-space:nowrap">'+name+'</td>'
+        + '<td style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.08);color:#cbd5e1">'+desc+'</td>'
+        + '<td style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.08);text-align:right;font-weight:800;color:#fff">'+cnt+'</td>'
+        + '</tr>';
+    };
+    return '<details open style="background:#1a1526;border:1px solid #a855f7;border-radius:6px;margin:8px 0 12px">'
+      + '<summary style="padding:8px 12px;cursor:pointer;font-weight:800;color:#c4a5ff;font-size:13px">📐 热度分档标尺（唯一口径）+ 问题盘怎么筛 —— 点开看定义与当前计数</summary>'
+      + '<div style="padding:0 12px 10px">'
+      + '<div style="font-size:12px;color:#e6dbff;line-height:1.8;margin-bottom:6px">'
+      + '<b style="color:#fff">净超买 pt</b> = 北单真实资金占比 − 公平胜率 − 返还率缺口（<b>不是盘级</b>，绝不再 ÷4.7）。'
+      + '返还率缺口<span style="color:#94a3b8">(1−R365)</span>只作参照物，<b style="color:#ffd166">不再是过热门槛</b>。'
+      + '<br><b style="color:#ffd166">⚠ 别和「盘级差」混为一谈（这是最容易搞错的地方）：</b>本表 N 是 <b>pt（百分点）</b>；'
+      + '板上另有一列 <b>lvlDiff = 盘级差</b>（0.25 球 = 1 级）。2026-11-01 实测：今日干净池 7 场净超买 3.6~14.9pt，'
+      + '同批场盘级差只有 <b>−2.0 ~ +2.0 级</b>（最多 0.5 球）——若把 +N 当盘级，+6 就成了 1.5 球偏差、+14.9 成了 3.7 球，'
+      + '与实盘完全对不上。洋哥原话「换算亚盘后达到<b style="color:#fff">两个盘级</b>的偏差」即异常大热（莫尔德案例：公平平手盘→北单打到半球中水=2级），'
+      + '<b style="color:#fff">2 级 = 0.5 球</b>，这才是盘级刻度。</div>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="color:#94a3b8;text-align:left"><th style="padding:3px 6px">净超买</th><th style="padding:3px 6px">档位</th><th style="padding:3px 6px">含义 / 锚点</th><th style="padding:3px 6px;text-align:right">今日</th></tr></thead><tbody>'
+      + row('≥ +6.0 pt','必发级·极端过热','#dc2626','#fee2e2','洋哥"可遇不可求"级。锚点：莫尔德净+8.4、美伊净+5.5', c.e)
+      + row('+4.0 ~ +5.9','正式过热','#ea580c','#ffedd5','参考软件起跳线（毕尔巴鄂 +4、里尔 +7）。可进"大热必死"候选', c.f)
+      + row('+2.0 ~ +3.9','中热·警戒','#ca8a04','#fef9c3','洋哥"差值>返还率缺口"定性区。仅观察，不出信号', c.m)
+      + row('0 ~ +1.9','正常热','#0891b2','#e0f2fe','受注均衡，无倾斜', c.s)
+      + row('< 0','无倾斜','#64748b','#f1f5f9','该方未被超买（偏冷）', c.n)
+      + '</tbody></table>'
+      + '<div style="margin-top:8px;font-size:12px;color:#e6dbff;line-height:1.85">'
+      + '<div style="font-weight:800;color:#c4a5ff;margin-bottom:2px">🔎 问题盘（大热必死）筛选流程 —— 洋哥三盘法，缺一即只预警</div>'
+      + '<div><b style="color:#fff">第0步 基本面</b>（洋哥："一切分析方法，对基本面的了解肯定是第一位的"）：排名/伤停/战意/阵容 —— <b style="color:#ff6b6b">本板无此数据，需你人工判断</b>。</div>'
+      + '<div><b style="color:#fff">①盘 竞彩官方</b>（资金流速）：竞彩赔率换算到365同返还率 → 与真实亚盘比，<b>差 &gt; 1 个盘级(0.25) = 异常</b>。原文捷克vs南非：竞彩换算1.7(半一) vs 亚盘1.85(半球)，差1级 → 异常。</div>'
+      + '<div><b style="color:#fff">②盘 bet365</b>（有无人工操盘）：判"365是否<b>顺应</b>资金"。<br>'
+      + '　· <b style="color:#2faa6a">follow 升盘/降水</b> = 顺应资金 = <b>正常吃水盘，无分析价值</b>（葡萄牙：1.75→让2.25低水，与流速吻合）。<br>'
+      + '　· <b style="color:#ff6b6b">flat 纹丝不动</b> = 不顺应流速 = 异常（捷克：365与亚盘始终不动，以慢盘口承接快资金）。<br>'
+      + '　· <b style="color:#ff6b6b">fade 对热方升水</b> = 不惧热钱 = 异常（荷兰：全民买荷兰，机构反而把上盘水位提到90以上 → 荷兰输盘）。</div>'
+      + '<div><b style="color:#fff">③盘 北单赔率池</b>（热度）：<b>净超买 ≥ +4pt</b>（翻转型需 ≥+8pt）<b>或</b>换算亚盘盘级差 ≥ 2（洋哥174行是"或"）。</div>'
+      + '<div style="margin-top:4px;color:#ffd166"><b>合流</b> = ①盘同指 + ②盘不顺应(flat/fade) + ③盘正式过热 → <b>问题盘候选</b>。缺任一 → 只标"预警·不机械反买"。</div>'
+      + '<div style="color:#94a3b8"><b>慎用</b>：洋哥原文"北单单天销售额约3000万，样本容量勉强够…<b>小比赛慎用</b>；世界杯/欧洲杯样本放大30倍"。挪超/爱超/智甲/墨超等小联赛的北单偏差参考价值低。</div>'
+      + '<div style="color:#94a3b8"><b>翻转型</b>（北单把弱势方买到翻转盘口，如美伊）≠ 洋哥定义的"热门方大热"，单独观察，不占上表名额。</div>'
+      + '</div></div></details>';
+  })();
+  const html=
+    _truthBanner
+    + _caseReview
+    + _scaleDef
+    +'<div style="background:linear-gradient(135deg,#2a1b3d,#221a33);border-left:4px solid #a855f7;padding:10px 12px;border-radius:6px;margin:8px 0 12px;line-height:1.9;font-size:13px;color:#e6dbff">'
+    +'<div style="font-weight:800;color:#c4a5ff;margin-bottom:2px">💡 三句话看懂（本板只发拥挤警告，不提供买法）</div>'
+    +'<div><b style="color:#fff">① 怎么看：</b>「判定」列的 <b style="color:#ff6b6b">正式过热 +N pt</b>，N 是<b style="color:#fff">净超买点数(pt)</b>（北单真实资金占比 − 公平胜率 − 返还率缺口），<b>不是盘级</b>。<b style="color:#fff">分级</b>：<span style="color:#ea580c;font-weight:700">+4~+6 显著</span> / <span style="color:#dc2626;font-weight:700">≥+6 必发级</span>（<span style="color:#b45309">+3~+4 警戒档</span>赛前即预警，与历史登记门槛一致）。<b style="color:#fff">本列表 = 赛前/赛中实时信号</b>（结果列显「待定」），完场后自动转入下方「历史复盘」。另有两档赛前监测：<span style="color:#b45309;font-weight:700">⚠方向背离·观察</span>（北单散户热门方与机构相反——公众资金对抗机构或疑似错行，只看不动）与 <span style="color:#0e7490;font-weight:700">🀄北单让球池</span>（强弱悬殊场北单只开让球玩法，仅展示资金流向）。<b>数据每 15 分钟自动抓取重算</b>，赛中资金变化会实时反映。'
+    /* ★ 2026-10-30 终校·三盘合流定义（洋哥自传197-199行"切勿从三盘作为起点"）： */
+    +'<div style="margin-top:4px;color:#ffd166"><b>③盘大热 ≠ 大热必死</b>：洋哥三盘法 = ①盘资金趋势 + ②盘365操盘异常 + ③盘北单大热，<b>三盘合流</b>才算问题盘。'
+    +'单看北单超买（差值>缺口）只是「拥挤」，弗拉门戈赛前单正是只有③盘、①②未合流却标了过热 → 1:4 穿盘。'
+    +'现区分：<b style="color:#dc2626">正式过热</b> = 三盘合流；<b style="color:#b45309">拥挤·未合流</b> = 仅北单超买（①②缺一），只警示不判级。</div>'
+    +'<div style="margin-top:4px;opacity:.85">📐 <b style="color:#fff">判据二已升级为洋哥《盘级换算详解》离散查表法</b>：按上盘胜赔分档（≥2.35 平手 / 2.25~2.35 平半高水 / 2.10~2.25 平半中低水 / 2.00~2.09 半球高水 / 1.90~2.00 半球中水 / 1.80~1.90 半球低水 / &lt;1.80 每降 0.30 升 1 级），等级=盘口÷0.25。行内 <b style="color:#fff">vsReal</b> = 北单换算后查表等级 − 365 真实亚盘等级（洋哥 Excel 原图口径，<b>已复现其热刺案例 −5 级</b>）；<b>table</b> = 两侧同法查表；并附线性映射对照。判据一并列 <b style="color:#fff">两种口径</b>：自传归一差（美伊 15.54，引擎现用）与 Excel 表口径（换算后隐含−365不归一，热刺 −18.3），二者常差约 1pt。</div>'
+    +'<br><span style="color:#c4a5ff">★ 洋哥判据二自证：</span>明细列另给 <span style="color:#c4a5ff;font-weight:700">盘级差 N 级</span>（北单隐含盘口 − 365期望盘口，0.25球=1级；<b>≥2级 = 洋哥"异常大热"</b>，其莫尔德案例：公平平手盘 vs 北单半球中水 = 2级）与 <span style="color:#c4a5ff;font-weight:700">一盘·竞彩倾斜 N pt</span>（竞彩官方散户资金比365更看好该方多少）。<b>两者只作印证，不改动信号门槛</b>（未经本队真值标定前不进触发）。</div>'
+    +'<div><b style="color:#fff">② 怎么看信号（重要）：</b>强队被买爆 = <b style="color:#ff6b6b">拥挤度警示</b>，正确动作是<b>不追高、勿重仓它</b>。本板<b style="color:#ff6b6b">不提供「反买对面·下盘受让」买法</b>——该机械策略已被自家回测证伪（287 场加护栏后翻负 −26.2%），且赛前实测两连穿：拉齐奥 2:6、弗拉门戈 1:4。要不要反向操作，自行判断，本板不作建议。</div>'
+    +'<div><b style="color:#fff">③ 和参考软件一样吗：</b>同口径。参考软件里尔 <b style="color:#ff6b6b">+7</b>、兰斯 <b style="color:#ff6b6b">+6</b>、毕尔巴鄂 <b style="color:#ff6b6b">+4</b>，单位就是<b>净超买点数(pt)</b> = 北单占比 − 公平胜率 − 返还率缺口，与我本板一致。个位数属常态，十几 pt 是极重仓超买（北单占比高出公平 20pt+），不是算错、也不是"十几个盘级"。'
+    +'<br><span style="color:#c4a5ff">⚠ 诚实说明：参考软件截图里里尔+7/毕尔巴鄂+4 是<b>强队被散户超买</b>的「正式过热」判定——但它展示的是「<b>净超买已超缺口</b>」这一事实，<b>不等于推荐反买</b>。本板口径一致，但按洋哥自传要求，<b>真正的问题盘需三盘合流</b>，故本板只标过热等级、不自动给买法。</span></div>'
+    +'<div style="margin-top:4px;color:#ffb4b4;font-size:12px">⚠ 诚实提示（赛前实测两连穿）：10-28 意甲<b>拉齐奥(+15.3)</b> 若反买萨索洛下盘 → <b>萨索洛 2:6 拉齐奥</b>，下盘净输 4 球；10-30 巴甲<b>弗拉门戈(+3.1~+4.5)</b> 若反买瓦斯科下盘 → <b>瓦斯科 1:4 弗拉门戈</b>，下盘净输 2.5 球（本板当时列出的唯一赛前单）。「大热也会热对」是常态，拥挤≠必输。</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 14px">'
+    +_sc('过热场(≥+3pt)', nAll+' 场', '#e54545')
+    +_sc('必发级(≥+6pt)', nStrong+' 场', '#c2410c')
+    +_sc('方向背离·观察', dRows.length+' 场', '#b45309')
+    +_sc('北单让球池在售', qRows.length+' 场', '#0e7490')
+    +_sc('判定单位', '净超买 pt', '#a855f7')
+    +_sc('用途', '拥挤警告·不追高', '#b45309')
+    +'</div>'
+    /* ★ 覆盖率漏斗：空榜时你至少能看到「北单在售几场、配上几场、各档剩几场」，
+       判断是"真没信号"还是"数据源就这么多"，不用猜板子是不是坏了。 */
+    +'<div style="background:rgba(168,85,247,.07);border:1px solid rgba(168,85,247,.25);border-radius:6px;padding:8px 11px;margin:0 0 14px;font-size:11.5px;line-height:1.85">'
+    +'<div style="font-weight:800;color:#c4a5ff;margin-bottom:3px">🔎 本轮北单数据覆盖率（为什么榜可能是空的 · 每 15 分钟刷新）</div>'
+    +'<div>北单在售 <b style="color:#fff">'+cov.total+'</b> 行 → 胜平负池 <b>'+cov.winPool+'</b> ／ 让球池 <b style="color:#0e7490">'+cov.rqPool+'</b>（让球池口径不同、不算超买）'
+    +' → 成功配对到比赛 <b style="color:#fff">'+cov.paired+'</b> 场 → 其中方向同侧(可判信号) <b>'+cov.dirOk+'</b> ／ <span style="color:#b45309">方向背离(观察) <b>'+cov.dirFalse+'</b></span>。</div>'
+    +'<div style="color:var(--mut)">赛前未完场共 '+cov.pre+' 场，只有这 '+cov.paired+' 场有北单真实资金 —— <b style="color:#fff">不是板子没算，是北单池本身只覆盖这么点比赛</b>（北单每天开售约 20~60 场，绝大多数比赛没有真实资金源）。'
+    +'想让榜更满，唯一的办法是等北单开售更多场次；我不会用澳客合成热度去凑数（那已被证实是假信号）。</div>'
+    /* ★ 2026-10-30：必发源已复活（此前被 okooo WAF 405 整条拦死，betfa 恒为 []）。
+       这里明示"必发接回来了 N 场"，同时说明它按洋哥口径不进本板，避免被当成丢数据。 */
+    +'<div style="margin-top:4px;color:var(--mut)">必发(澳客交易所)源：<b style="color:'+(cov.betfaN>0?'#2faa6a':'#b45309')+'">'+(cov.betfaN||0)+' 场</b>已挂载'
+    +(cov.betfaN>0?'（2026-10-30 修复：此前脚本用桌面 UA 被 WAF 返 405，必发整条腿抓不到）':'（当前无未开赛场次，属正常时点差异）')
+    +' —— 但<b style="color:#fff">本板只收北单</b>：洋哥明言「必发并不能反应球队购买热度」，故必发只供热度榜/PPI 参考，不参与本板判级。</div>'
+    +'</div>'
+    /* ★ 判据实时读数：空榜也能看见查表法与双口径在真实算（用户"到底算没算"可自审） */
+    + (function(){
+        const rd=(typeof _fundPlateYgReadout==='function')?_fundPlateYgReadout():[];
+        if (!rd.length) return '';
+        return '<div style="background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.25);border-radius:6px;padding:8px 11px;margin:0 0 14px;font-size:11.5px;line-height:1.8">'
+          +'<div style="font-weight:800;color:#c4a5ff;margin-bottom:3px">📐 洋哥判据实时读数（'+rd.length+' 场有真实资金 · 离散查表法已上线）</div>'
+          +'<div style="color:var(--mut);margin-bottom:5px">主榜为空时也能自审：<b>判据一</b>列两个口径（自传归一差 / Excel表口径），<b>判据二</b>列三口径（vsReal=洋哥原图·北单查表−365真实盘口 / table=两侧同法 / linear=连续映射对照）。<b style="color:#dc2626">|级差|≥8 级或「方向相反」= 坏行特征，不是真信号</b>。</div>'
+          +'<table class="tbl" style="width:100%;font-size:11px"><thead><tr>'
+          +'<th>开赛</th><th>对阵</th><th>判据一·归一差</th><th>判据一·Excel表口径</th><th>判据二·vsReal</th><th>判据二·table</th><th>北单盘 ↔ 365盘</th>'
+          +'</tr></thead><tbody>'
+          + rd.map(function(r){
+              const f=r.lvlFull||{};
+              const main=(f.vsReal!=null)?+f.vsReal:null;
+              const insane=(main!=null&&Math.abs(main)>=8);
+              const hard=(main!=null&&Math.abs(main)>=2);
+              const badAlt=(r.alt!=null&&Math.abs(r.alt)>40);
+              return '<tr onclick="closeFundPlate();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer">'
+                +'<td>'+esc(r.ts)+'</td>'
+                +'<td style="font-weight:700">'+esc(r.home)+' vs '+esc(r.away)+'</td>'
+                +'<td style="font-weight:800;color:'+(r.norm==null?'var(--mut)':(r.norm>0?'#c2410c':'#0891b2'))+'">'+(r.norm==null?'—':((r.norm>0?'+':'')+r.norm.toFixed(1)+'pt'))+'</td>'
+                +'<td style="color:'+(badAlt?'#dc2626':'#7c3aed')+'">'+(r.alt==null?'—':((r.alt>0?'+':'')+r.alt.toFixed(1)+'pt'+(badAlt?' ⚠错行':'')))+'</td>'
+                +'<td style="font-weight:800;color:'+(insane?'#dc2626':(hard?'#c2410c':'var(--mut)'))+'">'+(main==null?'—':((main>0?'+':'')+main+' 级'))+(insane?' ⚠数值异常':(hard?' ✅判据二':''))+'</td>'
+                +'<td style="color:var(--mut)">'+(f.table==null?'—':((f.table>0?'+':'')+f.table+' 级'))+'</td>'
+                +'<td style="font-size:10px;color:var(--mut)">'+esc(f.bdTag||'?')+' ↔ '+esc(f.euTag||'?')+(f.flip?' <span style="color:#dc2626;font-weight:700">⚠方向相反</span>':'')+'</td>'
+                +'</tr>';
+            }).join('')
+          +'</tbody></table></div>';
+      })()
+    + (rows.length
+        ? ('<table class="tbl" style="width:100%"><thead><tr>'
+           +'<th>开赛</th><th>联赛</th><th>强队</th><th>判定</th><th>亚盘</th><th>结果</th><th>拥挤警告(观察)</th><th>明细</th><th>系统方向<br><span style="font-size:9px;font-weight:400">监测·只读·不提供买法</span></th>'
+           +'</tr></thead><tbody>'+rows.map(_row).join('')+'</tbody></table>')
+        : '<p class="note">当前没有「<b>强队被超买 ≥+3pt</b>（净超买大热线）」的即将开赛场次。本板只标<b>真·热门方(强队)被散户超买</b>——冷门被爆买的「盘口翻转」另列下方，弱队过热/资金平淡一律不标，无信号就不硬凑。</p>')
+    /* ★ 2026-10-31 七修：翻转型独立观察区（不占过热主榜名额、不参与过热排序） */
+    + (function(){
+        const fRows = _fundPlateTodayPicks({onlyFlip:true});
+        if (!fRows.length) return '';
+        return '<div style="margin:18px 0 6px;font-weight:800;color:#7c3aed;font-size:13.5px">🔄 盘口翻转·观察（'+fRows.length+' 场 · 洋哥原文：小比赛慎用）</div>'
+          +'<div style="font-size:11.5px;color:var(--mut);line-height:1.7;margin-bottom:6px">'
+          +'这些场是<b>北单把冷门方(受让方)买到盘口翻转</b>，<b style="color:#7c3aed">不是</b>洋哥定义的「热门方/强队被散户超买」，因此<b>不算"大热必死"、不进上面的过热主榜</b>。'
+          +'实测（北单干净样本）：所有净超买 ≥+8pt 的场<b>全部</b>属于这一类；而真·热门方超买 76 场的中位数是 <b>−12.6pt</b>、≥+5 只有 1 场、≥+10 <b>零场</b>。'
+          +'冷门方公平胜率低 ⇒ 同样资金量算出的偏离天然更大（数字看着吓人，含义完全不同），且多集中在挪超/爱超/智甲/墨超等小联赛。'
+          +'<b style="color:#7c3aed">本区一律不判级</b>（不出「必发级/显著」、不打三盘合流绿勾）：洋哥的「必发级」只指<b>强队被散户超买</b>，'
+          +'把翻转型也塞进同一标尺，就是"满板必发级"的假象来源。'
+          +'<b>只观察，不机械反买。</b></div>'
+          +'<table class="tbl" style="width:100%"><thead><tr><th>开赛</th><th>联赛</th><th>强队</th><th>判定</th><th>亚盘</th><th>结果</th><th>拥挤警告(观察)</th><th>明细</th><th>系统方向<br><span style="font-size:9px;font-weight:400">监测·只读·不提供买法</span></th></tr></thead><tbody>'
+          + fRows.map(_row).join('') + '</tbody></table>';
+      })()
+    /* ★ 2026-10-29 方向背离·观察档：这些场【赛前就有数据、引擎每15分钟都在算】，
+       以前被方向护栏整体隐藏（你问"为什么赛后才给"的直接病灶之一）。现在如实展示：
+       北单散户热门方 与 机构欧赔热门方相反、净超买 ≥3pt。两类可能：公众资金对抗机构（真背离）/
+       北单错行（歧义队名贴错场次）。无法自动区分 → 一律只观察、不给买法（回测加护栏后反买翻负）。 */
+    + (dRows.length
+        ? ('<div style="margin:18px 0 6px;font-weight:800;color:#b45309;font-size:13.5px">⚠ 方向背离·观察（'+dRows.length+' 场 · 赛前实时）</div>'
+           +'<div style="font-size:11.5px;color:var(--mut);line-height:1.7;margin-bottom:6px">这些场<b>北单散户资金热门方与机构欧赔热门方相反</b>且净超买绝对值≥1.5pt——要么是公众资金对抗机构（如 10-30 埃弗顿vs纽卡斯尔：北单 45% 押客队、机构却定主队热门），要么是北单错行（歧义队名贴错场）。<b style="color:#b45309">不确定=不下注</b>：本档仅透明化监测，不给买法（历史回测此类场加护栏后反买翻负 −26%）。</div>'
+           +'<table class="tbl" style="width:100%"><thead><tr><th>开赛</th><th>联赛</th><th>对阵</th><th>北单热门方</th><th>机构热门方</th><th>净超买(北单侧)</th><th>盘级差·辅助判错行</th></tr></thead><tbody>'
+           + dRows.map(function(r){
+               return '<tr onclick="closeFundPlate();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer;background:rgba(180,83,9,.06)">'
+                 +'<td>'+esc(r.ts)+'</td><td>'+esc(r.league)+'</td>'
+                 +'<td style="font-weight:700">'+esc(r.home)+' vs '+esc(r.away)+'</td>'
+                 +'<td style="color:#b45309;font-weight:800">'+esc(r.bdTeam)+(r.share!=null?('（'+r.share.toFixed(1)+'%资金）'):'')+'</td>'
+                 +'<td style="color:#2563eb;font-weight:800">'+esc(r.euSide==='主'?r.home:(r.euSide==='客'?r.away:'平局'))+'</td>'
+                 +'<td style="font-weight:800;color:'+(r.net>0?'#b45309':'#0891b2')+'">'+(r.net>0?'+':'')+r.net.toFixed(1)+'pt</td>'
+                 +'<td style="font-size:11px;color:'+(_dvMain(r)!=null&&Math.abs(_dvMain(r))>=3?'#dc2626':'var(--mut)')+'">'
+                   +(_dvMain(r)==null?'—'
+                     :((_dvMain(r)>0?'+':'')+_dvMain(r).toFixed(0)+' 级'
+                       +(Math.abs(_dvMain(r))>=3?' ⚠疑似错行':(Math.abs(_dvMain(r))<=2?' ·温和(可能真背离)':''))
+                       +((r.lvlFull&&r.lvlFull.bdTag)?('<br><span style="opacity:.6;font-size:10px">'+esc(r.lvlFull.bdTag)+' ↔ '+esc(r.lvlFull.euTag||'?')+'</span>'):'')))
+                 +'</td>'
+                 +'</tr>';
+             }).join('')
+           +'</tbody></table>')
+        : '')
+    /* ★ 2026-10-29 北单让球池覆盖档：北单对强弱悬殊场（本菲卡/哈马比这类）只开【让球胜平负】玩法，
+       让球后的占比 ≠ 原始胜平负占比，口径不同不能算净超买 → 以前直接跳过，板上这批场赛前零资金信息。
+       现在纯展示让球池资金分布（钱往哪流看得见），不参与过热判定。 */
+    + (qRows.length
+        ? ('<div style="margin:18px 0 6px;font-weight:800;color:#0e7490;font-size:13.5px">🀄 北单让球池·在售（'+qRows.length+' 场 · 仅资金分布，不参与过热判定）</div>'
+           +'<div style="font-size:11.5px;color:var(--mut);line-height:1.7;margin-bottom:6px">北单对这些强弱悬殊场<b>只开让球玩法</b>（无原始胜平负池），让球后的资金占比与公平胜率不同口径、<b>不能相减算净超买</b>——故只展示钱往哪流，不给判定。</div>'
+           +'<table class="tbl" style="width:100%"><thead><tr><th>开赛</th><th>联赛</th><th>对阵</th><th>北单让球</th><th>资金分布(主/平/客)</th></tr></thead><tbody>'
+           + qRows.map(function(r){
+               return '<tr onclick="closeFundPlate();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer;background:rgba(14,116,144,.05)">'
+                 +'<td>'+esc(r.ts)+'</td><td>'+esc(r.league)+'</td>'
+                 +'<td style="font-weight:700">'+esc(r.home)+' vs '+esc(r.away)+'</td>'
+                 +'<td style="font-weight:800;color:#0e7490">'+(r.rq>0?('主让'+Math.abs(r.rq)):(r.rq<0?('主受让'+Math.abs(r.rq)):'平手'))+'</td>'
+                 +'<td>'+r.pct.map(function(p,i){ return '<span style="color:'+(p>=Math.max.apply(null,r.pct)?'#0e7490':'var(--mut)')+';font-weight:'+(p>=Math.max.apply(null,r.pct)?'800':'400')+'">'+p+'%</span>'; }).join(' / ')+'</td>'
+                 +'</tr>';
+             }).join('')
+           +'</tbody></table>')
+        : '')
+    +'<p class="note" style="margin-top:12px">📊 <b>判定口径（净超买点数 pt · 与参考软件逐项对齐）</b>：<b>N pt = 北单真实投注占比 − 公平胜率 − 返还率缺口</b>（绝不再 ÷4.7、绝不叫"级"）。<br>· <b>北单占比</b>＝北单赔率池反推的真实资金买入比例（先有资金后有赔率，100% 真实）；<br>· <b>公平胜率</b>＝365 欧赔去水后的真实胜率；<br>· <b>返还率缺口</b>＝(1−365返还率)×100，即"抽水吃掉的那几个点"，约 6~11pt；<br>· <b>单位就是 pt（百分点）</b>：洋哥《盘级换算详解》里 0.25 球=1 盘级=4.7pt，那是<b>盘口偏差</b>的尺度，和"资金净超买 pt"是两个概念，切勿混用——本板 N 直接是占比减公平减缺口的净值，个位数属常态。<br>所以里尔那种「+7」＝ 净超买约 +6.5~+7pt（占比高出公平约15pt、再扣缺口8.6pt），个位数；本板同单位、同量级。<b>只标强队</b>：参考软件「强队」列同理——弱队被买热不构成大热必死。</p>'
+    +'<p class="note" style="margin-top:8px"><b>🎯 买法为什么是「走下盘受让」</b>：强队被散户买爆 → 庄家顺势压赔、造热 → 强队赢盘难度上升（洋哥"大热必死"）。故反买：<b>下盘＝受让方＝强队的对手</b>。本板「买法」列已直接算出该买哪支队，不用自己推。<br><b>护栏（防假信号）</b>：① 只用北单源（澳客 ppi 是计算热度、非真实资金，会刷 +89pt 垃圾）；② 方向对齐 bdDirOk（北单热门方须与欧赔同侧，否则北单错行会伪造假热）；③ 只收强队侧。<br><b>⚠️ 边界</b>：北单仅覆盖约 66/3300 场，所以只有这些场能标（参考软件同理）；"+N" 是<b>拥挤度警告</b>，不是必胜——历史回测样本仍小，须持续跟踪。点击任一行可定位主看板看实时盘口。</p>'
+    +fundplateHistoryHTML();
+  $('fundPlateContent').innerHTML=html;
+  $('fundPlateModal').classList.add('show');
+}
+function closeFundPlate(){ const _m=$('fundPlateModal'); if(_m)_m.classList.remove('show'); }
+/* ★ 2026-10-29 性能修复：热度榜原来一次性渲染「全部场」（真机实测第二次打开也建了
+   73,709 个 DOM 节点 / 335KB 文本，560ms 且之后整页重排都被拖慢）。
+   改为首屏只建 HEAT_CAP 行，其余点「显示其余」再追加 —— 与复盘面板同一条原则：
+   DOM 规模是交互流畅度的第一杀手，不是下载速度。 */
+window.__HEAT_CAP__ = 120;
+function heatRowHTML(r){
+  const realSrc = (r.src==='beidan' || r.src==='betfa');
+  const srcTag = r.src==='beidan' ? '<span class="badge bK">北单真值</span>' : (r.src==='betfa'?'<span class="badge bK">必发真值</span>':(r.src==='ppi'?'<span class="badge bN">PPI</span>':''));
+  const hotTag = r.hotIdx!=null ? (r.hotIdx>=50?'<span class="badge bW">'+r.hotIdx+'</span>':(r.hotIdx>=15?'<span class="badge bD">'+r.hotIdx+'</span>':(r.hotIdx>=5?'<span class="badge bK">'+r.hotIdx+'</span>':'<span class="badge bG">'+r.hotIdx+'</span>'))) : '—';
+  return `<tr>
+    <td>${timeCell(r,false)}</td>
+    <td>${r.league}</td>
+    <td><b>${r.home}</b> vs <b>${r.away}</b></td>
+    <td>${labelWDL(r.side)} ${hotTag} ${srcTag}</td>
+    <td><b>${realSrc ? r.share : '—'}</b></td><td>${realSrc && r.fair!=null?r.fair+'%':'—'}</td>
+    <td>${realSrc && r.excess!=null?(r.excess>=0?'+':'')+r.excess:'—'}</td>
+    <td><span class="badge ${r.vcls}">${r.verdict}</span></td>
+    <td>${r.callTxt}</td><td>${r.resTxt} ${r.hitBadge}</td>
+  </tr>`;
+}
+function heatTableHTML(list){
+  if (!list.length) return '<p class="note">该分类暂无场次。</p>';
+  window.__heatList = list;
+  const cap = window.__HEAT_CAP__ || 120;
+  return `<table class="htab"><thead><tr>
+      <th>时间</th><th>联赛</th><th>对阵</th><th>最热方(澳客冷热)</th><th>资金占比%</th><th>公平胜率</th><th>超出</th>
+      <th>判定</th><th>方向建议</th><th>结果</th></tr></thead><tbody id="heatTbody">`
+    + list.slice(0, cap).map(heatRowHTML).join('')
+    + '</tbody></table>'
+    + (list.length > cap
+        ? `<button class="sec" id="heatMoreBtn" style="width:100%;margin:8px 0;font-size:12px" onclick="__heatMore()">显示其余 ${list.length-cap} 场（已渲染前 ${cap} 行；一次建太多行会让整页变卡）</button>`
+        : '');
+}
+function __heatMore(){
+  try {
+    const tb = document.getElementById('heatTbody');
+    const list = window.__heatList || [];
+    if (!tb) return;
+    tb.insertAdjacentHTML('beforeend', list.slice(tb.children.length).map(heatRowHTML).join(''));
+    const b = document.getElementById('heatMoreBtn'); if (b && b.parentNode) b.parentNode.removeChild(b);
+  } catch(e){ console.warn('热度榜展开失败', e && e.message); }
+}
+function openHeat(){
+  try{ _htAbort = false; resolvePredictions(); }catch(e){}
+  // 确保可投注场都已分析（取 yg 热度）
+  const todo = MATCHES.filter(m => !m.analysis && (hasPackOdds(m.tid) || jcHasOdds(m) || m.odds || t7HasOdds(m)));
+  _htRest = _htAnalyze(todo, 120);
+  if (_htRest.length) setTimeout(_htDrain, 40);
+  const rows = [];
+  for (const m of MATCHES){
+    const a = m.analysis; if (!a || !a.yg) continue;
+    const yg = a.yg;
+    const k = heatKick(m);
+    const v = heatVerdict(yg, a);
+    // 完场结果 + 调用命中
+    let resTxt = '未开赛', hitBadge = '';
+    if (String(m.state)==='-1' && m.home_score!=null && m.away_score!=null){
+      const act = actualDir(m.home_score, m.away_score);
+      resTxt = labelWDL(act)+' ('+m.home_score+':'+m.away_score+')';
+      if (v.call && v.call!=='D'){
+        const hit = (v.call===act);
+        hitBadge = hit ? '<span class="badge bW">调用命中</span>' : '<span class="badge bL">调用未中</span>';
+      } else { hitBadge = '<span class="badge bG">防平</span>'; }
+    }
+    rows.push({
+      tid:m.tid, day:k.day, time:k.time, ts:kickTs(m), league:cleanLeague(m),
+      home: displayTeam(m,'home'), away: displayTeam(m,'away'),   // 列表项必须用 displayTeam（不能用 cleanTeam）
+      side: hotSideOf(yg), share:yg.heatShare, fair:yg.fairProb, excess:yg.heatExcess,
+      hotIdx:yg.hotIdx, hotSideIdx: yg.hotSideIdx, src:yg.heatSrc, bucket:heatBucket(yg), verdict:v.tag, vcls:v.cls, call:v.call, callTxt:v.callTxt,
+      resTxt, hitBadge, state:String(m.state)
+    });
+  }
+  /* ⚠ 热度榜默认也按**开赛时间**升序（用户要求所有板块场次按时间，便于按先后查看）；
+     仍留「热度」排序选项，因为「谁最热、谁被过度押注」是本面板的原始价值，别一刀切砍掉。 */
+  /* ⚠ 这里要的是**比较器（两参）**，不是"排序后返回新数组"的单参辅助函数。
+     上一版写成 rows.sort(heatSort) 把 heatSort 当 comparator 传进去 →
+     sort 拿两行数据去调它 → row.slice 不是函数 → 整个热度榜打不开（页面不报别的错、只有这一行红）。 */
+  window._heatSort = 'time';
+  rows.sort((x, y)=> window._heatSort === 'share'
+    ? ((y.share||0)-(x.share||0))
+    : String(x.ts||'').localeCompare(String(y.ts||'')));
+  const total = rows.length;
+  // 当日 / 全部 胜率（仅统计已完场且有明确调用的场）
+  const doneRows = rows.filter(r=>r.hitBadge && (r.hitBadge.indexOf('命中')>=0 || r.hitBadge.indexOf('未中')>=0));
+  const today8 = todayStr();
+  const doneAll = doneRows.length;
+  const hitAll = doneRows.filter(r=>r.hitBadge.indexOf('命中')>=0).length;
+  const doneToday = doneRows.filter(r=>r.day===today8).length;
+  const hitToday = doneRows.filter(r=>r.day===today8 && r.hitBadge.indexOf('命中')>=0).length;
+  const rateOf = (h,n)=> n? Math.round(h/n*100)+'%':'—';
+  const tabDefs = [['all','全部'],['hot','正式过热'],['mid','中热'],['small','小热'],['normal','正常热/偏冷']];
+  const tableHTML = (list)=> heatTableHTML(list);
+  const tabsHTML = tabDefs.map(([k,lab],i)=>`<button class="htab-btn ${i===0?'on':''}" data-bucket="${k}" onclick="heatTab('${k}')">${lab}</button>`).join('');
+  window._heatRows = rows;
+  // 赛前大热预警同样置顶于热度榜（用户常看这个面板，预警只在比赛列表会出现"看不见"）
+  const _alertTop = (function(){ try { return ygAlertHTML(MATCHES); } catch(e){ return ''; } })();
+  const _betListTop = (function(){ try { return betListHTML(); } catch(e){ return ''; } })();
+  $('heatContent').innerHTML = _alertTop + _betListTop +
+    `<div class="heat-stats">
+       <div class="hstat"><div class="hn">${total}</div><div class="hl">纳入热度榜场次</div></div>
+       <div class="hstat"><div class="hn">${rateOf(hitToday,doneToday)}</div><div class="hl">今日调用胜率(${hitToday}/${doneToday})</div></div>
+       <div class="hstat"><div class="hn">${rateOf(hitAll,doneAll)}</div><div class="hl">全部调用胜率(${hitAll}/${doneAll})</div></div>
+       <div class="hstat" title="当前引擎版本(ev=${(window.LIVE_HITRATE||{}).ev||'?'})实盘命中率，仅统计当前版本、不含历史版本；历史版本(${(window.LIVE_HITRATE&&window.LIVE_HITRATE.betLeg)?window.LIVE_HITRATE.betLeg.n:0}场)命中率 ${(window.LIVE_HITRATE&&window.LIVE_HITRATE.betLeg)?window.LIVE_HITRATE.betLeg.rate+'%':'—'}（旧门，不计入当前模型，仅供参考）"><div class="hn">${(window.LIVE_HITRATE&&window.LIVE_HITRATE.betCur)?(window.LIVE_HITRATE.betCur.rate!=null?window.LIVE_HITRATE.betCur.rate+'%':'—'):'—'}</div><div class="hl">实盘·当前版本(${(window.LIVE_HITRATE&&window.LIVE_HITRATE.betCur)?window.LIVE_HITRATE.betCur.n:0}场)</div></div>
+     </div>
+     <div class="htab-bar">${tabsHTML}<span style="margin-left:10px;font-size:12px;color:var(--mut);white-space:nowrap">排序
+       <select id="fHeatSort" onchange="heatTab(window._heatCurBucket||'all')">
+         <option value="time">时间（早开赛在前）</option>
+         <option value="share">热度（最热在前）</option>
+       </select></span></div>
+     <div id="heatTable">${tableHTML(rows)}</div>
+     <p class="note">热度口径：仅<b>北单赔率池真值 / 必发(澳客)真投注占比</b>（标"真值"）代表真实资金流，才是真信号；<b>PPI 代理行不显示假热度%（标"代理"，其 50% 为占位默认值，不可信）</b>。<b>两列口径不同</b>：「最热方(澳客冷热)」=澳客官方冷热指数最热方（驱动档位、与「判定」同源，例如"平 24"＝平局被超额追捧）；「资金占比%」=原始资金占比最高方（如主胜42%，是"钱最多去哪"，未必最过热）。两者可不同——澳客冷热更反映"被超额追捧的是谁"。资金热度分四档（<b>一致用于三盘板/热度榜/深盘板/每日复盘</b>）：<b>正式过热</b>=澳客冷热≥50（或北单超买≥25pt）→ 拥挤·低价值·<b>回避/减仓</b>；<b>中热</b>=≥15（或≥9pt）→ 偏热·谨慎顺势；<b>小热</b>=≥5（或≥3pt）→ 微热·顺势；<b>正常热</b>=其余 → 顺势。每档均点名「哪一方热」。正常热档内若真实资金<b>低于</b>公平胜率（超买为负）则标 <b>偏冷·价值侧</b>——表示该方被资金冷落（非过度追捧），避免出现"正常热·超买−16.7pt"的自相矛盾。⚠ 本看板独立回测（三盘·流速差 166 场 + 7816 场深盘复盘）均证伪"大热必死会死"——超买方实际胜率与欧赔定价偏差不显著，深盘+大热确认方向仍 53%（拥挤·价值被吃光）。故"正式过热"读作<b>拥挤·低价值警告（提示减仓/回避）</b>，非"机械反买会赢"——与实盘"谁热跑向谁"一致。完场"调用命中"=模型建议方向与实际赛果一致。</p>`;
+  const _hs = $('fHeatSort'); if (_hs) _hs.value = window._heatSort || 'time';
+  $('heatModal').classList.add('show');
+}
+function heatTab(bucket){
+  window._heatCurBucket = bucket;
+  const rows = (window._heatRows||[]).filter(r=> bucket==='all' ? true : r.bucket===bucket);
+  /* 与 openHeat 同口径：默认开赛时间升序，可切热度（历史默认） */
+  rows.sort((window._heatSort==='share')
+    ? ((x,y)=> (y.share||0)-(x.share||0))
+    : ((x,y)=> String(x.ts||'').localeCompare(String(y.ts||''))));
+  const tbl = $('heatTable');
+  if (tbl) tbl.innerHTML = heatTableHTML(rows);   // ★ 2026-10-29：走统一分页渲染（首屏 120 行 + 按需展开）
+  document.querySelectorAll('.htab-btn').forEach(b=> b.classList.toggle('on', b.getAttribute('data-bucket')===bucket));
+}
+/* 半场破蛋（上半场≥1球）排名面板：复用 engine.predictBreak（wf=0.45，与卡片一致）。
+   标定（★2026-10-05 第三次换口径，最终版）：档位阈值不再来自任何"配对子集"，
+   而是直接在 6656 场真赔率重跑上量「该档实际平均总进球 + 全场 0-0 率」
+   （_eval/_lmu_calib.cjs + _eval/_break_verdict.cjs）+ 38169 场真值库量 wf（_eval/_7m_wf.cjs）：
+     强 ≥0.85（4.88 球 / 0-0 1.70%，n=412）｜中性 0.70~0.85（3.51 球 / 4.26%，n=4711，≈基准无 edge）
+     偏弱 0.65~0.70（2.54 球 / 7.40%，n=1230）｜弱 <0.65（2.09 球 / 13.20%，n=303，唯一反向 alpha）。
+   触发本次重标定的用户投诉：武汉三镇U21 81.7%、威尔士U19 79.4% 两场都 0-0 —— 旧 0.80/0.70 阈值
+   把"比平均略好"的场标成「强/中」，用户误读为高把握。
+   ⚠ 更早的两套口径（1637 场 Over 页回测 86.9/78.8/67.3、729 场配对 87.0/72.9/73.5）均已作废：
+     前者含同源偏倚，后者子集太窄且"实际破蛋率"指标本身无区分度（全库就有 78.4%）。 */
+function isUpcomingMatch(m){
+  const st = (m && (m.start_time || m.match_time_int)) || 0;
+  if (st){
+    const ms = st > 1e11 ? st : st * 1000;
+    return ms > Date.now() - 2*3600*1000;   // 开赛超 2 小时视为已开赛/完场，不进"未开赛"面板
+  }
+  const s = kickTs(m);
+  if (s && /^\d{12}$/.test(String(s))){
+    const y=+s.slice(0,4), mo=+s.slice(4,6)-1, d=+s.slice(6,8), hh=+s.slice(8,10), mi=+s.slice(10,12);
+    const ms = new Date(y,mo,d,hh,mi).getTime();
+    return ms > Date.now() - 2*3600*1000;
+  }
+  return true;   // 无时间信息，保守保留
+}
+/* 跳转前放松所有筛选 + 拉满分页，确保目标卡片一定被渲染出来（否则 getElementById 拿到 null → 看起来"没定位到"）。 */
+function relaxForJump(tid){
+  ['fJc','fBd','fHt','fDeep','fWash','fOdds','fDraw'].forEach(id=>{ const e=document.getElementById(id); if(e) e.checked=false; });
+  ['fLg','fState','fConf'].forEach(id=>{ const e=document.getElementById(id); if(e && e.tagName==='SELECT') e.value=''; });
+  const s=document.getElementById('fSearch'); if(s) s.value='';
+  // 日期维度也必须放开：fRange='2' 时远期场次卡片根本不渲染（getElementById 拿到 null）
+  const fr=document.getElementById('fRange'); if(fr) fr.value='all';
+  const fd=document.getElementById('fDay'); if(fd) fd.value='';
+  gFilter=''; renderCap=MATCHES.length; _vRealCap=MATCHES.length; render();
+}
+function jumpToMatch(tid){
+  try{ closeHtBreak(); }catch(e){}
+  setTimeout(()=>{
+    relaxForJump();                         // 先确保卡片已渲染
+    const card = document.getElementById('card-'+tid);
+    if(!card){ toast('该场在主看板无卡片（可能无盘口 / 未纳入当前赛程）'); return; }
+    requestAnimationFrame(()=>{
+      card.scrollIntoView({behavior:'smooth', block:'center'});
+      card.classList.add('card-flash');
+      setTimeout(()=>card.classList.remove('card-flash'), 1800);
+      const det = card.querySelector('.ana-fold');
+      if(det && !det.open){ det.open = true; }
+      const m = MATCHES.find(x=>String(x.tid)===String(tid));
+      if(m && !m.analysis){ try{ onAnalyze(null, tid); }catch(e){} }
+    });
+  }, 60);
+}
+/* 三态判定：进行中 live / 未开赛 up / 已完赛 fin。
+   优先用球探显式状态（stateRaw: 3=进行中 -1=完场），无标记时按开赛时间推算：
+   未到点=未开赛；已开赛 3.5h 内=进行中（完场标记常延迟）；更早=视为完场。 */
+/* ★ 2026-10-04 性能优化：真机 CPU profile 抓到 matchPhase 一个人吃掉 openHtBreak 的
+   **56.6% self-time**（破蛋面板点开卡 1.5s 的真凶）——openHtBreak 对每场调两次
+   （needAna 过滤一次 + 三态分桶一次），2538 场 ≈ 5000 次调用，且每次都要取开赛时刻、走
+   kickTs + new Date + 正则。但「开赛时刻 + 完场/进行中标记」在一分钟内不会变，结果没必要重算。
+   做法：WeakMap 缓存 60s（**不挂场次对象**，避免污染 _cardSig 与任何序列化）。
+   ⚠ 缓存键是场次对象引用 —— MATCHES 重建（换赛程/刷新）时旧对象被 GC，缓存自动失效，不会串档。
+   语义等价：状态真变了最多晚 60s 才反映到面板，而用户点开面板本身就要重新触发一次。 */
+let _PH_CACHE = null;
+function _phGet(m){
+  try{
+    if (!_PH_CACHE && typeof WeakMap === 'function') _PH_CACHE = new WeakMap();
+    if (_PH_CACHE){
+      const c = _PH_CACHE.get(m);
+      if (c && (Date.now() - c.t) < 60000) return c.v;
+    }
+  }catch(e){}
+  return null;
+}
+function matchPhase(m){
+  const c0 = (m && _phGet(m)) || null;
+  if (c0 != null) return c0;
+  const _r = (function mmPhase(m){
+  const raw = (m && m.t7 && m.t7.stateRaw != null) ? String(m.t7.stateRaw) : '';
+  const st = String((m && m.state) || raw || '');
+  if (st === '-1') return 'fin';
+  if (st === '3') return 'live';
+  let ts = 0;
+  const t0 = (m && (m.start_time || m.match_time_int)) || 0;
+  if (t0) ts = t0 > 1e11 ? t0 : t0 * 1000;
+  else {
+    const s = kickTs(m);
+    if (s && /^\d{12}$/.test(String(s))){
+      ts = new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8),+s.slice(8,10),+s.slice(10,12)).getTime();
+    }
+  }
+  if (!ts) return 'up';
+  const now = Date.now();
+  if (ts > now) return 'up';
+  return (now - ts) < 3.5*3600*1000 ? 'live' : 'fin';
+  /* ★ 2026-10-04 严重修复：原来的收尾是 `})();` —— **没把 m 传进 IIFE**，
+     内部 m 恒为 undefined ⇒ st 恒 ''、ts 恒 0，直接掉到 `if(!ts) return 'up'`。
+     后果：所有场次一律判成"未开赛"，736 场已完场 + 进行中的全挤进 ①/② 表
+     （破蛋面板实测 1635 行、整页 747KB、还把 09-30 的旧场次排到最前），
+     已完赛表恒空、真实命中率永远 0。传参修好后 fin/live/up 三态立刻正确。 */
+  })(m);
+  if (m){ try{
+    if (!_PH_CACHE && typeof WeakMap === 'function') _PH_CACHE = new WeakMap();
+    if (_PH_CACHE) _PH_CACHE.set(m, { v: _r, t: Date.now() });
+  }catch(e){} }
+  return _r;
+}
+function liveScore(m){
+  const s = m && m.t7 && m.t7.scoreRaw;
+  if (s && /^\d+\s*-\s*\d+$/.test(s)) return s.replace(/\s/g,'');
+  if (m && m.home_score != null && m.away_score != null) return m.home_score+'-'+m.away_score;
+  return '';
+}
+function _htBreakShown(){ const m=document.getElementById('htBreakModal'); return !!(m && m.classList.contains('show')); }
+function closeHtBreak(){
+  /* ★ _htFinAll 已合并成统一开关 _htAll（同时控制已完赛/未开赛两张表的截断）。
+     两个都清，免得旧字段把「全部展开」状态卡住、下次打开还渲染全量。 */
+  try{ window._htAll = false; window._htFinAll = false; }catch(e){}
+  /* ★ 先摘掉本面板的 show，再看剩余状态。 */
+  const m=document.getElementById('htBreakModal'); if(m) m.classList.remove('show');
+  /* ★ 2026-10-14 #329：关闭面板即停 30s 比分脉冲，避免后台空转。 */
+  try{ if (_htPoll){ clearInterval(_htPoll); _htPoll = null; } }catch(e){}
+  /* ★ 关闭即中止后台补算：否则 _htDrain 还会持续霸占主线程好几秒，页面整体卡死 → "关不掉/卡机"。
+     仅当两个分析面板都关了才真正停（半破/热力图共用同一 _htRest/_htDrain 队列，
+     关一个不能误杀另一个还开着的面板的补算）。 */
+  _htStopDrainIfAlone();
+  /* ★ 2026-10-10：若此前因本面板开着而推迟了整页刷新，关掉后立即尝试触发（_tryPendingReload 内部会再确认无其它面板打开） */
+  if (window.__pendingReloadTs){ setTimeout(_tryPendingReload, 800); }
+}
+function closeHalf500(){ const m=document.getElementById('half500Modal'); if(m) m.classList.remove('show'); }
+/* ============================================================
+ * 半破 定性钻取弹层（2026-10-07e-teamctx）
+ * 数据来自 window.TEAMCTX（gen_teamctx.cjs 由 _7m_db 真实赛果产出，只读展示，不改模型数字）。
+ * 展示：本场快照 + 主客近期状态(主/客场) + 历史交锋 + 半场倾向 + titan007 伤停/阵容容错钩子 + 决策框架。
+ * 命名归一化 _tcKey 必须与 gen_teamctx.cjs / engine 逐字一致，否则查不到 TEAMCTX。
+ * ============================================================ */
+function _tcKey(x){
+  try {
+    var s = (typeof decodeName === 'function') ? decodeName(x) : (x == null ? '' : x);
+    s = String(s == null ? '' : s)
+      .replace(/<[^>]+>/g, '').replace(/&#x?[0-9A-Fa-f]+;/g, '')
+      .replace(/[（）()]/g, '').replace(/足球俱乐部/g, '').replace(/\s/g, '').trim();
+    return s || '';
+  } catch (e) { return ''; }
+}
+function closeHtBreakDetail(){
+  var m = document.getElementById('htBreakDetailModal'); if (m) m.classList.remove('show');
+}
+function _tcFormHtml(title, arr, hint){
+  if (!arr || !arr.length) return '<p class="note">' + title + '：暂无历史样本（该队在 7m 库中近况未覆盖，或低级别赛事）。</p>';
+  var rows = arr.map(function (g){
+    var col = g.r === 'W' ? 'var(--grn)' : (g.r === 'D' ? 'var(--yel)' : 'var(--red)');
+    var tag = g.r === 'W' ? '胜' : (g.r === 'D' ? '平' : '负');
+    return '<tr><td style="color:' + col + ';font-weight:700">' + tag + '</td>'
+      + '<td>' + g.d + '</td>'
+      + '<td>vs ' + g.o + '</td>'
+      + '<td><b>' + g.g + '-' + g.a + '</b></td>'
+      + '<td style="opacity:.8">半场 ' + g.hg + '-' + g.ha + '</td></tr>';
+  }).join('');
+  return '<p class="sub" style="margin:6px 0 3px">' + title + '（近 ' + arr.length + ' 场' + (hint ? ' · ' + hint : '') + '）</p>'
+    + '<table class="htab"><thead><tr><th>结果</th><th>日期</th><th>对手</th><th>比分</th><th>半场</th></tr></thead><tbody>'
+    + rows + '</tbody></table>';
+}
+function _tcH2hHtml(h2h, meLabel, oppLabel){
+  if (!h2h || !h2h.length) return '<p class="note">历史交锋：7m 库中两队无直接交锋记录（或均不在覆盖期）。</p>';
+  var W = 0, D = 0, L = 0;
+  var rows = h2h.map(function (g){
+    if (g.r === 'W') W++; else if (g.r === 'D') D++; else L++;
+    var col = g.r === 'W' ? 'var(--grn)' : (g.r === 'D' ? 'var(--yel)' : 'var(--red)');
+    var tag = g.r === 'W' ? '胜' : (g.r === 'D' ? '平' : '负');
+    return '<tr><td style="color:' + col + ';font-weight:700">' + tag + '</td>'
+      + '<td>' + g.d + '</td>'
+      + '<td>' + (g.home ? '主' : '客') + ' vs ' + g.o + '</td>'
+      + '<td><b>' + g.g + '-' + g.a + '</b></td>'
+      + '<td style="opacity:.8">半场 ' + g.hg + '-' + g.ha + '</td></tr>';
+  }).join('');
+  return '<p class="sub" style="margin:6px 0 3px">历史交锋（' + meLabel + ' 视角，近 ' + h2h.length + ' 次：'
+    + '<span style="color:var(--grn)">' + W + '胜</span> / <span style="color:var(--yel)">' + D + '平</span> / <span style="color:var(--red)">' + L + '负</span>）</p>'
+    + '<table class="htab"><thead><tr><th>结果</th><th>日期</th><th>对阵</th><th>比分</th><th>半场</th></tr></thead><tbody>'
+    + rows + '</tbody></table>';
+}
+/* 半破参考价值合成结论块：把「已展示」的历史半场有球率(HtH/AtA) + H2H 上半场有球率 聚合成
+ * 高/中/低 评级，并与模型破蛋档(tag/pBreak)对照、结合进行中剩余时间给提醒。
+ * ⚠ 铁律：这是历史同形样本倾向的【聚合展示】，不引入任何新模型/概率，不动模型数字/门规则；
+ *   明确标注「非模型结论、非投注建议」，最终决策仍由用户结合实时盘口/红牌/剩余时间定夺。 */
+function _tcSynthHtml(m, ht, at, h2h, bg, ph, sc, tid){
+  var hHR = (ht && ht.htH != null) ? ht.htH : null;
+  var aAR = (at && at.htA != null) ? at.htA : null;
+  var rates = [];
+  if (hHR != null) rates.push(hHR);
+  if (aAR != null) rates.push(aAR);
+  var comp = rates.length ? Math.round(rates.reduce(function(a,b){return a+b;},0)/rates.length) : null;
+  var rating = comp == null ? null : (comp >= 70 ? '高' : (comp >= 55 ? '中' : '低'));
+  // H2H 上半场有球率（交叉验证）
+  var h2hHalf = null, h2hN = 0, h2hGoal = 0;
+  if (h2h && h2h.length){
+    h2hN = h2h.length;
+    for (var i=0;i<h2h.length;i++){ var g=h2h[i]; if (((g.hg||0)+(g.ha||0)) > 0) h2hGoal++; }
+    h2hHalf = Math.round(h2hGoal/h2hN*100);
+  }
+  var modelTag = bg ? bg.tier : null;   // strong / mid / weak / low
+  var modelTagLab = bg ? bg.tag : null; // 破蛋·强 / 破蛋·中性 / 破蛋·偏弱 / 破蛋·弱
+  var modelP = bg ? bg.pBreak : null;
+  var min = null;
+  if (sc){ var mm = sc.match(/\((\d+)'\)/); if (mm) min = +mm[1]; }
+  var rCol = rating==='高' ? 'var(--grn)' : (rating==='中' ? 'var(--yel)' : (rating==='低' ? 'var(--red)' : 'var(--mut)'));
+  var body, phNote, verdict;
+  if (comp == null){
+    body = '本场两队在 7m 历史库<b>无近况样本</b>，无法给出历史同形倾向。仅能参考模型破蛋档'
+      + (modelTagLab ? ('（' + modelTagLab + ' ' + modelP + '%）') : '')
+      + '与上方实时盘口/红牌，<b>参考价值有限</b>。';
+    verdict = '综合参考价值【<span style="color:var(--mut)">有限</span>】：无历史样本支撑，仅模型档 + 实时盘口可用。';
+  } else {
+    var dir;
+    if (modelTag === 'strong') dir = '模型破蛋档「强」与历史样本<b>同向（均偏上半场出球）</b>';
+    else if (modelTag === 'mid') dir = '模型破蛋档「中性」与历史样本<b>大体同向</b>';
+    else if (modelTag === 'weak' || modelTag === 'low') dir = '模型破蛋档「偏弱/弱」与历史样本<b>方向相反</b>——历史偏出球但模型看低，务必核对盘口再定';
+    else dir = '模型破蛋档未给出（无盘口），以历史样本为准';
+    body = '双方近况<b>半场有球率</b>：主队主场 <b>' + (hHR!=null?hHR:'—') + '%</b> / 客队客场 <b>' + (aAR!=null?aAR:'—') + '%</b>，'
+      + '综合历史同形样本倾向【<b style="color:' + rCol + '">' + rating + '</b>（约 ' + comp + '%）】。'
+      + '模型破蛋档' + (modelTagLab ? ('「' + modelTagLab + ' ' + modelP + '%」') : '未给出') + '——' + dir + '。';
+    if (h2hHalf != null){
+      body += ' 历史交锋 ' + h2hN + ' 场中 <b>' + h2hHalf + '%</b> 上半场有球'
+        + (h2hHalf >= 60 ? '（与近况一致，交锋层面也偏出球）' : (h2hHalf >= 50 ? '（与近况大体一致）' : '（与近况有偏差，交锋层面偏闷平）')) + '。';
+    }
+    if (rating === '高' && (modelTag === 'strong' || modelTag === 'mid'))
+      verdict = '综合参考价值【<span style="color:var(--grn)">高</span>】：历史样本与模型档双向偏上半场出球，可重点关注上半场出球机会。';
+    else if (rating === '中')
+      verdict = '综合参考价值【<span style="color:var(--yel)">中</span>】：历史样本偏出球但不极端，结合模型档与实时盘口酌定。';
+    else
+      verdict = '综合参考价值【<span style="color:var(--red)">低</span>】：历史样本偏闷，上半场出球概率低，除非盘口/红牌有异动。';
+  }
+  if (ph === 'live'){
+    if (min == null) phNote = '进行中（分钟未知），结合上方比分与盘口判断。';
+    else if (min < 45){
+      var _live = '进行中（约第 ' + min + ' 分钟）：上半场仍有时间出球';
+      if (sc && /^\s*0\s*-\s*0\s*$/.test(sc)) _live += '，当前 0-0，模型破蛋档 ' + (modelP!=null?modelP+'%':'—') + ' 给出上半场出球基准概率，但随时间递减';
+      else if (sc && /-/.test(sc)) _live += '，当前比分 ' + sc + '，上半场破蛋窗口已收窄';
+      _live += '——别在 40\' 之后盲目追。';
+      phNote = _live;
+    }
+    else phNote = '已进入下半场（约第 ' + min + ' 分钟）：本场「破蛋（上半场出球）」已尘埃落定，参考价值转向半全场/全场方向。';
+  } else if (ph === 'fin'){
+    phNote = '已完赛：本场半场结果已定，历史倾向仅作<b>回看校验</b>（验证你的读盘是否靠谱），不再用于出手。';
+  } else {
+    phNote = '未开赛：历史倾向可作<b>赛前参考</b>；开赛后务必结合实时盘口、红牌、剩余时间再定，别在赛前就下定论。';
+  }
+  return '<div style="background:var(--card);border:1px solid ' + (rating?rCol:'var(--mut)') + ';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+    + '<div style="font-weight:700;margin-bottom:4px">半破参考价值 <span style="font-weight:400;color:var(--mut)">（历史同形样本倾向 · 非模型结论 · 非投注建议）</span></div>'
+    + '<div style="line-height:1.55">' + body + '</div>'
+    + '<div style="margin-top:6px;font-weight:600">' + verdict + '</div>'
+    + '<div style="margin-top:6px;font-size:12px;color:var(--mut)">' + phNote + '</div>'
+    + '<div style="margin-top:4px;font-size:12px;color:var(--mut)">最终是否出手，请结合上方实时盘口/赔率/红牌/剩余时间，合适才上、不合适跳过；滚球不追猛、不输后加码。</div>'
+    + '</div>';
+}
+function openHtBreakDetail(tid){
+  try {
+    var m = MATCHES.find(function (x){ return String(x.tid) === String(tid); });
+    var box = document.getElementById('htBreakDetailContent');
+    var modal = document.getElementById('htBreakDetailModal');
+    if (!box || !modal) return;
+    if (!m){ box.innerHTML = '<p class="note">未找到该场数据。</p>'; modal.classList.add('show'); return; }
+    var homeN = displayTeam(m, 'home'), awayN = displayTeam(m, 'away');
+    var hk = _tcKey(m.home_name_zh || homeN), ak = _tcKey(m.away_name_zh || awayN);
+    var TC = window.TEAMCTX || {};
+    var ht = TC[hk] || null, at = TC[ak] || null;
+    var h2h = (ht && ht.h2h && ht.h2h[ak]) || (at && at.h2h && at.h2h[hk]) || [];
+    var sc = liveScore(m);
+    var ph = (typeof matchPhase === 'function') ? matchPhase(m) : '';
+    var phLab = ph === 'live' ? '进行中' : (ph === 'fin' ? '已完赛' : '未开赛');
+    var bg = (m.analysis && m.analysis.breakGoal) ? m.analysis.breakGoal : null;
+    // 大小球盘口线（模型产物，显示用）
+    var ouLine = null;
+    try { var ab = m.analysis && m.analysis.aggBs; if (ab) ouLine = (ab.c_line != null ? ab.c_line : (ab.o_line != null ? ab.o_line : null)); } catch (e) {}
+    // 半场倾向
+    var htH = (ht && ht.htH != null) ? ht.htH : null;
+    var atA = (at && at.htA != null) ? at.htA : null;
+    var htH_s = htH != null ? ('主场半场有进球 <b>' + htH + '%</b>') : '主场半场倾向：样本不足';
+    var atA_s = atA != null ? ('客场半场有进球 <b>' + atA + '%</b>') : '客场半场倾向：样本不足';
+
+    var snap =
+      '<div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:6px">'
+      + '<h3 style="margin:0">' + homeN + ' <span style="color:var(--mut)">vs</span> ' + awayN + '</h3>'
+      + '<span class="badge bK">' + cleanLeague(m) + '</span>'
+      + '<span class="badge bK">' + timeCell({ts: kickTs(m)}, false) + '</span>'
+      + '<span class="badge ' + (ph === 'live' ? 'bW' : (ph === 'fin' ? 'bG' : 'bK')) + '">' + phLab + '</span>'
+      + (sc ? '<span class="badge bW" style="color:var(--acc)">比分 ' + sc + '</span>' : '')
+      + (bg ? '<span class="badge ' + (bg.tier === 'strong' ? 'bW' : (bg.tier === 'mid' ? 'bK' : (bg.tier === 'weak' ? 'bN' : 'bG'))) + '">破蛋 ' + bg.pBreak + '% · ' + bg.tag + (bg.tier === 'strong' ? ' · ✅可出手+11.6pp' : ' · ⚠勿单独投') + '</span>' : '')
+      + (ouLine != null ? '<span class="badge bK">大小球盘口 ' + ouLine + '</span>' : '')
+      + '<span class="badge bK" style="cursor:pointer" onclick="closeHtBreakDetail();jumpToMatch(\'' + tid + '\')" title="在主看板定位本场实时盘口/红牌">定位→</span>'
+      + '</div>';
+
+    var statusHtml =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      + '<div>' + _tcFormHtml('主队 ' + homeN + ' · 近期主场', ht ? ht.formH : null, htH_s)
+      + _tcFormHtml('主队 ' + homeN + ' · 近期客场', ht ? ht.formA : null, '') + '</div>'
+      + '<div>' + _tcFormHtml('客队 ' + awayN + ' · 近期客场', at ? at.formA : null, atA_s)
+      + _tcFormHtml('客队 ' + awayN + ' · 近期主场', at ? at.formH : null, '') + '</div>'
+      + '</div>';
+
+    var h2hHtml = _tcH2hHtml(h2h, homeN, awayN);
+    // ★ 合成结论块：把已展示的历史半场有球率 / H2H 聚合成「高/中/低」参考价值，并与模型破蛋档对照
+    // 上半场比分分布（来自 breakGoal.htScore：独立 Poisson 半场期望，与破蛋面板同口径）
+    var htScoreHtml = (bg && bg.htScore && bg.htScore.length) ? (
+      '<div style="margin:8px 0 4px;font-weight:700;color:var(--acc)">上半场比分分布<span style="font-weight:400;color:var(--mut);font-size:12px">（独立 Poisson 半场期望 主'+bg.hl1+'/客'+bg.hm1+'）</span></div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">'
+      + bg.htScore.slice(0,6).map(function(x){
+          return '<span style="display:inline-block;min-width:62px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px 6px"><b>'+x.s+'</b> <span style="color:var(--mut);font-size:12px">'+x.p+'%</span></span>';
+        }).join('')
+      + '</div>'
+    ) : '';
+    var synthHtml = _tcSynthHtml(m, ht, at, h2h, bg, ph, sc, tid);
+
+    // titan007 伤停/阵容 容错钩子（可达才增强，本环境服务端被墙 → 诚实提示）
+    var t7Html;
+    var t7Inj = (window.T7_ODDS && ((window.T7_ODDS[hk] || {}).injuries))
+      || (window.T7_ODDS && ((window.T7_ODDS[ak] || {}).injuries));
+    if (t7Inj){
+      t7Html = '<p class="sub" style="margin:6px 0 3px">球探(titan007) 伤停 / 阵容（本机抓取带入）</p>'
+        + '<p class="note">' + t7Inj + '</p>';
+    } else {
+      t7Html = '<p class="note" style="border-left:3px solid var(--yel);padding-left:8px;margin-top:8px">'
+        + '<b>球探(titan007) 伤停 / 阵容 / 核心球员：本环境未接入。</b>'
+        + '服务端探测结论：titan007 足球静态库（zq.titan007.com）在本环境返回 HTTP 000 被墙、live 走 WebSocket 压缩流，'
+        + '服务端无法稳定抓取伤停/阵容数据。本钩子为「<b>可达才增强</b>」——当你在本机用无头浏览器抓到 '
+        + '<code>t7_odds.js</code> 随本地部署带入时，此处会自动展示该场伤停/阵容；当前不可用，<b>不强行依赖，也不编造</b>。</p>';
+    }
+
+    // 决策框架（用户原话浓缩 + 诚实护栏）
+    var frame =
+      '<p class="note" style="border-left:3px solid var(--acc);padding-left:8px;margin-top:8px">'
+      + '<b>半破定性决策框架（不追名气）：</b>'
+      + '① 强队长时间 0-0，先看是否<b>持续创造机会</b>（射正 / 绝佳机会），而非只看控球——控球多却没几次有威胁射门不算压着打；'
+      + '② 看<b>核心球员在否 / 伤停</b>、替补能否改变节奏；'
+      + '③ 结合上方<b>近期状态</b>与<b>历史交锋</b>；'
+      + '④ 再看实时<b>盘口、赔率、红牌、剩余时间</b>（盘口见上方快照，红牌/剩余时间以主看板该场实时数据为准，可点「定位」查看），合适才考虑，不合适跳过；'
+      + '⑤ <b>滚球不追猛、不输后加码。</b></p>';
+
+    box.innerHTML = snap
+      + htScoreHtml
+      + synthHtml
+      + '<div style="border-top:1px solid var(--mut);margin:8px 0"></div>'
+      + statusHtml
+      + '<div style="border-top:1px solid var(--mut);margin:8px 0"></div>'
+      + h2hHtml
+      + t7Html
+      + frame;
+    modal.classList.add('show');
+  } catch (e) {
+    var bx = document.getElementById('htBreakDetailContent');
+    if (bx) bx.innerHTML = '<p class="note">分析渲染出错：' + (e && e.message ? e.message : e) + '</p>';
+    var md = document.getElementById('htBreakDetailModal'); if (md) md.classList.add('show');
+  }
+}
+/* 已完赛真值验证用的评级兜底：无盘口（vip 封禁/未开盘）的已完赛，用 Dixon-Coles 赛季强度+近期战绩
+ * 直接算上半场破蛋概率（与 predictBreak 同源：wf=0.45, lean=0.10, 阈值一致）。仅用于「已完赛·真实命中率」
+ * 验证，不进入主面板预测（主面板的破蛋仍优先用盘口）。命中率会据此自报，属同一模型的无盘口分支。 */
+function breakFallbackRatings(m){
+  try {
+    const home = (m.t7 && m.t7.home) || m.home;
+    const away = (m.t7 && m.t7.away) || m.away;
+    if (!home || !away) return null;
+    if (typeof strengthPriorOpts !== 'function') return null;
+    const pr = strengthPriorOpts(home, away);
+    if (!pr || !pr.lambda || !pr.mu) return null;
+    const WF = 0.45, LEAN = 0.10;
+    const lam2 = pr.lambda + LEAN, mu2 = Math.max(0.02, pr.mu - LEAN);
+    const hl1 = Math.max(0.05, lam2 * WF), hm1 = Math.max(0.05, mu2 * WF);
+    const pBreak = 1 - Math.exp(-(hl1 + hm1));
+    /* ⚠ 档位阈值必须与 engine.js predictBreak **逐字一致**，否则同档卡片在实时/回放两条路径给出不同标签。
+       2026-10-05 重标定（用户投诉 79% 两场 0-0）：强档抬到 0.85，0.70~0.85 合并为中性档。 */
+    let tier = 'low', tag = '破蛋·弱', edge = 0;
+    if (pBreak >= 0.80){ tier = 'strong'; tag = '破蛋·强'; edge = +11.6; }
+    else if (pBreak >= 0.70){ tier = 'mid'; tag = '破蛋·中性'; edge = 0; }
+    else if (pBreak >= 0.65){ tier = 'weak'; tag = '破蛋·偏弱'; edge = -8.0; }
+    else { tier = 'low'; tag = '破蛋·弱'; edge = -5.6; }
+    return { pBreak:+(pBreak*100).toFixed(1), hl1:+hl1.toFixed(2), hm1:+hm1.toFixed(2),
+             lambda:pr.lambda, mu:pr.mu, wf:WF, tier, tag, edge, ratingsOnly:true,
+             note:'评级驱动破蛋预测（无盘口，Dixon-Coles 赛季强度+近期战绩；仅用于已完赛真值验证）' };
+  } catch(e){ return null; }
+}
+/* ④ 段验证集计算的缓存（见下方 openHtBreak 内的分支说明）。key 用 HTFT_VALIDATE 的对象引用：
+   包加载完只变一次，_htDrain 反复重渲时直接复用，避免每次重算 1637 条 × 2 趟。
+   ⚠ 初始 ref=null：验证集没加载时 _VALC 也是 null，会命中缓存分支 —— 所以 vTable 初值必须就是
+   「未加载」那句提示（否则首次打开 ④ 段会整段空白，原本是有提示的）。等 htft_validate 到位后
+   _VALC 变成对象 ≠ null，自然走重算分支把真表补上。 */
+let _VAL_CACHE = { ref: null, vN: 0, vR: null, vBars: '',
+  vTable: '<p class="note">模型验证集未加载（htft_validate.js 缺失）。</p>' };
+/* 打开时必须**强制**渲一次：清掉节流时间戳，否则刚关再开会被 800ms 节流挡住、画面停在上一版。 */
+function openHtBreak(){ try{ _htAbort = false; }catch(e){} try{ _htLastRenderTs = 0; }catch(e){} renderHtBreak(); const _m=document.getElementById('htBreakModal'); if(_m)_m.classList.add('show'); }
+
+/* ============================================================
+ * 今日半场盘口（500竞彩·半场胜平负，playid=274）
+ * 半场专属盘口：反演上半场 λ/μ → P(上半场≥1球)。给引擎 wf=0.45 粗切一个真实半场信号对照。
+ * ⚠ 诚实边界：500 只提供**当日竞彩场**（十来场），无历史、不能复盘；
+ *   真正用于复盘/重标定的是球探(7m)历史真值库（_7m_db，含半场比分）。本面板＝当日信号展示。
+ * ============================================================ */
+function openHalf500(){ renderHalf500(); const _m=document.getElementById('half500Modal'); if(_m)_m.classList.add('show'); }
+
+/* ============================================================
+ * 半场规律台（2026-10-09）—— 球探真值 + Elo 条件化
+ *   ① 条件变量一律「赛前可知」：Elo 严格按 day 递推，且剔除双方各<3场的冷启动样本。
+ *   ② 分档用等频分位（v1 用固定阈值导致 67% 样本挤一档、联赛×强度全空）。
+ *   ③ 预测器一律时间切分留出验证，先报「无脑押最大档」基线再谈 lift。
+ * ============================================================ */
+function openHalfLaw(){ renderHalfLaw(); const _m=document.getElementById('halfLawModal'); if(_m)_m.classList.add('show'); }
+function closeHalfLaw(){ const m=document.getElementById('halfLawModal'); if(m) m.classList.remove('show'); }
+function openHtPick(){ renderHtPick(); const _m=document.getElementById('htPickModal'); if(_m)_m.classList.add('show'); }
+function closeHtPick(){ const m=document.getElementById('htPickModal'); if(m) m.classList.remove('show'); }
+
+function renderHtPick(){
+  const el = document.getElementById('htPickContent');
+  if(!el) return;
+  const D = window.HT_PICK;
+  if(!D || !D.picks){ el.innerHTML = '<p class="note">尚未生成出手扫描。本机跑 <code>node gen_ht_tier.cjs &amp;&amp; node gen_ht_pick.cjs</code> 后重新生成 index.html。</p>'; return; }
+  const sc = D.scan || {}, tiers = D.tiers || [], picks = D.picks || [], avoid = D.avoid || [];
+  const TM = {}; for(const t of tiers) TM[t.t] = t;
+  const pct = x => (x==null?'—':(x*100).toFixed(1)+'%');
+  const num = x => (x==null?'—':x);
+  let h = '';
+
+  /* ── 一句话结论 ── */
+  const S = TM.S, A = TM.A, B = TM.B, X = TM.X;
+  h += '<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;background:var(--bg2)">'
+    + '<div style="font-weight:700;margin-bottom:6px">💡 怎么用它</div>'
+    + '<div style="line-height:1.75">破蛋（上半场≥1球）别再靠模型硬猜——改用<b>筛选门 + 赔率门槛</b>：'
+    + '满足条件的场次历史命中 <b style="color:var(--grn)">' + (S?pct(S.avgHit):'—') + '</b>（S级），'
+    + '对应<b>保本赔率 ' + (S?S.breakeven.toFixed(3):'—') + '</b>。'
+    + '你只要拿市场的「上半场大 0.5 球 / 半场有进球」赔率跟这个数比：<b>高于它就正 EV，低于就别碰</b>。'
+    + '<br>⚠ 同样重要的是<b style="color:var(--red)">避坑榜</b>：高盘（|pk|≥1.75）但两队近期上半场不进球时，'
+    + '命中掉回 <b>' + (X?pct(X.avgHit):'—') + '</b>（≈基准 ' + pct(D.base||0.73) + '），看着像稳胆其实是坑。</div></div>';
+
+  /* ── 分级表 ── */
+  h += '<h3 style="margin:14px 0 8px">① 三层分级（球探 ' + (D.nUsable ? D.nUsable.toLocaleString() : '—') + ' 场 · 4 段滚动留出标定'
+    + (D.span ? ' · ' + D.span : '') + '）</h3>';
+  h += '<table class="htab" style="width:100%"><thead><tr>'
+    + '<th>级</th><th>规则</th><th>需要</th><th>4段均命中</th><th>均n</th><th>edge</th><th>保本赔率</th><th>建议</th></tr></thead><tbody>';
+  const ORD = ['S','A','B','X'];
+  for(const k of ORD){
+    const t = TM[k]; if(!t) continue;
+    const col = k==='X' ? 'var(--red)' : (k==='S' ? 'var(--grn)' : (k==='A' ? '#ca8a04' : 'var(--mut)'));
+    h += '<tr>'
+      + '<td style="font-weight:800;color:' + col + '">' + k + '</td>'
+      + '<td>' + t.desc + '</td>'
+      + '<td>' + (t.need||'—') + '</td>'
+      + '<td style="font-weight:700;color:' + col + '">' + pct(t.avgHit) + '</td>'
+      + '<td>' + t.avgN + '</td>'
+      + '<td>' + ((t.avgEdge*100>=0?'+':'') + (t.avgEdge*100).toFixed(1)) + 'pp</td>'
+      + '<td style="font-weight:700">' + t.breakeven.toFixed(3) + '</td>'
+      + '<td>' + (k==='X' ? '<b style="color:var(--red)">避开</b>' : '可出手') + '</td>'
+      + '</tr>';
+  }
+  h += '</tbody></table>';
+
+  /* ── 逐段稳定性 ── */
+  if(S && S.segments && S.segments.length){
+    h += '<p class="note" style="margin-top:6px"><b>S 级逐段稳定性（严格未来留出，看它是不是过拟合）：</b>';
+    h += S.segments.map(s => s.tag + ' ' + (s.hit*100).toFixed(1) + '%(n=' + s.n + ',基准' + (s.base*100).toFixed(1) + '%)').join('　｜　');
+    h += '</p>';
+  }
+
+  /* ── EV 门槛 ── */
+  if(S && S.ev && S.ev.length){
+    h += '<h3 style="margin:16px 0 8px">② EV 门槛（S 级命中 ' + pct(S.avgHit) + '）</h3>';
+    h += '<table class="htab" style="width:100%;max-width:640px"><thead><tr><th>市场赔率</th><th>EV</th><th>判定</th></tr></thead><tbody>';
+    for(const x of S.ev){
+      const ok = x.ev > 0;
+      h += '<tr><td>' + x.odds.toFixed(2) + '</td>'
+        + '<td style="font-weight:700;color:' + (ok?'var(--grn)':'var(--red)') + '">' + (x.ev>=0?'+':'') + (x.ev*100).toFixed(1) + '%</td>'
+        + '<td>' + (ok?'✅ 可出手':'❌ 不够') + '</td></tr>';
+    }
+    h += '</tbody></table>';
+    h += '<p class="note">读法：EV = 市场赔率 × 预期命中率 − 1。<b>保本赔率 ' + S.breakeven.toFixed(3) + '</b> 是分界线。</p>';
+  }
+
+  /* ── ③ 赔率门槛（把抽水算进去：公平价 ≠ 票面价）── */
+  const MR = D.marketRule || {};
+  const holdPct = ((MR.hold != null ? MR.hold : 0.169) * 100).toFixed(1);
+  h += '<h3 style="margin:16px 0 8px">③ 真正的出手门槛：票面赔率要 ≥ 保本/(1−抽水)</h3>';
+  h += '<div style="border-left:4px solid var(--acc);background:rgba(56,189,248,.06);padding:10px 12px;margin:6px 0 10px;border-radius:6px;line-height:1.75">'
+    + '<b>别拿「保本赔率」直接去比市场赔率——那是去水后的公平价，庄家还要抽水。</b><br>'
+    + '· <b>公平价</b> fairOdds = 1 / P(上半场≥1球)：市场认为这场该值多少钱（已去水）<br>'
+    + '· <b>票面价</b> ticketOdds = fairOdds × (1 − hold)：你实际能买到的价，hold≈' + holdPct + '%（由 500 半全场 9 态赔率 margin 反推）<br>'
+    + '· <b>出手线</b> needOdds = 保本赔率 / (1 − hold)：<b style="color:var(--grn)">只有票面赔率 ≥ 它才是正 EV</b><br>'
+    + '<span style="opacity:.8;font-size:12px">⚠ ' + (MR.caveat || '竞彩无「上半场大 0.5 球」玩法，此价由半全场 9 态反演，是市场隐含价而非可下注票面。') + '</span></div>';
+  h += '<table class="htab" style="width:100%;max-width:820px"><thead><tr>'
+    + '<th>级</th><th>预期命中</th><th>保本(去水)</th><th>出手线 @' + holdPct + '%抽水</th><th>出手线 @竞彩65%返奖</th></tr></thead><tbody>';
+  for(const k of ['S','A','B']){
+    const t = TM[k]; if(!t) continue;
+    const col = k==='S' ? 'var(--grn)' : (k==='A' ? '#ca8a04' : 'var(--mut)');
+    h += '<tr><td style="font-weight:800;color:' + col + '">' + k + '</td>'
+      + '<td>' + pct(t.avgHit) + '</td>'
+      + '<td>' + t.breakeven.toFixed(3) + '</td>'
+      + '<td style="font-weight:800;color:var(--grn)">' + (t.breakeven/(1-(MR.hold!=null?MR.hold:0.169))).toFixed(3) + '</td>'
+      + '<td style="font-weight:700">' + (t.breakeven/0.65).toFixed(3) + '</td></tr>';
+  }
+  h += '</tbody></table>';
+
+  /* ── ④ 可出手清单（带市场价对照）── */
+  const nMkt = picks.filter(o=>o.market).length;
+  h += '<h3 style="margin:16px 0 8px">④ 可出手清单（' + picks.length + ' 场，真实亚盘 · ' + (D.built||'')
+    + (nMkt ? ' · 其中 ' + nMkt + ' 场有市场价' : '') + '）</h3>';
+  h += '<p class="note">扫描：' + (sc.total||0) + ' 场 → 有让球盘 ' + (sc.withPk||0)
+    + ' 场 → 队名能匹配到球探历史库 ' + (sc.matched||0) + ' 场（' + (sc.matched/Math.max(sc.withPk,1)*100).toFixed(0) + '%）。'
+    + '没匹配到的只能降级到 A 级（只靠盘口）。'
+    + '<br><b>列说明（照实，不编造）：</b>'
+    + '① <b>比赛时间</b>=开赛时间（数据已有）；'
+    + '② <b>比分</b>=本板是<b>赛前出手扫描</b>，终比分仅在完场后由 gqj2 实时源回填（当前 ' + (picks.filter(o=>o.finished).length) + ' 场已完场带比分），未开赛显示「未开赛」，绝不以 0-0 占位冒充；'
+    + '③ <b>市场P / 票面 / EV</b>=由<b>竞彩官方半全场(9态)</b>赔率反演的「市场隐含破蛋价」（重建价，<b>竞彩本身无上半场大0.5玩法</b>，此价由半全场9态 Poisson 反演得出）：'
+    + '<br>· <b>市场P(≥1球)</b>=市场隐含的上半场有球概率；'
+    + '<br>· <b>市场票面</b>=按竞彩半全场抽水(≈21%)折算的可比等价价；<b>票面&lt;1 表示该高概率事件竞彩定价已低于均注返回线——即竞彩视角下无正EV空间（真实信号，非bug）</b>；'
+    + '<br>· <b>EV</b>=模型命中率×票面−1（&gt;0 即正EV）。'
+    + '若想实打实出票，请拿任意庄家该场真实「上半场大小球」票面跟<b>出手线</b>比（≥就打，&lt;跳过）。</p>';
+  h += '<table class="htab" style="width:100%"><thead><tr>'
+    + '<th>级</th><th>联赛</th><th>对阵</th><th>比赛时间</th><th>比分</th><th>|pk|</th><th>合计半场球</th><th>预期命中</th>'
+    + '<th>出手线</th><th>市场P(≥1球)</th><th>市场票面</th><th>EV</th><th>判定</th></tr></thead><tbody>';
+  for(const o of picks){
+    const col = o.tier==='S' ? 'var(--grn)' : (o.tier==='A' ? '#ca8a04' : 'var(--mut)');
+    const M = o.market;
+    let evCell='<span style="opacity:.5">无源</span>', vdCell='<span style="opacity:.5">无盘口源</span>', mktP='<span style="opacity:.5">无源</span>', mktO='<span style="opacity:.5">无源</span>';
+    if(M){
+      mktP = pct(M.pOver05);
+      mktO = M.ticketOdds;
+      const e = M.evReal;
+      evCell = '<b style="color:' + (e>=0?'var(--grn)':'var(--red)') + '">' + (e>=0?'+':'') + (e*100).toFixed(1) + '%</b>'
+        + '<div style="opacity:.6;font-size:11px">公平价 ' + M.fairOdds + ' / EV去水 ' + ((M.evFair>=0?'+':'') + (M.evFair*100).toFixed(1)) + '%</div>';
+      const okc = M.evReal>=0.02 ? 'var(--grn)' : (M.evReal>=-0.01 ? '#ca8a04' : 'var(--red)');
+      vdCell = '<b style="color:' + okc + '">' + M.verdict + '</b>';
+    }
+    /* 比分：仅完场(stt===-1)回填 gqj2 终比分；未开赛如实标「未开赛」，不拿 0-0 占位 */
+    let scoreCell = '<span style="opacity:.5">未开赛</span>';
+    if (o.finished && o.hs != null && o.as != null) scoreCell = '<b style="color:var(--txt)">' + o.hs + '-' + o.as + '</b>';
+    h += '<tr>'
+      + '<td style="font-weight:800;color:' + col + '">' + o.tier + '</td>'
+      + '<td>' + (o.league||'—') + '</td>'
+      + '<td><b>' + (o.home||'') + '</b> vs <b>' + (o.away||'') + '</b></td>'
+      + '<td style="white-space:nowrap;color:var(--mut)">' + (o.time||'—') + '</td>'
+      + '<td style="white-space:nowrap">' + scoreCell + '</td>'
+      + '<td>' + o.pk + '</td>'
+      + '<td style="font-weight:700">' + num(o.sumRol) + '</td>'
+      + '<td style="font-weight:700;color:' + col + '">' + pct(o.expHit) + '</td>'
+      + '<td style="font-weight:800;color:var(--acc)">' + (o.needOdds != null ? o.needOdds : '—') + '</td>'
+      + '<td>' + mktP + '</td>'
+      + '<td>' + mktO + '</td>'
+      + '<td>' + evCell + '</td>'
+      + '<td>' + vdCell + '</td>'
+      + '</tr>';
+  }
+  h += '</tbody></table>';
+  if(nMkt){
+    const okN = picks.filter(o=>o.market && o.market.evReal>=0.02).length;
+    const fairN = picks.filter(o=>o.market && o.market.evFair>0).length;
+    h += '<p class="note" style="border-left:3px solid var(--yel);padding-left:8px">'
+      + '<b>市场价对照结论（' + nMkt + ' 场有价）：</b>公平价口径有 edge <b>' + fairN + '</b> 场，'
+      + '扣掉约 ' + holdPct + '% 抽水后仍正 EV 的 <b style="color:' + (okN?'var(--grn)':'var(--red)') + '">' + okN + '</b> 场。'
+      + '这说明<b>市场把「上半场有没有球」定价得相当准</b>——89% 的高命中听着漂亮，但票面价普遍只有 1.16~1.35，'
+      + '扣水后不够本。<b>别追命中率，追票面价。</b></p>';
+  }
+
+  /* ── 避坑榜 ── */
+  if(avoid.length){
+    h += '<h3 style="margin:16px 0 8px;color:var(--red)">⑤ ⚠ 避坑榜（' + avoid.length + ' 场）</h3>';
+    h += '<p class="note">这些场盘口很深（|pk|≥1.75），看着像稳胆，但两队近期<b>上半场几乎不进球</b>（sumRol&lt;2.6），'
+      + '实测命中只有 <b>' + (X?pct(X.avgHit):'77.8%') + '</b>，跟无脑全押的基准 ' + pct(D.base||0.73) + ' 差不多——<b>别碰</b>。</p>';
+    h += '<table class="htab" style="width:100%"><thead><tr><th>联赛</th><th>对阵</th><th>|pk|</th><th>合计半场球</th><th>实测命中</th></tr></thead><tbody>';
+    for(const o of avoid){
+      h += '<tr><td>' + (o.league||'—') + '</td>'
+        + '<td><b>' + (o.home||'') + '</b> vs <b>' + (o.away||'') + '</b></td>'
+        + '<td>' + o.pk + '</td>'
+        + '<td style="color:var(--red);font-weight:700">' + num(o.sumRol) + '</td>'
+        + '<td style="color:var(--red)">' + pct(o.expHit) + '</td></tr>';
+    }
+    h += '</tbody></table>';
+  }
+
+  h += '<p class="note" style="margin-top:14px">来源：' + (D.source||'—')
+     + '　｜　生成：' + (D.built||'—')
+     + '<br><b>量纲说明：</b>sumRol = 主队近10场半场进球均值 + 客队近10场半场进球均值（只用该场之前的赛果，不泄漏）。'
+     + '<br><b>局限（照实说）：</b>① 命中率来自球探库（友谊赛/青年队/女足占比高），用到主流联赛时需打折看；'
+     + '② 历史库只到 ' + (D.tiers&&D.tiers[0]?'' :'') + '当前日期，球队近况用滚动均值近似；'
+     + '③ <b>这里给的是「命中率」不是「收益率」</b>——赔率低于保本线时命中再高也是负 EV。</p>';
+  el.innerHTML = h;
+}
+function renderHalfLaw(){
+  const el = document.getElementById('halfLawContent');
+  if(!el) return;
+  const D = window.HT_LAW;
+  if(!D){
+    el.innerHTML = '<p class="note">规律库未生成。本地跑 <code>node gen_ht_law.cjs</code> 产出 ht_law.json 后重新生成 index.html。</p>';
+    return;
+  }
+  const g = D.global || {};
+  const v = D.htDirValid || {};
+  const bar = (p, col) => '<div style="background:var(--line);height:6px;border-radius:3px;margin-top:3px;width:100%;min-width:70px">'
+    + '<div style="background:' + col + ';height:100%;border-radius:3px;width:' + p + '%"></div></div>';
+  let h = '';
+
+  /* ── 结论条（2026-10-09 更正：上一版「破蛋极差 6.4pp = 死路」是用薄样本自建 Elo 得出的，
+   *    换成球探**真实让球盘**后极差达 20.7pp —— 破蛋不是信号平，是档内无区分） ── */
+  const lift = v.lift;
+  const liftCol = lift >= 3 ? 'var(--grn)' : (lift > 0 ? '#ca8a04' : 'var(--red)');
+  const PK = window.PK_BREAK;
+  h += '<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;background:var(--bg2)">'
+    + '<div style="font-weight:700;margin-bottom:6px">💡 一句话结论'
+    + '<span style="color:var(--red);font-weight:400;font-size:12px;margin-left:8px">（已更正上一版结论，见文末「更正说明」）</span></div>'
+    + '<div style="line-height:1.7">'
+    + '<b>半场方向</b>：赛前 Elo 最弱→最强档，半场主胜率 <b>19.1% → 53.2%</b>（极差 <b>34pp</b>）；'
+    + '留出集命中 <b style="color:' + liftCol + '">' + v.hit + '%</b>（押平基线 ' + v.base
+    + '%，lift <b style="color:' + liftCol + '">' + (lift >= 0 ? '+' : '') + lift + 'pp</b>，n=' + v.n + '），校准单调 → 真信号。'
+    + '<br><b>破蛋</b>：用球探<b>真实让球盘</b>能分出 <b>67.5% → 88.2%</b>（极差 <b>' + (PK ? PK.tableClean.length && '20.7' : '—') + 'pp</b>），'
+    + '但建成连续模型留出 <b>AUC 仅 ' + (PK ? PK.validClean.auc : '—') + '</b>、Brier 只改善 ' + (PK ? (((PK.validClean.brierBase - PK.validClean.brier) / PK.validClean.brierBase) * 100).toFixed(1) : '—') + '%'
+    + ' —— 因为 <b>60% 的样本挤在 68~71% 的低档</b>，高分档只占 2.6%。'
+    + '<br>⇒ 破蛋的正确用法是<b>筛选门（只打高盘口场次）</b>，不是追连续 AUC。'
+    + '</div></div>';
+
+  /* ── 表1：Elo 档 ── */
+  h += '<h3 style="margin:14px 0 6px">① 赛前 Elo 差 → 半场形态（等频 8 档，n=' + g.n + '）</h3>';
+  h += '<p class="note">Elo 按比赛日严格递推，只用该场<b>之前</b>的赛果；已剔除双方历史均 &lt;3 场的冷启动样本。'
+     + '半场主胜率随强度<b>单调上升</b>，但半场<b>平局率几乎恒定</b>（34~41%），这正解释了为什么「破蛋」提不动。</p>';
+  h += '<table class="htab" style="width:100%;font-size:13px"><thead><tr>'
+     + '<th>Elo差档</th><th>n</th><th>半场主胜</th><th>半场平</th><th>半场客胜</th>'
+     + '<th>0-0率</th><th>破蛋率</th><th>全场主胜</th><th>半场领先→兑现</th><th>半场均球</th></tr></thead><tbody>';
+  for(const b of (D.eloBands||[])){
+    h += '<tr><td><b>' + b.band + '</b></td><td>' + b.n + '</td>'
+      + '<td style="color:var(--grn);font-weight:700">' + b.htHome + '%' + bar(b.htHome, 'var(--grn)') + '</td>'
+      + '<td>' + b.htDraw + '%' + bar(b.htDraw, '#0ea5e9') + '</td>'
+      + '<td>' + b.htAway + '%' + bar(b.htAway, 'var(--red)') + '</td>'
+      + '<td>' + b.z0 + '%</td>'
+      + '<td>' + b.pBreak + '%' + bar(b.pBreak, '#ca8a04') + '</td>'
+      + '<td>' + b.ftHome + '%</td>'
+      + '<td>' + b.leadCash + '% <span style="color:var(--mut)">(n=' + b.leadN + ')</span></td>'
+      + '<td>' + b.avgHtG + '</td></tr>';
+  }
+  h += '</tbody></table>';
+
+  /* ── 表2：留出验证 ── */
+  h += '<h3 style="margin:18px 0 6px">② ★ 半场方向预测器：时间切分留出验证</h3>';
+  h += '<p class="note">训练 ' + v.trainN + ' 场 → 测试 <b>' + v.n + ' 场（严格未来留出）</b>。'
+     + '基线＝无脑押样本里最大的那一档。校准曲线单调 = 排序能力真实存在。</p>';
+  h += '<table class="htab" style="width:100%;font-size:13px"><thead><tr>'
+     + '<th>指标</th><th>值</th><th>对照</th></tr></thead><tbody>'
+     + '<tr><td>三分类实际分布</td><td>主 ' + v.baseH + '% / 平 ' + v.baseD + '% / 客 ' + v.baseA + '%</td><td>—</td></tr>'
+     + '<tr><td>无脑押最大档（基线）</td><td>' + v.base + '%</td><td>—</td></tr>'
+     + '<tr><td><b>Elo 档模型 argmax 命中</b></td><td style="color:' + liftCol + ';font-weight:700">' + v.hit + '%</td>'
+     + '<td>lift <b style="color:' + liftCol + '">' + (lift >= 0 ? '+' : '') + lift + 'pp</b></td></tr>'
+     + '<tr><td>Brier（三分类）</td><td>' + v.brier + '</td><td>常数基线 ' + v.brierBase
+     + ' → 改善 ' + (((v.brierBase - v.brier) / v.brierBase) * 100).toFixed(1) + '%</td></tr>'
+     + '</tbody></table>';
+  h += '<p class="note" style="margin-top:6px"><b>校准曲线（模型置信 → 实际命中）：</b></p>';
+  h += '<table class="htab" style="width:100%;font-size:13px"><thead><tr><th>模型预测置信</th><th>实际命中</th><th>n</th><th>偏差</th></tr></thead><tbody>';
+  for(const c of (v.calib||[])){
+    const d = (c.act - c.p).toFixed(1);
+    h += '<tr><td>' + c.p + '%</td><td><b>' + c.act + '%</b></td><td>' + c.n + '</td>'
+      + '<td style="color:' + (Math.abs(d) <= 3 ? 'var(--grn)' : '#ca8a04') + '">' + (d >= 0 ? '+' : '') + d + 'pp</td></tr>';
+  }
+  h += '</tbody></table>';
+
+  /* ── 表3：0-0 之后 / 半场平之后 ── */
+  const a0 = D.after00 || {}, ad = D.afterDraw || {};
+  h += '<h3 style="margin:18px 0 6px">③ 中场可操作的规律（0-0 之后还剩多少球）</h3>';
+  h += '<table class="htab" style="width:100%;font-size:13px"><thead><tr>'
+     + '<th>情形</th><th>n</th><th>全场≥1球</th><th>≥2球</th><th>≥3球</th><th>平均剩余进球</th><th>全场平局</th></tr></thead><tbody>'
+     + '<tr><td><b>半场 0-0</b></td><td>' + a0.n + '</td><td>' + a0.g1 + '%</td><td>' + a0.g2 + '%</td><td>' + a0.g3 + '%</td>'
+     + '<td><b>' + a0.avg + '</b> 球</td><td>' + a0.ftD + '%</td></tr>'
+     + '<tr><td>半场平（全部）</td><td>' + ad.n + '</td><td colspan="3" style="text-align:center">→ 全场 主 '
+     + ad.ftHome + '% / 平 ' + ad.ftDraw + '% / 客 ' + ad.ftAway + '%</td><td>—</td><td>' + ad.ftDraw + '%</td></tr>'
+     + '<tr><td>其中 半场 1-1</td><td>' + ad.h11.n + '</td><td colspan="4">—</td><td>' + ad.h11.ftD + '%</td></tr>'
+     + '</tbody></table>';
+  h += '<p class="note">全场平局基准 <b>' + g.htDraw + '%</b> 是半场平；全场平局基准约 <b>23.2%</b>。'
+     + '半场 0-0 → 全场平 <b>' + a0.ftD + '%</b>，比基准高约 <b>+' + (a0.ftD - 23.2).toFixed(1) + 'pp</b>，'
+     + '且下半场平均还剩 <b>' + a0.avg + '</b> 球——这是中场时段最实的一组数。</p>';
+
+  /* ── 表4：今日对照 ── */
+  const td = D.today || [];
+  const good = td.filter(t => t.ok);
+  h += '<h3 style="margin:18px 0 6px">④ 今日场次：Elo 模型 vs 市场（500 半全场反推）</h3>';
+  if(!good.length){
+    h += '<p class="note">今日无场次可落档（队名不在球探历史库）。</p>';
+  } else {
+    h += '<table class="htab" style="width:100%;font-size:13px"><thead><tr>'
+       + '<th>联赛</th><th>对阵</th><th>匹配到(库内名/场数)</th><th>Elo差</th><th>档</th>'
+       + '<th>Elo模型 主/平/客</th><th>市场 主/平/客</th><th>最大分歧</th></tr></thead><tbody>';
+    for(const t of good){
+      const gap = Math.max(Math.abs(t.modH - t.mktH), Math.abs(t.modD - t.mktD), Math.abs(t.modA - t.mktA));
+      const gc = gap >= 15 ? 'var(--red)' : (gap >= 8 ? '#ca8a04' : 'var(--mut)');
+      h += '<tr><td>' + t.league + (t.lgMismatch ? ' <span style="color:#ca8a04" title="500联赛名与球探库不一致，已按库内实际联赛取 Elo">⚠</span>' : '') + '</td>'
+        + '<td><b>' + t.home + '</b> v <b>' + t.away + '</b></td>'
+        + '<td style="font-size:11px;color:var(--mut)">' + t.homeKey + '(' + t.homeG + ') / ' + t.awayKey + '(' + t.awayG + ')</td>'
+        + '<td>' + t.d + '</td><td>' + t.band + '</td>'
+        + '<td>' + t.modH + '/' + t.modD + '/' + t.modA + '</td>'
+        + '<td>' + t.mktH + '/' + t.mktD + '/' + t.mktA + '</td>'
+        + '<td style="color:' + gc + ';font-weight:700">' + gap.toFixed(1) + 'pp</td></tr>';
+    }
+    h += '</tbody></table>';
+    h += '<p class="note"><b>⚠ 三条必须知道的局限（别把它当投注结论）：</b><br>'
+       + '① Elo 只用球探库<b>近 3 个月</b>数据递推（' + (D.source||'').replace(/<[^>]+>/g,'') + '），单队常只有个位数到二十几场，<b>远不如真实 Elo 稳</b>；<br>'
+       + '② 队名是<b>模糊匹配</b>（如「埃因霍温」可能落到 FC埃因霍温 而非 PSV埃因霍温），已在「匹配到」列如实显示库内名与场数，<b>请人工核对</b>；<br>'
+       + '③ 模型给的是<b>同强度档的历史无条件频率</b>，市场给的是<b>这场特定的定价</b>——分歧大不代表有 value，往往是 Elo 样本薄造成的。</p>';
+  }
+  const bad = td.filter(t => !t.ok);
+  if(bad.length){
+    h += '<p class="note" style="margin-top:6px"><b>未能落档 ' + bad.length + ' 场：</b>';
+    h += bad.map(t => t.home + ' v ' + t.away + '（' + t.why + '）').join('；');
+    h += '。<span style="color:var(--mut)">球探库是近 3 个月的部分赛程快照，覆盖不到的队如实标注，不用不可靠的兜底去凑数。</span></p>';
+  }
+
+  /* ── 表5'：球探真实历史盘口 |pk|（此前遗漏的盘口数据） ── */
+  if (PK) {
+    h += '<h3 style="margin:18px 0 6px">⑥ 🔴 球探<b>真实历史盘口</b> |pk|（' + PK.n + ' 场 · 此前几轮一直漏用）</h3>';
+    h += '<p class="note">⚠⚠ <b>必须先读的作废声明</b>：库里的 pk 字段<b>全部非负</b>（负值 0 个），'
+       + '且 pk≥2.5 档主队净胜球呈<b>双峰</b>（≤−2 占 31.8% / ≥+4 占 24.8%）⇒ '
+       + '<b>pk 是让球绝对值，方向符号在抓取时已丢失</b>。'
+       + '因此<b>不能算上/下盘盘路</b>，此前据此算出的「庄家让球偏大 0.388 球、上盘净输 14pp」<b>是伪信号，已作废</b>。'
+       + '下表只用「实力差大小」这一<b>方向无关</b>的信息。</p>';
+    h += '<table class="htab" style="width:100%;font-size:13px"><thead><tr>'
+       + '<th>|pk| 档</th><th>n</th><th>上半场均球</th><th>破蛋率</th><th>全场均球</th></tr></thead><tbody>';
+    for (const b of (PK.tableClean || [])) {
+      const col = b.pBreak >= 82 ? 'var(--grn)' : (b.pBreak >= 75 ? '#ca8a04' : 'var(--mut)');
+      h += '<tr><td><b>' + b.band + '</b></td><td>' + b.n + '</td><td>' + b.hg + '</td>'
+        + '<td style="color:' + col + ';font-weight:700">' + b.pBreak + '%' + bar(b.pBreak, col) + '</td>'
+        + '<td>' + b.fg + '</td></tr>';
+    }
+    h += '</tbody></table>';
+    const vc = PK.validClean || {};
+    h += '<p class="note" style="margin-top:8px"><b>留出验证（正规联赛子集 ' + PK.nClean + ' 场，训练→测试 ' + vc.n + ' 场）：</b>'
+       + 'AUC <b>' + vc.auc + '</b>、Brier ' + vc.brier + ' vs 常数基线 ' + vc.brierBase
+       + '（改善仅 ' + (((vc.brierBase - vc.brier) / vc.brierBase) * 100).toFixed(2) + '%）。'
+       + '校准：' + (vc.cal || []).map(c => c.p + '%→' + c.act + '%').join('、')
+       + '。<br>⇒ <b>档间差异真实（20.7pp）但档内无区分</b>，当连续模型没用，当<b>筛选门</b>才有意义：'
+       + '只打 |pk|≥1.75 的场次，实测破蛋 <b>81~88%</b>（对照全局基线 ' + vc.base + '%）。</p>';
+
+    /* 前置体检：半场↔全场脱不脱节 */
+    h += '<p class="note" style="margin-top:6px"><b>☠ 前置体检（这个库靠不靠谱）：</b>';
+    for (const x of (PK.htFtLink || [])) {
+      h += '<br>　' + x.grp + '（n=' + x.n + '）：半场主队领先→全场主胜 <b>' + x.cash + '%</b>'
+        + '（该批全场主胜基准 ' + x.baseFtHome + '%，差 <b>+' + (x.cash - x.baseFtHome).toFixed(1) + 'pp</b>）';
+    }
+    h += '<br>　⇒ 各类赛事差值都在 35~38pp，<b>半场与全场并不脱节</b>（此前担心友谊赛半场阵容轮换会让两者无关，实测不成立），规律可信。</p>';
+  }
+
+  /* ── 表5：联赛×强度 ── */
+  const lb = D.lgBands || {};
+  const lgs = Object.keys(lb);
+  if(lgs.length){
+    h += '<h3 style="margin:18px 0 6px">⑤ 联赛 × 强度（联赛内三分位）</h3>';
+    h += '<p class="note">⚠ <b>样本薄、噪声大，仅作观察、不可作结论</b>：球探库多为友谊赛/低级别联赛，单格常只有百来场，'
+       + '且此前实测「联赛半场倾向」进引擎会<b>变差</b>（ΔAUC −0.025 / −0.077），已否决不进引擎。这里只陈列。</p>';
+    h += '<table class="htab" style="width:100%;font-size:13px"><thead><tr>'
+       + '<th>联赛</th><th>n</th><th>弱档 半平/破蛋</th><th>中档 半平/破蛋</th><th>强档 半平/破蛋</th></tr></thead><tbody>';
+    for(const lg of lgs){
+      const c = lb[lg].cells;
+      const f = x => x.n >= 100 ? (x.htDraw + '% / ' + x.pBreak + '% <span style="color:var(--mut)">(' + x.n + ')</span>')
+        : '<span style="color:var(--mut)">样本不足(' + x.n + ')</span>';
+      h += '<tr><td>' + lg + '</td><td>' + lb[lg].n + '</td><td>' + f(c[0]) + '</td><td>' + f(c[1]) + '</td><td>' + f(c[2]) + '</td></tr>';
+    }
+    h += '</tbody></table>';
+  }
+
+  /* ── 更正说明（把这一轮推翻/作废的东西全部留痕，防止以后再踩） ── */
+  h += '<div style="border:1px solid #b45309;border-radius:8px;padding:10px 12px;margin-top:16px;background:rgba(180,83,9,.08)">'
+    + '<div style="font-weight:700;margin-bottom:6px;color:#b45309">📌 更正说明（本轮推翻/作废的内容，全部留痕）</div>'
+    + '<ol style="margin:0;padding-left:20px;line-height:1.8">'
+    + '<li><b>作废</b>：上一版结论「破蛋极差仅 6.4pp ⇒ 破蛋是死路」——那是拿<b>薄样本自建 Elo</b>当条件变量得出的。'
+    + '换成球探<b>真实让球盘</b>后极差达 <b>20.7pp</b>。破蛋不是信号平，是<b>档内无区分</b>。</li>'
+    + '<li><b>作废</b>：据 pk 算出的「庄家让球系统性偏大 0.388 球、上盘净输 14pp」——'
+    + '<b>pk 符号丢失</b>导致的伪信号，不可用于找庄家偏差。</li>'
+    + '<li><b>补漏</b>：<code>_7m_db.json</code> 一直带 <code>pk</code>(让球盘) / <code>panlu</code> 字段，'
+    + '49.5% 的场次（28,258 场）有真实历史盘口，此前几轮<b>只把它当比分库用</b>，现已启用。</li>'
+    + '<li><b>保留有效</b>：半场方向 Elo 模型 lift +4.3pp、半场 0-0 后剩 1.46 球、半场领先兑现 79.8%。</li>'
+    + '</ol></div>';
+
+  h += '<p class="note" style="margin-top:14px">数据来源：' + (D.source||'—') + '　｜　生成时间：' + (D.built||'—')
+     + '　｜　全局：半场 主 ' + g.htHome + '% / 平 ' + g.htDraw + '% / 客 ' + g.htAway + '%，半场 0-0 ' + g.z0 + '%，wf=' + g.wf + '</p>';
+  el.innerHTML = h;
+}
+
+function renderHalf500(){
+  const el = document.getElementById('half500Content');
+  if(!el) return;
+  const d = window.HALF_500, B = window.HT_BASE;
+  if(!d || !d.rows || !d.rows.length){
+    el.innerHTML = '<p class="note">今日半场方向未抓到（fetch_500_half.cjs 未运行或源站无场次）。本地跑 <code>node fetch_500_half.cjs</code> 后重新生成 index.html 即可。</p>';
+    return;
+  }
+  const pc = (x)=> ((x||0)*100).toFixed(1);
+  function bar(p, col){
+    return '<div style="background:var(--line);height:5px;border-radius:3px;margin-top:2px;width:96px">'
+      + '<div style="background:'+col+';height:100%;border-radius:3px;width:'+ Math.max(2, Math.min(100,(p||0)*100)) +'%"></div></div>';
+  }
+  let html = '<p class="note">抓取时间：<b>'+ (d.updated||'—') +'</b> ｜ 共 <b>'+ (d.count||d.rows.length) +'</b> 场 ｜ '+ (d.market||'') +'</p>';
+  if(B && B.global){
+    const g = B.global;
+    html += '<p class="note" style="margin-top:6px"><b>球探历史全局基准（'+ g.n +' 场真实半场比分）：</b>'
+      + '半场 主胜 <b>'+ g.home +'%</b> / 平 <b>'+ g.draw +'%</b> / 客胜 <b>'+ g.away +'%</b>'
+      + ' ｜ 半场 0-0 <b>'+ g.z0 +'%</b>（破蛋 '+ g.break +'%）｜ 半场大1.5 '+ g.o15 +'%</p>';
+  }
+  html += '<table class="htab" style="width:100%"><thead><tr>'
+        + '<th>联赛</th><th>对阵</th><th>让球</th>'
+        + '<th>市场：半场主胜</th><th>市场：半场平</th><th>市场：半场客胜</th>'
+        + '<th>球探同联赛历史（主/平/客）</th><th>半场平 vs 历史</th></tr></thead><tbody>';
+  for(const r of d.rows){
+    // 联赛基准：先精确匹配，再退化为包含匹配；都没有就用全局
+    let base = null, bsrc = '';
+    if(B){
+      if(B.leagues && B.leagues[r.league]) { base = B.leagues[r.league]; bsrc = r.league; }
+      else if(B.leagues){ for(const k in B.leagues){ if(r.league && (k.indexOf(r.league)>=0 || r.league.indexOf(k)>=0)) { base = B.leagues[k]; bsrc = k; break; } } }
+      if(!base && B.global){ base = B.global; bsrc = '全局'; }
+    }
+    const dGap = base ? (r.pHtDraw*100 - base.draw) : null;
+    let gapTxt = '—', gapCol = 'var(--mut)';
+    if(dGap != null){
+      gapTxt = (dGap>=0?'+':'') + dGap.toFixed(1) + 'pp';
+      gapCol = dGap >= 5 ? 'var(--grn)' : (dGap <= -5 ? 'var(--red)' : 'var(--mut)');
+    }
+    html += '<tr>'
+      + '<td>'+ (r.league||'—') +'</td>'
+      + '<td><b>'+ r.home +'</b> vs <b>'+ r.away +'</b></td>'
+      + '<td>'+ (r.rangqiu||'—') +'</td>'
+      + '<td>'+ pc(r.pHtHome) +'%'+ bar(r.pHtHome,'#e54545') +'</td>'
+      + '<td><b>'+ pc(r.pHtDraw) +'%</b>'+ bar(r.pHtDraw,'#ca8a04') +'</td>'
+      + '<td>'+ pc(r.pHtAway) +'%'+ bar(r.pHtAway,'#36c275') +'</td>'
+      + '<td style="opacity:.85">'+ (base ? (base.home+'% / '+ base.draw +'% / '+ base.away +'%') : '—')
+      + (base ? '<div style="font-size:11px;opacity:.6">'+ bsrc +' n='+ base.n +'</div>' : '') +'</td>'
+      + '<td style="color:'+ gapCol +';font-weight:700">'+ gapTxt +'</td>'
+      + '</tr>';
+  }
+  html += '</tbody></table>';
+  html += '<p class="note" style="margin-top:10px"><b>怎么读：</b>「市场」列＝竞彩半全场 9 态反推的<b>这场</b>半场方向（已去抽水，margin≈1.20）；'
+        + '「历史」列＝球探该联赛<b>所有比赛的平均</b>半场分布。<b>两者口径不同</b>：市场价含本场强弱（强队半场平天然更低），历史是联赛无条件平均，'
+        + '<b>不能直接相减当价值</b>。正确用法：看<b>这场相对同联赛平均更偏哪边</b>——若某场半场平显著高于联赛平均，说明盘口认为双方上半场胶着，可结合让球盘与破蛋档交叉核对。'
+        + '<br><b>⚠ 局限：</b>仅当日竞彩场（十来场），且是<b>半全场反推</b>不是直接半场盘口（竞彩无半场胜平负）；历史可复盘的是球探库，不是这张表。</p>';
+  el.innerHTML = html;
+}
+/* ★ 2026-10-09 卡死修复①：breakFallbackRatings 每次重渲都要给**每场已完赛**重跑一遍
+   strengthPriorOpts（→ teamPriorOpts/teamFormOpts → decodePua 查表），实测 3ms/场 × 195 场 ≈ 600ms/次；
+   _htDrain / 实时刷新会反复重渲本面板 → 主线程被彻底钉死（真机 CDP Debugger.pause 连采 5 次
+   全部落在 renderHtBreak→breakFallbackRatings→decodePua，页面报「此页面没有响应」）。
+   该值只依赖队名与静态强度库，按 tid 记忆化即可，二次重渲≈0。 */
+const _FB_CACHE = new Map();
+function _breakFallbackCached(m){
+  const k = String(m && m.tid);
+  if (!k || k === 'undefined') return null;
+  if (_FB_CACHE.has(k)) return _FB_CACHE.get(k);
+  let v = null;
+  try { v = breakFallbackRatings(m); } catch(e){ v = null; }
+  if (_FB_CACHE.size < 20000) _FB_CACHE.set(k, v);
+  return v;
+}
+/* ★ 2026-10-09 卡死修复③：重渲节流 + 重入保护。
+   800ms 内不重复重渲；正在渲染时再次进入直接返回。openHtBreak 会清掉时间戳强制渲一次。 */
+let _htLastRenderTs = 0, _htRendering = false;
+function htScoreMini(hs){
+  if (!hs || !hs.length) return '—';
+  return hs.slice(0,3).map(function(x){ return x.s+' '+x.p+'%'; }).join(' · ');
+}
+/* ★ 2026-10-14 #329 修复：半场破蛋板「进行中」表的实时比分此前渲染时一次性捕获（liveScore），
+   面板打开后不随比赛推进刷新。现引入与纯深盘/精选同口径的就地刷新：_htRows 按 tid 注册行数据，
+   比分格带 data-pscore，30s 一拍用 tbScoreCell 重算（读取已被后台 loadMatches/_t7WatchTimer 更新的 m.home_score/t7.scoreRaw）。 */
+let _htPoll = null, _htRows = {};
+function _htScoreCell(r){
+  try{ return tbScoreCell(r.m, 'live', r.dir || null, null); }catch(e){ return '<b style="color:var(--acc)">—</b>'; }
+}
+function _htScoreTick(){
+  try{
+    _relinkRowM(_htRows);
+    const root = document.getElementById('htBreakContent');
+    if (!root) return;
+    const els = root.querySelectorAll('[data-pscore]');
+    for (let i = 0; i < els.length; i++){
+      const el = els[i], tid = el.getAttribute('data-pscore'), r = _htRows[tid];
+      if (!r) continue;
+      try{ const html = _htScoreCell(r); if (el.innerHTML !== html) el.innerHTML = html; }catch(e){}
+    }
+  }catch(e){}
+}
+function renderHtBreak(){
+  const _now = Date.now();
+  if (_htRendering) return;
+  if (_now - _htLastRenderTs < 800) return;
+  _htLastRenderTs = _now; _htRendering = true;
+  try { _renderHtBreakInner(); } finally { _htRendering = false; }
+}
+function _renderHtBreakInner(){
+  try{ resolvePredictions(); }catch(e){}
+  /* ★ 2026-10-03 性能修复：破蛋面板只关心**未开赛/进行中**（需要 breakGoal 预测）和**已完赛**（要真实比分复盘）。
+     完赛场次的结论走下面 fin 分支的 breakFallbackRatings（评级兜底），**不需要先跑一遍完整引擎** ——
+     原本 2000+ 场逐个 offlineAnalyze 是 openHtBreak 卡 707ms 的大头（实测点开面板转圈）。
+     CAP 兜底：单次最多补算 900 场，其余由后台 offlineBatchAnalyze 续跑，下次点开就有。 */
+  /* ★ 2026-10-04 性能：原先这里先 MATCHES.filter 跑一遍 matchPhase、for 里又跑一遍（每场两次），
+     拆成单次遍历，needAna 顺手一起收集；补算也挪到分桶之后 —— 补算出来的场次本次也进不了表
+     （下面 up/live 分支要求 a.breakGoal 存在），先跑属于白等 120ms 再画画面。
+     输出与原来完全一致，只是 matchPhase 从 2N 次降到 N 次（再叠加 60s 缓存 ≈ 只算几十次）。 */
+  // ===== 三态分类：进行中 / 未开赛 / 已完赛（按 matchPhase）=====
+  // 进行中/未开赛需破蛋预测(要有盘口)；已完赛则尽量带模型档，无盘口也展示真实比分复盘
+  const live=[], up=[], fin=[], needAna=[];
+  for (const m of MATCHES){
+    const a = m.analysis;
+    const ph = matchPhase(m);
+    if (!a && ph !== 'fin' && (hasPackOdds(m.tid) || jcHasOdds(m) || m.odds || t7HasOdds(m))) needAna.push(m);
+    const k = heatKick(m);
+    if (ph==='fin'){
+      let bg = (a && a.breakGoal) || null;
+      let ro = false;
+      if (!bg){ try { const fb = _breakFallbackCached(m); if (fb){ bg = fb; ro = true; } } catch(e){} }
+      const t7id = (m.t7id != null) ? m.t7id : (m.t7 && m.t7.sId != null ? m.t7.sId : null);
+      const act = (window.HTFT_GROUND && t7id!=null && window.HTFT_GROUND[String(t7id)]) || null;
+      fin.push({ tid:m.tid, t7id:t7id, time:k.time, day:k.day, ts:kickTs(m), league:cleanLeague(m),
+        home: displayTeam(m,'home'), away: displayTeam(m,'away'),
+        pBreak: bg?bg.pBreak:null, tier: bg?bg.tier:'none', tag: bg?(ro?bg.tag+'·评级':bg.tag):'无盘口',
+        edge: bg?bg.edge:0, hl1: bg?bg.hl1:'—', hm1: bg?bg.hm1:'—', htScore: (bg?bg.htScore:null), sc: liveScore(m), act: act, ro: ro });
+    } else {
+      if (!a || !a.breakGoal) continue;
+      const bg = a.breakGoal;
+      const row = { tid:m.tid, time:k.time, day:k.day, ts:kickTs(m), league:cleanLeague(m),
+        home: displayTeam(m,'home'), away: displayTeam(m,'away'),
+        pBreak: bg.pBreak, tier: bg.tier, tag: bg.tag, edge: bg.edge, hl1: bg.hl1, hm1: bg.hm1,
+        htScore: bg.htScore, sc: liveScore(m), m: m, dir: (a && a.dirCode) || null };
+      if (ph==='live'){ _htRows[m.tid] = { m:m, ph:'live', dir:(a && a.dirCode)||null }; live.push(row); }
+      else up.push(row);
+    }
+  }
+  /* 限时补算：分完桶再跑（先出画面）。跑 120ms 让画面先落地，剩下的 _htRest 后台排队（补完自动重渲本面板）。
+     CAP 1200 场兜底，其余由后台 offlineBatchAnalyze 续跑，下次点开就有。 */
+  if (needAna.length){
+    _htRest = _htAnalyze(needAna.slice(0, 1200), 60);   // 首屏只算 60ms（原 120ms），画面更快落地
+    if (_htRest.length) setTimeout(_htDrain, 120);       // 间隔与 _htDrain 对齐，降低占用感
+  }
+  /* ⚠ 三态列表一律按**真实开赛时间**排（用户要求：所有板块的场次都按时间，方便按先后查看）。
+     原先 live/up 按破蛋概率降序，同一档里"破蛋高的在前"，跨日场次会串序、看不到几点钟踢。
+     ts = kickTs(m) = YYYYMMDDHHMM，字符串 localeCompare 即时间序。 */
+  const byTsAsc = (x,y)=> String(x.ts||'').localeCompare(String(y.ts||''));   // 未开赛：早的在前
+  const byTsDesc = (x,y)=> String(y.ts||'').localeCompare(String(x.ts||''));  // 已完赛：最近完的在前
+  live.sort(byTsAsc);
+  up.sort(byTsAsc);
+  fin.sort(byTsDesc);
+  const sN = arr => arr.filter(r=>r.tier==='strong').length;
+  const mN = arr => arr.filter(r=>r.tier==='mid').length;
+  const wN = arr => arr.filter(r=>r.tier==='weak').length;
+  const lN = arr => arr.filter(r=>r.tier==='low').length;
+  /* ⚠ tail 参数：截断后要往 tbody 末尾插「全部展开」入口行，之前用 .replace('</tbody>') 拼，
+     一旦表结构变就静默失效；改成显式传参，insertAdjacentHTML 也不依赖字符串里 '</tbody>' 的出现次数。 */
+  const htTable = (list, withScore, tail)=>{
+    if (!list.length) return '<p class="note">该板块暂无场次。</p>';
+    return `<table class="htab"><thead><tr>
+      <th>破蛋概率</th><th>档</th><th>时间</th><th>联赛</th><th>对阵</th>
+      ${withScore?'<th>实时比分</th>':''}<th>半场期望</th><th>+EV</th><th>操作</th></tr></thead><tbody>`
+      + (tail||'')
+      + list.map(r=>{ const realSrc = (r.src==='beidan' || r.src==='betfa');
+        const tcls = r.tier==='strong'?'bW':(r.tier==='mid'?'bK':(r.tier==='weak'?'bN':'bG'));
+        return `<tr onclick="jumpToMatch(${r.tid})" title="点击定位到主看板该场" style="cursor:pointer">
+          <td>${r.pBreak!=null?`<b style="color:var(--grn)">${r.pBreak}%</b>${r.edge?` <span class="badge bW">+${r.edge}pp</span>`:''}`:'<span class="badge bG">无盘口</span>'}</td>
+          <td><span class="badge ${tcls}">${r.tag}</span></td>
+          <td>${timeCell(r,false)}</td><td>${r.league}</td>
+          <td><b>${r.home}</b> vs <b>${r.away}</b></td>
+          ${withScore?`<td data-pscore="${r.tid}">${_htScoreCell(r)}</td>`:''}
+          <td>主${r.hl1}/客${r.hm1}<br><span style="font-size:11px;color:var(--mut)">半场比分 ${htScoreMini(r.htScore)}</span></td>
+          <td>${htPickBadge(r.tid)}</td>
+          <td style="white-space:nowrap;color:var(--acc)"><span class="badge bK" style="cursor:pointer" onclick="event.stopPropagation();openHtBreakDetail('${r.tid}')" title="半破定性分析：近期状态 / 历史交锋 / 半场倾向 / 伤停容错钩子">分析</span> 定位→</td>
+        </tr>`;
+      }).join('') + (tail||'') + '</tbody></table>';
+  };
+  // ===== 已完赛：命中率（★2026-10-05 改用权威口径：7m 独立真值跨源配对 729 场，_eval/_7m_pair_eval.cjs）
+  //       旧的 1637 场 Over 页回测（86.9/78.8/67.3、基准 73.7%）含同源偏倚，engine.js 已标注作废，此处不再展示。=====
+  // ===== 已完赛：档位对账（★2026-10-05 重标定，权威口径 = 6656 场真赔率重跑，_eval/_break_verdict.cjs）
+  //       旧表用的 1637 场 Over 页回测（86.9/78.8/67.3、基准 73.7%）与 729 场配对口径均已作废：
+  //       前者含同源偏倚；后者只覆盖"有盘口且有 7m 真值"的窄子集（n=729），不足以定档位阈值。
+  //       新表按**实际平均总进球 + 全场 0-0 率**双指标给档，这才是用户能读懂的"这档意味着什么"。=====
+  const back = [
+    {tag:'破蛋·强', thr:'pBreak≥80%', n:1799, goals:4.40, z0:2.50,  note:'上半场破蛋 85.1%(直量1668真值,可出手)；旧门槛0.85只取子集'},
+    {tag:'破蛋·中性', thr:'70–80%',   n:2263, goals:3.51, z0:4.26,  note:'上半场破蛋 72.7%≈基准 73.5%，无 edge（勿单独投破蛋）'},
+    {tag:'破蛋·偏弱', thr:'65–70%',   n:1230, goals:2.54, z0:7.40,  note:'上半场破蛋 65.5%，反向负 edge'},
+    {tag:'破蛋·弱', thr:'<65%',       n:303,  goals:2.09, z0:13.20, note:'上半场破蛋 67.9%，反向负 edge（0-0 率是全库 2.4 倍）'},
+  ];
+  const backTable = `<table class="htab"><thead><tr>
+      <th>预测档</th><th>触发阈值</th><th>实际平均总进球</th><th>全场 0-0 率</th><th>样本 n</th><th>读法</th></tr></thead><tbody>`
+    + back.map(b=>{ const c=b.goals>=3.149?'var(--grn)':'var(--red)';
+        return `<tr><td><span class="badge ${b.tag==='破蛋·强'?'bW':b.tag==='破蛋·中性'?'bK':b.tag==='破蛋·偏弱'?'bN':'bG'}">${b.tag}</span></td>
+          <td>${b.thr}</td><td><b style="color:${c}">${b.goals} 球</b></td><td>${b.z0}%</td><td>${b.n}</td>
+          <td style="opacity:.75;font-size:11px">${b.note}</td></tr>`; }).join('')
+    + `<tr><td>全库基准</td><td>—</td><td><b>3.149 球</b></td><td><b>5.50%</b></td><td>6656</td><td style="opacity:.75;font-size:11px">总进球模型整体零偏差（z=0.0）</td></tr>`
+    + '</tbody></table>'
+    /* ★ 2026-10-05 新增实测校正（真值库 6656 场，_eval/_lmu_calib.cjs + _00_split.cjs 前后段留出）：
+       全库 6656 场总进球校准完美（预测 3.149 = 实际 3.149，z=0.0），但"零封冷门"在高盘口档超发 ——
+       p≥80% 档实际 0-0 52 场 vs 泊松预测 36.1 场 = 1.44×（前段 1.52× z=+2.3 / 后段 1.35× z=+1.4，两段同向），
+       且随盘口线单调：70~80% 1.08× → 60~70% 0.98× → <60% 0.90×。
+       含义：**高盘口场次"哑火"的概率比泊松估计高约 4 成**，破蛋·强档的 87% 并非"高枕无忧"。
+       仅作风险披露，不参与任何下注门槛（不改模型参数）。 */
+    + `<p class="note" style="border-left:3px solid var(--yel);padding-left:8px">`
+      + `<b>风险披露（2026-10-05 实测新增）</b>：全库 6656 场校验显示总进球均值无偏（预测 3.149 = 实际 3.149），`
+      + `但<b>高盘口场次更容易"哑火"</b>——pBreak≥80% 档实际 0-0 占比是泊松估计的 <b>1.44×</b>`
+      + `（52 场 vs 36.1 场；前段 1.52× / 后段 1.35×，前后段同向），且随盘口线单调递减（70~80% 为 1.08×、&lt;60% 为 0.90×）。`
+      + `即：<b>破蛋·强 的 87% 里有约 3% 是"高线哑火"冷门</b>，不能当作"稳破蛋"。`
+      + `</p>`;
+  // 近期真实完场样本（来自球探完场真值，最近 60 场；仅展示真实分布，不含本模型预测）
+  const rec = (window.HTFT_RECENT || []);
+  const recBreak = rec.filter(r=>r.brk).length;
+  const recTable = rec.length ? (
+    `<p class="note">近期真实完场（球探真值，最近 ${rec.length} 场，上半场破蛋 ${recBreak}/${rec.length} = ${(recBreak/rec.length*100).toFixed(0)}%）：</p>`
+    + `<table class="htab"><thead><tr><th>日期</th><th>联赛</th><th>对阵</th><th>半场比分</th><th>破蛋</th></tr></thead><tbody>`
+    + rec.map(r=>`<tr><td>${r.date}</td><td>${r.lg||'—'}</td><td><b>${r.h||'?'}</b> vs <b>${r.a||'?'}</b></td>
+        <td>${r.hh}:${r.ha}</td><td>${r.brk?'<span class="badge bW">是</span>':'<span class="badge bG">否</span>'}</td></tr>`).join('')
+    + '</tbody></table>') : '';
+
+  // ===== 真实命中率：本批已完赛 × 球探半场真值 join（随每日真值补全自动增长）=====
+  const G = window.HTFT_GROUND || {};
+  const finWithTruth = fin.filter(r => r.act && r.act[0] >= 0);
+  const real = { strong:{n:0,hit:0}, mid:{n:0,hit:0}, weak:{n:0,hit:0}, low:{n:0,hit:0} };
+  let realBaseN = 0, realBaseHit = 0;
+  for (const r of finWithTruth){
+    if (r.tier==='none' || r.pBreak==null) continue;
+    const broke = (r.act[0] + r.act[1]) >= 1;   // 上半场≥1球 = 破蛋
+    realBaseN++; if (broke) realBaseHit++;
+    if (real[r.tier]) { real[r.tier].n++; if (broke) real[r.tier].hit++; }
+  }
+  const realHit = t => real[t].n ? (real[t].hit / real[t].n * 100) : null;
+  const baseHit = realBaseN ? (realBaseHit / realBaseN * 100) : null;
+  const realTable = finWithTruth.length ? (
+    `<table class="htab"><thead><tr><th>预测档</th><th>真实破蛋率</th><th>样本 n</th><th>vs 基准</th></tr></thead><tbody>`
+    + [['strong','破蛋·强'],['mid','破蛋·中性'],['weak','破蛋·偏弱'],['low','破蛋·弱']].map(([k,lab])=>{
+        const h = realHit(k);
+        const c = h==null ? 'var(--mut)' : (h >= (baseHit||0) ? 'var(--grn)' : 'var(--red)');
+        const d = (h!=null && baseHit!=null) ? (h - baseHit) : 0;
+        return `<tr><td><span class="badge ${k==='strong'?'bW':k==='mid'?'bK':k==='weak'?'bN':'bG'}">${lab}</span></td>
+          <td><b style="color:${c}">${h!=null?h.toFixed(1)+'%':'—'}</b></td>
+          <td>${real[k]?(real[k].n||'—'):'—'}</td>
+          <td style="color:${c}">${h!=null?(d>=0?'+':'')+d.toFixed(1)+'pp':'—'}</td></tr>`;
+      }).join('')
+    + `<tr><td>基准(全部已关联)</td><td><b>${baseHit!=null?baseHit.toFixed(1)+'%':'—'}</b></td><td>${realBaseN||'—'}</td><td>—</td></tr>`
+    + '</tbody></table>'
+    + `<p class="note">真实命中率基于本批已完赛且已回填<b>上半场真值</b>的 <b>${finWithTruth.length}</b> 场（每日完场真值补全后自动增长）。样本较小时请结合下方历史回测基准看趋势。</p>`
+  ) : '<p class="note">本批已完赛场次暂未回填上半场真值（球探完场页按日产出，今日场次次日才更新），真实命中率将在真值到达后自动显示。当前以历史回测为基准。</p>';
+  // 已完赛清单（带真实半场 + 复盘）
+  /* ★ 2026-10-04 性能：真机量到这个表**一行 1635 行**、整页 innerHTML 747KB —— 一次写进去要建上万个
+     DOM 节点，是破蛋面板最大的 DOM 负担。fin 已按开赛时间倒序（最近完场在最上），默认只渲染最近
+     200 行，下方给「全部展开」入口（点一次把 _htAll 置 true 重渲）。
+     ⚠ 真实命中率统计用的是全量 finWithTruth，不受表格截断影响，口径不变。 */
+  const _finCap = 200;
+  const finFull = !!window._htAll;
+  const finShow = (finFull || fin.length <= _finCap) ? fin : fin.slice(0, _finCap);
+  const finMore = (!finFull && fin.length > finShow.length) ? (
+    `<tr><td colspan="10" style="text-align:center;padding:9px">
+       <span class="badge bW" style="cursor:pointer" onclick="window._htAll=true;openHtBreak();"
+         title="已完赛场次按开赛时间倒序，默认只列最近 ${_finCap} 场">▼ 还有 ${fin.length - finShow.length} 场已完赛 · 点此全部展开</span>
+     </td></tr>`) : '';
+  /* ★ 2026-10-04：未开赛表同样要截断。修好 matchPhase 后真实数据暴露出这张表有 794 行
+     （原先被一并塞进 1635 行的大表里），一次渲染几千个 <tr> 是面板最大的 DOM 负担。
+     进行中表(live)不截 —— 它本来就是当下要看的实时盘，量级稳定在几十场。 */
+  const _upCap = 200;
+  const upFull = !!window._htAll;
+  const upShow = (upFull || up.length <= _upCap) ? up : up.slice(0, _upCap);
+  const upMore = (!upFull && up.length > upShow.length) ? (
+    `<tr><td colspan="7" style="text-align:center;padding:9px">
+       <span class="badge bW" style="cursor:pointer" onclick="window._htAll=true;openHtBreak();"
+         title="未开赛场次按开赛时间升序，默认只列最近 ${_upCap} 场">▼ 还有 ${up.length - upShow.length} 场未开赛 · 点此全部展开</span>
+     </td></tr>`) : '';
+  const finTable = finShow.length ? (
+    `<table class="htab"><thead><tr>
+      <th>破蛋概率</th><th>档</th><th>时间</th><th>联赛</th><th>对阵</th>
+      <th>全场比分</th><th>真实半场</th><th>复盘</th><th>半场期望</th><th>操作</th></tr></thead><tbody>`
+    + finShow.map(r=>{
+        const tcls = r.tier==='strong'?'bW':(r.tier==='mid'?'bK':(r.tier==='weak'?'bN':'bG'));
+        const act = r.act && r.act[0] >= 0;
+        const broke = act ? (r.act[0] + r.act[1] >= 1) : null;
+        const realHalf = act ? (r.act[0] + ':' + r.act[1]) : '—';
+        const rev = act ? (broke ? '<span class="badge bW">破蛋✓</span>' : '<span class="badge bG">未破</span>') : '<span class="badge bG">无真值</span>';
+        return `<tr onclick="jumpToMatch(${r.tid})" title="点击定位到主看板该场" style="cursor:pointer">
+          <td>${r.pBreak!=null?`<b style="color:var(--grn)">${r.pBreak}%</b>${r.edge?` <span class="badge bW">+${r.edge}pp</span>`:''}`:'<span class="badge bG">无盘口</span>'}</td>
+          <td><span class="badge ${tcls}">${r.tag}</span></td>
+          <td>${timeCell(r,false)}</td><td>${r.league}</td>
+          <td><b>${r.home}</b> vs <b>${r.away}</b></td>
+          <td><b style="color:var(--acc)">${r.sc||'—'}</b></td>
+          <td>${realHalf}</td><td>${rev}</td>
+          <td>主${r.hl1}/客${r.hm1}<br><span style="font-size:11px;color:var(--mut)">半场比分 ${htScoreMini(r.htScore)}</span></td>
+          <td style="white-space:nowrap;color:var(--acc)"><span class="badge bK" style="cursor:pointer" onclick="event.stopPropagation();openHtBreakDetail('${r.tid}')" title="半破定性分析：近期状态 / 历史交锋 / 半场倾向 / 伤停容错钩子">分析</span> 定位→</td>
+        </tr>`;
+      }).join('') + finMore + '</tbody></table>'
+  ) : '<p class="note">当前赛程暂无已完赛场次。</p>';
+
+  // ===== ④ 破蛋概率 ↔ 半场进球数 校准/相关性（模型留出验证 1637 真实样本 + 本批实时）=====
+  /* ★ 2026-10-02 验证集（htft_validate.js 706K）改按需加载：首屏不拉，
+     点开本面板才拉；本段先按「无验证集」渲染，等包到位后自动重渲一次把 ④ 段补上。 */
+  const _wantVal = !window.HTFT_VALIDATE && !!_deferMap()['htft_validate'];
+  if (_wantVal) _loadJs('htft_validate');
+  /* ★ 2026-10-04 性能：④ 段要把 1637 条验证集遍历两遍（分桶 + 算 Pearson），而 _htDrain 在后台
+     补完算会反复重渲本面板（每次重算一遍纯属浪费，且验证集加载完只变一次）。输入不变就复用。 */
+  const _VALC = window.HTFT_VALIDATE || null;
+  let vN=0, vR=null, vBars='', vTable='';
+  const vb = [[0,0.65],[0.65,0.70],[0.70,0.75],[0.75,0.80],[0.80,0.85],[0.85,1.01]]
+    .map((e,i)=>({lo:e[0],hi:e[1],lab:['<65%','65–70%','70–75%','75–80%','80–85%','≥85%'][i],n:0,brk:0,sg:0,d:[0,0,0,0]}));
+  if (_VAL_CACHE.ref === _VALC){
+    vN=_VAL_CACHE.vN; vR=_VAL_CACHE.vR; vBars=_VAL_CACHE.vBars; vTable=_VAL_CACHE.vTable;
+  } else {
+  let vSP=0, vSG=0, vNum=0, vDP=0, vDG=0;
+  for (const s of (window.HTFT_VALIDATE ? Object.values(window.HTFT_VALIDATE) : [])){
+    const lam=s.lambda, mu=s.mu, wf=(s.wf!=null?s.wf:0.45);
+    if (lam==null||mu==null) continue;
+    const pB = 1 - Math.exp(-((lam+mu)*wf));
+    const hm = String(s.half||'').split('-'); const gh=+hm[0]||0, ga=+hm[1]||0; const g=gh+ga;
+    if (isNaN(g)) continue;
+    vN++; vSP+=pB; vSG+=g;
+    for (const b of vb){ if (pB>=b.lo && pB<b.hi){ b.n++; if(g>=1)b.brk++; b.sg+=g; if(g>=3)b.d[3]++; else b.d[g]++; break; } }
+  }
+  const vMP = vN?vSP/vN:0, vMG = vN?vSG/vN:0;
+  for (const s of (window.HTFT_VALIDATE ? Object.values(window.HTFT_VALIDATE) : [])){
+    const lam=s.lambda, mu=s.mu, wf=(s.wf!=null?s.wf:0.45); if(lam==null||mu==null)continue;
+    const pB=1-Math.exp(-((lam+mu)*wf)); const hm=String(s.half||'').split('-'); const g=((+hm[0])||0)+((+hm[1])||0); if(isNaN(g))continue;
+    vNum+=(pB-vMP)*(g-vMG); vDP+=(pB-vMP)*(pB-vMP); vDG+=(g-vMG)*(g-vMG);
+  }
+  vR = (vN>=3 && vDP>0 && vDG>0) ? vNum/Math.sqrt(vDP*vDG) : null;
+  const vMaxAvg = Math.max(0.1, ...vb.map(b=> b.n? b.sg/b.n:0));
+  vBars = vb.map(b=>{ const avg=b.n?(b.sg/b.n):0, w=Math.round(avg/vMaxAvg*100);
+    return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12px">
+      <span style="width:64px;color:var(--mut)">${b.lab}</span>
+      <span style="display:inline-block;height:14px;min-width:2px;width:${w}%;background:linear-gradient(90deg,var(--blu),var(--grn));border-radius:3px"></span>
+      <span style="color:var(--grn)">${b.n?avg.toFixed(2):'—'}</span></div>`; }).join('');
+  vTable = vN ? (
+    `<table class="htab"><thead><tr><th>预测破蛋率</th><th>样本n</th><th>实际破蛋率</th><th>平均半场进球</th><th>0球</th><th>1球</th><th>2球</th><th>3+球</th></tr></thead><tbody>`
+    + vb.map(b=>{ const ar=b.n?(b.brk/b.n*100):0, avg=b.n?(b.sg/b.n):0, tot=b.n||1;
+        return `<tr><td>${b.lab}</td><td>${b.n}</td>
+          <td><b style="color:${ar>=73.5?'var(--grn)':'var(--red)'}">${b.n?ar.toFixed(0)+'%':'—'}</b></td>
+          <td><b style="color:var(--acc)">${b.n?avg.toFixed(2):'—'}</b></td>
+          <td>${Math.round(b.d[0]/tot*100)}%</td><td>${Math.round(b.d[1]/tot*100)}%</td><td>${Math.round(b.d[2]/tot*100)}%</td><td>${Math.round(b.d[3]/tot*100)}%</td></tr>`;
+      }).join('')
+    + `<tr><td><b>合计</b></td><td><b>${vN}</b></td><td colspan="6">Pearson r(破蛋概率, 半场进球数) = <b style="color:${vR!=null?(vR>0?'var(--grn)':'var(--red)'):'var(--mut)'}">${vR!=null?vR.toFixed(2):'样本不足'}</b>${vR!=null?(vR>0?'，正相关：概率越高半场进球越多':'，未见正相关'):''}</td></tr>`
+    + '</tbody></table>'
+  ) : '<p class="note">模型验证集未加载（htft_validate.js 缺失）。</p>';
+  _VAL_CACHE = { ref: _VALC, vN: vN, vR: vR, vBars: vBars, vTable: vTable };
+  }   // ---- end ④ 验证集缓存分支 ----
+  // 本批已完赛实时校准（finWithTruth 子集）
+  const corrSamples = finWithTruth.filter(r => r.tier!=='none' && r.pBreak!=null);
+  const liveBrk = corrSamples.length ? corrSamples.filter(r=>(r.act[0]+r.act[1])>=1).length/corrSamples.length*100 : null;
+
+  // ===== 诚实口径：上半场「不破蛋」率（7m 独立真值跨源配对，与本库无同源关系）=====
+  /* ★ 2026-10-07 新增（用户核心痛点）：档位对账表(backTable)标的是「全场 0-0 率」，
+     但破蛋定义 = 上半场≥1 球，所以"不破蛋"是<b>上半场 0 球</b>，发生频率远高于全场 0-0。
+     这正是"破蛋·强/中性也出现 0 破蛋"的口径误导根因——强档说的是全场进球预期高，不等于上半场一定进。
+     本块用 RD.pair7m.rate（7m 独立真值跨源配对 ~729 场）亮出真实档位破蛋/不破率，纯展示、不改数字。 */
+  const _p7r = (window.REVIEW_DATA && window.REVIEW_DATA.pair7m && window.REVIEW_DATA.pair7m.rate) || null;
+  /* ★ 2026-10-07：REVIEW_DATA（review_data.js，含 pair7m）原本只由「每日复盘」面板懒加载，
+     破蛋面板单独打开时它还没加载，pair7m.rate 为 null → 诚实块整块跳过。
+     这里若缺 REVIEW_DATA 就触发加载、到位后幂等重渲本面板（openHtBreak 可重入），确保诚实块必现。 */
+  if (!_p7r && !window.REVIEW_DATA && typeof _ensureReviewData === 'function') {
+    _ensureReviewData().then(() => { if (_htBreakShown()){ try { renderHtBreak(); } catch (e) { console.error(e); } } });
+  }
+  let honestBreakHtml = '';
+  if (_p7r) {
+    const _order = ['strong','mid','low'];
+    const _lab = { strong:'破蛋·强 (p≥80%)', mid:'破蛋·中性 (70~80%)', low:'破蛋·偏弱+弱 (<70%)' };
+    const _rows = _order.map(k=>{
+      const o = _p7r[k]; if(!o) return '';
+      const hit = o.hit/o.n*100, miss = 100-hit;
+      const c = hit >= (_p7r.__all ? (_p7r.__all.hit/_p7r.__all.n*100) : 73.5) ? 'var(--grn)' : 'var(--red)';
+      return `<tr><td><span class="badge ${k==='strong'?'bW':k==='mid'?'bK':'bG'}">${_lab[k]}</span></td>
+        <td><b style="color:${c}">${hit.toFixed(1)}%</b></td>
+        <td><b style="color:var(--red)">${miss.toFixed(1)}%</b></td>
+        <td>${o.n}</td></tr>`;
+    }).join('');
+    const _all = _p7r.__all;
+    const _allHit = _all ? _all.hit/_all.n*100 : 73.5;
+    honestBreakHtml = `
+      <p class="note" style="border-left:3px solid var(--red);padding-left:8px">
+        <b>⚠ 诚实口径：上半场「不破蛋」率（7m 独立真值跨源配对 ${_all?_all.n:'?'} 场，与本库无同源关系）</b><br>
+        上方「档位对账」表标的是<b>全场 0-0 率</b>，那不等于破蛋。破蛋定义 = <b>上半场≥1 球</b>，所以"不破蛋"是<b>上半场 0 球</b>，发生频率远高于全场 0-0（场上下半场都可能进球）：
+      </p>
+      <table class="htab"><thead><tr><th>预测档</th><th>真实上半场破蛋率</th><th>真实上半场<b>不破</b>率</th><th>配对 n</th></tr></thead><tbody>
+        ${_rows}
+        ${_all?`<tr><td>全部配对场</td><td><b>${_allHit.toFixed(1)}%</b></td><td><b style="color:var(--red)">${(100-_allHit).toFixed(1)}%</b></td><td>${_all.n}</td></tr>`:''}
+      </tbody></table>
+      <p class="note">含义：<b>破蛋·强档每约 8 场就有 1 场上半场交白卷</b>（不破率 13.3%），<b>破蛋·中性档每约 4 场就有 1 场</b>（不破率 27.0%），偏弱+弱档更达 33.8%。这正是"强/中性也出现 0 破蛋"的原因——"破蛋·强"说的是<b>全场进球预期高</b>，不等于"上半场一定进球"。上半场沉闷本身是大概率常态，不破蛋后仍有下半场补破的可能；据此管理预期，而非当作模型失误。</p>`;
+  }
+
+  const disciplineBox = `
+    <div style="border-left:4px solid var(--grn);background:rgba(46,204,113,.06);padding:10px 12px;margin:6px 0 12px;border-radius:6px">
+      <b style="color:var(--grn)">破蛋出手纪律（2026-10-08 用上半场真值 1668 场直量重定）</b><br>
+      · <b style="color:var(--grn)">破蛋·强 p≥80%：实测上半场破蛋 85.1%（+11.6pp）</b>—— 唯一正 edge，<b>可出手</b>（强档门槛从 0.85 降到 0.80，可出手场次 75→323，胜率不变）。<br>
+      · 破蛋·中性 70~80%：72.7% ≈ 基准 73.5%，<b>无 edge，勿单独投破蛋</b>。<br>
+      · 破蛋·偏弱/弱 &lt;70%：65~68%，反向负 edge，仅反向观察，不跟破蛋。<br>
+      · 破蛋是 73.5% 基准率的高概率事件，模型 AUC 59.6 已近天花板；团队/联赛半场率特征实测都不提 AUC。要真突破须接<b>半场专属盘口</b>（半场大小球/半场1X2）。
+    </div>`;
+  $('htBreakContent').innerHTML =
+    disciplineBox +
+    htSelectSectionHTML() +
+    `<h3 style="margin:14px 0 6px;color:var(--acc)">① 进行中 · 实时（点击任意行直达主看板该场）</h3>
+     <div class="heat-stats">
+       <div class="hstat"><div class="hn">${live.length}</div><div class="hl">进行中纳入场次</div></div>
+       <div class="hstat"><div class="hn" style="color:var(--grn)">${sN(live)}</div><div class="hl">破蛋·强</div></div>
+       <div class="hstat"><div class="hn" style="color:var(--blu)">${mN(live)}</div><div class="hl">破蛋·中性</div></div>
+       <div class="hstat"><div class="hn" style="color:var(--mut)">${wN(live)+lN(live)}</div><div class="hl">偏弱+弱</div></div>
+     </div>
+     <p class="note">「破蛋」= 上半场≥1 球。进行中场次附带<b>实时比分</b>（球探），破蛋概率=赛前模型预测，可辅助判断「上半场未破蛋的进行中场」下半场/全场还有无机会。</p>
+     ${htTable(live, true)}
+
+     <h3 style="margin:22px 0 6px;color:var(--acc)">② 未开赛 · 我的选择（点击任意行直达主看板该场）</h3>
+     <div class="heat-stats">
+       <div class="hstat"><div class="hn">${up.length}</div><div class="hl">未开赛纳入场次</div></div>
+       <div class="hstat"><div class="hn" style="color:var(--grn)">${sN(up)}</div><div class="hl">破蛋·强(≥80%)</div></div>
+       <div class="hstat"><div class="hn" style="color:var(--blu)">${mN(up)}</div><div class="hl">破蛋·中性(70~80%)</div></div>
+       <div class="hstat"><div class="hn" style="color:var(--mut)">${wN(up)+lN(up)}</div><div class="hl">偏弱+弱(&lt;70%)</div></div>
+     </div>
+     <p class="note">⚠ <b>档位口径已重标定（2026-10-05，6656 场真赔率重跑）</b>：强档抬到 <b>p≥85%</b>（实测 4.88 球 / 全场 0-0 仅 1.70%，n=412，唯一值得高看的档）；<b>70~85% 合并为「中性」</b>——实测 3.51 球 / 0-0 率 4.26%，与全库基准 3.15 球 / 5.50% 几乎无差，<b>不构成"有球把握大"的依据</b>（此前 79~82% 被标成「强/中」导致误读，两场 0-0 的武汉三镇U21 81.7%、威尔士U19 79.4% 均属此档）；&lt;65% 才是唯一有反向 alpha 的档（0-0 率 13.20%，全库 2.4 倍）。<b>仅概率与高置信子集提示，非投注建议</b>。点击行 → 主看板卡片高亮+自动展开分析。</p>
+     ${htTable(upShow, false, upMore)}
+
+     <h3 style="margin:22px 0 6px;color:var(--acc)">④ 已完赛 · 真实命中率（本批真实完场 ${fin.length} 场，已关联上半场真值 ${finWithTruth.length} 场）</h3>
+     ${finTable}
+     <p class="note"><b>真实破蛋命中率</b>（本批已完赛 × 球探半场真值，浏览器端实时 join；每日真值补全自动增长）：</p>
+     ${realTable}
+     <p class="note"><b>档位对账</b>（2026-10-05 权威口径：6656 场真赔率重跑 + 38169 场真值库，_eval/_break_verdict.cjs / _7m_wf.cjs；按「实际平均总进球 + 全场 0-0 率」双指标定档）：</p>
+     ${backTable}
+     ${honestBreakHtml}
+     ${recTable}
+
+     <h3 style="margin:22px 0 6px;color:var(--acc)">⑤ 破蛋概率 ↔ 半场进球数（模型留出验证 n=${vN} 真实完场）</h3>
+     <p class="note">把每场<b>模型预测破蛋概率</b>按区间分桶，对照其<b>真实半场进球数</b>（球探完场真值，n=${vN}）。结论：预测破蛋概率越高的比赛，<b>半场实际进球数越多</b>——≥85% 概率桶平均半场 <b>2.34 球</b>（47% 半场 3+ 球），&lt;65% 概率桶仅 <b>1.07 球</b>；Pearson r = <b style="color:${vR!=null?(vR>0?'var(--grn)':'var(--red)'):'var(--mut)'}">${vR!=null?vR.toFixed(2):'—'}</b>（首半场进球数是噪声较大的计数变量，r 偏小正常，但分桶趋势单调显著）。即<b>破蛋概率与半场实际进球数正相关</b>：破蛋·强档不仅是"破蛋率高"，更是"半场多球"信号。</p>
+     ${vTable}
+     <p style="margin:10px 0 4px;color:var(--mut);font-size:12px"><b>各桶平均半场进球数（条越长=半场越多球）：</b></p>
+     ${vBars}
+     ${corrSamples.length?`<p class="note">本批已完赛实时校准（${corrSamples.length} 场）：实际破蛋率 <b>${liveBrk!=null?liveBrk.toFixed(0)+'%':'—'}</b>（权威基准 <b>78.4%</b> = 38169 场真值库实测，_eval/_7m_wf.cjs）。</p>`:''}`;
+  /* ★ 验证集是按需拉的：等它到位再重渲一次（renderHtBreak 只重设 innerHTML、不碰 show，
+     面板已关就不打扰用户；开着则 ④ 段自己长出来，不会闪回）。最多等 90×500ms≈45s。 */
+  if (_wantVal && !window.HTFT_VALIDATE && !window._htValWatching){
+    window._htValWatching = true;
+    let _n = 0;
+    const _t = setInterval(function(){
+      _n++;
+      if (window.HTFT_VALIDATE || _n > 90){
+        clearInterval(_t); window._htValWatching = false;
+        if (window.HTFT_VALIDATE && _htBreakShown()){ try { renderHtBreak(); } catch(e){ console.error(e); } }
+      }
+    }, 500);
+  }
+  /* ★ 2026-10-14 #329：面板渲染完启动 30s 比分脉冲（与纯深盘/精选同口径）。每次重渲先清旧脉冲，避免叠加。 */
+  try{ if (_htPoll) clearInterval(_htPoll); _htPoll = setInterval(_htScoreTick, 30000); }catch(e){}
+}
+function verdictCls(v){
+  if (!v) return 'bG';
+  if (v.indexOf('大热')>=0) return 'bL';
+  if (v.indexOf('吃水')>=0) return 'bG';
+  if (v.indexOf('问题')>=0) return 'bK';
+  if (v.indexOf('与庄')>=0) return 'bN';
+  if (v.indexOf('无盘口')>=0) return 'bG';
+  return 'bG';
+}
+/* ★ 2026-10-12 #306/#309：破蛋面板「精选/优选」段渲染（数据来自 window.HT_SELECT，按开赛时间升序）。
+ *   #306：双源融合（引擎破蛋档 ∪ ht_pick 深盘分级）+ 实时复盘。
+ *   #309 增强：① 每行增加「半场比分 / 实时比分 / 最终比分」三列（已完赛 join 账本 HT_SETTLE 与 HTFT_GROUND 真值）；
+ *            ② 复盘核对 = 上半场≥1球(破蛋✓/未破) + 半场·最终比分核对；
+ *            ③ 底部「跨日复盘账本」用持久化 HT_SETTLE 突破 5 天窗口，累计精选/优选命中率 + 按日结算。 */
+function htSelectSectionHTML(){
+  const D = window.HT_SELECT;
+  const SET = (window.HT_SETTLE && window.HT_SETTLE.picks) ? window.HT_SETTLE.picks : [];
+  const SET_BY_MID = {}; for (const p of SET) SET_BY_MID[String(p.mid)] = p;  // 同 mid 取末条（最近）
+  if (!D || !D.select || !D.select.length){
+    return '<h3 style="margin:14px 0 6px;color:var(--acc)">★ 精选/优选破蛋场次（按开赛时间升序）</h3>'
+      + '<p class="note">尚未生成精选清单。本机跑 <code>node gen_ht_select.cjs</code> 后重新生成 index.html。</p>';
+  }
+  const MID2M = {};
+  for (const m of MATCHES){ if (m && m.tid != null) MID2M[String(m.tid)] = m; }
+  const _normT = s => String(s == null ? '' : s).replace(/[\s·・.\-‐()（）/／]/g, '').toLowerCase();
+  const MATCH_BY_KEY = {};
+  for (const mm of MATCHES){ if (!mm) continue;
+    const hk = _normT(typeof mm.home === 'string' ? mm.home : (mm.home_name_zh || ''));
+    const ak = _normT(typeof mm.away === 'string' ? mm.away : (mm.away_name_zh || ''));
+    const kk = (mm.day || '') + '|' + hk + '|' + ak;
+    if (!MATCH_BY_KEY[kk]) MATCH_BY_KEY[kk] = mm;
+  }
+  const G = window.HTFT_GROUND || {};
+  const clsBadge = c => c === 'select' ? '<span class="badge bW">精选</span>' : '<span class="badge bK">优选</span>';
+  const htBadge = t => !t ? '<span class="badge bG">—</span>'
+    : (t === 'S' ? '<span class="badge bW">S</span>' : (t === 'A' ? '<span class="badge bK">A</span>' : '<span class="badge bN">B</span>'));
+  let selN = 0, selHit = 0, prefN = 0, prefHit = 0;
+  const rows = D.select.map(o => {
+    const m = MID2M[String(o.mid)] || MATCH_BY_KEY[(o.day||'')+'|'+_normT(o.home)+'|'+_normT(o.away)] || null;
+    const ph = m ? matchPhase(m) : null;
+    let half = '—', live = '—', full = '—', rev = '<span class="badge bG">—</span>', broke = null;
+    const led = SET_BY_MID[String(o.mid)];                 // 持久账本（已结算时最权威，含半场真值）
+    if (led && led.settled){
+      half = led.halfH + ':' + led.halfA; full = led.fullH + ':' + led.fullA; broke = led.broke; live = full;
+    } else if (m){
+      // 球探完场页真值（HTFT_GROUND 按 sId===t7id 1:1 精确配对）：覆盖已完赛场的半场/终场 + 真实破蛋判定
+      const g = (m.t7 && m.t7.sId != null) ? G[String(m.t7.sId)] : null;
+      if (g && g[0] >= 0 && g[1] >= 0){
+        half = g[0] + ':' + g[1];
+        const fin = (g[2] >= 0 && g[3] >= 0) ? (g[2] + ':' + g[3]) : null;
+        if (fin){ full = fin; live = fin; }
+        broke = (g[0] + g[1]) >= 1;            // 上半场≥1球 = 破蛋✓
+      } else {
+        // 实时/终场比分优先用球探 t7.scoreRaw（按 t7id 配对，可靠）；回退 okooo home_score
+        const raw = (m.t7 && typeof m.t7.scoreRaw === 'string' && /^\d+\s*-\s*\d+$/.test(m.t7.scoreRaw))
+          ? m.t7.scoreRaw.replace(/\s/g, '')
+          : (m.home_score != null && m.away_score != null ? m.home_score + '-' + m.away_score : '');
+        if (ph === 'fin'){ full = raw || '—'; live = full; }
+        else if (ph === 'live'){ live = raw || '—'; }
+        // 半场比分：今日完场页(Over)尚未产出（球探滞后约 1 天），待明日刷新后自动补齐
+      }
+    }
+    if (broke === true) rev = '<span class="badge bW">破蛋✓</span>';
+    else if (broke === false) rev = '<span class="badge bG">未破</span>';
+    if (broke !== null){
+      if (o.cls === 'select'){ selN++; if (broke) selHit++; } else { prefN++; if (broke) prefHit++; }
+    }
+    const dayStr = (o.day || '').slice(4);
+    const evv = (o.verdict ? ' <span class="badge ' + (o.verdict.indexOf('✅')>=0?'bW':(o.verdict.indexOf('⚠')>=0?'bK':'bG')) + '">' + o.verdict + '</span>' : '');
+    return `<tr onclick="jumpToMatch('${o.mid}')" title="点击定位到主看板该场" style="cursor:pointer">
+        <td>${dayStr} ${o.time||''}</td>
+        <td>${clsBadge(o.cls)}</td>
+        <td>${o.league||'—'}</td>
+        <td><b>${o.home}</b> vs <b>${o.away}</b></td>
+        <td>${o.pBreak!=null?`<b style="color:var(--grn)">${o.pBreak}%</b>`:'—'} <span class="badge bK">${o.engTag||''}</span></td>
+        <td>${htBadge(o.htTier)} ${evv}</td>
+        <td><b style="color:var(--blu)">${half}</b></td>
+        <td><b style="color:var(--acc)">${live}</b></td>
+        <td><b>${full}</b></td>
+        <td style="white-space:nowrap">${rev}</td>
+        <td style="white-space:nowrap;color:var(--acc)"><span class="badge bK" style="cursor:pointer" onclick="event.stopPropagation();openHtBreakDetail('${o.mid}')">分析</span> 定位→</td>
+      </tr>`;
+  }).join('');
+  const pct = (n,h)=> (n? (h/n*100).toFixed(0)+'%' : '—');
+  // ===== 跨日复盘账本（持久 HT_SETTLE，突破 5 天窗口）=====
+  const done = SET.filter(p => p.settled);
+  const byDate = {};
+  for (const p of done){ (byDate[p.date] = byDate[p.date] || {sel:0,selH:0,pref:0,prefH:0})[p.cls==='select'?'sel':'pref']++;
+    if (p.broke) byDate[p.date][p.cls==='select'?'selH':'prefH']++; }
+  const dates = Object.keys(byDate).sort().reverse();
+  const ledgerHtml = dates.length ? (
+    `<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--acc)">▸ 跨日复盘账本（累计已结算 ${done.length} 场 · 点击展开按日明细）</summary>
+      <table class="htab" style="margin-top:8px"><thead><tr>
+        <th>比赛日</th><th>精选</th><th>精选命中</th><th>优选</th><th>优选命中</th></tr></thead><tbody>`
+      + dates.map(d=>{ const b=byDate[d]; const sp=b.sel?(b.selH/b.sel*100).toFixed(0)+'%':'—'; const pp=b.pref?(b.prefH/b.pref*100).toFixed(0)+'%':'—';
+          return `<tr><td>${d}</td><td>${b.sel}</td><td style="color:var(--grn)">${b.selH} (${sp})</td><td>${b.pref}</td><td style="color:var(--blu)">${b.prefH} (${pp})</td></tr>`; }).join('')
+      + '</tbody></table>'
+      + `<p class="note">跨日账本由 <code>settle_break_picks.cjs</code> 从每日新鲜真值库(_7m_db.json)回填半/全场比分，突破 5 天 bake 窗口，持久累计精选/优选破蛋命中率。上半场≥1球＝破蛋。</p>`
+    + '</details>'
+  ) : '';
+  return `<h3 style="margin:14px 0 6px;color:var(--acc)">★ 精选/优选破蛋场次（按开赛时间升序 · 精选 ${D.nSelect} / 优选 ${D.nPrefer}）</h3>
+    <div class="heat-stats">
+      <div class="hstat"><div class="hn">${D.nSelect}</div><div class="hl">精选(双源强信号)</div></div>
+      <div class="hstat"><div class="hn">${D.nPrefer}</div><div class="hl">优选(深盘A/B)</div></div>
+      <div class="hstat"><div class="hn" style="color:var(--grn)">${selN?selHit+'/'+selN:'—'}</div><div class="hl">精选命中/已核对</div></div>
+      <div class="hstat"><div class="hn" style="color:var(--blu)">${prefN?prefHit+'/'+prefN:'—'}</div><div class="hl">优选命中/已核对</div></div>
+      <div class="hstat"><div class="hn" style="color:var(--mut)">${done.length}</div><div class="hl">跨日账本已结算</div></div>
+    </div>
+    <p class="note">精选 = 引擎破蛋·强(无联赛降权) <b>∪</b> ht_pick S（深盘+近期半场历史均强）；优选 = ht_pick A/B。双源任一"强"信号才入选，中性档(无 edge)不单列，非主流联赛(女/青年/后备/业余)整排除。
+      「命中/已核对」= 该档已完赛<b>且</b>已回填真实<b>半场比分</b>的场次中，上半场≥1球(破蛋✓)的占比；未完赛场不计入分母。
+      <b>⚠ 口径诚实提示：</b>破蛋判定依赖<b>半场比分</b>，而半场真值仅来自球探(7m)——球探主要覆盖<b>主流联赛</b>，大量冷门/小联赛(B队·U22·业余·冰岛乙等)无半场真值，无法结算、不计入分母，故样本偏小；本档本就挑"高破蛋概率(≥70%)"的场，命中率天然高于全库基准 <b>78.4%</b>(38169 场真值)。请勿把小样本高命中误读为"稳赢"。未完赛/冷门无真值场在下方逐行「复盘核对」列标为「—」。</p>
+    <table class="htab"><thead><tr>
+      <th>时间</th><th>档</th><th>联赛</th><th>对阵</th><th>模型破蛋</th><th>深盘评级</th>
+      <th>半场比分</th><th>实时比分</th><th>最终比分</th><th>复盘核对</th><th>操作</th></tr></thead><tbody>
+    ${rows}
+    </tbody></table>
+    ${ledgerHtml}`;
+}
+/* ★ 2026-10-12 #304：破蛋主面板（①进行中 / ②未开赛 表）每场带"深盘+历史分级"的 +EV 判定徽标，
+ *   把 gen_ht_pick 的真实 ROI/EV 接到破蛋面板。仅在 ht_pick 命中且场上有上半场盘口源时显示。 */
+function htPickBadge(tid){
+  const D = window.HT_PICK; if (!D || !D.picks) return '';
+  if (!D._midMap){ const m = {}; for (const p of D.picks) m[String(p.mid)] = p; D._midMap = m; }
+  const o = D._midMap[String(tid)]; if (!o || !o.market) return '';
+  const v = o.market.verdict; if (!v || v === '—') return '';
+  const cls = v.indexOf('✅')>=0 ? 'bW' : (v.indexOf('⚠')>=0 ? 'bK' : 'bG');
+  const ev = (o.market.evReal != null) ? (' · EV ' + (o.market.evReal*100).toFixed(0) + '%') : '';
+  return ' <span class="badge ' + cls + '" title="深盘分级 ' + o.tier + ev + '（票面赔率口径，扣约 16.9% 抽水后）">' + v + '</span>';
+}
+/* 每日复盘（2026-09-24 改）：后端 gen_review.cjs 每轮自动跑，把所有已完场按比赛日(北京时)归集进
+ * window.REVIEW_DATA（跨设备持久、不受本机 localStorage 限制），本函数只负责按日期渲染。
+ * 双口径：调用命中率（洋哥式热度调整调用方向，大热场为站对面）＋ 模型方向命中率（原始方向 vs 赛果）。 */
+/* ★ 2026-10-04 性能：review_data.js（~140KB）只有「每日复盘」面板用，
+   首屏跟 3.5MB 的 bake 抢带宽纯属浪费 —— 改成点开复盘时**动态注一次 script**。
+   离线 file:// 打开时相对路径同目录，按需一样能拉到。_rvTried 防反复重试刷请求。 */
+let _rvTried = false;
+function _ensureReviewData(){
+  try{ if (window.REVIEW_DATA) return Promise.resolve(window.REVIEW_DATA); }catch(e){}
+  if (_rvTried) return Promise.resolve(null);
+  _rvTried = true;
+  return new Promise(res => {
+    const s = document.createElement('script');
+    s.src = 'review_data.js?v=' + (window.__APP_TS__ || Date.now());
+    s.onload = () => res(window.REVIEW_DATA || null);
+    s.onerror = () => res(null);
+    document.head.appendChild(s);
+  });
+}
+/* ★ 2026-10-09：各市场「逐日稳定性」自我证伪节 —— 照纯深盘视图套路，把胜平负(深盘/浅盘方向)、破蛋强档、大小球(大球占比)
+   三个市场的标定结论拆到比赛日维度，回答"是不是某几天刷出来的"。绿=≥70%/黄=55~70%/红=<55%。 */
+function dailyStabilitySectionHTML(RD){
+  const _col = r => r == null ? 'var(--mut)' : (r >= 70 ? 'var(--grn)' : (r >= 55 ? 'var(--yel)' : 'var(--red)'));
+  const _avg = arr => { const v = arr.filter(x => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+  const _dir = (RD && RD.dailyDir) || [];
+  /* ★ 2026-10-09b：破蛋逐日优先用真实上半场破蛋口径（dailyBrkHalf = 1668场半场真值·强档按日归集），
+     原 dailyBrk（bake 全场有球代理≈98%）仅作缺失兜底。 */
+  const _brk = (RD && RD.dailyBrkHalf && RD.dailyBrkHalf.length) ? RD.dailyBrkHalf : ((RD && RD.dailyBrk) || []);
+  const _ov  = (RD && RD.dailyOver) || [];
+  if (!_dir.length && !_brk.length && !_ov.length) return '';
+  const _fmtDate = s => (s && /^\d{8}$/.test(s)) ? (s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8)) : (s || '—');
+  const _dRows = _dir.map(d => `<tr><td style="padding:3px 6px">${d.date}</td><td style="padding:3px 6px;text-align:center">${d.deepN}</td><td style="padding:3px 6px;text-align:center;color:${_col(d.deepRate)}">${d.deepRate!=null?d.deepRate+'%':'—'}</td><td style="padding:3px 6px;text-align:center">${d.shalN}</td><td style="padding:3px 6px;text-align:center;color:${_col(d.shalRate)}">${d.shalRate!=null?d.shalRate+'%':'—'}</td></tr>`).join('');
+  const _bRows = _brk.map(d => `<tr><td style="padding:3px 6px">${_fmtDate(d.date)}</td><td style="padding:3px 6px;text-align:center">${d.n}</td><td style="padding:3px 6px;text-align:center;color:${_col(d.rate)}">${d.rate!=null?d.rate+'%':'—'}</td></tr>`).join('');
+  const _oRows = _ov.map(d => `<tr><td style="padding:3px 6px">${d.date}</td><td style="padding:3px 6px;text-align:center">${d.n}</td><td style="padding:3px 6px;text-align:center;color:${_col(d.overRate)}">${d.overRate!=null?d.overRate+'%':'—'}</td></tr>`).join('');
+  const _dAvg = _avg(_dir.map(x => x.deepRate)), _sAvg = _avg(_dir.map(x => x.shalRate)), _bAvg = _avg(_brk.map(x => x.rate)), _oAvg = _avg(_ov.map(x => x.overRate));
+  return `<div style="font-weight:700;margin:18px 0 4px;color:var(--acc)">★ 各市场逐日稳定性（自我证伪 · 日维度复现检验）</div>
+    <p class="note">把每个市场的标定结论拆到「比赛日」维度，回答"是不是某几天刷出来的"。绿＝≥70%、黄＝55~70%、红＝&lt;55%。</p>
+    <div style="font-weight:600;margin:10px 0 2px;color:var(--acc)">① 胜平负 · 让球深盘 / 浅盘 方向命中逐日</div>
+    <table class="tbl" id="tblDailyDir" style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse">
+      <tr style="opacity:.7"><th style="text-align:left;padding:3px 6px">日期</th><th style="padding:3px 6px">深盘n</th><th style="padding:3px 6px">深盘命中</th><th style="padding:3px 6px">浅盘n</th><th style="padding:3px 6px">浅盘命中</th></tr>
+      ${_dRows}
+    </table>
+    <p class="note">深盘日均 <b style="color:${_col(_dAvg)}">${_dAvg!=null?_dAvg+'%':'—'}</b>、浅盘日均 <b style="color:${_col(_sAvg)}">${_sAvg!=null?_sAvg+'%':'—'}</b> —— 深盘（让球热门实方向）是胜平负最硬的日稳定池，浅盘系统性弱于深盘。</p>
+    <div style="font-weight:600;margin:10px 0 2px;color:var(--acc)">② 破蛋 · 强档（pBreak≥0.80）上半场破蛋命中逐日</div>
+    <table class="tbl" id="tblDailyBrk" style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse">
+      <tr style="opacity:.7"><th style="text-align:left;padding:3px 6px">日期</th><th style="padding:3px 6px">n</th><th style="padding:3px 6px">上半场破蛋命中</th></tr>
+      ${_bRows}
+    </table>
+    <p class="note">破蛋强档日均 <b style="color:${_col(_bAvg)}">${_bAvg!=null?_bAvg+'%':'—'}</b>；★ <b>2026-10-09b 升级</b>：此处已换成<b>真实上半场破蛋</b>口径（1668 场半场真值库 · 强档 pBreak≥0.80 按日归集），与标定承诺 <b>85.1%</b> 对齐、回答"是不是某几天刷出来的"。原 bake 全场有球代理(≈98%，只验证"强档不开0-0")已弃用，不再混入本表——它衡量的是"强档下注不会开0-0"，<b>不是</b>破蛋真值。</p>
+    <div style="font-weight:600;margin:10px 0 2px;color:var(--acc)">③ 大小球 · 大球(&gt;2.5)实际占比逐日</div>
+    <table class="tbl" id="tblDailyOver" style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse">
+      <tr style="opacity:.7"><th style="text-align:left;padding:3px 6px">日期</th><th style="padding:3px 6px">n</th><th style="padding:3px 6px">大球占比</th></tr>
+      ${_oRows}
+    </table>
+    <p class="note">大球日均占比 <b style="color:${_col(_oAvg)}">${_oAvg!=null?_oAvg+'%':'—'}</b>（本回放库口径，与 7m 大库 lmu7m.overRate 47.1% 对照）。⚠ 回放行无大小球方向字段，此处为<b>分布稳定性</b>（大球频率是否漂移）非方向命中；方向精度见上方 MAE/RMSE。</p>`;
+}
+async function openReview(){
+  let RD = null;
+  try{ RD = window.REVIEW_DATA || null; }catch(e){}
+  if (!RD) RD = await _ensureReviewData();
+  if (!RD){
+    $('reviewContent').innerHTML = `<p class="note">尚未生成复盘数据。后台每轮刷新会自动跑「每日复盘」并归集到这里；若你是本机直接打开 index.html，请确认 review_data.js 与页面同目录。</p>`;
+    $('reviewModal').classList.add('show');
+    return;
+  }
+  const L = s => labelWDL(s);
+  const colOf = r => r>=60 ? 'var(--grn)' : (r>=50 ? 'var(--yel)' : 'var(--red)');
+  const stat = (label, n, r, color) =>
+    `<div class="rcard"><div class="rn">${n}</div><div class="rl">${label}</div><div class="rr" style="color:${color}">${n?r+'%':'—'}</div></div>`;
+  if (!RD){
+    $('reviewContent').innerHTML = `<p class="note">尚未生成复盘数据。后台每轮刷新会自动跑「每日复盘」并归集到这里；若你是本机直接打开 index.html，请确保 review_data.js 已随部署加载。</p>`;
+    $('reviewModal').classList.add('show');
+    return;
+  }
+  const days = (RD.days||[]).slice().sort((a,b)=> b.date.localeCompare(a.date));
+  /* 2026-10-01：市场fav基准对照——检验模型是否跑赢"无脑跟市场" */
+  const mktRate = RD.allMktTotal ? RD.allMktRate : null;
+  const mktHtml = (mktRate != null)
+    ? `<div class="rcard"><div class="rn">${RD.allMktTotal}</div><div class="rl">市场fav基准（对照）</div><div class="rr" style="color:${colOf(mktRate)}">${mktRate}%</div></div>` : '';
+  const overview = `
+    <div class="rstats">
+      ${stat('调用命中率（热度调整）', RD.allTotal, RD.allRate, colOf(RD.allRate))}
+      ${stat('模型方向命中率', RD.allDirTotal, RD.allDirRate, colOf(RD.allDirRate))}
+      ${mktHtml}
+      ${stat('纳入日期', days.length, 0, 'var(--mut)')}
+      ${stat('调用场数', RD.allTotal, 0, 'var(--mut)')}
+    </div>
+    <p class="note">数据来源：后台自动复盘（每日完场跑引擎，记录赛前预测/热度判定 vs 实际赛果，按比赛日归集，跨设备持久）。「调用命中率」＝洋哥式热度调整调用方向（大热场为站对面）的命中；「模型方向命中率」＝模型原始方向 vs 赛果；「市场fav基准」＝同批完场无脑跟市场临场热门的命中率——模型必须跑赢它才有价值。2026-10-01 起引擎加"市场共识闸门"：与市场反向的自研信号一律观望、平局卡改为观察不调用（实测命中仅 19-24%），故观望场不再计入调用分母。更新时间：${RD.updated||'未知'}。</p>`;
+  /* 2026-10-06 新增：本窗口实际战绩 vs 标定承诺（按档并排）—— 直接回答"当前窗口是否偏离标定" */
+  const _tierAct = (t) => { let n = 0, h = 0; for (const d of days){ for (const r of (d.rows || [])){ if (Number(r.tier) === t && r.dirHit != null){ n++; if (r.dirHit) h++; } } } return { n, r: n ? +(100 * h / n).toFixed(1) : null }; };
+  const _t1A = _tierAct(1), _t2A = _tierAct(2), _t0A = _tierAct(0);
+  // ★ 2026-10-09 T1 真实命中接复盘：把实盘「让球深盘 vs 浅盘」命中率直接摆进复盘面板，
+  //   验证 8449 场真值校准的「让球深=热门实」是否兑现。
+  //   ★ 优先读持久化 RD.deepDirRate（gen_review 跨设备统计，关机也累积）；
+  //     本机实盘 window._REVIEW_GROUPS（resolvePredictions）作为补充/兜底。
+  const _rg = window._REVIEW_GROUPS || {};
+  const _deepRate = (RD.deepDirRate != null) ? RD.deepDirRate : ((_rg.deep && _rg.deep.rate) != null ? +_rg.deep.rate : null);
+  const _deepN = (RD.deepDirN != null) ? RD.deepDirN : ((_rg.deep && _rg.deep.n) || 0);
+  const _shalRate = (RD.shalDirRate != null) ? RD.shalDirRate : ((_rg.shallow && _rg.shallow.rate) != null ? +_rg.shallow.rate : null);
+  const _shalN = (RD.shalDirN != null) ? RD.shalDirN : ((_rg.shallow && _rg.shallow.n) || 0);
+  const _deepSrc = (RD.deepDirN != null) ? '持久复盘' : '本机实盘';
+  const _deepHtml = (_deepN || _shalN)
+    ? `<div class="rcard"><div class="rn">${_deepN}</div><div class="rl">让球深盘·方向命中(${_deepSrc})</div><div class="rr" style="color:${colOf(+(_deepRate||0))}">${_deepRate!=null?_deepRate+'%':'—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">8449场标定：主让≥1→主胜66~71%</div></div>
+       <div class="rcard"><div class="rn">${_shalN}</div><div class="rl">浅盘·方向命中(${_deepSrc})</div><div class="rr" style="color:${colOf(+(_shalRate||0))}">${_shalRate!=null?_shalRate+'%':'—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">让球差&lt;0.5 不下让球方向</div></div>`
+    : '';
+  // ★ 2026-10-09 破蛋强档 & 热度信号确认 实盘命中（持久化 RD 优先，本机兜底）
+  const _brkRate = (RD.brkStrongRate != null) ? RD.brkStrongRate : null;
+  const _brkN = (RD.brkStrongN != null) ? RD.brkStrongN : 0;
+  const _heatRate = (RD.heatStrongRate != null) ? RD.heatStrongRate : null;
+  const _heatN = (RD.heatStrongN != null) ? RD.heatStrongN : 0;
+  // 破蛋真实口径：RD.breakHalf.byTier strong（上半场≥1球，1668场半场真值标定≈85.1%）
+  const _bh = (RD.breakHalf && RD.breakHalf.byTier) ? RD.breakHalf.byTier : [];
+  const _bhStrong = _bh.find(b => b.k === 'strong') || null;
+  const _brkReal = _bhStrong && _bhStrong.rate != null ? _bhStrong.rate : null;
+  const _brkRealN = _bhStrong ? _bhStrong.n : 0;
+  const _brkHtml = (_brkN || _heatN || _brkRealN)
+    ? `<div class="rcard"><div class="rn">${_brkRealN}</div><div class="rl">破蛋强档·上半场破蛋(真口径)</div><div class="rr" style="color:${colOf(+(_brkReal||0))}">${_brkReal!=null?_brkReal+'%':'—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">pBreak≥0.80·上半场≥1球·1668场半场真值标定(85.1% edge+11.6pp)；实盘复盘${_brkN}场全场有球${_brkRate!=null?_brkRate+'%':'—'}</div></div>
+       <div class="rcard"><div class="rn">${_heatN}</div><div class="rl">热度双信号确认·方向命中(${_deepSrc})</div><div class="rr" style="color:${colOf(+(_heatRate||0))}">${_heatRate!=null?_heatRate+'%':'—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">让球深+临场移动/热门门双确认（8449场校准）</div></div>`
+    : '';
+  // ★ 2026-10-09 信号组合实盘验证：深盘·热度双确认·破蛋强档 三条 edge 叠加的方向命中率阶梯
+  //   直接验证「今日可下注清单」的核心前提：叠加越多 edge，模型方向命中是否越高（决定清单按 edge 数排序+加权是否有依据）。
+  const _cb = RD.combo || {};
+  const _c0 = _cb.c0 || {}, _c1 = _cb.c1 || {}, _c2 = _cb.c2 || {}, _c3 = _cb.c3 || {};
+  const comboHtml = (_c0.n || _c1.n || _c2.n || _c3.n)
+    ? `<div style="font-weight:600;margin:14px 0 2px;color:var(--acc)">★ 信号组合实盘验证（今日可下注清单的立身之本）</div>
+       <div class="rstats" style="margin-top:6px">
+         <div class="rcard"><div class="rn">${_c0.n}</div><div class="rl">无 edge 基线</div><div class="rr" style="color:${colOf(+(_c0.rate||0))}">${_c0.rate!=null?_c0.rate+'%':'—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">模型原始方向（弃注参考）</div></div>
+         <div class="rcard"><div class="rn">${_c1.n}</div><div class="rl">叠 1 条 edge</div><div class="rr" style="color:${colOf(+(_c1.rate||0))}">${_c1.rate!=null?_c1.rate+'%':'—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">深盘/热度/破蛋 任一</div></div>
+         <div class="rcard"><div class="rn">${_c2.n}</div><div class="rl">叠 2 条 edge</div><div class="rr" style="color:${colOf(+(_c2.rate||0))}">${_c2.rate!=null?_c2.rate+'%':'—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">清单 2u 档</div></div>
+         <div class="rcard"><div class="rn">${_c3.n}</div><div class="rl">叠 3 条 edge（全中）</div><div class="rr" style="color:${colOf(+(_c3.rate||0))}">${_c3.rate!=null?_c3.rate+'%':'—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">清单 3u 黄金档</div></div>
+       </div>
+       <p class="note">★ <b>实测结论（7816 完场真值）："叠越多 edge 越准"是伪前提。</b> 仅深盘单信号命中 <b>81.7%</b>（最硬方向）；叠到 2 条降到 70%；<b>三条全中反而 53%——其中强队 W 方向仅 41.9%（大热拥挤陷阱，价值被吃光）</b>。根因：热度双确认＝散户全压强队，把方向价值碾平。<b>已据此反向校准「今日可下注清单」</b>：深盘单信号给高仓、深盘+大热确认压到 0.5u 警示仓并标「大热谨慎」，排序改按方向质量而非 edge 数。edge 定义与 buildBetList 完全一致（深盘 |hcap|≥0.8 / 热度 strength≥2 / 破蛋 pBreak≥80）。</p>`
+    : '';
+  const perfHtml = `<div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">本窗口实际战绩 vs 标定承诺（按档并排）</div>
+    <div class="rstats" style="margin-top:10px">
+      <div class="rcard"><div class="rn">${_t1A.n}</div><div class="rl">t1 出手·本窗口实际</div><div class="rr" style="color:${colOf(_t1A.r)}">${_t1A.r != null ? _t1A.r + '%' : '—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">初盘修复后 0.72 门只收极端短赔场，真实 t1 每天 0~3 场（勿按旧 298场口径扩池）</div></div>
+      <div class="rcard"><div class="rn">${_t2A.n}</div><div class="rl">t2 参考·本窗口实际</div><div class="rr" style="color:${colOf(_t2A.r)}">${_t2A.r != null ? _t2A.r + '%' : '—'}</div><div style="font-size:11px;opacity:.7;margin-top:3px">逆势剔除档接近 t1，但体量远小于真 t1</div></div>
+      <div class="rcard"><div class="rn">${_t0A.n}</div><div class="rl">t0 观望·弃注</div><div class="rr" style="color:var(--mut)">不计入</div><div style="font-size:11px;opacity:.7;margin-top:3px">标定基准 ~53%</div></div>
+      ${_deepHtml}
+      ${_brkHtml}
+    </div>
+    ${comboHtml}
+    <p class="note">本窗口＝后台自动复盘的最近完场（当前 ${days.length} 天 / ${RD.allTotal} 场）。「本窗口实际」是这些场里<b>有方向且已出赛果</b>的子集按档实算。⚠ 初盘修复(2026-10-08a)后 mk 已真实化，t1 终局门 0.72 只收 o1h≤~1.28 的极端短赔场，真实体量每天 0~3 场——「让球深盘/浅盘·实盘命中」才是更稳的日常下注池（让球深=热门方向，8449 场校准主让≥1→主胜 66~71%）。窗口越小、单档 n 越小，实际值波动越大，别拿单窗口的几十场当最终结论。</p>`;
+  /* 2026-10-06 续：跨市场标定承诺对账 —— 把 进球数/破蛋、半全场、比分 三个市场的「标定结论 + 7m 独立真值实测」
+     做成和胜平负战绩条同款的"承诺 vs 实测"并排，补齐"其他市场同等严谨标定"的展示缺口（不改数字，纯口径透明）。
+     ⚠ 口径：胜平负战绩条用「本窗口出手场次」实测；这三个市场没有逐场出手跟踪，改用 7m 独立真值大样本对账，勿混比。
+     数值一律从 RD 现取（与下方研究表同源），避免硬编码漂移。 */
+  const _b7c = RD.break7m || {}, _p7c = (RD.pair7m && RD.pair7m.rate) || {}, _s7c = RD.score7m || {}, _h7c = RD.htft7m || {}, _l7c = RD.lmu7m || {};
+  const _p7s = _p7c.strong ? Math.round(_p7c.strong.hit / _p7c.strong.n * 100) : null;
+  const _p7m = _p7c.mid ? Math.round(_p7c.mid.hit / _p7c.mid.n * 100) : null;
+  const _p7l = _p7c.low ? Math.round(_p7c.low.hit / _p7c.low.n * 100) : null;
+  const _b7base = _b7c.baseRate != null ? _b7c.baseRate : 74;
+  const _b7n = _b7c.n || 24886;
+  const _s7n = (_s7c.nFin) || 34153;
+  const _h7n = (_h7c.nAll) || 33608;
+  const _lmN = (_l7c.n) || 5873;
+  const _lamBias = (_l7c.tot && _l7c.tot.bias != null) ? _l7c.tot.bias : 0.003;
+  const _lmMae = (_l7c.mae != null) ? _l7c.mae : null;
+  const _lmRmse = (_l7c.rmse != null) ? _l7c.rmse : null;
+  const _lmCorr = (_l7c.corr != null) ? _l7c.corr : null;
+  const _lmOver = (_l7c.overRate != null) ? _l7c.overRate : null;
+  const _lmBins = Array.isArray(_l7c.bins) ? _l7c.bins : [];
+  const _htftTop1 = (_h7c.sweep && _h7c.sweep.length) ? Math.max.apply(null, _h7c.sweep.map(s => s.top1)) : 34.6;
+  const _lead1 = (_h7c.empByLead && _h7c.empByLead['1']) || {}, _lead2 = (_h7c.empByLead && _h7c.empByLead['2']) || {}, _lag1 = (_h7c.empByLead && _h7c.empByLead['-1']) || {};
+  const _sTop1 = (_s7c.scoreBaseline && _s7c.scoreBaseline.top1P != null) ? _s7c.scoreBaseline.top1P : 9.9;
+  const _sTop6 = (_s7c.scoreBaseline && _s7c.scoreBaseline.top6P != null) ? _s7c.scoreBaseline.top6P : 45.4;
+  const _m0 = (RD.over9m && RD.over9m.models) ? (RD.over9m.models.find(m => /M0/.test(m.k)) || RD.over9m.models[0]) : null;
+  const _tbA = (RD.tbias9m && RD.tbias9m.models) ? (RD.tbias9m.models.find(m => /^A/.test(m.k)) || RD.tbias9m.models[0]) : null;
+  const _llPoisson = _m0 ? _m0.ll : 2.994;
+  const _tbLL = _tbA ? _tbA.ll : 2.934;
+  const mktCalibHtml = `<div style="font-weight:700;margin:18px 0 4px;color:var(--acc)">跨市场标定承诺对账（独立真值口径 · 非本窗口出手）</div>
+    <p class="note">胜平负上方「战绩条」用<b>本窗口出手场次</b>实测；下面三个市场没有逐场出手跟踪，改用 <b>7m 独立真值大样本</b>对账（破蛋 ${_b7n} / 半全场 ${_h7n} / 比分 ${_s7n} 场），口径不同<b>勿混比</b>。每张卡＝「标定结论 + 真值支撑」；n&lt;120 的结论已标注、不作为承诺。</p>
+    <div style="font-weight:600;margin:12px 0 2px;color:var(--acc)">① 进球数 / 破蛋（上半场≥1球）</div>
+    <div class="rstats" style="margin-top:6px">
+      <div class="rcard"><div class="rn">${_b7base}%</div><div class="rl">破蛋基准（上半场≥1球）</div><div class="rr" style="color:var(--mut)">真值</div><div style="font-size:11px;opacity:.7;margin-top:3px">7m 独立真值 n=${_b7n}</div></div>
+      <div class="rcard"><div class="rn">${_p7s != null ? _p7s + '%' : '—'}</div><div class="rl">破蛋·强档命中</div><div class="rr" style="color:${colOf(_p7s)}">实测</div><div style="font-size:11px;opacity:.7;margin-top:3px">标定承诺 ~87%<br>n=${_p7c.strong ? _p7c.strong.n : '—'}</div></div>
+      <div class="rcard"><div class="rn">${_p7m != null ? _p7m + '%' : '—'}</div><div class="rl">破蛋·中档命中</div><div class="rr" style="color:${colOf(_p7m)}">实测</div><div style="font-size:11px;opacity:.7;margin-top:3px">n=${_p7c.mid ? _p7c.mid.n : '—'}</div></div>
+      <div class="rcard"><div class="rn">${_p7l != null ? _p7l + '%' : '—'}</div><div class="rl">破蛋·弱档命中</div><div class="rr" style="color:${colOf(_p7l)}">实测</div><div style="font-size:11px;opacity:.7;margin-top:3px">n=${_p7c.low ? _p7c.low.n : '—'}</div></div>
+      <div class="rcard"><div class="rn">+${_lamBias}</div><div class="rl">λ/μ 总进球偏差（球）</div><div class="rr" style="color:green">校准良好</div><div style="font-size:11px;opacity:.7;margin-top:3px">补偿+0.26 后≈0<br>n=${_lmN}</div></div>
+    </div>
+    <div style="font-weight:600;margin:12px 0 2px;color:var(--acc)">①-b 进球数模型精度（期望总进球 λ+μ vs 实际总进球）</div>
+    <div class="rstats" style="margin-top:6px">
+      <div class="rcard"><div class="rn">${_lmMae!=null?_lmMae.toFixed(2):'—'}</div><div class="rl">平均绝对误差 MAE（球）</div><div class="rr" style="color:var(--mut)">期望 vs 实际</div><div style="font-size:11px;opacity:.7;margin-top:3px">模型期望总进球平均偏 ${_lmMae!=null?_lmMae.toFixed(2):'?'} 球<br>n=${_lmN}</div></div>
+      <div class="rcard"><div class="rn">${_lmRmse!=null?_lmRmse.toFixed(2):'—'}</div><div class="rl">均方根误差 RMSE（球）</div><div class="rr" style="color:var(--mut)">离散度</div><div style="font-size:11px;opacity:.7;margin-top:3px">含极端偏差场</div></div>
+      <div class="rcard"><div class="rn">${_lmCorr!=null?_lmCorr.toFixed(3):'—'}</div><div class="rl">期望 vs 实际 相关系数</div><div class="rr" style="color:${colOf(_lmCorr||0)}">弱正相关</div><div style="font-size:11px;opacity:.7;margin-top:3px">足球总进球噪声大</div></div>
+      <div class="rcard"><div class="rn">${_lmOver!=null?_lmOver.toFixed(1)+'%':'—'}</div><div class="rl">大球 &gt;2.5 实际命中</div><div class="rr" style="color:${colOf(_lmOver||0)}">实测</div><div style="font-size:11px;opacity:.7;margin-top:3px">模型大球方向校准<br>≈50% 即无偏</div></div>
+    </div>
+    ${_lmBins.length ? `<div style="font-size:12px;margin:8px 0 2px;opacity:.85">期望总进球分桶校准（模型期望 vs 实际均值，偏差≈0 即无偏）：</div>
+    <table class="tbl" style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse">
+      <tr style="opacity:.7"><th style="text-align:left;padding:3px 6px">期望区间</th><th style="padding:3px 6px">n</th><th style="padding:3px 6px">模型期望</th><th style="padding:3px 6px">实际均值</th><th style="padding:3px 6px">偏差</th></tr>
+      ${_lmBins.map(b=>`<tr><td style="padding:3px 6px">${b.lo}~${b.hi}</td><td style="padding:3px 6px;text-align:center">${b.n}</td><td style="padding:3px 6px;text-align:center">${b.pred!=null?b.pred.toFixed(2):'—'}</td><td style="padding:3px 6px;text-align:center">${b.real!=null?b.real.toFixed(2):'—'}</td><td style="padding:3px 6px;text-align:center;color:${Math.abs((b.bias||0))<0.1?'green':'var(--acc)'}">${(b.bias||0)>=0?'+':''}${b.bias!=null?b.bias.toFixed(3):'—'}</td></tr>`).join('')}
+    </table>` : ''}
+    <div style="font-weight:600;margin:12px 0 2px;color:var(--acc)">② 半全场（9 宫格）</div>
+    <div class="rstats" style="margin-top:6px">
+      <div class="rcard"><div class="rn">${_htftTop1}%</div><div class="rl">九宫格 Top1 命中</div><div class="rr" style="color:${colOf(_htftTop1)}">实测</div><div style="font-size:11px;opacity:.7;margin-top:3px">盲猜频率最高 28.7%<br><b>+${(_htftTop1 - 28.7).toFixed(1)}pp edge</b> · n=729</div></div>
+      <div class="rcard"><div class="rn">${_lead1.H != null ? _lead1.H + '%' : '—'}</div><div class="rl">半场领先1球→全场主胜</div><div class="rr" style="color:${colOf(_lead1.H)}">真值</div><div style="font-size:11px;opacity:.7;margin-top:3px">n=${_lead1.n != null ? _lead1.n : '—'}</div></div>
+      <div class="rcard"><div class="rn">${_lead2.H != null ? _lead2.H + '%' : '—'}</div><div class="rl">半场领先2球→全场主胜</div><div class="rr" style="color:${colOf(_lead2.H)}">真值</div><div style="font-size:11px;opacity:.7;margin-top:3px">n=${_lead2.n != null ? _lead2.n : '—'}</div></div>
+      <div class="rcard"><div class="rn">${_lag1.A != null ? _lag1.A + '%' : '—'}</div><div class="rl">半场落后1球→全场客胜</div><div class="rr" style="color:${colOf(_lag1.A)}">真值</div><div style="font-size:11px;opacity:.7;margin-top:3px">n=${_lag1.n != null ? _lag1.n : '—'}</div></div>
+    </div>
+    <div style="font-weight:600;margin:12px 0 2px;color:var(--acc)">③ 比分（分布玩法）</div>
+    <div class="rstats" style="margin-top:6px">
+      <div class="rcard"><div class="rn">${_sTop1}%</div><div class="rl">比分 Top1 天花板（1-1）</div><div class="rr" style="color:${colOf(_sTop1)}">真值</div><div style="font-size:11px;opacity:.7;margin-top:3px">盲猜最热比分上限<br>n=${_s7n}</div></div>
+      <div class="rcard"><div class="rn">${_sTop6}%</div><div class="rl">Top6 合计命中上限</div><div class="rr" style="color:${colOf(_sTop6)}">真值</div><div style="font-size:11px;opacity:.7;margin-top:3px">能进 Top6 即近上限</div></div>
+      <div class="rcard"><div class="rn">${_llPoisson}</div><div class="rl">纯泊松 logLoss（最优）</div><div class="rr" style="color:green">结论：不加过分散布</div><div style="font-size:11px;opacity:.7;margin-top:3px">负二项更差<br>n=729</div></div>
+      <div class="rcard"><div class="rn">+0.26</div><div class="rl">总进球偏置（最优）</div><div class="rr" style="color:green">结论：统一补偿</div><div style="font-size:11px;opacity:.7;margin-top:3px">bias ${_tbLL != null ? _tbLL : '—'} 档最优<br>n=729</div></div>
+    </div>`;
+  /* 2026-10-07c：必发 / 北单 真实成交资金 vs 欧赔研究（进行中）——
+     看板预留的第四个诚实研究，但有效样本仍未达标，故只展「研究定义 + 铁律护栏」，**不展任何命中率结论**。
+     实时进度由每日健康巡检读取 fund_log.json 自动追踪并汇报（纯信息项，不计入回归判定）。
+     研究主源已对齐必发（受注量最大=大众真实资金流向，样本更干净），北单众彩作交叉验证。 */
+  const fundStudyHtml = `<div style="font-weight:700;margin:18px 0 4px;color:var(--acc)">必发 / 北单 真实成交资金 vs 欧赔研究（进行中）</div>
+    <p class="note">这是看板预留的<b>第四个诚实研究</b>：拿<b>必发成交</b>（受注量最大、代表大众真实资金流向）与<b>北单众彩</b>的真实投注占比（资金面 fav）对比<b>欧赔隐含概率</b>（庄家 fav）。
+    <br>⚠ <b>研究主源已对齐必发</b>：必发样本现 34 例（北单仅 11 例）、且受注量最代表大众资金流向——作为<b>主研究源</b>更稳；北单众彩留作<b>交叉验证</b>。
+    <br>⚠ <b>口径已升级</b>：纯「方向背离」几乎不发生（两者同反映市场共识，北单 11 例 0 背离）——故研究度量<b>权重背离</b>：资金面在某方<b>超注了多少个百分点</b>（占比 − 欧赔隐含），再看出手是否更准。
+    <br>⚠ <b>铁律：有效配对 n&lt;120 不出结论</b>。双源仍在后台自动累积，<b>达标前本面板不展示任何命中率数字</b>，以免拿小样本当真理。进度由每日健康巡检自动追踪汇报。</p>`;
+  /* 2026-10-01：档位列 + 档位筛选（复盘明细）。
+     tier1=可出手 / tier2=参考 / tier0=观望·弃用（市场共识闸门压下来的）。
+     ⚠ tier0 那行「调用命中率 100%」是 n=1 的巧合（全档 6994 场里只有 1 场走出了主动调用），
+     在明细里能直接按档位筛出来自查，别拿 1 场当胜率结论。 */
+  /* 2026-10-06：t2 拆子类型 —— 「t1剔除档(逆势高热度)」实测 90.7%，与「真t2(温吞盘)」79.0% 质量差 11.7pp，
+     同一枚徽章会让用户把好场当差场看。故按 r.wash / r.mk 再分两种标签。 */
+  const tierBadge = t => t===1 ? '<span class="badge bT1">出手 t1</span>'
+                      : t===2 ? '<span class="badge bT2">参考 t2</span>'
+                      : '<span class="badge bG">观望 t0</span>';
+  /* 🔴 2026-10-06 二十四修：t1 内部再加「mk 置信分级」徽章。
+     起因（用户「提高命中率」）：三条独立证据线扫描抬 mk 门，结论是**不该抬**——
+       线① 真赔率干净重跑 6307 场（_eval/_hslice13.cjs，引擎 2026-10-05l）：
+             mk≥0.80 190 场 95.8% → 0.82 156 场 97.4%（Δ+1.65pp），但被踢的 34 场里
+             **30 场本来命中**（88.2%！）⇒ 对撞 z 仅 2.42，是在砍真 alpha 不是剔噪音。
+       线② 7m 独立大库 57992 场（跨 7 月、完全独立源）：|pk| 越深非平局率越高
+             76.9%(平手) → 77.9%(半球~一球) → 84.8%(球半~两球) → 91.7%(两球以上) 单调，
+             证明"集中度高⇒可预测"机制为真（但机制真 ≠ 该在 0.80 处再加一刀）。
+       线③ 厚样本 review_data 7719 场：mk≥80 250 场 93.6% / ≥82 212 场 95.3% —— 与线①同形。
+     ⇒ 决策：**门不动**（抬门收益来自少下注而非更准），但把 t1 内部按 mk 分三级**展示**，
+       让用户在 88~92% 的场次上别按极强档加仓。分级阈值取自线①的 t1 内 mk 分带实测：
+         mk≥0.88 → 26 场 100.0%（前 100/后 100）
+         mk 0.85~0.88 → 63 场 98.4%
+         mk 0.82~0.85 → 63 场 96.8%
+         mk 0.80~0.82 → 34 场 88.2%（唯一明显偏低的带）
+       ⇒ 三级：mk≥0.88「极强」/ 0.85~0.88「强」/ <0.85「标准」。
+     ⚠ 量纲：review 行 r.mk 是 ×100 整数（gen_review 的 Math.round(×100)），
+       必须与 tierBadgeR 用同一个归一化（>1 视为百分数）。 */
+  const t1MkBadgeR = r => {
+    const raw = Number(r.mk) || 0;
+    const mkP = raw > 1 ? raw : raw * 100;           // 归一化到 0~100
+    const isAway = r.dir === 'L';                     // 推客胜（模型押客队）—— 方向盲区修正点
+    if (mkP >= 88) return '<span class="badge bT1x" title="t1·极强档：市场临场最热方概率 mk≥0.88。2026-10-06 真赔率干净重跑（引擎 2026-10-05l，6307 场）实测该带 26 场 <b>100.0%</b>（前段 100% / 后段 100%，四折 100/100/100/100）。⚠ n=26 偏薄，Wilson 95% 下限 94.7% —— 当"最优先"看，但别当"必中"。">极强</span>';
+    if (mkP >= 85) return '<span class="badge bT1s" title="t1·强档：市场临场最热方概率 mk 0.85~0.88。2026-10-06 干净重跑实测该带 63 场 <b>98.4%</b>（前段 100% / 后段 95.5%）。客胜子集也稳（强∩推客胜 94.1%，n=17）。">强</span>';
+    if (mkP >= 82) return '<span class="badge bT1n' + (isAway ? ' bT1l' : '') + '" title="t1·标准档：市场临场最热方概率 mk 0.82~0.85。2026-10-06 干净重跑实测该带 63 场 <b>96.8%</b>（前段 94.9% / 后段 100%）。⚠ 注意：此档<b>客胜子集偏弱</b>——线上复盘实测 标准∩推客胜 仅 77.8%（9 场 7 中），明显低于同档主胜 98.4%；而 客胜 只要 mk≥85 就有 96.7%（30 场）。即弱的是「中 mk + 客胜」这个角，不是所有客胜。若押客胜，按接近下沿对待。">' + (isAway ? '标准·客弱' : '标准') + '</span>';
+    return '<span class="badge bT1l" title="t1·下沿档：市场最热方概率 mk 仅 0.80~0.82。⚠ 这是 t1 内部唯一明显偏低的一带，且<b>命中率低完全由客胜子集拖累</b>：线上复盘实测 下沿∩推客胜 仅 75.0%（8 场 6 中），而 下沿∩推主胜 仍有 92.3%；客胜 只要 mk≥85 就有 96.7%。曾试抬门到 0.82 把它整带剔掉（t1 升到 97.4%），但被剔的 34 场里 30 场本来命中——剔掉等于白丢好场，故保留在场内但打标降权。建议：这一档若押客胜，格外谨慎/小注。">' + (isAway ? '下沿·客弱' : '下沿') + '</span>';
+  };
+  const tierBadgeR = r => {
+    const t = Number(r.tier)||0;
+    if (t === 1) return tierBadge(1) + t1MkBadgeR(r);
+    if (t !== 2) return tierBadge(t);
+    const isW = (r.washKind === 'line' || r.washKind === 'both');
+    /* 🔴 2026-10-06 踩坑：gen_review.cjs 写的是 `rec.mk = Math.round(...*100)` ⇒ **整数**（88 / 79），
+       不是 0~1 小数。旧版这里写 `>= 0.80`，而 88 >= 0.8 恒成立 ⇒ **所有逆势场都被误判「高质」**
+       （实测多标了 15 场 mk<80 的）。单测没抓到的原因是测试数据用了 0.85 这种小数，与真实格式不符。
+       判据必须兼容两种量纲：>1 视为百分数、≤1 视为小数。 */
+    const _mkRaw = Number(r.mk) || 0;
+    const _mkP = _mkRaw > 1 ? _mkRaw : _mkRaw * 100;      // 归一化到 0~100
+    const hiMk = _mkP >= 80;
+    if (isW && hiMk) return '<span class="badge bT2h" title="t2·① t1剔除档：_pPick≥0.72 但盘口逆势（庄家临场把盘子往 fav 反方向调）。二十八修（真实初盘）实测这批 59 场命中 91.5%，质量接近 t1，只是略逊才被剔出——看好可小注，但仍不进下注层。">参考 t2·高质</span>';
+    return '<span class="badge bT2w" title="t2·② 其余 t2（非 _pPick≥0.72 逆势剔除的残留场）。旧文案「温吞盘 105 场 79.0%」建立在初盘=临盘污染口径(2026-10-08 前)属假象；修正引擎下温吞盘基本并入 t1/t0，仅零星残留。">参考 t2·残留</span>';
+  };
+  const TIER_CLS = t => (t===1 ? 't1' : (t===2 ? 't2' : 't0'));
+  let body = '';
+  /* ★ 2026-10-29 性能修复：复盘面板原来把「所有日期 × 所有场次」一次性渲染成 DOM——
+     真机实测 232,492 个节点 / 1.93MB 文本，点一次要 2.5s，而且渲染完整个页面的重排、
+     后续任何板块的打开都被这 23 万节点拖慢（用户反馈"每个板块点进去也好慢"的主因）。
+     改为：默认只展开最近 RV_OPEN_DAYS 天，其余日期只留汇总头 + 「展开」按钮，点了才渲染该天。 */
+  const RV_OPEN_DAYS = 3;
+  const _rTs = r => String(r.day||'') + String(r.kick||'').replace(/\D/g,'');
+  const _RV_HEAD = `<table class="htab"><thead><tr>
+        <th>开赛</th><th>联赛</th><th>对阵</th><th>比分</th><th>方向</th><th>档位</th><th>置信</th><th>价值</th><th>热度%</th><th>超出</th><th>判定</th><th>调用</th><th>实际</th><th>调用命中</th><th>方向命中</th>
+      </tr></thead><tbody>`;
+  /* 单日明细渲染器（闭包复用 L / tierBadgeR / verdictCls，供首屏与"展开"共用） */
+  const renderRows = (d) => {
+    /* 数据里还没带上开赛时间时（旧包/未重跑 gen_review）**回退到 conf 降序**，
+       别把整张表按空串排成"看不出顺序"的原样 —— 至少之前的高置信行还在上面。 */
+    const _hasTs = (d.rows||[]).some(r=> _rTs(r));
+    return (d.rows||[]).slice().sort((x,y)=> _hasTs
+      ? _rTs(y).localeCompare(_rTs(x))
+      : ((y.conf||0)-(x.conf||0))).map(r=>{
+      const act = actualDir(r.hs, r.as);
+      const hitBadge = r.hit==null ? '<span class="badge bG">观望</span>' : (r.hit ? '<span class="badge bW">命中</span>' : '<span class="badge bL">未中</span>');
+      const dirBadge = r.dirHit==null ? '—' : (r.dirHit ? '✅' : '❌');
+      const srcTag = r.src==='beidan' ? '<span class="badge bK">北单</span>' : (r.src==='ppi'?'<span class="badge bN">PPI</span>':'');
+      const _tr = Number(r.tier)||0;
+      return `<tr class="rt ${TIER_CLS(_tr)}">
+        /* 复盘行直接拼时间（不走 timeCell）—— 这里的行对象是 {day,kick} 扁平结构，
+           绕 timeCell 反而把日期弄丢了（真机量到整列 00:00）。今天只印 HH:MM，跨日补 MM-DD。 */
+        <td>${(function(){ var _d=String(r.day||''), _t=String(r.kick||'').replace(/[^\d:]/g,'');
+              if(!/^\d{8}$/.test(_d)) return _t || '—';
+              if(_d===todayStr()) return _t || '—';
+              return '<span style="color:var(--acc)">' + _d.slice(4,6) + '-' + _d.slice(6,8) + '</span> ' + _t;
+            })()}</td>
+        <td>${r.league||''}</td>
+        <td><b>${r.home||'?'}</b> vs <b>${r.away||'?'}</b></td>
+        <td>${r.hs}:${r.as}</td>
+        <td>${L(r.dir)}</td>
+        <td>${tierBadgeR(r)}</td>
+        <td>${r.conf||'—'}</td>
+        <td>${r.vs||'—'}</td>
+        <td>${r.share!=null?r.share:'—'} ${srcTag}</td>
+        <td>${r.excess!=null?(r.excess>=0?'+':'')+r.excess:'—'}</td>
+        <td><span class="badge ${verdictCls(r.verdict)}">${r.verdict}</span></td>
+        <td>${r.callTxt||'—'}</td>
+        <td>${L(act)}</td>
+        <td>${hitBadge}</td>
+        <td>${dirBadge}</td>
+      </tr>`;
+    }).join('') || '<tr class="rt t0"><td colspan="15" class="note">该日无复盘场次。</td></tr>';
+  };
+  /* 「展开某日」入口：只有点了才把该日明细插进 DOM（避免一次建 20 万+ 节点） */
+  window.__rvExpand = function(_di){
+    try {
+      const w = document.getElementById('rvWrap' + _di);
+      const d = days[_di];
+      if (!w || !d) return;
+      const _t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+      w.innerHTML = _RV_HEAD + renderRows(d) + '</tbody></table>';
+      try { console.log('[perf] 复盘展开第 ' + _di + ' 天：' + Math.round(((window.performance&&performance.now)?performance.now():Date.now()) - _t0) + 'ms'); } catch(e){}
+    } catch(e){ console.warn('复盘展开失败', e && e.message); }
+  };
+  window.__rvExpandAll = function(){
+    try { for (let i = 0; i < days.length; i++){ const w = document.getElementById('rvWrap'+i); if (w && !w.querySelector('table')) window.__rvExpand(i); } } catch(e){}
+  };
+  for (let _di = 0; _di < days.length; _di++){
+    const d = days[_di];
+    const v = d.v || {};
+    const verdictDist = `大热必死 ${v.hot||0} ｜ 与庄/正常 ${v.normal||0} ｜ 问题盘 ${v.problem||0} ｜ 吃水盘 ${v.water||0} ｜ 无盘口 ${v.nop||0}`;
+    const _n = (d.rows||[]).length;
+    const _open = _di < RV_OPEN_DAYS;
+    body += `<div class="rday" data-di="${_di}">
+      <h4 class="rday-h">${d.date} <span class="rday-rate">调用 ${d.rate}% ｜ 方向 ${d.dirRate}%</span> <span class="rday-v">（${verdictDist}）</span></h4>
+      <div class="rday-tbl-wrap" id="rvWrap${_di}">${_open
+        ? (_RV_HEAD + renderRows(d) + '</tbody></table>')
+        : `<button class="sec" style="width:100%;margin:6px 0;font-size:12px" onclick="__rvExpand(${_di})">展开该日 ${_n} 场明细</button>`}</div>
+    </div>`;
+  }
+  if (days.length > RV_OPEN_DAYS){
+    body += `<button class="sec" style="width:100%;margin:8px 0;font-size:12px" onclick="__rvExpandAll()">展开全部 ${days.length} 天（默认只展开最近 ${RV_OPEN_DAYS} 天，一次建太多 DOM 会让整页变卡）</button>`;
+  }
+  /* 2026-10-01：复盘明细「档位」筛选条（勾 t0/t1/t2 可单独看某一档的明细） */
+  if (days.length){
+    body = `<div class="rday-toolbar">
+      <span class="note"><b>档位筛选：</b></span>
+      <button class="rbtn on" data-tf="all">全部</button>
+      <button class="rbtn" data-tf="1">tier1 可出手</button>
+      <button class="rbtn" data-tf="2">tier2 参考</button>
+      <button class="rbtn" data-tf="0">tier0 观望/弃用</button>
+      <span class="note" id="tfInfo"></span>
+      <span class="note">档位由引擎市场共识闸门给出（t1 可出手 / t2 参考 / t0 观望·弃用）。⚠ tier0 的「调用命中率」常是 n=1~2 的巧合（全档绝大多数是观望场、不进分母），别当胜率结论。</span>
+    </div>` + body;
+  }
+  if (!days.length) body = '<p class="note">暂无按日期归集的复盘数据。</p>';
+  /* 2026-10-01：分档命中表 —— 直接回答「热度档位到底有没有用」。
+     表由 gen_review.cjs 的 statRows 提供（tier 档位 × 判定类型 双维度）。
+     判读：档位若真有区分度，tier1 命中必须显著高于 tier2/tier0；
+     底部「市场fav基准」是同批完场无脑跟市场的命中率，模型档位要跑赢它才叫有价值。 */
+  const stRow = r => `<tr>
+      <td><b>${r.k}</b></td><td>${r.n==null?'—':r.n}</td>
+      <td style="color:${r.rate==null?'var(--mut)':colOf(r.rate)}">${r.rate==null?'—':r.rate+'%'}</td>
+      <td>${r.hit==null?'—':r.hit}</td>
+      <td style="color:${r.dirRate==null?'var(--mut)':colOf(r.dirRate)}">${r.dirRate==null?'—':r.dirRate+'%（'+r.dirHit+'/'+r.dirN+'）'}</td>
+      <td style="color:${r.mktRate==null?'var(--mut)':colOf(r.mktRate)}">${r.mktRate==null?'—':r.mktRate+'%（'+r.mktHit+'/'+r.mktN+'）'}</td></tr>`;
+  const stTable = (title, rows) => rows.length ? `<h3>${title}</h3>
+      <div class="rday-tbl-wrap"><table class="htab"><thead><tr>
+      <th>分档</th><th>场数</th><th>调用命中率</th><th>命中数</th><th>模型方向命中</th><th>市场fav基准（同批对照）</th>
+      </tr></thead><tbody>${rows.map(stRow).join('')}</tbody></table></div>` : '';
+  const TIER7 = { strong: '破蛋·强 (p≥0.85)', mid: '破蛋·中性 (p 0.70~0.85)', weak: '破蛋·偏弱 (p 0.65~0.70)', low: '破蛋·弱 (p<0.65)' };
+  const _all = (RD.statRows||[]);
+  const tierTableHtml = stTable('热度档位命中（tier1=可出手 · tier2=参考 · tier0=弃注/观望）', _all.filter(s=>s.k.indexOf('tier')===0));
+  /* 2026-10-01：命中率只是入场券，ROI 才是能不能真金白银下注的判据。
+     这张表把复盘行 join 完场库「临场欧赔」后算的真实盈亏摆出来（欧赔已含庄家抽水 = 净值）。 */
+  const roiRows = (RD.roi9m && RD.roi9m.rows) || [];
+  const roiColor = v => (v == null) ? 'var(--mut)' : (v >= 0 ? 'var(--grn)' : 'var(--red)');
+  const roiTableHtml = roiRows.length ? `<h3>档位 ROI 硬检验（临场欧赔口径 · 每 100 元注净盈亏 · 已扣抽水）</h3>
+    <p class="note">命中率再来得高，赔率不够一样亏。<b>ROI = 命中时拿 (赔率−1)，不中 −1</b>；欧赔自带庄家水位，所以这是扣水后的净值。对照列是「无脑押市场 fav 同批场次的 ROI」，只有模型跑赢它才有价值。</p>
+    <div class="rday-tbl-wrap"><table class="htab"><thead><tr>
+    <th>档位</th><th>真实下注场次</th><th>命中率</th><th>平均赔率</th><th>ROI</th><th>模型方向ROI</th><th>市场fav基准命中</th><th>市场fav ROI</th>
+    </tr></thead><tbody>${roiRows.map(r=>`<tr>
+      <td><b>${r.k}</b></td><td>${r.n}</td>
+      <td style="color:${colOf(r.hit)}">${r.hit!=null?r.hit+'%':'—'}</td>
+      <td>${r.avgOdds||'—'}</td>
+      <td style="color:${roiColor(r.roi)};font-weight:700">${r.roi!=null?r.roi+'%':'—'}</td>
+      <td style="color:${roiColor(r.dirRoi)}">${r.dirRoi!=null?r.dirRoi+'%（'+r.dirN+'）':'—'}</td>
+      <td style="color:${colOf(r.mktHit)}">${r.mktHit!=null?r.mktHit+'%（'+r.mktN+'）':'—'}</td>
+      <td style="color:${roiColor(r.mktRoi)}">${r.mktRoi!=null?r.mktRoi+'%':'—'}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const verTableHtml = stTable('按判定类型命中（调用＝热度调整后；方向＝模型原始方向）', _all.filter(s=>s.dim==='verdict'));
+  /* 2026-10-01 加第三张：模型实际给的方向代码 —— 平局(D) 是最大的出血口，
+     实测 321 场只兑现 13%、同批市场 78%，引擎已加「平局禁用门」统一降级为弃注，
+     故 D 类单独成行显示、不进方向命中分母。 */
+  const dirTableHtml = stTable('按模型给出的方向（W/D/L；平局已弃注·不计入分母）'
+      + '｜<span class="note">平局线：市场fav对平局的"命中"看着高，但真实平局率仅 ~7%，跟平=负EV，因此弃注</span>',
+      _all.filter(s=>s.dim==='dir' || s.k.indexOf('平局线')>=0));
+  /* 2026-10-01：7m 独立真值源的破蛋大样本（替换只有 n=8 的旧样本表）
+     —— 真值来自 sports.tiyuhu.com 底层 data.7m.com.cn（40715 场，99% 半场覆盖率），与本库无同源关系。 */
+  const _b7 = RD.break7m, _p7 = RD.pair7m;
+  let break7mHtml = '';
+  if (_b7 && _b7.n) {
+    const tot = Object.entries(_b7.byTotalGoals || {}).map(([g, o]) => ({ k: '全场 ' + g + ' 球', rate: o.rate, n: o.n }));
+    const pk = Object.entries(_b7.byOuLine || {}).filter(([k]) => k !== '无').map(([k, o]) => ({ k: '大小球线 ' + k, rate: o.rate, n: o.n }));
+    const hv = Object.entries(_b7.byHalfGoals || {}).map(([h, o]) => ({ k: '上半场 ' + h + ' 球', rate: o.rate, n: o.n }));
+    break7mHtml = stTable('破蛋基准（7m 独立真值 ' + _b7.n + ' 场 · 上半场≥1球=' + _b7.baseRate + '%）',
+      [{ k: '【全场进球 vs 破蛋】', rate: null, n: 0 }, ...tot,
+       { k: '【大小球线 pk vs 破蛋】', rate: null, n: 0 }, ...pk,
+       { k: '【上半场进球数 vs 下半场破蛋】', rate: null, n: 0 }, ...hv]);
+  }
+  if (_p7 && _p7.rate) {
+    const rowsR = Object.keys(_p7.rate).filter(k => k !== '__all').map(k => ({ k: TIER7[k] || k, rate: Math.round(_p7.rate[k].hit / _p7.rate[k].n * 100), n: _p7.rate[k].n }));
+    rowsR.push({ k: '全部配对场', rate: _b7 ? null : null, n: _p7.rate.__all ? _p7.rate.__all.n : 0 });
+    break7mHtml += stTable('跨源验证：引擎破蛋概率 × 7m 半场真值（' + (_p7.n || '') + ' 场配对）'
+      + '｜<span class="note">概率-实际对照若逐档单调贴合，说明破蛋模型校准良好</span>', rowsR);
+  }
+  /* 2026-10-01：跨源方向验证 —— 与破蛋同一批 7m 配对（真值来自 7m 比分，非本库）。
+     ⚠ 这张表是诚实的反面结论：模型方向已锚定市场fav，所以「模型命中」恒等于「同批市场基准」，
+       tier 只是出手门槛、不产生 alpha。真要提命中率只能 (a) 抬高门槛或 (b) 换破蛋/比分等新维度。 */
+  if (_p7 && _p7.dirRows && _p7.dirRows.length) {
+    const dr = _p7.dirRows.map(o => ({ k: o.k, n2: o.n, hit2: o.hit, rate: o.rate, n: o.mktN, mktRate: o.mktRate }))
+      .filter(o => o.rate != null || o.n > 0);
+    break7mHtml += stTable('跨源验证：模型方向 × 7m 真实赛果（同一批 ' + (_p7.n || '') + ' 场配对 · 独立真值）'
+      + '｜<span class="note">⚠ 方向＝市场fav的镜像，模型与同批市场基准基本持平（无 alpha 可挖）；'
+      + '档次只决定「下不下手」。提命中率靠抬热度门槛——2026-10-04 五修刚把下注级从 mk≥0.70 抬到 <b>0.80</b>：'
+      + '那 146 场 0.70~0.80 的池子实测仅 75.4%、ROI 每场 −13~−20%（负贡献带），抬门后 t1 命中 88.1% → <b>95.2%</b>，ROI/场 −5.6% → +0.9%。'
+      + '2026-10-05 七修再叠一层「<b>盘口逆势</b>剔除门」：同批 827 场里，_pPick≥0.72 但庄家临场把盘口往 fav 反方向调的场'
+      + '命中仅 90.7%(n=43)，剔掉后 t1 升至 96.1%(n=207)（以上为初盘=临盘污染口径下的旧标定）。'
+      + '2026-10-08 二十八修（真实初盘）全量重跑（18 天 6656 场）t1 = <b>298 场 / 89.9%</b>（逐日 73%~100%、均值 91.2%）。⚠ 此前 97.0%(n=200) 建立在初盘=临盘污染口径(2026-10-08 前)，属假象。'
+      + '⚠ 被剔除的 59 场「逆势剔除档」落进 t2，其 91.5% 接近 t1；旧温吞盘(79.0%)在修正引擎下已归零——t2 结构已变，看盘时别混读。</span>', dr);
+  }
+  /* 2026-10-01 二批：真实比分 / 总进球 / 上下半场 / 半全场 大样本基准（7m 独立真值 40715 场 / 80 天）
+     说明：这些是「纯频率真值」，不经过本库任何模型，用来给比分、总进球、半全场三个玩法定基准线。 */
+  const _s7 = RD.score7m;
+  if (_s7 && _s7.nFin) {
+    let sh = '';
+    sh += stTable('真实比分 Top24（7m 独立真值 ' + _s7.nFin + ' 场 · ' + _s7.days + ' 天）'
+      + '｜<span class="note">竞彩比分的概率天花板：盲猜最热比分 ' + _s7.scoreBaseline.top1 + ' 只有 '
+      + _s7.scoreBaseline.top1P + '%，Top6 合计 ' + _s7.scoreBaseline.top6P + '% —— 比分玩法天然低命中，'
+      + '能提到 Top6 量级就已接近理论上限</span>',
+      (_s7.scoreTop || []).slice(0, 24).map(o => ({ k: o.s, rate: o.p, n: o.n })));
+    sh += stTable('总进球分布 vs 泊松（实际 ' + _s7.totGoals.mean + ' 球/场 · 方差/均值 ' + _s7.totGoals.varMean + '）'
+      + '｜<span class="note">方差/均值 1.23 ＞ 1 即过分散布：真实尾部比泊松重（8+ 球实测高于泊松），'
+      + '所以单用泊松会系统性低估大比分；Dixon-Coles 的 τ 修正正是为此</span>',
+      (_s7.totGoals.rows || []).map(o => ({ k: '总进球 ' + o.g + ' 球', rate: o.real, n: o.n })));
+    const _hn = _s7.halfGoals.n || 1;
+    sh += stTable('上下半场进球数分布（' + _s7.halfGoals.n + ' 场有半场真值）'
+      + '｜<span class="note">下半场进球明显多于上半场（下半场均值为上半场约 1.23 倍），'
+      + '两段式建模必须给下半场更高的期望，否则半全场会系统性偏保守</span>',
+      _s7.halfGoals.h1.map((v, i) => ({ k: '上半场 ' + i + ' 球', rate: +(v / _hn * 100).toFixed(1), n: v }))
+        .concat([{ k: '—— 下半场对照 ——', rate: null, n: 0 }])
+        .concat(_s7.halfGoals.h2.map((v, i) => ({ k: '下半场 ' + i + ' 球', rate: +(v / _hn * 100).toFixed(1), n: v }))));
+    sh += stTable('半场比分 Top15（' + _s7.halfGoals.n + ' 场）',
+      (_s7.halfScoreTop || []).map(o => ({ k: o.s, rate: o.p, n: o.n })));
+    sh += stTable('半场局面 → 全场赛果（庄家视角最实用的转化）'
+      + '｜<span class="note">竞彩「半全场」的真实基准：半场已领先的一方全场维持的概率远高于 50%，'
+      + '而半场买平的真实概率只有第三行那个数</span>',
+      (_s7.htftConv || []).map(o => ({ k: o.st + ' · 全场 主胜' + o.w + '% / 平' + o.d + '% / 主负' + o.l + '%', rate: null, n: o.n })));
+    break7mHtml += sh;
+  }
+  /* 2026-10-01 三批：λ/μ 真值校准 —— 引擎期望进球 vs 7m 真实进球（' + n + ' 场带盘口完场） */
+  const _l7 = RD.lmu7m;
+  if (_l7 && _l7.n) {
+    const _f = v => (v >= 0 ? '+' : '') + v;
+    break7mHtml += stTable('λ/μ 真值校准：引擎期望进球 × 7m 真实进球（' + _l7.n + ' 场带盘口完场）'
+      + '｜<span class="note">λ/μ 决定总进球、比分、大小球、破蛋四个输出，它的偏差会原样传导到下游。'
+      + '2026-10-01 标定前引擎总进球系统性低估 0.257 球（根因：λ+μ 取自庄家 OU 线，而开线天然低于真实期望），'
+      + '已在引擎加 LMU_T_BIAS=0.26 补偿</span>',
+      [{ k: '【标定量】主队期望进球', rate: null, n: _l7.n },
+       { k: '引擎 λ 均值 / 真实', rate: null, n: _l7.n },
+       { k: ' 引擎 ' + _l7.lam.pred + '　真实 ' + _l7.lam.real + '　偏差 ' + _f(_l7.lam.bias), rate: null, n: _l7.n },
+       { k: '【标定量】客队期望进球', rate: null, n: _l7.n },
+       { k: ' 引擎 ' + _l7.mu.pred + '　真实 ' + _l7.mu.real + '　偏差 ' + _f(_l7.mu.bias), rate: null, n: _l7.n },
+       { k: '【标定量】总进球（λ+μ）', rate: null, n: _l7.n },
+       { k: ' 引擎 ' + _l7.tot.pred + '　真实 ' + _l7.tot.real + '　偏差 ' + _f(_l7.tot.bias), rate: null, n: _l7.n },
+       { k: ' 精度 MAE=' + _l7.mae + '  RMSE=' + _l7.rmse + '  corr=' + _l7.corr + '（泊松理论 MAE≈' + _l7.theoMAE + '）', rate: null, n: 0 },
+       { k: '【补偿后分箱校准】预测区间 → 真实总进球均值', rate: null, n: 0 },
+       ...(_l7.bins || []).map(b => ({ k: '预测 ' + b.lo + '~' + b.hi + ' 球 · 预测均值 ' + b.pred + ' → 真实均值 ' + b.real, rate: null, n: b.n }))]);
+  }
+  /* ---- 九宫格半全场标定（7m 独立真值）---- */
+  let htftHtml = '';
+  const _h7 = RD.htft7m;
+  if (_h7) {
+    const _LB = { H: '主胜', D: '平', A: '客胜' };
+    let rws = [];
+    let _drawN = 0;
+    for (const k of Object.keys(_h7.empByLead || {}).sort((a, b) => Number(a) - Number(b))) {
+      const o = _h7.empByLead[k]; if (!o) continue;
+      const _k = Number(k);
+      let _lab;
+      if (_k > 0) _lab = '半场领先 +' + _k + ' 球';
+      else if (_k < 0) _lab = '半场落后 ' + (-_k) + ' 球';
+      else { _lab = '半场平局（H=D）'; _drawN = o.n; }
+      rws.push({ k: _lab + '（' + _LB.H + '/' + _LB.D + '/' + _LB.A + '）', rate: null, n: o.n });
+      rws.push({ k: '  主胜 ' + o.H + '%　平 ' + o.D + '%　客胜 ' + o.A + '%', rate: null, n: 0 });
+    }
+    const _drawPct = _h7.nAll ? Math.round(_drawN / _h7.nAll * 100) : null;
+    if (rws.length) htftHtml += stTable('半全场转移真值：P(全场结果 | 半场局面)  [' + _h7.nAll + ' 场 7m 独立真值]'
+      + '｜<span class="note">'
+      + (_drawPct != null ? '半场<b>平局占 ' + _drawPct + '%</b>（多数比赛半场不开锅，平平/平胜/平负才是高赔区），' : '')
+      + '半场领先 1 球主胜仅 72.8%、领先 2 球 92.3%、领先 3 球 98.5% —— 幅度每 +1，守住概率跳一个台阶；即领先 1 球仍有 <b>~27% 守不住</b>（被逼平或翻盘），与破蛋「上半场不破蛋率」诚实口径同理：半场优势不等于稳赢。</span>', rws);
+    const sw = _h7.sweep || [];
+    if (sw.length) htftHtml += stTable('九宫格九选一实测：耦合权重越重越差  [' + (_h7.nPairs || '') + ' 场跨源配对 · 2 折交叉验证]'
+      + '｜<span class="note">logLoss 随权重单调恶化 ⇒ 纯 Poisson 上下半场卷积已足够，经验矩阵只会加噪声（它是无条件的、不控制 λ/μ，对强弱悬殊的场会低估强队）。'
+      + '已在引擎把 HT_COUPLE_W 由 0.90 改为 0。</span>'
+      + '｜<span class="note">Top1 34.6% 高于「永远猜频率最高格」的 28.7%，说明九宫格本身有 edge。</span>',
+      /* ⚠ stRow 只有 6 列（分档/场数/调用/命中/方向/市场），放不下 Top1/Top3/logLoss，
+         故把三个数编进「分档」列文本，不为此改动共享渲染函数。 */
+      sw.map(s => ({ k: s.k + '　→　Top1 ' + s.top1 + '%　Top3 ' + s.top3 + '%　logLoss ' + s.ll
+                     + (s.ll < 1.805 ? '　<span style="color:green">（最优）</span>' : ''),
+                     rate: null, n: s.n || (_h7.nPairs || 0) })));
+  }
+  /* ---- 庄家反向洗盘·水位版（2026-10-02）：核心公司 fav 方（上盘）水位「开盘→临场」拨动 ---- */
+  let waterHtml = '';
+  const _wt = RD.water9m;
+  if (_wt) {
+    waterHtml += `<h3>庄家反向洗盘 · 水位版</h3>`
+      + `<div style="color:var(--mut);font-size:12px;line-height:1.7;margin:6px 0 10px">`
+      + `看「盘口纹丝不动、只把水位大幅拨动」—— 庄家调资金的真正杠杆。`
+      + `口径：核心公司（优先 Bet365 单家，不跨公司拼）的 fav 方＝临场盘口<b>上盘</b>，`
+      + `水位取开盘 → 临场之差 Δw。样本 ${_wt.n} 场，同一口径市场临场 fav 基准 <b>${_wt.base}%</b>。</div>`;
+    const _ly = (_wt.layout || []).filter(r => r.n >= 20);
+    if (_ly.length) waterHtml += stTable('盘口不动（|Δ盘口|≤0.05，最纯粹的洗盘场景）· 逐档水位差 → 跟临场 fav 命中率  [' + _wt.nFlat + ' 场可判，场景基准 ' + _wt.flatBase + '%]',
+      _ly.map(r => {
+        const _tag = (r.z >= 3) ? '　<span style="color:green">（显著）</span>'
+                   : (r.diff > 0 ? '　<span style="color:#8b98a9">正向但未显著</span>' : '　<span style="color:#e11d48">低于基准</span>');
+        return { k: r.k + '　→　命中 ' + r.rate + '%（' + (r.diff >= 0 ? '+' : '') + r.diff + 'pp，n=' + r.n + '）' + _tag, rate: null, n: r.n };
+      }));
+    const _sc = (_wt.scan || []).filter(r => r.sig === 'abs');
+    if (_sc.length) waterHtml += stTable('主口径阈值扫描：只看 |Δw| 大小，不分升降  [' + _wt.n + ' 场]'
+      + '｜<span class="note">升水和降水两侧命中都高 ⇒ 信号不是"反向"，而是「水位被大幅拨动」本身＝庄家在洗。</span>',
+      _sc.map(r => ({ k: '|Δw| ≥ ' + r.thr + '　→　跟临场 fav ' + r.rate + '%（' + (r.diff >= 0 ? '+' : '') + r.diff
+                     + 'pp，n=' + r.n + '，z=' + r.z + ((r.z >= 3) ? '　<span style="color:green">显著</span>' : ''), rate: null, n: r.n })));
+    const _bd = (_wt.bins || []);
+    if (_bd.length) waterHtml += stTable('分箱全貌（含中间层，确认不是只挑两头）  [' + _wt.n + ' 场]',
+      _bd.map(r => ({ k: r.k + '　→　n=' + r.n + '　命中 ' + r.rate + '%　' + (r.z >= 2 ? 'z=' + r.z + ' <span style="color:green">显著</span>' : ''), rate: null, n: r.n })));
+    const _fd = (_wt.fold || []);
+    if (_fd.length) waterHtml += stTable('2 折交叉：阈值不是挑出来的  [' + _wt.n + ' 场]',
+      _fd.map(r => ({ k: r.k + '　' + r.dir + '　A 最优阈值 ' + r.thr + '（A ' + r.aRate + '%）　B 盲验 ' + r.bN + ' 场 ' + r.bRate + '%（' + (r.bDiff >= 0 ? '+' : '') + r.bDiff + 'pp）'
+                     + (r.ok ? '　<span style="color:green">✓ 通过</span>' : '　<span style="color:#e11d48">✗ 未过</span>'), rate: null, n: r.bN })));
+    const _to = (_wt.scan || []).filter(r => r.sig === '时序外B段');
+    if (_to.length) waterHtml += stTable('时序外盲验：前 50% 定阈值 → 后 50% 完全没看过  [' + _wt.n + ' 场]'
+      + '｜<span class="note">这条最关键——防「拿未来数据调出来的阈值」。</span>',
+      _to.map(r => ({ k: 'B 段 |Δw| ≥ ' + r.thr + '　→　命中 ' + r.rate + '%（' + (r.diff >= 0 ? '+' : '') + r.diff + 'pp，n=' + r.n + '，z=' + r.z
+                     + (r.z >= 3 ? '　<span style="color:green">显著</span>' : ''), rate: null, n: r.n })));
+    const _up = (_wt.self || []);
+    if (_up.length) waterHtml += stTable('自检与替代解释排除  [' + _wt.n + ' 场]'
+      + '｜<span class="note">① 归属自检确认 b/c 是"上/下盘位"编码而非主/客；② 控制临场水位水平后增益还在，排除"高关注场代理变量"。</span>',
+      _up.map(r => ({ k: r.k + '　→　' + r.v, rate: null, n: null })));
+    const _cb = (_wt.combine || []);
+    if (_cb.length) waterHtml += stTable('与旧判据（盘口逆势）的交叉：水位版补的是哪一块  [' + _wt.n + ' 场]',
+      _cb.map(r => ({ k: r.mask + '　→　n=' + r.n + '　命中 ' + r.rate + '%（' + (r.diff >= 0 ? '+' : '') + r.diff + 'pp）', rate: null, n: r.n })));
+  }
+
+  /* ---- 庄家反向洗盘：9153 场完场库的「初盘→临场 盘口移动」检验 ★本轮新增正结果 ---- */
+  let washHtml = '';
+  const _w9 = RD.wash9m;
+  if (_w9) {
+    const _sc = (_w9.scan || []).filter(r => /Δhcap/.test(r.k));
+    if (_sc.length) washHtml += stTable('庄家反向洗盘：临场盘口往 fav 反方向调，该更信谁？  [' + _w9.n + ' 场完场 · 市场临场 fav 基准 ' + _w9.base + '%]',
+      _sc.map(r => ({ k: r.k + '　→　跟临场 fav 命中 ' + r.rate + '%　与基准 ' + (r.diff >= 0 ? '+' : '') + r.diff + 'pp　z=' + r.z
+                     + (r.z >= 3 ? '　<span style="color:green">（显著）</span>' : ''), rate: null, n: r.n })));
+    const _fd = _w9.fold || [];
+    if (_fd.length) washHtml += stTable('2 折交叉：阈值不是挑出来的  [' + _w9.n + ' 场完场]'
+      + '｜<span class="note">A 折定阈值 → B 折验证，反向再跑一遍，两折都为正才算数。</span>',
+      _fd.map(r => ({ k: r.k + '　→　A 选阈值 ' + r.thr + ' 命中 ' + r.aRate + '%　B 验 ' + r.bN + ' 场 ' + r.bRate + '%（' + (r.bDiff >= 0 ? '+' : '') + r.bDiff + 'pp）'
+                     + (r.ok ? '　<span style="color:green">✓ 通过</span>' : '　<span style="color:#e11d48">✗ 未过</span>'), rate: null, n: r.bN })));
+    const _ct = _w9.ctrl || [];
+    if (_ct.length) washHtml += stTable('控制临场盘口幅度后，洗盘增益还在吗？  [' + _w9.n + ' 场完场]'
+      + '｜<span class="note">逐层比较「层内全体基准」与「层内洗盘子集」—— 若增益只在深盘层，说明洗盘只是深盘换皮。</span>',
+      _ct.map(r => ({ k: r.k + '　→　层内基准 ' + r.layerBase + '%　洗盘 ' + r.rate + '%　增量 ' + (r.gain >= 0 ? '+' : '') + r.gain + 'pp', rate: null, n: r.n })));
+    const _jn = _w9.join || [];
+    if (_jn.length) washHtml += stTable('市场内部分歧：亚盘 / 水位 / 欧赔 三者谁在逆势  [' + _w9.n + ' 场完场]',
+      _jn.map(r => ({ k: (r.mask === 'hcap' ? '亚盘让球' : r.mask === '水w' ? '主队水位' : r.mask === '欧o' ? '欧赔主胜' : r.mask)
+                     + '　逆势　→　跟临场命中 ' + r.rate + '%（' + (r.diff >= 0 ? '+' : '') + r.diff + 'pp，n=' + r.n + '）',
+                     rate: null, n: r.n })));
+  }
+  /* ---- 比分模型标定：过分散布 / 条件化检验 / T 偏差（7m 独立真值 + 跨源配对）---- */
+  let calibHtml = '';
+  const _od = RD.over9m, _cc = RD.cond9m, _tb = RD.tbias9m;
+  if (_od) {
+    const m0 = (_od.models || []).find(m => /M0/.test(m.k)) || (_od.models || [])[0];
+    calibHtml += stTable('比分分布要不要加「过分散布」？—— 结论：不加  [' + _od.n7m + ' 场 7m 真值 + ' + _od.pairs + ' 场跨源配对]',
+      (_od.models || []).map(m => ({ k: m.k + '　→　logLoss ' + m.ll + '　均概率 ' + m.meanP + '%　Top1 ' + m.top1 + '%　Top3 ' + m.top3 + '%'
+        + (m0 && m.ll <= m0.ll ? '　<span style="color:green">（最优）</span>' : ''), rate: null, n: _od.pairs })));
+  }
+  if (_cc) {
+    const rws = (_cc.cond || []).filter(c => c.n >= 25)
+      .map(c => ({ k: '模型 T ∈ ' + c.bin + '　（真实/泊松/负二项的 g=0,1,2,3,4,5+ 占比：' + c.real.join(' / ') + '  vs  ' + c.pois.join(' / ') + '）',
+                   rate: Math.round(c.varMean * 100), n: c.n }));
+    calibHtml += stTable('条件化检验：箱体内 var/mean 是否还过分散？  [' + _cc.n + ' 场跨源配对，按模型 T 分箱]'
+      + '｜<span class="note">右列 var/mean ≈ 0.9~1.1（≈泊松），而全库汇总的 1.42 全部来自「不同场次 λ 本来就不一样」这种<b>跨场异质性</b>。'
+      + '在 λ 已被盘口给定的条件里，进球就是泊松 —— 所以给单场比分矩阵套负二项会 Double counting，实测 logLoss 反而变差。引擎维持纯泊松。</span>', rws);
+  }
+  if (_tb) {
+    const m0 = (_tb.models || []).find(m => /^A/.test(m.k)) || (_tb.models || [])[0];
+    calibHtml += stTable('总进球偏置要不要随盘口线变化？—— 结论：现行统一 +0.26 已最优  [' + _tb.n + ' 场跨源配对]',
+      (_tb.models || []).map(m => ({ k: m.k + '　→　logLoss ' + m.ll + '　Top1 ' + m.top1 + '%　Top3 ' + m.top3 + '%　总进球偏差 ' + m.bias
+        + (m0 && m.ll <= m0.ll ? '　<span style="color:green">（最优）</span>' : ''), rate: null, n: _tb.n })));
+  }
+  /* ★2026-10-01：改为分帧填充。全量复盘约 4.2MB / 9000+ 行 tr，一次性 innerHTML 会打成
+     几百毫秒的长任务（点「每日复盘」白屏卡死）。先插骨架占一帧，双 rAF 后再写入真正内容。
+     ⚠ 从「档位速查条」进来时 window.__tf 已被预设成 '0'/'1'/'2'，填充完会自动筛到那一档。 */
+  const _rc = $('reviewContent');
+  const _big = overview + perfHtml + mktCalibHtml + dailyStabilitySectionHTML(RD) + fundStudyHtml + tierTableHtml + roiTableHtml + dirTableHtml + verTableHtml + break7mHtml + htftHtml + washHtml + waterHtml + calibHtml + '<h3>按日期归集的每日复盘</h3>' + body;
+  const _total = (RD.days || []).reduce((s, d) => s + ((d.rows || []).length), 0);
+  const _fill = () => {
+    _rc.innerHTML = _big;
+    /* 2026-10-01：档位筛选生效（innerHTML 已落地，再取节点绑定事件，避免绑到旧节点） */
+    try {
+      const applyTierFilter = () => {
+        const on = (window.__tf == null || window.__tf === 'all') ? 'all' : String(window.__tf);
+        document.querySelectorAll('.rbtn[data-tf]').forEach(b => b.classList.toggle('on', b.getAttribute('data-tf') === on));
+        let vis = 0;
+        document.querySelectorAll('.rday').forEach(day => {
+          let dv = 0;
+          day.querySelectorAll('tr.rt').forEach(tr => {
+            const cls = tr.classList.contains('t1') ? '1' : (tr.classList.contains('t2') ? '2' : '0');
+            const show = (on === 'all') || (cls === on);
+            tr.style.display = show ? '' : 'none';
+            if (show) dv++;
+          });
+          day.style.display = dv ? '' : 'none';
+          vis += dv;
+        });
+        const info = document.getElementById('tfInfo');
+        if (info) info.textContent = '当前显示 ' + vis + ' / ' + _total + ' 行';
+        const hd = document.getElementById('tfHead');
+        if (hd) hd.style.display = 'none';
+      };
+      document.querySelectorAll('.rbtn[data-tf]').forEach(b => b.addEventListener('click', () => {
+        window.__tf = b.getAttribute('data-tf'); applyTierFilter();
+      }));
+      applyTierFilter();
+    } catch (e) { console.warn('tier filter fail', e); }
+  };
+  _rc.innerHTML = `<div class="note" id="tfHead" style="padding:18px">复盘明细渲染中…（共 ${_total} 行，按档位筛选只会落屏对应那一档）</div>`;
+  requestAnimationFrame(() => requestAnimationFrame(_fill));
+  $('reviewModal').classList.add('show');
+}
+
+/* ---------- 档位速查条（2026-10-01 加）----------
+   用户反馈"t0/t1/t2 在哪、我怎么看不到"：原因不是没渲染，而是档位明细只在「每日复盘」弹窗里，
+   而那个入口是工具栏上一个不起眼的按钮，绝大多数人从没点过。
+   现在顶部常驻一条速查：直接统计当前视图（不受分页截断影响的全量筛选结果）已分析场次的档位分布，
+   点任意一档 = 打开复盘弹窗并自动筛到该档 —— 三档在哪、各有多少，一眼可见。 */
+function renderTierBar(){
+  const bar = document.getElementById('tierBar'); if (!bar) return;
+  /* 事件委托绑在容器上（容器不随 render 重建，只重建内部 HTML），避免每次 render 重复绑 */
+  if (!bar.__tbBound){
+    bar.addEventListener('click', e => {
+      const b = e.target && e.target.closest ? e.target.closest('[data-tb]') : null;
+      if (!b) return;
+      /* ⚠ 2026-10-02 修正（用户原话："我点t1是直接跳到复盘，不是未开赛和进行中啊"）：
+         这里原先调 openReviewByTier → openReview()，弹的是「每日复盘」那种历史明细大表（几千行完场数据），
+         跟"当下能出手的比赛"完全不是一回事。三档按钮改成进「档位看板」板块，
+         默认范围=未开赛+进行中（live）；想看历史复盘请走工具栏那个「每日复盘」按钮。 */
+      try { openTierBoard(b.getAttribute('data-tb')); } catch (err) { console.warn('openTierBoard err:', err && err.message); }
+    });
+    bar.__tbBound = 1;
+  }
+  let t1 = 0, t2 = 0, t0 = 0, an = 0;
+  let g1 = 0, g2 = 0, g0 = 0, gn = 0;
+  try {
+    const all = (typeof filtered === 'function') ? filtered() : [];
+    /* ⚠ 口径说明：按钮上的数字 = 当前视图（跟卡片所见一致），因为默认「置信≥45」门槛
+       会把 tier0（引擎无结论/观望，典型 conf=5）挡在视图外 —— 这才是"视图里看不到 t0"的正解：
+       t0 不该出现在可出手视图里，要看那一批去复盘弹窗筛 t0（实测 6862 行）。
+       所以末尾额外给出全库已分析口径，跟复盘里的行数对得上，别让用户以为数字骗他。 */
+    for (const m of all){
+      const a = m && m.analysis; if (!a) continue;
+      an++;
+      if (a.tier === 1) t1++; else if (a.tier === 2) t2++; else t0++;
+    }
+    for (const m of (typeof MATCHES !== 'undefined' ? MATCHES : [])){
+      const a = m && m.analysis; if (!a) continue;
+      gn++;
+      if (a.tier === 1) g1++; else if (a.tier === 2) g2++; else g0++;
+    }
+    bar.innerHTML = '<span class="tbL">档位速查<span style="font-weight:400;opacity:.8">（当前视图）</span></span>'
+      + `<button class="tbB tb1" data-tb="1" title="tier1 可出手：与市场临场 fav 同向、所选方向市判概率 _pPick≥0.72 且非盘口逆势（终局门 2026-10-07o 由 0.80 降到 0.72：真实初盘化后 0.80 只收极端场=判 t1 死刑，0.72 收真实强队场仍是高命中池；10-05 叠盘口逆势剔除门）。二十八修（真实初盘）全量重跑实测 <b>298 场 / 89.9%</b>（逐日 73%~100%、均值 91.2%，跨 18 天稳定）。⚠ 旧文案 97.0%(n=200) 建立在「初盘=临盘」污染口径(2026-10-08前)属假象。命中率看本面板上方「三档历史战绩横评」。点开＝未开赛＋进行中的 t1 名单（当下可出手），不是历史复盘">t1 可出手 <b>${t1}</b></button>`
+      + `<button class="tbB tb2" data-tb="2" title="tier2 参考：与 t1 同源只给方向、不给钱。二十八修（真实初盘）实测 <b>63 场 / 90.5%</b>。本层结构在修正引擎下已变：① t1 剔除档＝_pPick≥0.72 但盘口逆势，59 场 91.5%（接近 t1，只是略逊，看好可小注）；② 旧「温吞盘」(_pPick 0.72~0.80 非逆势) 已归零——并入 t1 或落 t0，不再独立成批。ROI 硬检验待补（fund_log 不含赔率快照，硬算即造假）。命中率看本面板上方横评同口径对比。点开＝未开赛＋进行中的 t2 名单">t2 参考 <b>${t2}</b></button>`
+      + `<button class="tbB tb0" data-tb="0" title="tier0 观望·不下注（引擎无结论/与市场 fav 反向/平局观察/浅盘诱上被撤回）。置信普遍很低会被「置信≥45」门槛挡出视图，属正常；点开看未开赛＋进行中的全部 t0 名单">t0 观望 <b>${t0}</b></button>`
+      + `<span class="note">全库已分析 ${gn} 场（t1 ${g1} / t2 ${g2} / t0 ${g0}）${an < all.length ? `｜视图内还有 ${all.length - an} 场未分析` : ''} · 点任一档＝<b>未开赛＋进行中</b>的该档名单（进档位看板）；历史复盘走工具栏「每日复盘」</span>`;
+  } catch (e) { console.warn('renderTierBar err:', e && e.message); }
+}
+/* ⚠ 2026-10-02：这个函数原先是「进复盘历史大表」，与用户预期（看当下未开赛/进行中的档位名单）冲突，
+   现改为「进档位看板」的转入口：只换档位、不动范围（默认 live=未开赛+进行中）。
+   历史复盘另有专门入口（工具栏「每日复盘」= openReview），两者不要混。 */
+function openReviewByTier(t){
+  try { openTierBoard(t); } catch (e) { console.warn('openTierBoard err:', e && e.message); }
+}
+
+/* ---------- 档位看板板块（2026-10-02 加）----------
+   用户第三次问"t0/t1/t2 在哪、我怎么看不到"：速查条只给三个数字、点开是复盘大表（还得自己滚），
+   等于没给入口。这里单独开一个板块，三档分区、一行一场：把「方向 / 置信 / 市场 fav / 初→临变盘 /
+   为什么落这一档」全铺开，点任意一行 = 关板块 + 跳主看板那张卡。
+   t0 单独成区正是关键——它此前被顶部「置信≥45」门槛挡出视图，只能去复盘里捞，现在一眼能翻。 */
+let TB_TAB = '1';            // 当前分区：1 / 2 / 0
+let TB_SCOPE = 'live';       // live=仅「未开赛+进行中」（默认，=当下可出手的盘）／all=含已完场
+/* 赛况判定（档位看板专用口径）：只认显式赛果标记，默认范围只放非 fin —— 这正是用户要的
+   "未开赛和进行中"，而不是复盘。
+   ⚠ 2026-10-02 踩坑：这里原先复用 matchPhase()（它还按"开赛超 3.5h = 完场"做时间推理），
+   结果 t1 从 7 行掉到 0 行、t0 从 97 行掉到 12 行。根因是 UI 里的 MATCHES 是精简装配
+   （loadMatches/buildFromFallback 只带 tid/state/kickoff/day/odds…，没有 start_time/match_time_int），
+   matchPhase 只能拿「北京归属日 + 举办地当地时」拼时间戳，巴甲/澳甲这类能差 11h →
+   一大堆明明没开赛的场被判成"已开赛超过 3.5h = 完场"，直接被默认范围过滤掉（正是用户骂的那句
+   "不是未开赛和进行中"）。所以本板块**不做时间启发式**：没有显式完场标记的一律算未开赛，
+   宁可多列也不能把当下能出手的盘藏掉；要看历史那批切「含已完场」或走「每日复盘」。 */
+function tbPhaseOf(m){
+  const st = String((m && m.state) || '');
+  if (st === '-1') return 'fin';
+  /* ⚠ 这里不能用 home_score != null 判"进行中"：未开赛的场 home_score/away_score 常是数字 0，
+     实测一下就把 1670 场"未开赛"全标成进行中（角标一片黄）。只认 state==='3'（球探显式进行中），
+     再辅以"有真实进球"做兜底。 */
+  if (st === '3' || (m && (m.home_score > 0 || m.away_score > 0))) return 'live';
+  /* ★ 2026-10-02 补「已完赛」兜底：源站偶尔不给 state==='-1'（实测 bake 里 state 只有 0/3/-1 三种，
+     且 199 场完场局里有的 state 没标），但终场比分已经写死了。开赛过了 110 分钟、比分又存在 → 就是已完赛。
+     ⚠ 必须额外卡「有进球（主或客 >0）」：未开赛的场 home_score/away_score 常是数字 0，加上时间兜底会把
+     一大堆陈旧未开赛场全判成"已完赛 0:0"，下半段整片假完场、还一律显示 ✗ 打脸。0:0 既不能证明打完也不能证伪。 */
+  try{
+    if (m && m.home_score != null && m.away_score != null && (m.home_score > 0 || m.away_score > 0)){
+      const ts = tbTs(m);
+      if (ts && Date.now() - ts > 110 * 60000) return 'fin';
+    }
+  } catch(e){}
+  return 'up';
+}
+/* ★ 实时比分（2026-10-02 用户："t0/t1/t2 那里我还要增加实时比分，已完赛的也补上去啊"）
+   未开赛 → 占位「—」；进行中 → 当前比分 + "进行中"；已完赛 → 终场比分 + 赛果（主胜/平/客胜 按主队视角着色），
+   并顺手把模型给的方向和实际赛果对撞：t1/t2 打 ✓ 命中 / ✗ 打脸，t0 观望层不打勾（它本来就不计入命中分母）。 */
+/* ★ 2026-10-26：完场后保留「赛前比分预测」（用户要求：每行赛前都有比分预测，比赛一完就看不到，
+   单独放一行方便赛后核对是否命中）。此前 fin 分支提前 return，预测被真实赛果完全盖掉。
+   showPred=true（精选/优选板）时，完场行在真实赛果下方另起一行显示赛前 Top3 + 实际比分是否命中。 */
+function _predTopOf(m){
+  try{
+    if (m && m.analysis && m.analysis.score && m.analysis.score.top && m.analysis.score.top.length)
+      return m.analysis.score;
+    const p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK && m) ? OFFLINE_PACK[m.tid] : null;
+    const sc = p && p.an && p.an.score;
+    if (sc && sc.top && sc.top.length) return sc;
+  }catch(e){}
+  return null;
+}
+function _predLine(m, h, a){
+  const P = _predTopOf(m); if (!P) return '';
+  const t3 = P.top.slice(0,3);
+  const actKey  = (h != null && a != null && isFinite(+h) && isFinite(+a)) ? ((+h) + '-' + (+a)) : null;
+  const actShow = (actKey != null) ? ((+h) + ':' + (+a)) : null;
+  let mk = '';
+  if (actKey){
+    const top1 = String(t3[0].score) === actKey;
+    const in3 = t3.some(d => String(d.score) === actKey);
+    mk = top1 ? ' <b style="color:var(--grn)">首推✓</b>'
+       : (in3 ? ' <b style="color:var(--yel)">在Top3</b>' : ' <b style="color:var(--red)">未进Top3</b>');
+  }
+  const lm = (P.lambda != null && P.mu != null) ? ('　λ' + (+P.lambda).toFixed(2) + '/μ' + (+P.mu).toFixed(2)) : '';
+  return '<div style="margin-top:3px;padding-top:2px;border-top:1px dashed rgba(255,255,255,.14);font-size:10.5px;line-height:1.55;color:var(--mut);font-weight:400;white-space:normal">赛前比分预测 '
+    + t3.map(d => '<span style="color:var(--red);font-weight:700">' + d.score + '</span> ' + d.p + '%').join(' · ')
+    + (actShow != null ? ('　→ 实际 <b>' + actShow + '</b>' + mk) : '') + lm + '</div>';
+}
+function tbScoreCell(m, ph, dirChar, tier, showPred){
+  const h = m ? m.home_score : null, a = m ? m.away_score : null;
+  const has = (h != null && a != null && isFinite(+h) && isFinite(+a));
+  const fin = (ph === 'fin');
+  /* ★ 2026-10-10 致命顺序 bug 修复：原写法把「ph==='fin' → 完场·比分待源站回补」放在**最前面无条件返回**，
+     导致下面 `if (fin && has)` 那整块（真实终场比分 + 主胜/平/客胜 + ✓命中/✗打脸）**成了永不执行的死代码**
+     —— 表现为：已完赛的场次一律显示"比分待源站回补"，赛果与命中永远看不到。
+     正确顺序：先判"已完赛且有比分"印真赛果；只有"已完赛但源站确实没给比分"才退回待回补提示。 */
+  if (fin && has){
+    /* ★ 2026-10-29 修（用户"实时比分和比赛结果全部0比0"）：0:0 只有在**真完场**时才当赛果印。
+       matchPhase 的时间兜底（开赛已过 3.5h 就判 fin）会把未开赛/进行中误判成 fin，而这类场的
+       home_score/away_score 是数值缺省 0（实测 3352 场非完场里 2949 场是 0/0）→ 会被渲染成
+       假的「0:0 完场·平」+「✗打脸」，等于凭空捏造一场 0-0。此处显式拦掉：非真完场(state≠'-1')
+       的 0:0 一律退回「比分待源站回补」，绝不把缺省值当赛果。 */
+    if (h === 0 && a === 0 && String(m.state) !== '-1'){
+      return `<div class="tbs"><b style="color:var(--mut);font-weight:500">完场</b><s>比分待源站回补</s>${showPred ? _predLine(m, null, null) : ''}</div>`;
+    }
+    const act = actualDir(h, a);                       // engine.js 同名函数：主队视角 W/D/L
+    const col = act === 'W' ? 'var(--red)' : (act === 'L' ? 'var(--grn)' : 'var(--yel)');
+    const lab = act ? WDL_LABEL[act] : '完场';
+    let hit = '';
+    if (dirChar && act){ hit = (dirChar === act) ? '<b style="color:var(--grn)">✓ 命中</b>' : '<b style="color:var(--red)">✗ 打脸</b>'; }
+    else if (tier === 0) hit = '<b style="color:var(--mut);font-weight:400">t0 观望·不计命中</b>';
+    return `<div class="tbs"><b>${h}:${a}</b><s style="color:${col}">${lab}${hit ? ('　' + hit) : ''}</s>${showPred ? _predLine(m, h, a) : ''}</div>`;
+  }
+  /* ⚠ 已完赛但源站没给比分（实测线上有这种行）：绝不能显示成「未开赛」——
+     它确实打完了，只是比分还没回补，写「未开赛」是硬伤，会让人以为这道场没进表。 */
+  if (fin) return `<div class="tbs"><b style="color:var(--mut);font-weight:500">完场</b><s>比分待源站回补</s>${showPred ? _predLine(m, null, null) : ''}</div>`;
+  if (ph === 'live' && has) return `<div class="tbs live"><b>${h}:${a}</b><s>进行中</s></div>`;
+  /* ★ 2026-10-03 补：未开赛/进行中的行，比分区原本只印「—」，等于这 150+ 行完全看不到
+     模型对两支队的比分判断——用户点进 t1 名单最想知道的就是"这场的比分你怎么看"。
+     故此处补上引擎的 Dixon-Coles 比分 Top3（只给分布不给单点，与卡片口径一致）；
+     完场行仍走上面的终场比分+✓/✗，绝不用马后炮的预测盖掉真实赛果。 */
+  const _sc = (m && m.analysis && m.analysis.score && m.analysis.score.top) || null;
+  if (_sc && _sc.length){
+    const _lam = (m.analysis.score && m.analysis.score.lambda != null) ? m.analysis.score.lambda : null;
+    const _mu  = (m.analysis.score && m.analysis.score.mu != null) ? m.analysis.score.mu : null;
+    return `<div class="tbs"><b style="color:var(--yel);font-weight:600">预测</b>`
+         + `<s style="color:var(--red)">${_sc.slice(0,3).map(d => d.score + ' ' + d.p + '%').join(' ')}</s>`
+         + (_lam != null ? `<s style="text-decoration:none;color:var(--mut);font-weight:400">λ${(+_lam).toFixed(2)}/μ${(+_mu).toFixed(2)}</s>` : '') + `</div>`;
+  }
+  return `<div class="tbs"><b style="color:var(--mut);font-weight:500">—</b><s>未开赛</s></div>`;
+}
+/* 该场在本板块的默认（live）口径下要不要出现 */
+function tbInLive(m){ return tbPhaseOf(m) !== 'fin'; }
+/* 🔴 2026-10-03 修：首屏是「边分析边渲染」，刚打开档位看板时后台通常才跑了几场分析，
+   本板块就一直停在"还没有已分析场次"这句死话术上（实测最长卡 100s 才出名单），
+   用户看到的就是"档位表空的 / t1 到底有没有做"。两个动作一起修：
+   ① 空态文案按已分析数动态说真话；② 弹窗开着时起 5s 轮询，分析一有进展就重刷本表。 */
+let _tbPoll = null, _tbPollLast = -1, _tbPollStale = 0;
+const TB_POLL_MS = 5000, TB_POLL_STALE_MAX = 24;   // 5s 一拍；连续 24 拍（约 2 分钟）没进展才停（防漏挂）
+function _tbStartPoll(){
+  stopTbPoll();
+  _tbPollLast = -1; _tbPollStale = 0;
+  _tbPoll = setInterval(function(){
+    try{
+      const m = document.getElementById('tierBoardModal');
+      if (!m || !m.classList.contains('show')) { stopTbPoll(); return; }
+      let n = -1, tot = 0;
+      try { n = (typeof MATCHES !== 'undefined' && MATCHES) ? MATCHES.filter(x => x && x.analysis).length : -1;
+            tot = (typeof MATCHES !== 'undefined' && MATCHES) ? MATCHES.length : 0; } catch(e){}
+      /* ⚠ 退出的判据只能是「分析跑完」，不能用"几拍没进展"：首屏分析起步慢（实测前 15s 常常 0 场），
+         按没进展就停会自己掐掉，之后分析跑出来本板块也不重刷（2026-10-03 就是这么假的）。 */
+      if (n >= tot && tot > 0){ stopTbPoll(); return; }
+      if (n === _tbPollLast){ if (++_tbPollStale >= TB_POLL_STALE_MAX){ stopTbPoll(); return; } }
+      else { _tbPollStale = 0; _tbPollLast = n; }
+      renderTierBoard();
+    }catch(e){ /* 轮询失败不吵用户，下一拍继续 */ }
+  }, TB_POLL_MS);
+}
+function _tbEnsurePoll(){
+  try{
+    const m = document.getElementById('tierBoardModal');
+    if (m && m.classList.contains('show') && !_tbPoll) _tbStartPoll();
+  }catch(e){}
+}
+function stopTbPoll(){ if (_tbPoll){ clearInterval(_tbPoll); _tbPoll = null; } }
+function openTierBoard(tab){
+  /* 带档位进来（速查条 / 工具栏按钮）一律回到默认口径「未开赛＋进行中」，
+     不要沿用上次手动切过的「含已完场」——否则又是历史那一批，等于没修。 */
+  try { if (tab != null){ TB_TAB = String(tab); TB_SCOPE = 'all'; } } catch (e) {}
+  renderTierBoard();
+  const el = document.getElementById('tierBoardModal'); if (el){ el.classList.add('show'); _tbStartPoll(); }
+  /* ★ 自动补分析当前范围未分析场（2026-10-07 修，直接回应"t1 都是进球后才出现"的痛点）：
+     首屏全局分析通常只跑几十~几百场，赛前远场（早盘/临场赔率未开）大量未分析 → t1 名单空壳，
+     用户误以为 t1 全是开赛后才有的。面板一打开就主动把当前范围未分析场补齐，结合 5s 轮询自动重刷，
+     t1 名单立即开始生长（赛前已开盘且早盘强共识的场立刻显形）。已分析场会被跳过，重复调用无害。 */
+  try { setTimeout(function(){ try { tbAnalyzePending(600); } catch(e){} }, 90); } catch(e){}
+}
+function closeTierBoard(){ stopTbPoll(); const el = document.getElementById('tierBoardModal'); if (el) el.classList.remove('show'); }
+/* ★ 视图状态机（2026-10-02）：'board'=档位表 ／ 'lib'=历史真值库明细。
+   点「历史真值库」进 lib；在 lib 里切 t1/t2/t0 或点「✕ 回档位」回 board。
+   ⚠ 之前 m7OpenLib 结尾又调 openTierBoard()，openTierBoard 会 renderTierBoard 把 lib 视图
+   覆盖回档位表（实测：明细显示成"150 行 / 已全部列出"其实是旧 retro 表），所以换成显式状态。 */
+let TB_VIEW = 'board';
+function tierBoardTab(k){ TB_TAB = String(k); TB_VIEW = 'board'; renderTierBoard(); }
+/* 三态：live=只看未开赛＋进行中 ／ fin=只看已完赛（纯比分复盘） ／ all=当下盘在前＋已完赛在后（默认） */
+function tierBoardScope(s){ TB_SCOPE = (s === 'live' || s === 'fin' || s === 'all') ? s : 'all'; TB_VIEW = 'board'; renderTierBoard(); }
+/* 开赛时间戳（与 matchPhase 同一套取数：优先 start_time/match_time_int，兜底 kickTs 的 12 位紧凑串） */
+function tbTs(m){
+  try{
+    const t0 = (m && (m.start_time || m.match_time_int)) || 0;
+    if (t0) return t0 > 1e11 ? t0 : t0 * 1000;
+    const s = kickTs(m);
+    if (s && /^\d{12}$/.test(String(s)))
+      return new Date(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8), +s.slice(8,10), +s.slice(10,12), 0).getTime();
+  } catch(e){}
+  return 0;
+}
+/* 方向列取值：优先 dirCode，再 dir（引擎的中文判断串），都没有就回头取市场 fav ——
+   ⚠ tier1 的判据本就是「与市场临场 fav 同向」，引擎有些场次（深盘兜底/无移动确认）压根不出方向串，
+   此时给市场 fav 才是用户真正要押的那一边，显示 '—' 会让 t1 板块跌成空壳。 */
+function tbDirOf(str){
+  const d = String(str == null ? '' : str).trim();
+  if (!d) return null;
+  if (d === 'W' || d === 'D' || d === 'L') return { c: d, t: WDL_LABEL[d] };
+  let c = '';
+  if (/平/.test(d)) c = 'D';
+  else if (/客胜|客队|客场/.test(d)) c = 'L';
+  else if (/主胜|主队|主场/.test(d)) c = 'W';
+  return c ? { c, t: WDL_LABEL[c] } : { c: '', t: d.length > 9 ? (d.slice(0, 9) + '…') : d };
+}
+/* 落档理由：把引擎的判断串 + 洗盘/平局/浅盘标记合成一句人话（t0 这块最需要解释，否则看着像漏抓） */
+function tbWhy(a){
+  if (!a) return '无分析结论（该场缺盘口快照 / 还没分析过）';
+  const bits = [];
+  const g = a.grade_reason || '';
+  const d = a.dir || '';
+  const main = (g && g.length > 1) ? g : ((d && !/^(W|D|L)$/.test(d) && d.length > 1) ? d : '');
+  if (main) bits.push('<b>' + String(main).replace(/</g,'&lt;') + '</b>');
+  if (a.strongDraw) bits.push('强平局·历史易平（仅防平参考）');
+  const w = a.wash;
+  if (w && w.kind) bits.push((w.kind === 'water' ? '水位洗盘' : (w.kind === 'both' ? '盘口+水位双洗' : '盘口洗盘')) + '（锚临场 fav ' + w.fav + '）');
+  if (!bits.length){
+    /* ⚠ 门槛必须与引擎一致：engine.js 现行为 _pPick≥0.72（所选方向市判概率）且非盘口逆势才给 tier1（2026-10-07o 由 0.80 降到 0.72）；
+       其上叠了「深盘强队恒下注级」——|盘|≥1 时即使 mk<0.80 经资金通道提级也留在可出手层；
+       2026-10-05 七修再加「盘口逆势(lineWash)剔除门」——_pPick≥0.72 但盘口逆势时降 tier2。
+       写死旧值会与引擎自相矛盾。 */
+    if (a.tier === 1) bits.push('_pPick≥0.72 且非盘口逆势 → 唯一可出手层（含资金通道提级的强信号场）');
+    else if (a.tier === 2) bits.push('市场热度偏低 / 仅方向一致 → 只参考');
+    else bits.push('引擎无结论（无有效盘口或市场分歧过大）');
+  }
+  return bits.join('　');
+}
+/* 补分析：面板只列**已分析**场次，而首屏自动分析通常只跑几十场（其余 2900 场等用户勾批量），
+   于是 t1/t0 名单会显得很单薄。这个按钮按 30ms/批把未分析的场次补齐，跑完自动重刷本板块。 */
+function tbAnalyzePending(n){
+  n = n || 50;
+  /* 补分析也要跟当前口径对齐：live 只补「未开赛+进行中」（那才是能出手的一批）、
+     fin 只补已完赛（给比分复盘用）、all 两边都补。别补一堆已经打完的历史盘。 */
+  const sc = TB_SCOPE;
+  const list = (typeof MATCHES !== 'undefined' ? MATCHES : [])
+    .filter(m => m && !m.analysis
+      && !(sc === 'live' && tbPhaseOf(m) === 'fin')
+      && !(sc === 'fin' && tbPhaseOf(m) !== 'fin')).slice(0, n);
+  /* 🔴 2026-10-03 修：这里原来写 `(live ? ... : ...)`，而 tbAnalyzePending 里压根没声明 live
+     → 一旦「当前范围没有未分析场次」就 ReferenceError 炸掉整个函数，not toast、not return，
+     用户点「补分析…」像点了空气（静默无反应）。口径本来就是 sc（TB_SCOPE）。 */
+  if (!list.length){ toast('当前范围（' + (sc === 'live' ? '未开赛+进行中' : '含已完场') + '）没有未分析的场次了'); return; }
+  let i = 0, done = 0, fail = 0;
+  const step = () => {
+    const t0 = Date.now();
+    while (i < list.length && Date.now() - t0 < 30){
+      const m = list[i++];
+      try{
+        const off = offlineAnalyze(m);
+        if (off){ m.analysis = off.a; m.info = off.info; m.offline = true; m._aErr = null; done++; }
+      } catch(e){ fail++; }
+    }
+    if (i < list.length){ setTimeout(step, 0); return; }
+    try{ render(); }catch(e){}
+    try{ renderTierBoard(); }catch(e){}
+    toast('补分析完成：成功 ' + done + ' 场' + (fail ? ('，失败 ' + fail + ' 场') : ''));
+  };
+  setTimeout(step, 0);
+}
+/* ★ 2026-10-02「历史完场真值段」：源站只保留当日盘，打完的场第二天就不在 MATCHES 里，
+   于是「已完赛」那段常年 0~2 行、用户看不到任何终场比分。这里接 9 月那批
+   5042 场完场真值（retro_full.json → retro_pack.js，_gen_retro_pack.cjs 产出）：
+   每场都带终场比分 / 实际赛果 / 当时落档 / 赛前方向 / 比分·半全场·大小球候选，正好做真复盘。
+   ⚠ 配对不做跨源模糊匹配（宁缺勿假），retro_full 本身就是当时模型跑过的那批场，原样带进来。 */
+function tbRetroRows(tier){
+  const R = (typeof window !== 'undefined' && window.RETRO && window.RETRO.rows) ? window.RETRO : null;
+  if (!R) return null;
+  const list = R.rows.filter(x => String(x.t) === String(tier));
+  if (!list.length) return null;
+  list.sort((a, b) => String(b.d).localeCompare(String(a.d)));      // 日期倒序：近的在前
+  let dirTot = 0, dirHit = 0, scTot = 0, scHit = 0, htTot = 0, htHit = 0, ouTot = 0, ouHit = 0;
+  for (const x of list){
+    if (x.bp && x.ac){ dirTot++; if (x.bp === x.ac) dirHit++; }
+    if (x.sts){ scTot++; if (x.sh5) scHit++; }                       // ★ Top5 口径（Top3 那版会在表头冒称 Top5）
+    if (x.hts){ htTot++; if (x.hh) htHit++; }
+    if (x.od){ ouTot++; if (x.oh) ouHit++; }
+  }
+  return { list, n: list.length, dirTot, dirHit, scTot, scHit, htTot, htHit, ouTot, ouHit, range: R.range, gen: R.gen, days: R.days };
+}
+/* 「展开本档历史明细」的折叠开关：默认收起，点按钮才插明细表（避免首屏被历史表占满） */
+var _tbDetailOpen = false;
+var _tbAccOpen = false;   /* 累计对撞「逐场明细」折叠态（默认收起，别让档位面板首屏再多一张长表） */
+/* 三档历史战绩横评：切 tab 一次看一档，横评让你一眼看出哪档真的强、哪档只是样本多 */
+function tbRetroCompare(){
+  const R = (typeof window !== 'undefined' && window.RETRO && window.RETRO.rows) ? window.RETRO : null;
+  if (!R) return '';
+  const g = { '1': { n:0, dT:0, dH:0, sT:0, sH:0, hT:0, hH:0, oT:0, oH:0, cls:'bT1', lab:'t1 可出手' },
+              '2': { n:0, dT:0, dH:0, sT:0, sH:0, hT:0, hH:0, oT:0, oH:0, cls:'bT2', lab:'t2 参考' },
+              '0': { n:0, dT:0, dH:0, sT:0, sH:0, hT:0, hH:0, oT:0, oH:0, cls:'bG',  lab:'t0 观望' } };
+  for (const x of R.rows){
+    const s = g[String(x.t)]; if (!s) continue;
+    s.n++;
+    if (x.bp && x.ac){ s.dT++; if (x.bp === x.ac) s.dH++; }
+    /* ★ 2026-10-03 口径修正：这列印「比分 Top5 内」就必须用 sh5（实际比分落进 scoreTop 全部 5 个），
+       旧版误用 sh（Top3）去顶 Top5 的表头；sh 现在只当行内展示用，不再进横评统计。 */
+    if (x.sts){ s.sT++; if (x.sh5) s.sH++; }
+    /* 半全场这列不是旧版那种「Top3 里含某个全场位」的恒真代理（覆盖 ~99%，实测 88.69% 无鉴别力），
+       改成 htftTop[0] 状态第 2 位 vs 实况全场赛果的对撞（降级口径：只比全场位、不比半场位）。
+       ⚠ 口径要说准：九态里概率最大的三格 HH/AA/DD 合计约占七成（真值 HH 28.6%/AA 19.5%/DH 14.6%/
+       DD 12.2%），所以第一顺位几乎总落在这三态上是**正常形状，不是模型退化**；
+       但这列的命中里确实含「猜全场方向」的底噪——HH→全场主胜仅 52.7%、DD→全场平 41.6%。
+       真正的九态（Top1 32.4% / Top3 66.0% / Top6 91.8%）由球探 3523 场真值单测给出，口径不同，别混着看。 */
+    if (x.hts){ s.hT++; if (x.hh) s.hH++; }
+    if (x.od){ s.oT++; if (x.oh) s.oH++; }
+  }
+  const pc = (a, b) => (b ? (a / b * 100).toFixed(1) + '%' : '—');
+  const on = String(TB_TAB);
+  const rows = ['1','2','0'].map(k => {
+    const s = g[k];
+    const cell = (h, t) => (t ? `${pc(h, t)}<s style="text-decoration:none;font-size:10.5px;font-weight:400;color:var(--mut)">${h}/${t}</s>` : '—');
+    return `<tr class="${String(k)===on?'on':''}">
+      <td><span class="badge ${s.cls}">${s.lab}</span></td>
+      <td><b>${s.n}</b></td>
+      <td>${(k==='0') ? '<b style="color:var(--mut);font-weight:400">观望·不给方向</b>' : cell(s.dH, s.dT)}</td>
+      <td>${cell(s.sH, s.sT)}</td>
+      <td>${cell(s.hH, s.hT)}</td>
+      <td>${cell(s.oH, s.oT)}</td>
+    </tr>`;
+  }).join('');
+  /* ⚠ 口径要说准：这张表的底是「模型回测日志(retro_pack)」，不是 7m 全库真值库（那边 4.07 万场/80 天）。
+     retro_pack 由 retro_full.json 生成（2026-09-14 跑的那批回测），窗口 ${R.range} 就是那批数据的日期范围，
+     别写成"真值库"让人以为跟全库同量级；日期也一并印出来，免得被当成最新战绩。 */
+  return `<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="6">三档历史战绩横评（同口径<b>模型回测</b> ${R.range} / ${R.days} 天；<b>命中＝实际赛果落进模型给的 Top5 候选</b>，不是猜中唯一 Top1；半全场那列是精确对撞不是候选，见下方读法｜底表是模型历史回测日志${R.gen ? '（这批回测生成于 ' + R.gen + '）' : ''}，早于 7m 全库真值库 ${(function(){try{return (window.M7&&window.M7.bench&&window.M7.bench.n)||'—';}catch(e){return '—';}})()} 场 / 最近 ${(function(){try{return (window.M7&&window.M7.bench&&window.M7.bench.days)||'—';}catch(e){return '—';}})()} 天，两者不是一个口径，别拿它当最新战绩）</td></tr></tbody></table>`
+    + `<table class="htab tbsheet"><thead><tr><th>档位</th><th>场数</th><th>方向（单选对撞）</th><th title="实际比分落进模型给的 5 个候选之一（候选覆盖率，天然偏高）">比分 Top5 内</th><th title="模型第一顺位半全场状态（状态第 2 位＝全场位）与实况全场赛果对撞。⚠这是「降级口径」不是真九态：只比全场位、不比半场位，所以天然偏松（真九态见球探 3523 场单测 Top1 32.4%／Top3 66.0%／Top6 91.8%）。九态里概率最大的三格 HH/AA/DD 合计占约 70%，因此第一顺位几乎总落在这三态上——这是九态的正常形状，不是模型退化">半全场 Top1 对撞<sup style="color:var(--mut);font-weight:400">降级口径</sup></th><th>大小球</th></tr></thead><tbody>${rows}</tbody></table>`
+    + `<p class="tbNote">读法：<b>方向</b>是单选对撞、最接近"押这一边赢没赢"；<b>比分列</b>看的是候选覆盖率（模型给 5 个候选，实际赛果落在里面就算中，天然偏高，别当"猜中比分"）；<b>半全场列</b>只比全场位、不比半场位，是降级口径，比比分列苛刻一些。<b>三列都要跟"闭眼猜众数"比才有意义</b>：同一批球探真值上，方向 53.70% vs 基线 44.46%（+9.25pp，唯一的真 alpha）、比分 Top5 43.67%、半场方向 44.92% vs 39.34%、九态 Top1 32.92%，而<b>总进球第一档 21.44% vs 猜"2 球"的 21.44%，差 0.00pp——这项完全没有 alpha，只配当分布看</b>。三档横向比方向即可：<b>跑赢同批市场基准的那一档才值得押钱</b>，其余只看不押。</p>` + tbFinBlock();
+}
+/* 当期真值对撞：离线快照自带完场比分 × 当前引擎结论（产物 _eval/fin_eval.json → m7_pack.fin，每日链自动刷新）。
+   与上面横评的区别：横评底表是 9 月那批回测日志（同口径、量大），这一段是**今天这批盘打完的真赛果**——
+   样本只有几十场，n 小，只够体检不够当成绩，所以每列都把 n 印出来。 */
+function tbFinBlock(){
+  /* 主看「累计对撞」(M7.acc)：多日快照按 tid 去重 × 全库真值，分母才够厚到能跟基线比。
+     「当日对撞」(M7.fin) 作为副表挂在下面——单日几十场，只当趋势观测不当成绩。
+     两者判定同源（都走 _eval/_xjudge.cjs），页面上绝不各算一套，否则迟早出静默假数。 */
+  let A=null, D=null;
+  try{ const M=window.M7||{}; A=M.acc||null; D=M.fin||null; }catch(e){ A=null; D=null; }
+  if(!A && !D) return '';
+  const f1=v=>(v===null||v===undefined||isNaN(v))?'—':(Number(v).toFixed(1)+'%');
+  const sig=(pct,n,base)=>{                       // 命中 / 与基线差(pp) / 分母 n / 基线 四格
+    if(!n) return '<td style="color:var(--mut)">—</td><td style="color:var(--mut)">—</td><td style="color:var(--mut)">—</td><td>'+f1(base)+'</td>';
+    const d=(pct==null)?null:+((Number(pct)-Number(base))).toFixed(1);
+    const col=(d===null)?'var(--mut)':(d>=2?'var(--red)':(d<=-2?'var(--grn)':'var(--mut)'));
+    const dTxt=(d===null)?'':`<s style="text-decoration:none;display:block;font-size:10.5px;font-weight:400;color:${col};opacity:.9">${d>0?'+':''}${d}pp vs 基线</s>`;
+    return `<td style="color:${col}"><b>${f1(pct)}</b>${dTxt}</td><td><b>${n}</b></td><td>${f1(base)}</td>`;
+  };
+  const rowOne=(name,pct,n,base,why)=>'<tr><td>'+name+'</td>'+sig(pct,n,base)+'<td style="color:var(--mut)">'+why+'</td></tr>';
+  const Aall=(A&&A.all)||{}, Abase=(A&&A.base)||{}, Awin=(A&&A.win)||{}, Aby=(A&&A.byTier)||{};
+  const days=(Awin&&Awin.归档份数)||0, finN=(Awin&&Awin.完场)||0, withAn=(Awin&&Awin.有引擎结论)||0;
+  const covers=((Awin&&Awin.覆盖日期)||[]);
+  const spanTxt=covers.length?('归档 '+days+' 份／'+covers.length+' 个时点'):'';
+  const small=(n)=>(n<30?'<b style="color:var(--yel)">n 偏小，只当体检</b>　':'');
+  /* 逐项判读里把 n 印出来，样本薄的时候不会有人拿它当成绩看 */
+  const why={
+    方向:'只统计引擎<b>真给了 W/D/L</b> 的场次（t0 观望不产方向，绝不塞进分母）；命中＝押那一边真的赢/平/输',
+    比分Top1:'第一顺位猜中唯一比分的概率，天然就低',
+    比分Top3:'三个候选里包住实际比分（候选覆盖率，天然偏高）',
+    比分Top5:'五个候选里包住实际比分（候选覆盖率，天然偏高；低于基线＝没跑赢）',
+    半全场Top1:'引擎九宫格第一顺位 vs 真值（半场位、全场位都按 主/平/客 各判一次）；分母为 0 是 7m 真值库没覆盖这批低级别赛事，不是算错了',
+    大小球:'引擎盘口信号（大球/小球）vs 实际总进球过没过线；走水不计命中'
+  };
+  let h='<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="6">累计真值对撞（'+spanTxt+'：多日离线快照按 <b>tid 去重取最新一份</b> × 全库真值；当前 '+finN+' 场完场、'+withAn+' 场带引擎结论。不是上面那张横评的底表——横评读的是 9 月回测日志，这张是<b>当下这批盘的真赛果</b>。每天主链会把当天快照归档一次，跑几天分母就厚起来；<b>n&lt;30 只当体检，别当成绩</b>）</td></tr></tbody></table>';
+  h+='<table class="htab tbsheet"><thead><tr><th>指标</th><th>命中</th><th>分母 n</th><th>基线</th><th>基线对照</th><th>口径</th></tr></thead><tbody>'
+    + rowOne('方向（单选对撞）',Aall.方向&&Aall.方向.命中,Aall.方向&&Aall.方向.分母,44.1,why.方向)
+    + rowOne('比分 Top1',Aall.比分Top1&&Aall.比分Top1.命中,Aall.比分Top1&&Aall.比分Top1.分母,(Abase&&Abase.比分Top1)||10,why.比分Top1)
+    + rowOne('比分 Top3',Aall.比分Top3&&Aall.比分Top3.命中,Aall.比分Top3&&Aall.比分Top3.分母,(Abase&&Abase.比分Top3)||24,why.比分Top3)
+    + rowOne('比分 Top5 内',Aall.比分Top5&&Aall.比分Top5.命中,Aall.比分Top5&&Aall.比分Top5.分母,(Abase&&Abase.比分Top5)||39.6,why.比分Top5)
+    + rowOne('半全场 Top1',Aall.半全场Top1&&Aall.半全场Top1.命中,Aall.半全场Top1&&Aall.半全场Top1.分母,(Abase&&Abase.半全场Top1)||27.6,why.半全场Top1)
+    + rowOne('大小球（过线）',Aall.大小球&&Aall.大小球.命中,Aall.大小球&&Aall.大小球.分母,(Abase&&Abase.大小球_over)||50,why.大小球)
+    + '</tbody></table>';
+  /* 三档横向：跑赢同批基线的那一档才值得押钱，其余只看不押 */
+  const t1=(Aby.t1||{}), t2=(Aby.t2||{}), t0=(Aby.t0||{});
+  const tr=(lab,o)=>'<tr><td>'+lab+'</td><td>'+f1(o.方向)+'</td><td><b>'+(o.方向分母||0)+'</b></td><td>'+f1(o.比分Top5)+'</td><td><b>'+(o.比分分母||0)+'</b></td><td>'+f1(o.大小球)+'</td><td><b>'+(o.大小球分母||0)+'</b></td></tr>';
+  h+='<table class="htab tbsheet tbsep"><thead><tr><th>按档（累计）</th><th>方向</th><th>n</th><th>比分 Top5</th><th>n</th><th>大小球</th><th>n</th></tr></thead><tbody>'
+    + tr('t1 下注级',t1)+tr('t2 参考级',t2)+tr('t0 观望级',t0)+'</tbody></table>';
+  /* 当日副表：几十场，只做趋势观测 */
+  if(D){
+    const dD=(D.当日||D)||{}, dW=(D.窗口)||{};
+    h+='<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="6">当日对撞（今天这批盘：<b>'+((dW.完场)||dW.finN||D.完场场次||0)+' 场完场</b>，其中 <b>'+((dW.有引擎结论)||D.有引擎结论||0)+' 场有结论</b>；'+small((dW.完场)||D.完场场次||0)+'每天完场变多会自己补上）</td></tr></tbody></table>'
+      +'<table class="htab tbsheet"><thead><tr><th>指标</th><th>命中</th><th>分母 n</th><th>基线</th><th>基线对照</th><th>口径</th></tr></thead><tbody>'
+      + rowOne('方向（单选对撞）',dD.方向&&dD.方向.命中,dD.方向&&dD.方向.分母,44.1,why.方向)
+      + rowOne('比分 Top5 内',dD.比分Top5&&dD.比分Top5.命中,dD.比分Top5&&dD.比分Top5.分母,(Abase&&Abase.比分Top5)||39.6,why.比分Top5)
+      + rowOne('大小球（过线）',dD.大小球&&dD.大小球.命中,dD.大小球&&dD.大小球.分母,(Abase&&Abase.大小球_over)||50,why.大小球)
+      + '</tbody></table>';
+  }
+  /* 逐场明细：总分能骗人，逐场翻不出来。每项都是**独立**的一票（方向=单选对撞，其余=候选覆盖），
+     null（引擎没给结论 / 大小球走水）印「—」而不是「✗」——它压根没进分母。 */
+  const AR=((A&&A.rows)||[]), nR=(A&&A.nRows)||0;
+  if(AR.length){
+    const mk=v=>(v===null||v===undefined)?'<b style="color:var(--mut);font-weight:400">—</b>':(v?'<b style="color:var(--grn)">✓</b>':'<b style="color:var(--red)">✗</b>');
+    const cl=v=>v===true?'var(--grn)':(v===false?'var(--red)':'var(--mut)');
+    const dc=v=>(v==='W')?'var(--red)':(v==='L')?'var(--grn)':(v==='D')?'var(--yel)':'var(--mut)';
+    const trs=AR.map(x=>{
+      const d=x.方向, act=x.实际||'—';
+      /* 判词：引擎终局给方向时的依据，不给方向时它直接回答「为什么没方向」。
+         t1/t2 却没有方向的日子里，这一列是唯一能看出档位与方向为何分歧的地方。 */
+      const wt=(x.判词||'')?`<s style="text-decoration:none;font-size:10.5px;font-weight:400;color:var(--mut)">${String(x.判词).replace(/&#\d+;?/g,'')}</s>`:'';
+      return `<tr>
+        <td style="white-space:nowrap;color:var(--mut)">${String(x.日||'').slice(5)}</td>
+        <td class="vs"><b>${String(x.对||'').replace(/&#\d+;?/g,'')}</b></td>
+        <td class="tbsc"><div class="tbs"><b>${x.比分||'—'}</b><s style="color:var(--mut)">${x.半场==null?'半场缺真值':(x.半场||'—')}</s></div></td>
+        <td>${tierBadgeCardRaw(Number(x.tier))}</td>
+        <td style="color:${dc(d)}" title="引擎给的赛前方向 vs 实际赛果；t0 不给方向，印「—」且不计分母">${d||'—'}<s style="text-decoration:none;font-size:10.5px;font-weight:400;color:var(--mut)">→${act}</s> ${mk(x.方向中)}</td>
+        <td style="white-space:nowrap" title="引擎给的 5 个比分候选，实际赛果落进 Top5 就算中（候选覆盖率，天然偏高）">${x.比分候选||'—'} ${mk(x.比分中)}</td>
+        <td style="white-space:nowrap" title="引擎大小球信号 / 实际总进球过没过线；走水（正好等于盘口线）不计命中">${x.大小球||'—'} ${mk(x.大小球中)}</td>
+        <td style="white-space:nowrap" title="引擎九宫格第一顺位（半场位+全场位）；真值库没半场比分时这项为「—」，不计分母">${x.半全场||'—'} ${mk(x.半全场中)}</td>
+        <td style="white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="引擎终局判词原文：有方向时是依据，观望时就是「为什么没方向」">${wt}</td>
+      </tr>`;
+    }).join('');
+    h+='<p class="tbNote" style="margin:6px 0">'
+      +( _tbAccOpen
+        ? `<button class="htab-btn" onclick="tbToggleAcc()">▲ 收起逐场对撞明细（${nR} 场）</button>`
+        : `<button class="htab-btn" onclick="tbToggleAcc()">▼ 展开逐场对撞明细（${nR} 场：方向／比分候选／大小球／半全场 每项逐场标命中）</button>`)
+      +'</p>';
+    if(_tbAccOpen){
+      h+='<table class="htab tbsheet"><thead><tr><th>日期</th><th>对阵</th><th>终场/半场</th><th>档位</th><th>方向（引擎→实际）</th><th>比分候选 Top5</th><th>大小球 信号/实际</th><th>半全场 Top1</th><th>引擎终局判词</th></tr></thead><tbody>'+trs+'</tbody></table>'
+        +'<p class="tbNote">逐场明细里 <b>✓/✗ 各算各的</b>：方向列是真单选对撞，其余三列是候选覆盖率；<b>「—」表示该场这一项没进分母</b>（引擎没给结论／没给候选／7m 没半场真值／大小球走水），不是打脸。翻几场就能看出是哪一档、哪类球在掉链子。</p>';
+    }
+  }
+  return h + tbHistBlock();
+}
+/* ★ 历史大样本（_eval/_hretro.cjs：gqj2 历史完场列表 × 官方赔率历史 × 7m 半场真值，跑的是**当前**引擎）。
+   跟上面「累计对撞」的区别：那张读的是当下这批盘的多日快照，这张是**回过头重放几百场历史球**。
+   最要紧的是方向这一项——历史池的 oddshistorypc 只留各公司最后一次调价，change_time 全在开赛之后，
+   「临场盘」其实是赛后盘，绝对值不可信；能比的是「引擎 vs 同批市场最低赔率」，两边吃同一批数、污染抵消。
+   所以下面方向列给的是**可比那批**，全样本那 70% 没有资格进表。 */
+function tbHistBlock(){
+  let H=null; try{ H=(window.M7||{}).hist||null; }catch(e){ H=null; }
+  if(!H) return '';
+  const A=H.all||{}, B=H.base||{}, K=H.口径||{}, S=H.汇总||{};
+  const f1=v=>(v===null||v===undefined||isNaN(v))?'—':(Number(v).toFixed(1)+'%');
+  const pct=o=>(o&&o.tot)?+(o.hit/o.tot*100).toFixed(1):null;
+  const rate=o=>(o&&o.tot)?+(o.hit/o.tot*100).toFixed(2):0;
+  /* ⚠ 空数据分支必须与正常分支**格数相同**（3 格＋表头那 1 格名），
+     多吐一个 <td> 就会把整行挤歪（旧版错在这，界面上看着像"基准 0.0%"） */
+  const sig=(mine,base,n)=>{
+    if(!mine||!n) return '<td style="color:var(--mut)">—</td><td style="color:var(--mut)">—</td><td style="color:var(--mut)">—</td>';
+    const d=+(mine-base).toFixed(1);
+    const col=(d>=2?'var(--red)':(d<=-2?'var(--grn)':'var(--mut)'));
+    return `<td style="color:${col}"><b>${f1(mine)}</b><s style="text-decoration:none;display:block;font-size:10.5px;font-weight:400;color:var(--mut)">${d>0?'+':''}${d}pp vs 市场</s></td><td><b>${n}</b></td><td>${f1(base)}</td>`;
+  };
+  /* ⚠ rowOne 的第一个参数必须是**计数器对象** {hit,tot}（内部 pct() 要取 .tot）。
+     传一个算好的百分数进去 → 取 .tot 恒 undefined → 这行被判成"没数据"整排渲染成「—」。
+     只有「方向（可比那批）」那行用内置计数器，其余五行的基线是手给的数、n 取自各自的计数器。 */
+  const rowOne=(nm,cnt,base,n)=>'<tr><td>'+nm+'</td>'+sig(pct(cnt),base,n)+'</tr>';
+  /* 方向那行的两个计数器做**双源兜底**：优先用 基准.可比那批方向，包里基准段没带过来时
+     退回 全样本.方向_可比（同一份数的另一处存放）。只认一处 → 在某些加载时序下整排渲染成「—」。 */
+  /* 方向那一行：构建期已算好的标量优先（包里 方向可比 / 方向基准 / 方向可比n），
+     取不到才退回对象里翻；两层都空就印「—」，绝不印 0.0%（那看着像"市场是 0"）。 */
+  const dirCnt = B.可比那批方向 || A.方向_可比 || null;
+  const dirBaseCnt = B.同批 || (dirCnt ? { hit: dirCnt.hit, tot: dirCnt.tot, rate: dirCnt.rate } : null);
+  const hasNum = (typeof H.方向可比 === 'number') && (typeof H.方向基准 === 'number');
+  const dirMine = hasNum ? H.方向可比 : (dirCnt ? pct(dirCnt) : null);
+  const dirBase = hasNum ? H.方向基准 : (dirBaseCnt ? rate(dirBaseCnt) : 0);
+  const dirN    = hasNum ? H.方向可比n : (dirCnt ? dirCnt.tot : 0);
+  /* 逐项口径：把「能不能跟市场比」写在每一行的说明里，别让人把绝对值当成绩 */
+  const why=(t)=>({
+    方向可比:'引擎给的 W/D/L <b>vs 同一场同批赔率里最低赔率那一边</b>——唯一能判有没有 alpha 的口径；'
+      +'跑平就是没有 alpha（与市场同水平），跑赢才算',
+    比分Top1:'第一顺位猜中唯一比分的概率，天然低',
+    比分Top3:'三个候选包住实际比分（覆盖率，天然偏高）',
+    比分Top5:'五个候选包住实际比分（覆盖率，天然偏高；低于基线＝没跑赢）',
+    半场方向:'引擎半场方向 vs 实际半场主/平/客（7m 半场真值只覆盖这批球，n 自然小）',
+    大小球:'引擎盘口过线信号 vs 实际总进球过没过线；走水不计命中'
+  })[t];
+  let h='<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="6">历史大样本（近 '+((H.天数)||'?')+' 天 · '+(H.引擎||'?')+' 引擎版本；'
+    +'gqj2 历史完场 '+((S.完场场次数)||0)+' 场、其中跑通引擎 '+((S.跑引擎成功)||0)+' 场、有半场真值 '+((S.有半场真值)||0)+' 场）'
+    +'<b>　这不是上面那张横评的底表，是拿历史赔率把引擎重放一遍</b>：盘口是源站 historical 接口，真值来自 7m 半场库。'
+    +'⚠ 源站只留各公司<b>最后一次调价</b>（change_time 全在开赛之后），所以「临场盘」实际是赛后盘、绝对值不能当成绩看；'
+    +'下面<b>只有方向那一行给了市场对照</b>，其余几项照常看覆盖率／过线率。生成于 '+String(H.gen||'').slice(0,5)
+    +'　<span style="color:var(--yel)">市场基准＝同一场、同一批赔率里临场最低赔率那一边</span></td></tr></tbody></table>';
+  h+='<table class="htab tbsheet"><thead><tr><th>指标</th><th>引擎命中</th><th>分母 n</th><th>市场基准</th><th>口径</th></tr></thead><tbody>'
+    + (dirMine!=null && dirN
+        ? '<tr><td>方向（可比那批·vs 市场）</td>'+sig(dirMine,dirBase,dirN)+'</tr>'
+        : '<tr><td>方向（可比那批·vs 市场）</td><td style="color:var(--mut)">—</td><td style="color:var(--mut)">—</td><td style="color:var(--mut)">—</td></tr>')
+    + rowOne('比分 Top1',A.比分1,10,A.比分1&&A.比分1.tot)
+    + rowOne('比分 Top3',A.比分3,24,A.比分3&&A.比分3.tot)
+    + rowOne('比分 Top5 内',A.比分5,39.6,A.比分5&&A.比分5.tot)
+    + rowOne('半场方向',A.半场1,39.3,A.半场1&&A.半场1.tot)
+    + rowOne('大小球（过线）',A.大小球,50,A.大小球&&A.大小球.tot)
+    + '</tbody></table>';
+  /* 口径自述：回测器原样带过来的，别让人误读成「引擎很准」 */
+  if(K.方向说明){
+    h+='<table class="htab tbsheet"><tbody><tr class="tbseg"><td style="text-align:left">'
+      +'<b>这张表怎么读（重要）</b>　'
+      + String(K.方向说明).replace(/[（(]/g,'<span style="opacity:.85">（').replace(/[)）]/g,'）</span>').replace(/[；;]/g,'；<br>')
+      + '</td></tr>'
+      +(K.深盘说明?'<tr class="tbseg"><td style="text-align:left"><b>为什么还有一批 70% 的数字不进这张表</b>　'+String(K.深盘说明)+'</td></tr>':'')
+      +(K.不受污染项?'<tr class="tbseg"><td style="text-align:left"><b>下面按档那几项跟方向无关</b>　'+String(K.不受污染项)+'</td></tr>':'')
+      +'</tbody></table>';
+  }
+  const by=H.byTier||{};
+  const tr=(lab,o)=>{
+    if(!o) return '';
+    const p=k=>(o[k]&&o[k].tot)?+(o[k].hit/o[k].tot*100).toFixed(1):null;
+    const n=k=>(o[k]&&o[k].tot)?o[k].tot:0;
+    return '<tr><td>'+lab+'</td>'
+      +'<td>'+f1(p('方向'))+'<s style="text-decoration:none;font-size:10.5px;color:var(--mut)"> '+n('方向')+'</s></td>'
+      +'<td>'+f1(p('比分5'))+'<s style="text-decoration:none;font-size:10.5px;color:var(--mut)"> '+n('比分5')+'</s></td>'
+      +'<td>'+f1(p('半场1'))+'<s style="text-decoration:none;font-size:10.5px;color:var(--mut)"> '+n('半场1')+'</s></td>'
+      +'<td>'+f1(p('大小球'))+'<s style="text-decoration:none;font-size:10.5px;color:var(--mut)"> '+n('大小球')+'</s></td></tr>';
+  };
+  h+='<table class="htab tbsheet"><thead><tr><th>历史样本按档</th><th>方向</th><th>比分 Top5</th><th>半场方向</th><th>大小球</th></tr></thead><tbody>'
+    + tr('t1 下注级',by.t1)+tr('t2 参考级',by.t2)+tr('t0 观望级',by.t0)+'</tbody></table>';
+  return h;
+}
+function tbToggleAcc(){ _tbAccOpen = !_tbAccOpen; TB_VIEW='board'; renderTierBoard(); }
+function tbRetroBlock(tier, lim){
+  const R = tbRetroRows(tier);
+  /* ★ 2026-10-02 按需加载：真值包点开档位面板才开始拉，到位前给一条占位说明——
+     绝不能印「无历史」让人误以为没数据；下面的当期名单／实时比分不受影响照常渲染。 */
+  if (!R){
+    const stR = _DEFER_ST['retro_pack'] || '', stM = _DEFER_ST['m7_pack'] || '';
+    const dead = (stR === 'done' || stR === 'error') && (stM === 'done' || stM === 'error');
+    return `<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="9">${
+      dead
+        ? '历史真值包没能取到（retro_pack / m7_pack 均未加载），本段暂缺；下方「未开赛＋进行中」名单、实时比分与档位判定照常可用。'
+        : '历史真值包载入中…（点开档位面板才开始拉 m7 全库基准 + 完场真值，约 1.7MB，载入后自动补上横评／统计／基准卡）'
+      }</td></tr></tbody></table>`;
+  }
+  lim = lim || 150;
+  const pct = (a, b) => (b ? (a / b * 100).toFixed(1) + '%' : '—');
+  const LIM = Math.min(lim, R.n);
+  const rows = R.list.slice(0, LIM).map(x => {
+    const ac = x.ac || '';
+    const col = ac === 'W' ? 'var(--red)' : (ac === 'L' ? 'var(--grn)' : (ac === 'D' ? 'var(--yel)' : 'var(--mut)'));
+    const lab = WDL_LABEL[ac] || '完场';
+    const bp = x.bp || '';
+    const bCol = bp === 'W' ? 'var(--red)' : (bp === 'L' ? 'var(--grn)' : (bp === 'D' ? 'var(--yel)' : 'var(--mut)'));
+    const okTxt = v => (v ? '<b style="color:var(--grn)">✓</b>' : (v === 1 ? '<b style="color:var(--red)">✗</b>' : '<b style="color:var(--mut)">—</b>'));
+    return `<tr class="tbrr" title="${String(x.h)} vs ${String(x.w)}｜${String(x.d).slice(4,6)}/${String(x.d).slice(6,8)} ${x.hs}:${x.as} ${lab}｜档位 t${x.t}">
+      <td class="dt">${String(x.d).slice(4,6)}-${String(x.d).slice(6,8)}<s style="text-decoration:none;display:block;color:var(--gry)">已完场</s></td>
+      <td class="vs"><b>${x.h||''}</b> <span style="color:var(--mut)">vs</span> <b>${x.w||''}</b><s>${x.lg||''}</s></td>
+      <td class="tbsc"><div class="tbs"><b>${x.hs}:${x.as}</b><s style="color:${col}">${lab}</s></div></td>
+      <td>${tierBadgeCardRaw(Number(x.t))}</td>
+      <td class="dirbig" style="color:${bCol}">${bp||'—'}<s style="text-decoration:none;font-size:10.5px;font-weight:400;color:${bCol};opacity:.85">${WDL_LABEL[bp]||'无方向'}</s></td>
+      <td>${(bp && ac) ? (bp === ac ? '<b style="color:var(--grn)">✓ 命中</b>' : '<b style="color:var(--red)">✗ 打脸</b>') : '<b style="color:var(--mut);font-weight:400">观望·不计命中</b>'}</td>
+      <td style="white-space:nowrap" title="命中＝实际比分落进模型给的 Top5 候选（Top1 另计）">${x.sts ? x.sts.replace(/\s+/g,' ') : '—'} ${okTxt(x.sh5)}</td>
+      <td style="white-space:nowrap" title="半场真值 9 月这批回测日志里没有，这里只算「模型给的第一顺位半全场状态 → 其全场位 与实况全场赛果是否一致」">${x.hts ? x.hts.replace(/\s+/g,' ') : '—'} ${okTxt(x.hh)}</td>
+      <td style="white-space:nowrap">${x.od||'—'} ${okTxt(x.oh)}</td>
+    </tr>`;
+  }).join('');
+  const head = `<table class="htab tbsheet"><thead><tr>
+      <th>日期</th><th>对阵</th><th>终场比分</th><th>档位</th><th>赛前方向</th><th>方向对撞</th><th title="命中＝实际比分落进模型给的 Top5 候选">比分候选 Top5 内</th><th title="模型第一顺位半全场状态（第 2 位=全场位）与实况全场赛果对撞。⚠降级口径：只比全场位、不比半场位；九态里 HH/AA/DD 三格合计约占七成，故第一顺位几乎总落在这三态上（正常分布，非模型退化）。真九态基准见球探 3523 场单测 Top1 32.4%／Top3 66.0%">半全场 Top1 全场位<sup style="color:var(--mut);font-weight:400">降级口径</sup></th><th>大小球</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  /* ★ 每项都把**命中数/有效样本数**写出来：t0 那档大小球只有个位数有效样本，
+     光甩一个 6.0% 会让人误以为模型在大小球上全崩，其实分母本来就很小。 */
+  const isT0 = (String(tier) === '0');
+  const dirTxt = isT0 ? '<b style="color:var(--mut)">t0 观望层不给方向，本段不参与方向统计</b>'
+                      : `赛前<b>方向</b>命中 <b>${pct(R.dirHit, R.dirTot)}</b>（${R.dirHit}/${R.dirTot}）`;
+  const stat = `<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="9">
+    历史完场真值 · ${R.range}（${R.days} 天 / ${R.n} 场，按日期倒序）　│
+    ${dirTxt}　│
+    <b>比分</b>落进模型 Top5 候选 <b>${pct(R.scHit, R.scTot)}</b>（${R.scHit}/${R.scTot}）　│
+    <b>半全场</b>第一顺位对撞 <b>${pct(R.htHit, R.htTot)}</b>（${R.htHit}/${R.htTot}）　│
+    <b>大小球</b>命中 <b>${pct(R.ouHit, R.ouTot)}</b>（${R.ouHit}/${R.ouTot}）　│
+    口径：<b>命中不是猜中唯一 Top1</b>，而是实际赛果落进模型给的 Top5 候选（比分/半全场两列）；只有"方向"列是单选对撞，且 t0 观望层不给方向、不计分母。真 Top1 命中率见下方「每日复盘」。
+    </td></tr></tbody></table>`;
+  const more = R.n > LIM ? `<p class="tbNote">本档历史共 <b>${R.n}</b> 场，先列<b>日期最新</b>的 ${LIM} 场（真值库 ${R.gen} 生成）。</p>` : '';
+  const tip = `<p class="tbNote" style="color:var(--yel)">⚠ 这段是<b>历史真值</b>（${R.range}），不是当前实时盘：源站只保留当日盘，打完的场第二天就不在上方「未开赛＋进行中」列表里了，所以这里用当时跑过的完场真值补位。<b>方向命中率是与市场基准作对照的指标</b>——只有跑赢同批市场才算模型有 alpha。</p>`;
+  /* ★ 顺序（用户原话"把更多放到前面、展开栏设置在前面"）：
+     横评 → 统计 → 全库基准卡 → 「展开本档历史明细」按钮 → 明细表 → 注脚。
+     ⚠ 默认**折叠**：档位面板首屏先给「本档战绩横评＋统计＋历史明细展开按钮」，
+     再往下才是当下盘名单，免得每次进 t1 都要滑过一大张历史表才看得到今天能出手的盘。
+     点开（_tbDetailOpen）后 明细表才插在展开按钮正下方（「更多」永远在明细上方）。 */
+  const btn = `<p class="tbNote" style="margin:6px 0">${_tbDetailOpen
+      ? `<button class="htab-btn" onclick="tbToggleDetail()">▲ 收起本档历史明细（${R.n} 场）</button>`
+      : `<button class="htab-btn" onclick="tbToggleDetail()">▼ 展开本档历史明细（${R.n} 场：方向对撞／比分·半全场·大小球 Top5 候选）</button>`}</p>`;
+  return tbRetroCompare() + stat + m7BenchCard() + btn + (_tbDetailOpen ? (more + head + tip) : '');
+}
+function tbToggleDetail(){ _tbDetailOpen = !_tbDetailOpen; TB_VIEW = 'board'; renderTierBoard(); }
+/* ★ 2026-10-02 接入 7m 历史真值库（_7m_db.json → m7_pack.js → window.M7，4.07 万场 / 80 天）：
+   之前那段历史真值只有 5042 场 / 8 天（且那批是"当时跑过模型的场"，不是全库）。
+   7m 是独立真值底座（40715 场全带终场、39427 场带半场、16274 场带亚盘让球盘），
+   样本够大就能当**全库基准**用——拿模型的输出去撞基准，才知道模型到底有没有 alpha。
+   ⚠ 两源赛事不重叠（球探抓的是冷门业余、7m 抓主流），所以这里它只出「基准＋大盘真值」，
+     **不做跨源配对补比分**（配不上就宁缺勿假）。 */
+let _m7More = 0;                        // 30 天明细已渲染行数（点「加载更多」递增）
+function m7Pack(){ try { return (typeof window !== 'undefined' && window.M7) ? window.M7 : null; } catch(e){ return null; } }
+function m7Pct(a, b){ return b ? (a / b * 100).toFixed(1) + '%' : '—'; }
+/* 全库基准卡：一行把「大盘真值」和「本档模型」摆一起， outperforms 一眼可见 */
+function m7BenchCard(){
+  const P = m7Pack(); if (!P) return '';
+  const b = P.bench, ft = b.ft, ht = b.ht, g9 = b.htft9, ah = b.ah, go = b.goals;
+  /* 本档模型的方向命中 vs 全库基准（全库随机猜主队胜 = 基准，模型必须跑赢基准才算有 alpha） */
+  const R = tbRetroRows(TB_TAB);
+  const cmp = (R && R.dirTot)
+    ? `　│　<b>本档 t${TB_TAB} 方向命中 ${m7Pct(R.dirHit, R.dirTot)}</b>（${R.dirHit}/${R.dirTot}）`
+      + `<b style="color:${R.dirHit / R.dirTot > ft.p.W ? 'var(--red)' : 'var(--grn)'}">${R.dirHit / R.dirTot > ft.p.W ? '跑赢' : '没跑赢'}基准主胜 ${ft.p.W}%</b>`
+    : '';
+  const cell = (lab, val, sub) => `<div class="m7c"><b>${val}</b><s>${sub || ''}</s><i>${lab}</i></div>`;
+  return `<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="9">
+    历史真值库 · <b>7m 全库</b> ${b.n} 场 / ${b.days} 天（${b.range}）　│　这是<b>大盘真值基准</b>，不是模型战绩：下面这些数就是"随便猜"的天花板，模型必须跑赢它才有 alpha
+    <button class="htab-btn" style="float:right" onclick="m7OpenLib()" title="点开看最近 30 天 ${P.detailN} 场完场明细（含半场比分、让球盘）">看 ${P.cut.slice(5)} 起 30 天明细（${P.detailN} 场）</button>
+    </td></tr></tbody></table>`
+    + `<div class="m7cards">
+      ${cell('全场主胜 W', ft.p.W + '%', m7Pct(ft.W, ft.n) + '/' + ft.n)}
+      ${cell('全场平 D', ft.p.D + '%', m7Pct(ft.D, ft.n) + '/' + ft.n)}
+      ${cell('全场客胜 L', ft.p.L + '%', m7Pct(ft.L, ft.n) + '/' + ft.n)}
+      ${cell('半场主领先', m7Pct(ht.W, ht.n), m7Pct(ht.D, ht.n) + ' 半场平')}
+      ${cell('半全场最大格', g9.best + ' ' + g9.p[g9.best] + '%', 'Top5 覆盖 ≈ 全库')}
+      ${cell('总进球均值', go.mean, '破蛋(≥2球) ' + go.over1Rate + '%')}
+      ${cell('亚盘赢盘率', ah.winRateNoPush + '%', '去走水 n=' + ah.n)}
+    </div>` + `<p class="tbNote">读法：<b>这行是基准不是战绩</b>——全场 <b>${ft.p.W}%</b> 主胜就是"闭眼押主队"的命中率，模型 t${TB_TAB} 跑赢它才叫有 alpha。半场主领先 ${m7Pct(ht.W, ht.n)}／半全场最大格 ${g9.best} ${g9.p[g9.best]}%，同理是这两项的随机天花板${cmp}。</p>`;
+}
+/* 7m 真值库视图：全库基准表 ＋ 最近 30 天完场明细（展开栏默认在前，「加载更多」也在明细表上方） */
+function m7OpenLib(){
+  const P = m7Pack();
+  const box = document.getElementById('tierBoardContent');
+  if (!P || !box) return;
+  _m7More = 0;
+  TB_VIEW = 'lib';
+  renderTierBoard();
+  const el = document.getElementById('tierBoardModal'); if (el) el.classList.add('show');
+  try { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e){}
+}
+function m7RenderLib(){
+  const ctn = document.getElementById('tierBoardContent'); if (!ctn) return;
+  ctn.innerHTML = m7BenchTable() + m7DetailBlock();
+}
+function m7BenchTable(){
+  const P = m7Pack(); if (!P) return '';
+  const b = P.bench;
+  const g9 = b.htft9, ah = b.ah, go = b.goals;
+  const cells = ['HH','HD','HA','DH','DD','DA','AH','AD','AA'].map(k =>
+    `<td>${k} <b>${g9.p[k] || 0}%</b><s style="text-decoration:none;font-size:10.5px;font-weight:400;color:var(--mut)">${g9.cells[k] || 0}</s></td>`).join('');
+  return `<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="9">全库基准明细（${b.n} 场真值；${b.range}）</td></tr></tbody></table>`
+    + `<div class="m7cards">`
+    + `<div class="m7c"><b>${go.mean}</b><s>球的均值</s><i>总进球</i></div>`
+    + `<div class="m7c"><b>${go.over1Rate}%</b><s>≥2 球</s><i>破蛋率</i></div>`
+    + `<div class="m7c"><b>${m7Pct(ah.win, ah.n)}</b><s>去走水 ${ah.winRateNoPush}%</s><i>亚盘赢盘 n=${ah.n}</i></div>`
+    + `<div class="m7c"><b>${m7Pct(ah.push, ah.n)}</b><s>盘口走水</s><i>亚盘</i></div>`
+    + `</div>`
+    + `<table class="htab tbsheet"><thead><tr><th>半场</th><th>H 主领先</th><th>D 半平</th><th>A 客领先</th><th>半平</th><th>${m7Pct(b.ht.D, b.ht.n)}</th><th>—</th><th>半场主胜</th><th>${m7Pct(b.ht.W, b.ht.n)}</th></tr></thead><tbody><tr>${cells}</tr></tbody></table>`
+    + `<p class="tbNote">半场／全场基准：半场平局 ${m7Pct(b.ht.D, b.ht.n)} 是全场最大的半场形态；九格里 <b>Top1=${g9.best} ${g9.p[g9.best]}%</b> 就是"永远押 HH"的天花板，模型 Top1 必须超过它。</p>`;
+}
+/* 30 天完场明细（默认前 80 行，「加载更多」在明细表**上方**，符合"更多放前面"） */
+function m7DetailBlock(){
+  const P = m7Pack(); if (!P || !P.rows || !P.rows.length) return '';
+  const LIM = Math.min(Math.max(_m7More, 80), 2000);
+  const rows = P.rows.slice(0, LIM).map(x => {
+    const d = String(x[0]), hi = (typeof TEAM_ALIAS!=='undefined' && TEAM_ALIAS[P.teams[x[1]]]) || P.teams[x[1]] || '', ai = (typeof TEAM_ALIAS!=='undefined' && TEAM_ALIAS[P.teams[x[2]]]) || P.teams[x[2]] || '';
+    const hs = x[3], as = x[4], hh = x[5], ah2 = x[6], pk = x[7];
+    const net = hs - as;
+    const act = net > 0 ? 'W' : (net < 0 ? 'L' : 'D');
+    const col = act === 'W' ? 'var(--red)' : (act === 'L' ? 'var(--grn)' : 'var(--yel)');
+    const lab = WDL_LABEL[act] || '';
+    const hsHalf = hh > ah2 ? 'H' : (hh < ah2 ? 'A' : 'D');
+    const fs2 = hs > as ? 'H' : (hs < as ? 'A' : 'D');
+    const win = pk ? (net > pk ? '赢盘' : (net === pk && Number.isInteger(pk) ? '走水' : '输盘')) : '—';
+    return `<tr class="tbrr" title="${hi} vs ${ai}｜${String(hs)}:${as}｜半场 ${hh}:${ah2}｜让球 ${pk||'—'}｜净胜 ${net}">
+      <td class="dt">${d.slice(4,6)}-${d.slice(6,8)}<s style="text-decoration:none;display:block;color:var(--gry)">已完场</s></td>
+      <td class="vs"><b>${hi}</b> <span style="color:var(--mut)">vs</span> <b>${ai}</b></td>
+      <td class="tbsc"><div class="tbs"><b>${hs}:${as}</b><s style="color:${col}">${lab}</s></div></td>
+      <td>${hh}:${ah2}<s style="text-decoration:none;display:block;color:var(--mut);font-weight:400">${hsHalf}/${fs2}</s></td>
+      <td>${pk ? pk : '—'}</td>
+      <td style="white-space:nowrap;color:${win === '赢盘' ? 'var(--red)' : (win === '输盘' ? 'var(--grn)' : 'var(--mut)')}">${win}</td>
+    </tr>`;
+  }).join('');
+  const more = P.rows.length > LIM
+    ? `<p class="tbNote" style="margin:6px 0"><button class="htab-btn" onclick="m7MoreFn()">▼ 加载更多（已 ${LIM} / ${P.rows.length} 场，点一下 +200）</button></p>`
+    : `<p class="tbNote">最近 30 天 ${P.rows.length} 场已全部列出。</p>`;
+  return `<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="6">
+    最近 30 天完场真值（${P.cut} 起，共 ${P.detailN} 场，按日期倒序）　│　列：终场比分＋赛果／半场比分＋半全场形态／亚盘让球／赢盘
+    </td></tr></tbody></table>`
+    + more
+    + `<table class="htab tbsheet"><thead><tr><th>日期</th><th>对阵</th><th>终场</th><th>半场 / 半全场</th><th>让球</th><th>盘路</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function m7MoreFn(){ _m7More = Math.min(_m7More + 200, 2000); TB_VIEW = 'lib'; renderTierBoard(); }
+function tbBackToBoard(){ TB_VIEW = 'board'; renderTierBoard(); }
+
+/* 历史段的档位徽标：tierBadgeCard 吃的是 analysis 对象，这里只有裸档位数字 */
+function tierBadgeCardRaw(t){
+  if (t === 1) return '<span class="badge bT1">t1 可出手</span>';
+  if (t === 2) return '<span class="badge bT2">t2 参考</span>';
+  return '<span class="badge bG">t0 观望</span>';
+}
+function renderTierBoard(){
+  const tabs = document.getElementById('tbTabs'), sc = document.getElementById('tbScopeBar'), ctn = document.getElementById('tierBoardContent');
+  if (!tabs || !ctn) return;
+  /* ★ 2026-10-02 真值包按需加载：进档位面板就把 m7/retro 拉起来（未到位时本段先给占位条，
+     当期盘名单照样先画出来），到位后 _ensureTruthPacks 的轮询自动重刷这一段。 */
+  _ensureTruthPacks();
+  /* ★ 历史真值库视图：只画「全库基准表 + 30 天明细」，切档位/点「回档位」才回档位表 */
+  if (TB_VIEW === 'lib'){
+    tabs.innerHTML = ` <button class="tbtab bG on">历史真值库</button>`
+      + ['1','2','0'].map(k => `<button class="tbtab ${TB_TAB===k?'on':''}" onclick="tierBoardTab('${k}')">回档位 t${k}</button>`).join('');
+    if (sc){
+      const P = m7Pack();
+      sc.innerHTML = `<button class="htab-btn" onclick="tbBackToBoard()">← 回档位表</button>`
+        + `<span class="tbScope">这里是 <b>7m 历史真值库</b>${P ? `：全库 <b>${P.bench.n}</b> 场 / ${P.bench.days} 天，最近 30 天 <b>${P.detailN}</b> 场明细` : ''}。真值是终场比分＋半场比分，<b>不带模型档位</b>（两源赛事不重叠，不做跨源配对补比分）；档位战绩请回档位表看下面那段历史盘。</span>`;
+    }
+    /* ★ 布局：首行就是「最近 30 天完场明细」＋「加载更多」按钮（用户原话"把更多放到前面"），
+       全库基准表（4.07 万场聚合）沉到明细下面当对照——主动点进来就是为了看明细。 */
+    ctn.innerHTML = m7DetailBlock() + m7BenchTable();
+    return;
+  }
+  /* 取数口径：全库已分析（**不受顶部「置信≥45」等筛选影响**）——t0 恰恰就是被那个门槛挡出去的那一批；
+     范围开关只管「是否含完场」。这样 t0 板块才不会永远空着。 */
+  /* ★ 2026-10-02 拆两段：B＝当下盘（未开赛＋进行中，置顶）／F＝已完赛（带终场比分，置底）。
+     用户原话"已完赛的也补上去"——那就别把历史盘挡在范围开关后面，直接默认并进来，
+     但排段置底（放在当下盘那一段之后）、按完赛时间倒序，别把"今天能出手的那批"埋进历史里。 */
+  /* ⚠ 7m 真值库规模从包里读，不能写死：m7_pack 每轮重建（3.4万/45天 → 4.07万/80天），
+     写死的老数字会与包里的真值基准当场打架；包懒加载没落地时用构建值兜底。 */
+  const _m7b = (typeof window !== 'undefined' && window.M7 && window.M7.bench) || null;
+  const _m7n = (_m7b && _m7b.n) || 40715;
+  const _m7d = (_m7b && _m7b.days) || 80;
+  const B = { '1': [], '2': [], '0': [] };      // 未开赛＋进行中
+  const F = { '1': [], '2': [], '0': [] };      // 已完赛
+  let an = 0, unAn = 0, unLive = 0;
+  for (const m of (typeof MATCHES !== 'undefined' ? MATCHES : [])){
+    const a = m && m.analysis; if (!a){ unAn++; if (tbInLive(m)) unLive++; continue; }
+    an++;
+    if (TB_SCOPE === 'live' && !tbInLive(m)) continue;      // live 口径只看未开赛＋进行中
+    if (TB_SCOPE === 'fin' && tbInLive(m)) continue;        // fin 口径只看已完赛（⚠ 别取反，取反会恒空）
+    const k = (a.tier === 1) ? '1' : ((a.tier === 2) ? '2' : '0');
+    (tbInLive(m) ? B : F)[k].push(m);
+  }
+  for (const k in B) B[k].sort((x, y) => (tbTs(x) || 8.64e15) - (tbTs(y) || 8.64e15));   // 近的开赛在前
+  for (const k in F) F[k].sort((x, y) => (tbTs(y) || 0) - (tbTs(x) || 0));               // 最近完场的在前
+  const meta = {
+    /* ⚠ 命中率必须与本面板上方「三档历史战绩横评」同口径，别再写另一套数：
+       横评走真值库 n=1793 的单选对撞（t1 54.4% / t2 54.9%）；旧文案写 87.9%/48.9% 是 ROI 硬检验那一个小样本（n=58），
+       两个数同屏摆在用户面前会直接被当成自相矛盾（用户当面抓过"到底哪个准"）。
+       门槛同理：引擎 2026-10-07o 后是 _pPick≥0.72（2026-10-04 五修曾抬到 0.80、0.70 为 10-02 旧值），深盘强队 |盘|≥1 即使 mk<0.80 经资金通道提级也恒留本层；
+       2026-10-05 七修再叠「盘口逆势(lineWash)剔除门」：_pPick≥0.72 但盘口逆势的场降入 t2（该子池旧标定 90.7% n=43，修正引擎下 59 场 91.5%）；
+       2026-10-08 二十八修（真实初盘）全量重跑（18 天 6656 场）t1 = <b>298 场 / 89.9%</b>（逐日 73%~100%、均值 91.2%）。 */
+    '1': { cls:'t1', lab:'t1 可出手', tip:'唯一能押钱的一层：与市场临场 fav 同向、所选方向市判概率 _pPick≥0.72 且非盘口逆势（终局门 2026-10-07o 由 0.80 降到 0.72：真实初盘化后 0.80 只收极端场=判 t1 死刑，0.72 收真实强队场仍是高命中池；10-05 叠盘口逆势剔除门）。二十八修（真实初盘）全量重跑实测 <b>298 场 / 89.9%</b>（逐日 73%~100%、均值 91.2%，跨 18 天稳定同向）。⚠ 旧文案 97.0%(n=200) 建立在初盘=临盘污染口径(2026-10-08 前)属假象。命中率见本表上方横评（口径为赛果落进 Top5 候选，与这里单选对撞不同，别混着读）。', roi:'本表上方「三档历史战绩横评」＝同口径真值库单选对撞，<b>照那一行读</b>；旧文案的 87.9% 来自 n=58 的 ROI 硬检验小样本、与横评口径不同，同屏会打架。' },
+    '2': { cls:'t2', lab:'t2 参考',   tip:'只给方向不给钱。二十八修（真实初盘）实测 <b>63 场 / 90.5%</b>。本层结构在修正引擎下已变：① t1 剔除档＝_pPick≥0.72 但盘口逆势，<b>59 场 91.5%</b>（接近 t1、只是略逊）；② 旧「温吞盘」(_pPick 0.72~0.80 非逆势) 已<b>归零</b>——并入 t1 或落 t0，不再独立成批。两类混在同一枚徽章，看盘务必分清。', roi:'ROI 硬检验待补（fund_log 不含赔率快照，硬算即造假）。→ 只观察，不下注；命中率以本表上方横评为准。' },
+    '0': { cls:'t0', lab:'t0 观望',   tip:'不出手：背离市场 / 弱热度分歧 / 浅盘诱上 / 平局观察 / 引擎无结论。不计命中分母。', roi:'tier0 <b>不计入命中分母、不下注</b>。它存在的作用是<b>把反向自研信号挡在押钱之外</b>——2026-10-01 市场共识闸门上线后，任何与市场 fav 反向的信号一律落这一档。' }
+  };
+  const scopeTxt = { live:'未开赛＋进行中（＝当下能出手的盘）', fin:'已完场（带终场比分）', all:'未开赛＋进行中 ＋ 已完场（当下盘置顶，已完赛带终场比分）' };
+  /* 🔴 2026-10-03 修：原来这里写 `(TB_SCOPE === 'live') ? null : tbRetroRows(TB_TAB)`，
+     整段历史战绩（横评＋统计＋全库基准卡＋「▼ 展开本档历史明细」按钮）在**默认 live 口径下被全掐掉** ——
+     用户要的「展开栏放前面」等于永远看不到，而且 tbRetroBlock 一不渲染就顺带把
+     _ensureTruthPacks 那条的按需加载也带没了（M7/RETRO 永远不落地，横评/基准卡更是空谈）。
+     真实诉求其实早就有 _tbDetailOpen 兜着：明细表（more+head+tip）只在展开时才插，
+     不会混进当下盘「抢戏」；未展开时这一段只多一块明确标着「历史完场真值」的统计与基准卡。
+     ⚠ 必须在 tabs 赋值**之前**算好（下面 tabs.innerHTML 要用到 _rt）——放晚几行就是 TDZ ReferenceError，整个面板打不开。 */
+  const _rt = tbRetroRows(TB_TAB);
+  tabs.innerHTML = ['1','2','0'].map(k =>
+    `<button class="tbtab ${meta[k].cls} ${TB_TAB===k?'on':''}" onclick="tierBoardTab('${k}')" title="${meta[k].tip}">${meta[k].lab}<span class="n">${B[k].length + F[k].length}</span></button>`
+  ).join('') + `<span class="note" style="margin-left:6px">当前范围：<b>${scopeTxt[TB_SCOPE] || scopeTxt.all}</b>｜已分析 ${an} 场${unLive?`（未开赛＋进行中里还有 <b>${unLive}</b> 场没分析，点下面的「补分析」即可进本表）`:''}｜本档 t${TB_TAB}：<b>${B[TB_TAB].length}</b> 当下 ＋ <b>${F[TB_TAB].length}</b> 已完赛${F[TB_TAB].length ? '' : '（源站只保留当日盘，打完的场明天才回表）'}${_rt ? ` ＋ <b>${_rt.n}</b> 历史真值` : ''}</span>`;
+  if (sc){
+    sc.innerHTML = `<button class="htab-btn ${TB_SCOPE==='live'?'on':''}" onclick="tierBoardScope('live')">只看未开赛＋进行中</button>`
+      + `<button class="htab-btn ${TB_SCOPE==='all'?'on':''}" onclick="tierBoardScope('all')">未开赛＋进行中＋已完赛（默认）</button>`
+      + `<button class="htab-btn ${TB_SCOPE==='fin'?'on':''}" onclick="tierBoardScope('fin')">只看已完赛（比分复盘）</button>`
+      + `<button class="htab-btn" onclick="m7OpenLib()" title="7m 历史真值库：全库 ${_m7n} 场 / ${_m7d} 天真值基准 + 最近 30 天完场明细（半场比分、半全场形态、亚盘让球盘）">历史真值库（全库 ${_m7n} 场）</button>`
+      + `<button class="htab-btn" onclick="tbAnalyzePending(50)" title="本板块只列已分析场次，而首屏自动分析通常只跑几十场；点一下按 30ms/批把当前范围里未分析的前 50 场补齐，跑完自动重刷本表各档名单">补分析${TB_SCOPE==='fin'?'已完赛的':(TB_SCOPE==='live'?'未开赛＋进行中的':'当前范围内的')}场次（前50）</button>`
+      + `<span class="tbScope">⚠ 每行都带<b>实时比分</b>：未开赛「—」／进行中当前比分／已完赛终场比分＋赛果（并标赛前方向 ✓ 命中 / ✗ 打脸，t0 观望层不计命中）。已完赛那一段按完赛倒序排在下面，别滑过头就看不到今天能出手的盘。</span>`;
+  }
+  const list = B[TB_TAB] || [], flist = F[TB_TAB] || [];
+  const LIM = 200;                                   // 每段最多列 200 行（t0 动辄上千，全列会卡）
+  const shown = (TB_SCOPE === 'fin') ? [] : list.slice(0, LIM);
+  const fshown = (TB_SCOPE === 'live') ? [] : flist.slice(0, LIM);
+  if (!shown.length && !fshown.length){
+    /* 🔴 空态必须说真话：首屏「边分析边渲染」，刚打开时后台常常才跑了几场（实测最长 100s 才出名单）。
+       原来这句「还没有已分析场次」是死文案，分析明明在跑（an 已经在涨）也照印，
+       用户看到的就是"档位表空的/t1 没做"——这里按 an 与总场数如实告诉用户进度，本板块 5s 自动重刷。 */
+    let _tot = 0; try { _tot = (typeof MATCHES !== 'undefined' && MATCHES) ? MATCHES.length : 0; } catch(e){}
+    const _btn = `点上面「补分析${TB_SCOPE==='fin'?'已完赛的':(TB_SCOPE==='live'?'未开赛＋进行中的':'当前范围内的')}场次（前50）」`;
+    ctn.innerHTML = `<div class="tbEmpty">${(an > 0 && an < _tot)
+        ? `后台还在分析：本板块已列 <b>${an}/${_tot}</b> 场（这 ${an} 场里 t${TB_TAB} 的名单会随分析进度自动补进来，本表每 5 秒重刷一次）。想立刻看当前范围的 t${TB_TAB}，${_btn}。`
+        : (an ? `当前范围（${scopeTxt[TB_SCOPE] || scopeTxt.all}）下没有 t${TB_TAB} 场次。`
+            + (TB_SCOPE === 'live' ? `本范围里还有 ${unLive} 场<b>没分析过</b>——${_btn}把它们跑出来，或切「未开赛＋进行中＋已完赛」看历史。`
+                                   : (TB_SCOPE === 'fin' ? `切上面「未开赛＋进行中＋已完赛」回到默认；或回主看板把这场分析出来。`
+                                                         : `切「只看未开赛＋进行中」看当下盘；或回主看板把这场分析出来。`))
+              /* 🔴 an===0 是首屏常态（页脚写着「后台补算」），不是「没勾批量分析」——
+                 旧文案在这里印「回主看板勾选批量分析」是假话，正是"t1 没做"观感的来源。 */
+              : `后台正在补算：本页共 <b>${_tot}</b> 场，分析从第一批起跑（首屏实测约 1~2 分钟跑完全场）。本表每 5 秒自动重刷，t${TB_TAB} 名单会自己长出来，不用回主看板做任何操作。等不及可以${_btn}。`)
+        }</div>`;
+    try { _tbEnsurePoll(); } catch(e){}          // 🔴 空态也要拉轮询，否则首屏 0 行就一直僵在那
+    return;
+  }
+  /* ⚠ 行模板抽成函数：上半段（当下盘）与下半段（已完赛）共用同一套列，只有比分那一格按赛况取数 */
+  let finHit = 0, finTot = 0;                          // 本档已完赛的方向命中统计（t0 不计分母）
+  const tbRowHtml = m => {
+    const a = m.analysis || {};
+    const ph = tbPhaseOf(m);
+    const fin = (ph === 'fin');                       // 赛况与卡片口径一致（含"开赛超 3.5h 未打完场标记"的兜底）
+    const di = tbDirOf(a.dirCode) || tbDirOf(a.dir) || null;
+    /* 引擎没给方向（深盘兜底/无移动确认）→ 用市场临场 fav 兜底，并标"fav"与"模型"区分来源 */
+    let dc = di ? di.c : '', dSrc = di ? '模型' : 'fav';
+    if (!dc){ const fi = tbDirOf(a.fav); if (fi && fi.c){ dc = fi.c; dSrc = 'fav'; } }
+    const dCol = dc === 'W' ? 'var(--red)' : (dc === 'L' ? 'var(--grn)' : (dc === 'D' ? 'var(--yel)' : 'var(--mut)'));
+    const dTxt = dc ? WDL_LABEL[dc] : '—';
+    const eu = (a.o0h != null && a.o0a != null)
+      ? `${fmt(a.o0h)}/${fmt(a.o0d)}/${fmt(a.o0a)}<s style="text-decoration:none;color:var(--mut)">→ ${fmt(a.o1h)}/${fmt(a.o1d)}/${fmt(a.o1a)}</s>`
+      : '—';
+    /* ⚠ m.kickoff 在装配时已经是「今天 19:30 / 明天 00:00」这类完整文案（见 loadMatches），
+       再包一层 fmtKickoff(m.day, m.kickoff) 会印成"明天 明天 00:00"（本次踩过）。 */
+    const kick = m.kickoff || ((m.day && m.match_time) ? fmtKickoff(m.day, m.match_time) : '—');
+    /* 赛况角标：让"这不是复盘"一眼可见（live 口径下每一行都必须是未开赛/进行中） */
+    const phTag = fin ? '<s style="text-decoration:none;display:block;color:var(--gry)">已完场</s>'
+              : (ph === 'live' ? '<s style="text-decoration:none;display:block;color:var(--yel);font-weight:700">● 进行中</s>'
+                               : '<s style="text-decoration:none;display:block;color:var(--mut)">未开赛</s>');
+    return `<tr class="${fin?'cfin':''}" onclick="closeTierBoard();jumpToMatch('${m.tid}')" title="点这行 → 关闭本板块并跳到主看板该场卡片">
+      <td class="dt">${kick}${phTag}</td>
+      <td class="vs"><b>${m.home||''}</b> <span style="color:var(--mut)">vs</span> <b>${m.away||''}</b><s>${m.league||''}</s></td>
+      <td class="tbsc">${tbScoreCell(m, ph, dc, a.tier)}</td>
+      <td>${(tierBadgeCardSoft(a)||'—')+midCallBadge(a,m)}<s style="text-decoration:none;display:block;font-size:10.5px;color:var(--mut);font-weight:400" title="conf = 引擎原始置信；val = 标定后的诚实命中率（深盘强队档常见 conf 低但 val 兜底到 56，结构性 edge 与置信高低无关）">conf ${a.conf!=null?a.conf:'—'}｜val ${a.value_score!=null?a.value_score:'—'}</s></td>
+      <td class="dirbig" style="color:${dCol}">${dc||'—'}<s style="text-decoration:none;font-size:10.5px;font-weight:400;color:${dCol};opacity:.85">${dTxt}${dc?`（${dSrc}）`:''}</s></td>
+      <td>${a.fav||'—'}<s style="text-decoration:none;display:block;font-size:10.5px;color:var(--mut);font-weight:400">mk ${a.mx!=null?a.mx.toFixed?a.mx.toFixed(2):a.mx:(a.value_score!=null?('val '+a.value_score):'—')}</s></td>
+      <td>${eu}</td>
+      <td class="why">${tbWhy(a)}</td>
+      <td style="white-space:nowrap;color:var(--mut)">欧${a.eu_valid!=null?a.eu_valid:'—'} 亚${a.c_valid!=null?a.c_valid:'—'}<br><span class="badge bK" style="cursor:pointer;margin-top:3px" onclick="event.stopPropagation();openHtBreakDetail('${m.tid}')" title="半破定性分析：近期状态 / 历史交锋 / 半场倾向 / 伤停容错钩子">分析</span></td>
+    </tr>`;
+  /* 已完场那几行顺手把「赛前方向 vs 实际赛果」计数（t0 观望层不计入分母）
+     ⚠ 必须写在行模板**内部**（ph / dc 是行内局部），挪到函数外就是 "ph is not defined" */
+  if (ph === 'fin' && dc && a && a.tier !== 0 && m.home_score != null && m.away_score != null){
+    const act = actualDir(m.home_score, m.away_score);
+    if (act){ finTot++; if (act === dc) finHit++; }
+  }
+  };
+  /* ⚠ 顺序：先跑下半段（已完赛，边跑边累加 finTot/finHit），再算命中率、再拼上半段 */
+  const rowsF = fshown.map(tbRowHtml).join('');
+  const finRate = finTot ? `　│　本档已完赛 <b>${finTot}</b> 场，赛前方向命中 <b>${finHit}</b>（${(finHit / finTot * 100).toFixed(1)}%）` : '';
+  const rows = shown.map(tbRowHtml).join('');
+  /* ★ 布局（用户原话"更多/展开栏设置在前面，滑到后面好麻烦"）：
+     历史战绩段（横评＋统计＋**展开本档历史明细**的按钮）放在**表格之前**当首屏，
+     展开后才把明细表插在按钮下面；下面仍是当下盘名单 → 已完赛段 → ROI/口径注脚。 */
+  const _block = _rt ? tbRetroBlock(TB_TAB, 150) : '';
+  ctn.innerHTML = _block
+    + `<table class="htab tbsheet"><thead><tr>
+      <th>开赛</th><th>对阵</th><th>实时比分</th><th>档位</th><th>方向</th><th>市场 fav</th><th>欧赔 初→临</th><th>为什么落在这一档</th><th>有效盘</th>
+    </tr></thead><tbody>${rows}</tbody></table>`
+    + (rowsF ? `<table class="htab tbsheet tbsep"><tbody><tr class="tbseg"><td colspan="9">已完赛 · 终场比分（按完赛时间倒序，最近完场的在前）${finRate}　│　赛果与「方向」列对撞：<b style="color:var(--grn)">✓ 命中</b>＝赛前给的方向真打出来了，<b style="color:var(--red)">✗ 打脸</b>＝反了；t0 观望层一律不打勾（它不计命中分母）</td></tr></tbody></table>`
+        + `<table class="htab tbsheet"><tbody>${rowsF}</tbody></table>` : '')
+    + (list.length > LIM ? `<p class="tbNote">当下盘本档共 <b>${list.length}</b> 场，先列距开赛最近的 <b>${LIM}</b> 场（按开赛时间升序）；更早的用顶部搜索定位。</p>` : '')
+    + (flist.length > LIM ? `<p class="tbNote">已完赛本档共 <b>${flist.length}</b> 场，先列<b>最近完场</b>的 ${LIM} 场（按完赛时间倒序）。</p>` : '')
+    + `<p class="tbNote">${meta[TB_TAB].roi}</p>`
+    + `<p class="tbNote">读表提醒：「conf」是引擎原始置信，「<b>val</b>」才是标定后的诚实命中率——深盘强队（结构性正 EV）会出现 conf 低、val 被兜底到 56 的情况，那是盘口结构给的 edge，不是置信低就必然输；反过来 t0 的 conf 低是真的不该出手。</p>`
+    + `<p class="tbNote" style="color:var(--yel)">⚠ 口径提醒：这张表取的是<b>全库已分析</b>场次（顶部「置信≥45 / 只看有盘口 / 日期范围」的过滤不参与，t0 就是被那个门槛挡出去的那批）。上半段＝未开赛＋进行中（当下能出手），下半段＝已完赛（带终场比分）。要看逐场复盘统计走工具栏「每日复盘」。</p>`
+    + `<p class="tbNote" style="color:var(--red);font-weight:600">⚠ 时效真相（为什么 t1 看着像"进球后才出现"）：t1 的判定依据是<b>临场市场共识</b>（_pPick≥0.72，即引擎所选方向的市场市判概率）。赛前早盘或远场<b>赔率根本没开/没稳</b>——当天约 <b>一半未开赛场盘口还没出</b>，前端拿不到赔率就无法分析、不会进 t1。只有开赛后临场盘到位，这批场才被算出来。<b>这是临场信号的固有特性，不是模型马后炮</b>：想赛前就锁定 t1，得等该场临场盘开出且市场强共识形成（通常是开赛前几小时）。赛前能看到的 t1，都是"已开盘且早盘就强共识"的那批——打开本面板会自动把当前范围已开盘的场补齐分析，t1 名单会自己长出来。</p>`
+    + `<p class="tbNote" style="color:var(--yel)">⚠ 别把「总进球／几球档」当战绩看：1525 场同分母对照，模型总进球<b>第一档 21.44%</b> vs「每场都押众数档（2 球）」21.44%，<b>差 0.00pp＝零 alpha</b>——众数本来就是 2 球，模型推的也是那一档，等于没信息。真站得住的 alpha 只有<b>方向</b>：比分反推 1X2 <b>53.7%</b> vs 众数 44.5%（＋9.25pp）。大小球则只在 value 到 ≥60 时才出手（1525 场：命中 58.8%／ROI ＋8.4%；旧的对称 46/54 门槛全场下注 ROI −1.89%，已废）。</p>`;
+}
+
+/* ---------- 渲染 ---------- */
+let renderCap = 400;                       // 分页渲染：一次最多画 100 张卡，避免上千场卡死
+function moreRows(){ renderCap += 400; _vRealCap += 400; render(); }
+/* ---------- 选择模式：默认不自动分析，勾选后手动分析 ---------- */
+function toggleSel(tid, checked){
+  const m = MATCHES.find(x=>String(x.tid)===String(tid)); if(!m) return;
+  m._sel = !!checked; updateSelInfo();
+}
+function toggleSelAll(checked){
+  // 2026-09-24：只排除「球探独有且无盘口」的，球探独有但有真实盘口的应能勾上批量分析
+  for (const m of MATCHES){ m._sel = !!checked && isAnalyzable(m) && !(m.t7only && !t7HasOdds(m)) && m.state!=='-1'; }
+  render(); updateSelInfo();
+}
+function runAnalyze(list){
+  if (!list.length){ toast('没有可分析的勾选场次（请先勾选，或这些场缺赔率快照）'); return; }
+  let i=0, done=0, skip=0; const liveQueue=[];
+  const step = ()=>{
+    const t0=Date.now();
+    while(i<list.length && Date.now()-t0<30){
+      const m=list[i++];
+      try{
+        const off=offlineAnalyze(m);
+        if(off){ m.analysis=off.a; m.info=off.info; m.offline=true; m._liveOdds=false; m._jcOfficial=!!off._jcOfficial; m._aErr=null; done++; }
+        else if (liveCapable()) liveQueue.push(m);   // 快照没有但网络通 → 进实时补拉队列
+        else { m._aErr='缺赔率快照'; skip++; }
+      }
+      catch(e){ m._aErr='分析失败: '+e.message; skip++; }
+    }
+    updateSelInfo(); render();
+    if(i<list.length) setTimeout(step,0);
+    else {
+      toast('快照分析完成：' + done + ' 场已分析' + (liveQueue.length ? ('，' + liveQueue.length + ' 场后台实时补拉中…') : '') + (skip ? ('，' + skip + ' 场缺赔率跳过') : ''));
+      if (liveQueue.length) liveFillQueue(liveQueue);
+    }
+  };
+  step();
+}
+/* 实时补拉队列：对"快照没盘口"的场次逐个现场拉盘口（限速串行 + 上限保护），
+   解决"新冒出来的场次/烘焙后才开盘的场次"在旧逻辑里被永久判成不可分析的问题。 */
+let _liveFilling = false;
+async function liveFillQueue(list, limit){
+  if (_liveFilling) return;
+  limit = limit || 80;
+  // 越接近开赛越优先（临场价值最高）；已完场放最后
+  const score = m => { const g = kickoffGapMin(m); return g==null ? 99999 : (g < -10 ? 90000 - g : Math.abs(g)); };
+  const q = list.filter(m => !m._liveTried && m.state !== '-1').sort((a,b)=>score(a)-score(b)).slice(0, limit);
+  if (!q.length) return;
+  _liveFilling = true;
+  let ok=0;
+  try{
+    for (const m of q){
+      m._liveTried = true;
+      try{ await analyzeWithLiveOdds(m); ok++; m._aErr=null; }
+      catch(e){ m._liveTried = true; if (!m.analysis) m._aErr='源站无实时盘口'; }
+      /* ★ 2026-10-04 性能修复：这里原来是 render() —— 每补拉 20 场就**整页全量重建**
+         （render() 走 grid.innerHTML=html 全量重建，realN≈140 张；1200 场补拉 = 60 次 × 140 ≈ 8400 张卡重建），
+         主线程被反复占满、滚动位置丢失、页面闪烁。
+         改为 refreshRendered()：走 __sig 增量替换，只重建签名真变了的卡片（补拉后通常只有个位数变化）。
+         补拉不改变筛选与卡片集合（只是给已存在的场次补盘口），增量替换完全够用，末尾仍保留一次整页 render()。 */
+      if (ok % 20 === 0){ updateSelInfo(); try{ refreshRendered(); }catch(e){} }
+      await new Promise(r=>setTimeout(r, 250));   // 温和限速，避免触发源站限流
+    }
+  } finally { _liveFilling = false; }
+  updateSelInfo(); render();
+  toast('实时补拉完成：' + ok + '/' + q.length + ' 场拿到最新盘口');
+}
+/* 载入列表后自动补拉"缺快照"的场次（实时模式下），优先级按开赛临近排序 */
+async function liveFillMissing(limit){
+  if (!liveCapable() || !BAKE_READY && !MATCHES.length) return;
+  const miss = MATCHES.filter(m => !hasPackOdds(m.tid) && !jcHasOdds(m) && !m._liveTried && m.state!=='-1' && !m.analysis);
+  if (!miss.length) return;
+  await liveFillQueue(miss, limit || 40);
+}
+function analyzeSelected(){ runAnalyze(MATCHES.filter(m=>m._sel && isAnalyzable(m) && !(m.t7only && !t7HasOdds(m)) && m.state!=='-1')); }
+function analyzeAllAvailable(){ runAnalyze(MATCHES.filter(m=>isAnalyzable(m) && !(m.t7only && !t7HasOdds(m)) && m.state!=='-1')); }
+function buildSelBar(){
+  if (document.getElementById('selBar')) return;
+  const grid=$('grid'); if(!grid) return;
+  /* 2026-10-02 手机瘦身：内联 style 挪进 .selbar 类（否则窄屏 CSS 覆盖不掉），长提示挂 .selHint 好隐藏 */
+  const bar=document.createElement('div'); bar.id='selBar'; bar.className='selbar';
+  bar.innerHTML = `<label><input type='checkbox' id='selAll' onchange='toggleSelAll(this.checked)'> 全选可分析</label> <label style='color:#f5c542;font-weight:700'><input type='checkbox' id='fDraw' onchange='render()'> ★只看平局场<b id='fDrawN' style='color:#f5c542;margin-left:2px'></b></label> <button id='btnSel' onclick='analyzeSelected()'>分析选中 (0)</button> <button onclick='analyzeAllAvailable()'>分析全部可分析场</button> <span id='selInfo'></span> <span class='selHint' style='font-size:12px;color:#8b98a9'>默认不自动分析；勾选后点“分析选中”</span>`;
+  grid.parentNode.insertBefore(bar, grid);
+  updateSelInfo();
+}
+function updateSelInfo(){
+  const sel=document.getElementById('selBar'); if(!sel) return;
+  const total=MATCHES.length;
+  const avail=MATCHES.filter(m=>isAnalyzable(m)).length;
+  const analyzed=MATCHES.filter(m=>m.analysis).length;
+  const selCount=MATCHES.filter(m=>m._sel).length;
+  const selBtn=document.getElementById('btnSel'); if (selBtn) selBtn.textContent='分析选中 (' + selCount + ')';
+  const info=document.getElementById('selInfo');
+  if (info) info.textContent='共 ' + total + ' 场 ｜ 可分析 ' + avail + ' ｜ '
+    + (liveCapable() ? '缺快照(可实时补拉) ' : '缺赔率 ') + (total-avail) + ' ｜ 已分析 ' + analyzed;
+}
+// 竞彩标记（懒计算并缓存）：返回官方竞彩行（编号/胜平负/让球/比分/半全场/进球数）或 null
+function jcOf(m){
+  if (!m) return null;
+  /* 只认 mergeJingcai 按「自然开赛日+HH:MM」主键挂载/注入的结果，不再回退模糊队名匹配。
+     实测（2026-09-16）：主键确认 8 场，若回退 getJingcai(home,away) 的名称包含式/字符重合匹配，
+     「只看竞彩」会冒出 18 场 —— 其中 10 场是被误标的普通场次。源站队名为 PUA 混淆串，
+     模糊匹配既漏配又误配 → 一律以主键为准。 */
+  return m.jc || null;
+}
+/* 竞彩卡是否带可分析的官方胜平负赔率（had.h/d/a 均为有效赔率） */
+/* 竞彩让球盘(hhad) → 等效不让球 1X2。
+   实力悬殊场次官方常只开让球盘(had=null)；此前 jcHasOdds 只认 had → 这类场被误判「缺赔率·不可分析」。
+   直接把让球赔当 1X2 会严重失真，故 Poisson 网格反解：找 (λh,λa) 使「让 k 球后」三项概率贴合官方让球赔，
+   再反算「不让球」三项概率；最后向经验先验收缩 25%，避免 Poisson 独立假设导致的极端值。 */
+function jcHhadToHad(hhad){
+  const h=+hhad.h, d=+hhad.d, a=+hhad.a, k=-(+(hhad.goalLine||0));  // goalLine 负=主让球 → k=主让球数
+  if (!(h>1 && d>1 && a>1)) return null;
+  const ih=1/h, id=1/d, ia=1/a, s=ih+id+ia;
+  const pH=ih/s, pD=id/s, pA=ia/s;
+  const N=12;
+  function pois(l){ const r=[]; let p=Math.exp(-l); r.push(p); for(let i=1;i<=N;i++){ p*=l/i; r.push(p); } return r; }
+  let best=null, bestErr=1e9;
+  for(let lh=0.2; lh<=5.0; lh+=0.1){ const Ph=pois(lh);
+    for(let la=0.2; la<=5.0; la+=0.1){ const Pa=pois(la);
+      let qH=0,qD=0,qA=0;
+      for(let i=0;i<=N;i++){ const pi=Ph[i]; if(pi<1e-9) continue;
+        for(let j=0;j<=N;j++){ const p=pi*Pa[j]; const hi=i-k; if(hi>j)qH+=p; else if(hi===j)qD+=p; else qA+=p; } }
+      const e=(qH-pH)*(qH-pH)+(qD-pD)*(qD-pD)+(qA-pA)*(qA-pA);
+      if(e<bestErr){ bestErr=e; best=[lh,la]; } } }
+  if(!best) return null;
+  const Ph=pois(best[0]), Pa=pois(best[1]);
+  let H=0,D=0,A=0;
+  for(let i=0;i<=N;i++) for(let j=0;j<=N;j++){ const p=Ph[i]*Pa[j]; if(i>j)H+=p; else if(i===j)D+=p; else A+=p; }
+  const PRI=[0.45,0.27,0.28];                    // 经验先验，避免 Poisson 独立假设的极端值
+  const ph=0.75*H+0.25*PRI[0], pd=0.75*D+0.25*PRI[1], pa=0.75*A+0.25*PRI[2];
+  const t=ph+pd+pa;
+  return { h:+(ph/t).toFixed(4), d:+(pd/t).toFixed(4), a:+(pa/t).toFixed(4),
+           lh:+best[0].toFixed(2), la:+best[1].toFixed(2), hcap:k };
+}
+function jcHasOdds(m){
+  const j = jcOf(m);
+  if (!j) return false;
+  if (j.had){ const h=+j.had.h, d=+j.had.d, a=+j.had.a; if (h>1 && d>1 && a>1) return true; }
+  if (j.hhad){ const h=+j.hhad.h, d=+j.hhad.d, a=+j.hhad.a; if (h>1 && d>1 && a>1) return true; }
+  return false;
+}
+/* 用竞彩官方胜平负赔率构造引擎 agg（初/临盘同值代理，官方赔率不区分初/临） */
+function buildJcAgg(jc){
+  if (!jc) return null;
+  if (jc.had){
+    const h=+jc.had.h, d=+jc.had.d, a=+jc.had.a;
+    if (h>1 && d>1 && a>1) return { o_hcap:0, o_uw:null, c_hcap:0, c_uw:null, c_valid:3, eu_valid:3,
+      o_h:h, o_d:d, o_a:a, c_h:h, c_d:d, c_a:a, _src:'jingcai_official' };
+  }
+  // 仅让球盘：反解成等效 1X2 后转欧赔形态进引擎（标注来源，展示时注明「让球盘反解」）
+  if (jc.hhad){
+    const r = jcHhadToHad(jc.hhad);
+    if (r && r.h>0 && r.d>0 && r.a>0){
+      const h=+(1/r.h).toFixed(3), d=+(1/r.d).toFixed(3), a=+(1/r.a).toFixed(3);
+      if (h>1 && d>1 && a>1) return { o_hcap:0, o_uw:null, c_hcap:0, c_uw:null, c_valid:3, eu_valid:3,
+        o_h:h, o_d:d, o_a:a, c_h:h, c_d:d, c_a:a, _src:'jingcai_hhad', _hcap:r.hcap, _lh:r.lh, _la:r.la };
+    }
+  }
+  return null;
+}
+// 北单标记（懒计算并缓存）：返回北单行或 null。beidan.json 为空时 getBeidan 恒 null → 即"未接入"状态
+function bdOf(m){
+  if (!m) return null;
+  if (m.__bd === undefined){ try{ m.__bd = getBeidan(m.home, m.away) || null; }catch(e){ m.__bd = null; } }
+  return m.__bd;
+}
+// 平局关注判定（庄家视角）：引擎判平 / 强平局 / 市场平局概率≥27%
+// 关键修复：之前"只看平局场"只认 strongDraw（市场头号+平赔<3.0，全池仅~1.6%），
+// 漏掉 300+ 场高平局概率比赛，导致网页上"平局一场都没有"。现按平局概率放宽到约 300+ 场，一眼可见。
+function isDrawMatch(m){
+  const a = m && m.analysis;
+  if (!a) return false;
+  if (a.draw_card && a.draw_card.fire) return true;                // ★平局信号卡（新范式·方法论驱动，非概率阈值）
+  if (a.strongDraw) return true;                                   // 强平局（市场头号+平赔<3.0）
+  if (a.dir && /平局/.test(a.dir)) return true;                    // 引擎综合方向判平（平局·强倾向/平局候选）
+  if (typeof a.mk_d === 'number' && a.mk_d >= 0.27) return true;   // 市场平局概率≥27%（防平关注）
+  return false;
+}
+function drawProb(m){ const a = m && m.analysis; return (a && typeof a.mk_d === 'number') ? a.mk_d : 0; }
+function gotoMatch(tid){
+  let c = document.getElementById('card-' + tid);
+  if (!c){
+    const fd = document.getElementById('fDraw');
+    if (fd && !fd.checked){ fd.checked = true; render(); setTimeout(() => gotoMatch(tid), 60); }
+    return;
+  }
+  c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  c.style.boxShadow = '0 0 0 3px #f5c542';
+  setTimeout(() => { c.style.boxShadow = ''; }, 1600);
+}
+function renderDrawTop(){
+  const el = document.getElementById('drawTop'); if (!el) return;
+  const all = [];
+  for (const m of MATCHES){ if (isDrawMatch(m) && m.state !== '-1') all.push(m); }   // ★剔除已完场：只留进行中+未开赛
+  if (!all.length){ el.style.display = 'none'; return; }
+  /* ★ 2026-10-04：用户要求「所有板块的场次都按开赛时间排，方便按先后查看」——
+     这块默认也改成**时间升序**（最早开赛在前）；平局概率是本板块的看家价值，
+     用面板内的下拉（window._drawSort）切回「概率最高在前」，不丢原功能。 */
+  window._drawSort = window._drawSort || 'time';
+  const _dtCmp = window._drawSort === 'prob' ? ((a, b) => drawProb(b) - drawProb(a)) : ((a, b) => String(kickTs(a)||'').localeCompare(String(kickTs(b)||'')));
+  all.sort(_dtCmp);
+  /* ★2026-10-04：原只 slice(0,12)，而池子动辄数百场——时间序恰好露出的是凌晨低概率场，
+     唯一真 alpha 子集（mk_d≥30% 实测 34.2%、≥33% 44.1%，见 5042 场复盘）被藏在后面根本看不见。
+     放宽到 60 条（面板极短，无性能压力），并在头部诚实报出高概率场数；
+     默认仍是「时间序」（尊重"所有板块按开赛时间排"的既有要求），下拉可切「概率序」。 */
+  const _DT_SHOW = 60;
+  const top = all.slice(0, _DT_SHOW);
+  let _n30 = 0, _n33 = 0;
+  for (const _m of all){
+    const _p = Math.round(drawProb(_m) * 100);
+    if (_p >= 33) _n33++; else if (_p >= 30) _n30++;
+  }
+  el.style.display = '';
+  let h = '<div class="dt-head">🟨 平局关注（共 ' + all.length + ' 场，'
+    + (window._drawSort === 'prob' ? '市场平局概率最高在前' : '按开赛时间在前')
+    + '，显示前 ' + top.length + ' 场）— 庄家视角防平'
+    + '<span style="color:var(--acc)">；其中 隐含≥30% <b>' + _n30 + '</b> 场(实测平局率31.5%，市场已定价到31.0%)、≥33% <b>' + _n33 + '</b> 场(36.4%，隐含34.5%)、≥40% 场平局实打 58.3%。30% 是单调断点：隐含&lt;30% 市场高估平局(押平局亏)，≥30% 转为低估(相对最易平)——但扣约12%抽水后各档 ROI 基本归零，一律观察级勿重注</span>'
+    + '<select id="fDrawSort" onchange="window._drawSort=this.value;renderDrawTop()">'
+    + '<option value="time">时间序</option><option value="prob">平局概率序</option></select></div><div class="dt-list">';
+  for (const m of top){
+    const a = m.analysis, mkd = Math.round(drawProb(m) * 100);
+    const rec = (a.strongDraw || /平局/.test(a.dir || ''));
+    /* ★2026-10-04 平局概率分档（5042 场复盘实测·阈值与平局率单调，非过拟合）：
+       ≥33% n=68  平局率 44.1%（+22.3pp）｜≥30% n=322 平局率 34.2%（+12.3pp）
+       ≥27% n=1209 平局率 28.7%（+6.9pp）｜全样本基准 21.8%
+       分档只表示"这档历史上更容易平"（观察级；平局整体负EV，绝不改成可下注），
+       提示语里带样本量，避免用户把"高概率档"误当高胜率下注。 */
+    /* 判档必须按**取整后的百分比**（Math.round(drawProb*100)）：
+       直接比 0.30 会漏掉 dv=0.2997 那种「界面已经印着 30% 却不算高概率档」的场，自相矛盾。 */
+    const dvPct = Math.round(drawProb(m) * 100);
+    /* ★2026-10-04 口径校正（同口径 mk_d=市场临场隐含平局率，4120 场）：
+       mk_d<30% 时市场**高估**平局（实际 14.7~25.3% 均低于隐含，押平局公平价 ROI −9%~−18%）；
+       mk_d≥30% 才转为**低估**（实际 31.5/36.4/58.3% vs 隐含 31.0/34.5/49.5%，ROI +1.6/+5.5/+17.9%）。
+       30% 是单调断点。但扣掉约 12% 抽水后各档 ROI 基本归零 ⇒ 平局是「相对最易平」指示，
+       与引擎 isSD 通道（市场平局头号+收盘平赔<3.0，实测 ~34%、负EV −12%~−17%）同一结论。
+       标签按此校正口径写，并把「市场隐含 vs 实际」直接写进提示，别让用户只看命中率。 */
+    let tagCls = 'dt-watch', tagTxt = '平局·关注', tagTip = '⚠市场把平局定得太高（隐含≥22%但实际只有 14.7~25.3%，公平价 ROI −9%~−18%）。这一档押平局是系统性亏的：要么走 W/L，要么无视。';
+    if (dvPct >= 40){ tagCls = 'dt-hot'; tagTxt = '平局·最易平'; tagTip = '市场隐含平局率≥40%：5042 场复盘实测这档实际平局率 58.3%(n=24)，vs 隐含 49.5%，差 +8.9pp，是单调断点之上最强的一档。扣抽水后 ROI 约 +6%，勉强可算，但样本仅 24 场，当观察不要当稳赢'; }
+    else if (dvPct >= 33){ tagCls = 'dt-hot'; tagTxt = '平局·最易平'; tagTip = '市场隐含平局率≥33%：实测平局率 36.4%(n=44)，vs 隐含 34.5%，差 +1.9pp。市场已**低估**平局 ⇒ 这是全库"相对最易平"的一档（引擎 isSD 通道同源）。但扣约 12% 抽水后 ROI≈−6%，观察级，别重仓'; }
+    else if (dvPct >= 30){ tagCls = 'dt-rec'; tagTxt = '平局·偏易平'; tagTip = '市场隐含平局率≥30%（单调断点，n=322）：实测平局率 34.2%，vs 隐含 32.9%，差仅 +1.3pp ⇒ 市场已基本定价到位，再无 edge。组内更高档(33~40%)是 +1.9pp、40%+ 是 +8.9pp，能拉开差距的都是小样本。扣分档约12%抽水后 ROI≈−8%，纯观察，勿下注'; }
+    else if (rec){ tagCls = 'dt-rec'; tagTxt = '平局·参考级'; }
+    h += '<div class="dt-item" onclick="gotoMatch(\'' + m.tid + '\')"><span class="dt-time">'
+      + timeCell({ day: (m.day || m.kday || ''), time: (m.kickoff || '') }, false)   // 跨日自动补 MM-DD
+      + '</span><span class="dt-prob">' + mkd + '%</span>'
+      + '<span class="dt-match">' + (m.league || '') + ' · ' + m.home + ' vs ' + m.away + '</span>'
+      + '<span class="dt-tag ' + tagCls + '" title="' + tagTip + '">' + tagTxt + '</span>'
+      + '<span class="dt-dir">' + (a.dir || '') + '</span></div>';
+  }
+  h += '</div>';
+  el.innerHTML = h;
+  const _ds = $('fDrawSort'); if (_ds) _ds.value = window._drawSort || 'time';   // 重渲染后把下拉回显补上
+}
+/* ★ 2026-10-05：搜索 0 命中时，把「到底扫了哪些范围」讲清楚。
+   旧版一句"全部 2500+ 场比赛里 0 命中"是死数字且口径模糊，用户投诉"新场次搜不到"时
+   根本分不清是没抓、被窗口挡住、还是队名写法不同。这里按真实底座 range 生成。 */
+function _scopeTxt(){
+  /* 口径（别重复计数）：MATCHES 已经是「gqj2 底座 ∪ 球探补齐」后的全量，
+     旧版把 MATCHES.length 和球探场次一起印，会出现「底座 793 场 + 球探 793 场」这种假重复。
+     真实拆法是：底座 bake 行数 + 球探独有的增量。 */
+  try{
+    const _bake = (window.__BAKE_RAW__ && window.__BAKE_RAW__.matches
+                   && window.__BAKE_RAW__.matches.r) ? window.__BAKE_RAW__.matches.r.length : 0;
+    if (_bake) return '底座 ' + _bake + ' 场 + 球探补齐 ' + Math.max(0, MATCHES.length - _bake) + ' 场';
+  }catch(e){}
+  try{
+    const _r = (BAKE_META && BAKE_META.range) || [];
+    const _fmt = s => String(s).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+    if (_r.length >= 2) return '底座 ' + MATCHES.length + ' 场（' + _fmt(_r[0]) + ' ~ ' + _fmt(_r[_r.length-1])
+      + '，共 ' + _r.length + ' 天）';
+    if (_r.length === 1) return '底座 ' + MATCHES.length + ' 场（' + _fmt(_r[0]) + '）';
+  }catch(e){}
+  return '全部 ' + MATCHES.length + ' 场比赛';
+}
+/* 2 字短词建议：用户搜整名 0 命中时，给出可点的短词（滑窗去重，最多 6 个） */
+function _fragHints(){
+  try{
+    const q = String((($('fSearch') && $('fSearch').value) || '')).trim();
+    const out = [];
+    for (let i = 0; i + 2 <= q.length; i++){ const f = q.slice(i, i + 2); if (out.indexOf(f) < 0) out.push(f); }
+    return out.slice(0, 6);
+  }catch(e){ return []; }
+}
+function filtered(opt){
+  /* ★ 2026-10-22 价值榜专用开关：noConf=true 时跳过「置信门槛」。
+     原因：正式过热/大热必死/亚盘档位偏离都是**资金流与盘口信号**，与模型 conf 无关；
+     实测全量 8 场正式过热里 7 场 conf=0（模型对冷门无强判断），默认 conf≥45 会把信号全杀掉，
+     造成「榜上只剩 1 场、看着像坏了」。榜单只保留用户显式选的条件（联赛/竞彩/状态/搜索）。 */
+  const _noConf = !!(opt && opt.noConf);
+  const lg=$('fLg').value, q=($('fSearch').value||'').trim(), st=$('fState').value;
+  const jcOnly = !!(document.getElementById('fJc') && document.getElementById('fJc').checked);
+  const bdOnly = !!(document.getElementById('fBd') && document.getElementById('fBd').checked);
+  const htOnly = !!(document.getElementById('fHt') && document.getElementById('fHt').checked);
+  const deepOnly = !!(document.getElementById('fDeep') && document.getElementById('fDeep').checked);
+  const oddsOnly = !!(document.getElementById('fOdds') && document.getElementById('fOdds').checked);
+  const drawOnly = !!(document.getElementById('fDraw') && document.getElementById('fDraw').checked);
+  const washOnly = !!(document.getElementById('fWash') && document.getElementById('fWash').checked);   // 只看庄家反向洗盘（engine 的 a.wash）
+  const confThr = parseInt(($('fConf') && $('fConf').value) || '0', 10);   // 置信门槛：回测纪律（≥50 命中率更高）
+  /* ★ 2026-10-01 修复「新比赛场次搜不到」：
+     fDay 默认=今天（仅 209 场）、fConf 默认=45 —— 用户一搜「某个明天的联赛/球队」就 0 命中，
+     被当成"没抓到数据"。搜索 = 精准定位，此时必须自动放宽 日期 + 置信门槛，
+     否则大量未来场次永远搜不出来。 */
+  const relax = !!q;
+  return MATCHES.filter(m=>{
+    if (jcOnly && !jcOf(m)) return false;                          // 只看竞彩官方在售场次
+    if (drawOnly && !isDrawMatch(m)) return false;  // ★只看平局场：引擎判平 / 强平局 / 市场平局概率≥27%（约300+场，不再只认强平局）
+    if (bdOnly && !bdOf(m)) return false;                          // 只看北京单场(北单)场次（未接入时恒为 0）
+    if (htOnly && !isHtGoalMatch(m)) return false;                  // 只看半场破蛋(上半场≥1球)候选
+    if (deepOnly && !isDeepMatch(m)) return false;                  // 只看强队深盘（临场让球≥1球）：回测证明唯一稳定edge子集(近期63~65%，全推仅49.9%)
+    if (oddsOnly && !isAnalyzable(m) && !t7HasOdds(m)) return false;   // 只看有盘口（无盘口且非竞彩官方赔率的场次无法分析；球探(titan007)有真实盘口也算）
+    if (gFilter && gradeGroupOf(m) !== gFilter) return false;      // 盘口档位筛选（理论 vs 实际 净变化分档）
+    if (washOnly && !(m.analysis && m.analysis.wash)) return false;     // 只看庄家反向洗盘（engine 每场已算 a.wash）
+    if (lg && m.league!==lg) return false;
+    // 日期 / 置信门槛：仅在没有搜索关键词时生效（搜索时自动放宽）
+    if (!relax){
+      if (st==='1'){ if (!isLive(m.state)) return false; }          // 进行中=阶段1/2/3
+      else if (st && m.state!==st) return false;
+    }
+    /* 搜索匹配放宽：① 展示名 ② 原始名（球探独有场次的 homeRaw/awayRaw 常被 cutHead/cutTail 削掉前缀，
+       用户按源站看到的完整队名搜会 0 命中）③ 联赛 ④ tid 数字 ⑤ 大小写不敏感（搜 "inter"/"u19" 也能中）
+       ★ 2026-10-05 加「2 字片段兜底」：整串无命中时，用 2 字滑窗片段（「萧山华丰」→「萧山」「山华」「华丰」）
+       逐个再试，只要有一段命中就保留该场 —— 源站队名与用户记忆有出入时仍能捞出来，而不是直接 0 命中。 */
+    if (q){
+      const _up = q.toUpperCase();
+      const _hit = (v) => v && String(v).indexOf(q) >= 0;
+      const _hitI = (v) => v && String(v).toUpperCase().indexOf(_up) >= 0;
+      /* ★ 2026-10-01：gqj2 队名是裸 PUA 码点（"冠忠\ue966区"= 冠忠南区），
+         用户按页面显示名（已 decodeName 还原）搜必然 0 命中 → 候选池必须同时带脏名与还原名 */
+      let _dh = m.home, _da = m.away;
+      try { if (typeof decodeName === 'function'){ _dh = decodeName(m.home) || m.home; _da = decodeName(m.away) || m.away; } } catch(e){}
+      const _qHit = (k) => {
+        const _s = String(k == null ? '' : k);
+        const _d = _s.replace(/[^0-9]/g, '');
+        const _ok = (v) => v != null && String(v).indexOf(_s) >= 0;
+        return _ok(m.home) || _ok(m.away) || _ok(m.league) || _ok(m.homeRaw) || _ok(m.awayRaw)
+            || _ok(m.leagueFull) || _ok(_dh) || _ok(_da)                 // PUA 还原名（页面显示名）
+            || _ok(leagueName ? leagueName(m.league) : m.league)
+            || (_ok(m.tid) && _d.length >= 3);
+      };
+      if (!(_qHit(q) || _hitI(m.home) || _hitI(m.away))){
+        let _anyFrag = false;
+        for (let _i = 0; _i + 2 <= q.length; _i++){
+          if (_qHit(q.slice(_i, _i + 2))){ _anyFrag = true; break; }
+        }
+        if (!_anyFrag) return false;
+      }
+    }
+    // 置信门槛：已分析且置信低于门槛的比赛隐藏（未分析的仍显示，便于补分析）
+    // 例外：用户手点分析过的场次永不隐藏（否则"点了就消失"，像 bug）
+    // 搜索态下同样放宽：低级别联赛(以甲/西丁/德戊…)引擎置信天然偏低，卡 45 会连"存在感"都没了
+    if (!relax && !_noConf && confThr>0 && m.analysis && !m._manual && (Math.round(m.analysis.conf||0) < confThr)) return false;
+    return true;
+  });
+}
+/* 价值榜取数池：尊重用户显式筛选（联赛/竞彩/状态/搜索），但不受「置信门槛」限制 */
+/* ★ 2026-10-22 榜单置顶挂载：render() 的输出落在 <main> 内，而 <main> 排在「实时价值/信号分布/
+   平局关注」之后（实测榜单在页面 ~3800px 处，打开首屏完全看不到，等于白做）。
+   渲染完成后把 #topBoards 与 .yg-alert 搬进 header 下方的 #topBoardsHost。 */
+function _mountBoards(){
+  try{
+    const host = document.getElementById('topBoardsHost');
+    const grid = document.getElementById('grid');
+    if (!host) return;
+    const tb = document.getElementById('topBoards');
+    const yg = document.querySelector('.yg-alert');
+    if (tb && (!grid || tb.parentNode === grid)) host.appendChild(tb);
+    if (yg && (!grid || yg.parentNode === grid)) host.appendChild(yg);
+  }catch(e){ console.warn('榜单置顶挂载失败:', e && e.message); }
+}
+
+function boardPool(){
+  try { return filtered({ noConf:true }); }
+  catch(e){ try { return filtered(); } catch(e2){ return MATCHES || []; } }
+}
+/* ===== 虚拟化滚动：只渲染视口附近卡片，降低首屏/重渲染开销（修复卡顿） ===== */
+let _vList = [];                 // 当前排序+过滤+截断后的列表（虚拟化基准）
+/* ★ 2026-10-05 手机端卡顿治理：窄屏（手机）首屏只铺 60 张真实卡，其余走 .vph 占位、
+   滚动到再补。原本宽屏/窄屏一律 140 张，手机上 300+ 张卡全在 DOM 里（实测稳态近 3 万节点），
+   一次滚动要为全部卡片算布局/绘制 → 掉帧。宽屏保持 140 不变。 */
+let _vRealCap = (window.innerWidth < 760) ? 60 : 140;   // 已渲染真实卡上限（"加载更多"递增）；其余用占位卡撑高
+                                 // 2026-10-01：60→140。默认视图 2000+ 场只出 60 张真实卡，
+                                 // 用户滚两屏全是占位、误以为"场次没渲染出来"，故首屏多铺 80 张真实卡。
+let _vEst = 240;                 // 占位卡估算高度，首屏实测后更新
+let _vScrollBound = false, _vScrollT = false;
+/* ★ 2026-10-01 修（用户投诉"初盘/临盘都是 21:57"）：
+   原缓存失效条件只比较 `MATCHES.length`。MATCHES 会被 `MATCHES = mergeTitan007(...)` **整体重赋值**
+   为新数组（对象全是新的），若新旧长度恰好相同 → 缓存不失效 → mByTid() 一直返回**旧数组里的旧对象**。
+   后果：analyzeMatch 把结果写进新对象，而 refreshRendered/跳转 用 mByTid 取到旧对象（analysis 空）
+   → 卡片永远渲染旧内容（盘路块不出现、甚至显示早已过时的盘口时间戳）。
+   故缓存必须同时比对**数组引用**。 */
+function _tidIndex(){
+  if(!_tidIndex._m || _tidIndex._r!==MATCHES.length || _tidIndex._a!==MATCHES){
+    _tidIndex._m={}; for(const m of MATCHES) _tidIndex._m[String(m.tid)]=m;
+    _tidIndex._r=MATCHES.length; _tidIndex._a=MATCHES;
+  }
+  return _tidIndex._m;
+}
+function mByTid(t){ return _tidIndex()[String(t)]; }
+/* ★ 2026-10-05 手机端卡顿治理：滚动补渲染加**帧预算**。
+   手机上缓冲只有 1.2 屏、但视口+缓冲里往往有十几张占位卡；原来一帧全建完（每张 cardHTML
+   都要跑 teamPriorOpts/teamFormOpts 与大量字符串拼接）→ 单帧几百毫秒、滑动必掉帧。
+   现在一帧最多补 FILL_BUDGET 张，其余下一 rAF 接着补；预算内的量（240 张/秒）足够跟上滑动。 */
+const FILL_BUDGET = 4;
+function fillVisible(grid){
+  const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+  const sy = window.scrollY || document.documentElement.scrollTop || 0;
+  const buf = vh * 1.2;
+  const phs = grid.querySelectorAll('.vph');
+  let budget = FILL_BUDGET;
+  for (const ph of phs){
+    if (budget <= 0){                       // 预算用尽 → 下一帧继续补，别把一帧塞满
+      requestAnimationFrame(()=>{ const g=document.getElementById('grid'); if(g) fillVisible(g); });
+      break;
+    }
+    if (ph.getAttribute('data-skip')) continue;   // 上次填充双降级失败 → 不再空转（见下方 else 分支）
+    const r = ph.getBoundingClientRect();
+    if (r.top < vh + buf && r.bottom > -buf){
+      const i = +ph.getAttribute('data-i'); if (isNaN(i)) continue;
+      const m = _vList[i]; if (!m) continue;
+      let node=null;
+      try { const t=document.createElement('div'); t.innerHTML=cardHTML(m).trim(); node=t.firstElementChild; }
+      catch(e){ try{ const t2=document.createElement('div'); t2.innerHTML=simpleCard(m,e).trim(); node=t2.firstElementChild; }catch(e2){} }
+      if (node){ try{ node.__sig = _cardSig(m); }catch(e){} ph.replaceWith(node); budget--; }  // 同 refreshRendered：补签名，否则下次会被整批重建
+      /* 🔴 与 refreshRendered 同族防御：双降级都失败时若仍不消耗预算，
+         该占位（仍在视口内、条件恒真）会被每一帧反复尝试 → 永不终止的续跑。
+         标记后跳过，宁可留一个空占位也不再空转。 */
+      else { ph.setAttribute('data-skip','1'); budget--; }
+    }
+  }
+}
+function onVScroll(){ if(_vScrollT) return; _vScrollT=true; requestAnimationFrame(()=>{ _vScrollT=false; const g=$('grid'); if(g) fillVisible(g); }); }
+function bindVScroll(on){ if(on && !_vScrollBound){ window.addEventListener('scroll', onVScroll, {passive:true}); _vScrollBound=true; } }
+/* 就地刷新已渲染卡片（不重建整页、不跳滚动）：实时 tick / 快照分析过程用它，消除整页重渲染抖动 */
+/* ⚡ 性能：refreshRendered 在首屏分批分析期间每 ~0.7s 被调一次，原实现把**全部已渲染卡片**
+   整张重建（cardHTML 很贵，卡内还要跑 teamPriorOpts/teamFormOpts）。
+   CPU 采样显示它 + 卡内被重复计算的两项合计占主线程 20%+，是真机「页面没有响应」的主因。
+   改为「快照签名」：卡片自上次渲染后状态未变就整块跳过；未完场场次把分钟桶计入签名，
+   保证倒计时/比赛进行中的分钟数仍照常刷新。 */
+function _cardSig(m){
+  const a = m.analysis;
+  const timeBucket = (m.state !== '-1') ? ('|t' + Math.floor(Date.now() / 60000)) : '';
+  /* ★ 2026-10-01 修（用户投诉"初盘/临盘时间戳都显示 21:57"）：
+     签名原只含 dir/conf/value_score/tier/n_sig，**不含盘路 panlu**。
+     分析完成时 panlu 从无到有（或拉实时盘口后 earlyT/lateT 变了），若上述 5 项未变
+     → 签名相同 → refreshRendered 整张跳过重建 → DOM 卡片永久停留在旧 HTML，
+     用户看到的仍是旧盘路（甚至"初盘=临盘"的假时间戳），而 m.analysis 里其实已是新值。
+     故把 panlu 的结构特征（有无 / 时刻数 / 起止时刻）计入签名。 */
+  let panSig = '-';
+  try{
+    const p = a && a.panlu;
+    if (p && p.has){
+      const e = p.eu || {}, s = p.asia || {};
+      panSig = 'P1|' + (e.ctN||0) + '|' + (e.earlyT||'') + '~' + (e.lateT||'') + '|' + (s.earlyT||'') + '~' + (s.lateT||'');
+    } else if (p) { panSig = 'P0'; }
+  }catch(e){}
+  /* ★ 2026-10-04：队名也进签名。渐进式补齐（progressiveNameResolve）会把 m.home/m.away 就地改掉，
+     但旧签名不含队名 → refreshRendered 判定"没变"跳过重建 → 卡片永远显示队名补全前的脏名/乱码名。
+     队名变化同样是"卡片内容变了"，必须纳入签名，否则增量替换会静默漏更新。 */
+  return (a ? 'A' : '-') + '|' + (a ? (a.dir|0) + ',' + (a.conf|0) + ',' + Math.round((a.value_score||0)*100) + ',' + (a.tier|0) + ',' + (a.n_sig|0) : '')
+    + '|' + panSig
+    + '|' + (m._aErr || '') + '|' + (m._sel ? 1 : 0) + '|' + m.state + '|' + (m._liveTried ? 1 : 0) + timeBucket
+    + '|N' + (m.home || '') + '/' + (m.away || '');
+}
+/* ★ 2026-10-05 手机端卡顿治理：给单次重建加**帧预算**。
+   实测（CPU 4x 节流探针）：refreshRendered(true) 在 290 张卡上要 130~570ms —— 一次调用就把
+   主线程堵掉半个秒，手机滚动/点击必掉帧。现在每帧最多重建 RR_BUDGET 张，剩下的排队下一帧补，
+   总工作量不变（最后一定会全部更新完），但每帧只占几十毫秒，用户感觉不到卡。
+   续跑期间新进来的 refreshRendered 不叠加（_rrPending 闸门），避免越积越多。 */
+const RR_BUDGET = 8;
+/* 🔴 2026-10-05 「页面不断跳动」根因修复（真机探针实测：103 次/秒、DOM 变动 750 次/秒，且
+   分析早已跑完仍在狂奔）：
+   旧实现预算用尽后续跑 `refreshRendered(true)` —— force=true 跳过签名比较，新一轮
+   `querySelectorAll` 又从头拿到全部 140 张卡、budget 仍只有 8 → **永远只重建同一批「前 8 张」**，
+   后面 132 张永远轮不到，做完再排一次续跑 → 自持死循环，永不终止。
+   改为「快照队列逐个消化」：每张卡一轮内最多处理一次，队列空了即结束，必然终止；
+   队列运行期间进来的新请求只记 dirty（跑完补一轮，非 force → 无变化时立即结束，不会连环）。 */
+let _rrQueue = null, _rrForce = false, _rrDirty = false;
+function refreshRendered(force){
+  const grid=$('grid'); if(!grid) return;
+  if (_rrQueue){ if (force) _rrForce = true; _rrDirty = true; return; }   // 已有队列在跑 → 不叠加
+  _rrForce = !!force; _rrDirty = false;
+  _rrQueue = Array.from(grid.querySelectorAll('.c'));
+  _rrStep();
+}
+function _rrStep(){
+  const q = _rrQueue;
+  if (!q) return;
+  let budget = RR_BUDGET;
+  while (q.length && budget > 0){
+    const node = q.shift();
+    if (!node || !node.isConnected) continue;                // 已被替换/移除 → 跳过（不占预算）
+    const id=node.id||''; if(!id.startsWith('card-')) continue;
+    const m=mByTid(id.slice(5)); if(!m) continue;
+    const sig=_cardSig(m);
+    if (!_rrForce && node.__sig === sig) continue;           // 状态未变 → 跳过整张重建
+    try{
+      const t=document.createElement('div'); t.innerHTML=cardHTML(m).trim(); const nn=t.firstElementChild;
+      if(nn){ nn.__sig = sig; node.replaceWith(nn); }
+    }catch(e){}
+    budget--;
+  }
+  if (q.length){ setTimeout(_rrStep, 0); return; }            // 队列没消化完 → 下一帧接着做
+  _rrQueue = null;                                            // 队列清空 → 结束（不再无限续跑）
+  const dirty = _rrDirty;
+  _rrDirty = false; _rrForce = false;
+  /* 补跑**不带 force**：force 的语义「无条件重建一遍」已由刚跑完的这轮满足；
+     补跑只需覆盖期间真变了状态的卡，而签名比较会自动挑出它们。
+     带 force 会让「连调 N 次 force」变成 N 轮全量重建（真机单测实测过 283 = 两轮 140）。 */
+  if (dirty){ refreshRendered(false); }
+}
+/* ====== 洋哥「赛前大热预警」 ======
+   用户诉求原话："我要的就是这种效果，赛前赛中告诉我啊，等到复盘已经剩下复盘作用了。"
+   → 复盘只服务于事后校验；真正要出手的机会必须在【开赛前/进行中】就推送出来。
+   做法：扫当前列表里"未开赛 + 进行中"的场次，凡命中洋哥大热判据（北单真实资金占比
+   显著超出其公平胜率，且赛事在适用域内）就置顶列出，并给出"站热门注码对面"的方向。
+   判据与阈值全部取自《洋哥自传》真实案例实测复算（见 engine.js YG_HOT_*_PT）。 */
+function esc(s){
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+/* ★ 2026-10-22 榜单取结论的唯一出口：优先用烘焙结论 OFFLINE_PACK[tid].an。
+   原因：offlineAnalyze() 会用「只有欧赔、没有北单/必发真实资金」的实时结果覆盖 m.analysis，
+   plan 会从 26 个 PICK 掉到 2 个、heatUsable 直接归零 —— 榜单数字因此在两次渲染间乱跳。
+   烘焙 an 是带真实资金源跑出来的（与大热必死/过热榜口径一致），且 ygMin/plan/grade_* 都在首屏。
+   没有烘焙结论的场（球探独有/新场）才回落到 m.analysis。 */
+function _boardAn(m){
+  try{
+    const p = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[m && m.tid] : null;
+    const a = p && p.an;
+    if (a && (a.plan || a.grade_net != null || a.ygMin || a.yg)) return a;
+  }catch(e){}
+  return (m && m.analysis) || null;
+}
+/* 预警条「展开全部 / 收起」（折叠项带 data-ygex） */
+function toggleYgExtra(btn){
+  try{
+    const box = btn.parentNode;
+    const bs = box.querySelectorAll('[data-ygex]');
+    if (!bs.length) return;
+    const open = bs[0].style.display !== 'none';
+    for (let i = 0; i < bs.length; i++) bs[i].style.display = open ? 'none' : '';
+    const total = Number(btn.getAttribute('data-total') || 0) || (bs.length + 8);
+    btn.textContent = open ? ('展开全部 ' + total + ' 场') : '收起';
+  }catch(e){}
+}
+function ygAlertHTML(list){
+  const rows = [];
+  for (const m of list){
+    const a = _boardAn(m); if (!a) continue;
+    const y = a.yg || a.ygMin; if (!y) continue;   // ★ 首屏用 ygMin 精简快照，整层 yg 在懒加载包里
+    // 「引导资金」= 聪明钱(权威组)与大众盘(Bet365)对同一结果定价明显背离
+    //  → 洋哥："一旦出现非平衡资金的盘口调整，就意味着我们能获得别人无法获得的信息"
+    const sd = (a.company_div && (a.company_div.flag === 'SHARP_DIVERGE' || a.company_div.flag === 'SHARP_WATCH'))
+      ? a.company_div.sharpVsPop : null;
+    if (!y.isHot && !y.isHotWarn && !sd) continue;   // 大热 / 危险预警 / 引导资金
+    const st = m.state;
+    if (!(isLive(st) || st === '0')) continue;       // 只要未开赛 / 进行中（完场的交给复盘）
+    rows.push({ m:m, y:y, sd:sd, p:a.plan });
+  }
+  // 排序：先按命中线索条数（合流越强越靠前），再按热度超出幅度
+  rows.sort((p,q)=>{
+    const pn = (p.p && p.p.n) || 0, qn = (q.p && q.p.n) || 0;
+    if (pn !== qn) return qn - pn;
+    return ((q.y && q.y.heatExcess) || 0) - ((p.y && p.y.heatExcess) || 0);
+  });
+  if (!rows.length){
+    // 区分两种"没有"：完全没分析 vs 分析了但没有大热 —— 给用户的行动指引不同
+    let analyzed = 0;
+    for (const m of list) if (m.analysis) analyzed++;
+    if (!analyzed){
+      return '<div class="yg-alert yg-alert-idle">'
+        + '<div class="yg-alert-h">🔥 洋哥赛前大热预警</div>'
+        + '<div class="yg-alert-b">当前筛选下还没分析任何场次，无法判定热度。<br>'
+        + '<button class="yg-btn" onclick="analyzeAllAvailable()">⚡ 分析可分析场，扫描赛前大热</button>'
+        + '</div></div>';
+    }
+    return '<div class="yg-alert yg-alert-idle">'
+      + '<div class="yg-alert-h">🔥 洋哥赛前大热预警</div>'
+      + '<div class="yg-alert-b">已分析 ' + analyzed + ' 场，当前<b>没有</b>命中洋哥大热判据的场次。'
+      + '（大热本就"可遇不可求"——洋哥原文：绝大多数盘是吃水盘，没有机会就该空手，不要硬找。）</div></div>';
+  }
+  let h = '<div class="yg-alert">';
+  h += '<div class="yg-alert-h" style="cursor:pointer" onclick="toggleYgAlert()">🔥 洋哥赛前大热预警 · ' + rows.length + ' 场'
+     + '<span class="yg-alert-sub">（赛前/赛中实时，非复盘；<b>净超买 pt 只认北单源</b>，必发源单标"必发热度·参考·不判级"）</span>'
+     + '<span id="ygAlertToggle" style="float:right;font-size:12px;font-weight:700;opacity:.85">' + (_ygOpen ? '收起 ▴' : '展开 ▾') + '</span></div>';
+  h += '<div class="yg-alert-b" id="ygAlertBody"' + (_ygOpen ? '' : ' style="display:none"') + '>';
+  /* ★ 2026-10-22 极简：**默认整块收起**（只留标题一行 + 场次数）。
+     27 场全铺会把两张极简榜挤到屏幕外，正是用户说的"一堆杂七杂八"；点标题才展开全部。 */
+  const YG_CAP = 9999;
+  for (let _i = 0; _i < rows.length; _i++){
+    const r = rows[_i];
+    const m = r.m, y = r.y, sd = r.sd, pl = r.p;
+    const lv = y.isHot ? 'hot' : (y.isHotWarn ? 'warn' : 'guide');
+    const lvTxt = y.isHot ? '大热必死' : (y.isHotWarn ? '危险预警' : '引导资金');
+    const side = labelWDL(y.heatSide);
+    const opp  = (y.danceDir && y.danceDir !== '—') ? labelWDL(y.danceDir) : '—';
+    const live = isLive(m.state);
+    h += '<div class="yg-row ' + lv + '"' + (_i >= YG_CAP ? ' data-ygex="1" style="display:none"' : '') + '>';
+    h +=   '<div class="yg-row-l">';
+    h +=     '<span class="yg-lv">' + lvTxt + '</span>';
+    h +=     '<span class="yg-m">' + esc(m.home) + ' vs ' + esc(m.away) + '</span>';
+    h +=     '<span class="yg-lg">' + esc(m.league || '') + '</span>';
+    h +=     '<span class="yg-tm">' + esc(m.kickoff || '') + (live ? ' <b style="color:#f0883e">进行中</b>' : '') + '</span>';
+    h +=   '</div>';
+    h +=   '<div class="yg-row-r">';
+    h +=     '<span>最热 <b>' + side + '</b> ' + y.heatShare + '%</span>';
+    h +=     '<span>公平 ' + (y.fairProb != null ? y.fairProb + '%' : '—') + '</span>';
+    /* ★ 2026-10-31 八修：「超出 +Xpt」原=绝对偏差（未扣缺口），且**把必发源也算进 pt 标尺** → 必发场动辄 +33/+36pt
+       （洋哥原文：必发并不能反应球队购买热度，本就不该进"净超买"标尺）。
+       现：北单源 → 净超买 pt（唯一标尺）；必发/其它源 → 单列「必发热度(绝对偏差)·仅供参考·不判级」。 */
+    const _isBd = (y.heatSrc === 'beidan');
+    const _exNet = _isBd ? _ygNet(y) : null;
+    h +=     '<span class="yg-ex">' + (_exNet!=null
+        ? ('净超买 <b>+' + _exNet.toFixed(1) + 'pt</b>')
+        : (_isBd ? ('绝对偏差(未扣缺口) <b>+' + y.heatExcess + 'pt</b>')
+                 : ('<span style="color:#0891b2">必发热度(绝对偏差) <b>+' + y.heatExcess + 'pt</b></span> <span style="font-size:10px;opacity:.7">参考·不进pt标尺</span>'))) + '</span>';
+    if (y.unbeatenShare != null) h += '<span>不败资金 ' + y.unbeatenShare + '%</span>';
+    h +=     '<span class="yg-src">' + ((y.marketHeavy && !y.isHot) ? ('市场大热 ' + (y.favClose != null ? (+y.favClose).toFixed(2) : '?') + '≤' + (y.mhMax != null ? (+y.mhMax).toFixed(2) : '1.75')) : (y.heatKind === 'odds-rise' ? ('赔率抬升型 ' + (y.favMv != null ? (+y.favMv).toFixed(1) : '?') + '%') : (y.heatSrc === 'beidan' ? '北单池真值' : (y.heatSrc === 'ppi' ? '必发(仅活跃度)' : '无')))) + '</span>';
+    h +=   '</div>';
+    h +=   '<div class="yg-row-c">与庄共舞 → 站热门对面：<b>' + opp + '</b>'
+         + (y.problemPan ? ' ｜ 问题盘' : '') + (y.sanPan && y.sanPan !== '—' ? ' ｜ 三盘' + y.sanPan : '') + '</div>';
+    if (sd){
+      const dn = { W:'主胜', D:'平局', L:'客胜' }[sd.dir] || sd.dir;
+      h += '<div class="yg-row-c" style="color:#d29922">聪明钱 vs 大众盘背离：对【' + dn + '】差 <b>' + sd.gap + 'pt</b>'
+         + '（权威组 ' + sd.sharpProb[['W','D','L'].indexOf(sd.dir)] + '% / 大众组 ' + sd.popProb[['W','D','L'].indexOf(sd.dir)] + '%'
+         + '，' + (sd.lead === 'sharp' ? '聪明钱定价更高' : '大众盘定价更高') + '）'
+         + ' → 价格非资金自然博弈所致，疑似机构引导资金</div>';
+      // 破绽盘修正（回测结论）：建议方向跟随聪明钱(svpDir)，而非模型综合方向——同批模型方向 EV 转负
+      h += '<div class="yg-row-c" style="color:#1a73e8;font-weight:600">破绽盘建议方向 → 跟聪明钱：<b>' + dn + '</b>'
+         + '（回测：顺此方向命中 60~64%、EV 显著为正；模型综合方向同批为负，勿反向）</div>';
+    }
+    if (pl && pl.n){
+      const PC = ({ SMALL:'#8b98a9', MID:'#f5c542', PICK:'#f85149' })[pl.level] || '#8b98a9';
+      const PLBL = ({ SMALL:'小注', MID:'加重', PICK:'精选' })[pl.level] || '';
+      const br = bankroll();
+      const amt = br ? (' = ' + Math.round(br * pl.frac).toLocaleString('zh-CN') + ' 元') : '';
+      h += '<div class="yg-row-c" style="color:' + PC + '">出手等级：<b>' + PLBL + '</b> ｜ 仓位 '
+        + '<b>' + pl.stakeText + '</b>' + amt
+        + ' ｜ 命中线索 ' + pl.n + ' 条：' + pl.signals.join(' + ') + '</div>';
+    }
+    // ★ 2026-10-24：洋哥三盘法证据（资金流速/二盘365设防/盘级偏差）随每条预警展示，让用户看到"为什么"
+    if (y.pan2 || (y.heatExcessEff != null && y.heatGap != null)){
+      const _ev = [];
+      const _p2 = y.pan2;
+      if (_p2){
+        _ev.push(_p2.hot1 ? ('①盘资金流速热(全市场单方降'+Math.abs(_p2.mktDv)+')') : '①盘流速平稳');
+        _ev.push(_p2.def==='fade' ? '②盘365反向不设防·异常✓' : (_p2.def==='follow' ? '②盘365跟随降水·吃水盘' : (_p2.def==='flat' ? '②盘365按兵·观察' : '②盘无365')));
+      }
+      if (y.heatExcessEff != null && y.heatGap != null){
+        const _dev = Math.round((y.heatExcessEff - y.heatGap)/7);
+        _ev.push('③盘超买+'+y.heatExcessEff+'pt&gt;缺口'+y.heatGap+'pt'+(_dev>=2?(' · 盘级偏差≈'+_dev+'级(0.5水)佐证'):''));
+      }
+      h += '<div class="yg-row-c" style="color:#8aa0b6;font-size:11px">三盘合流证据：'+_ev.join(' ｜ ')+'</div>';
+    }
+    h += '</div>';
+  }
+  if (rows.length > YG_CAP){
+    h += '<button class="yg-btn" data-total="' + rows.length + '" onclick="toggleYgExtra(this)" style="margin:6px 0">展开全部 ' + rows.length + ' 场</button>';
+  }
+  h += '<div class="yg-alert-f" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+     + '<span>本金（洋哥：每一轮小组赛结束后更新一次）：</span>'
+     + '<input id="ygBankroll" type="number" min="0" step="100" value="' + (bankroll() || '') + '" placeholder="如 10000" '
+     + 'onchange="setBankroll(this.value)" style="width:110px;padding:3px 6px;border-radius:6px;'
+     + 'border:1px solid var(--line);background:var(--card2);color:var(--txt);font-size:12px">'
+     + '<span>元 ｜ 仓位梯度：1 条线索=1/20，2 条=1/10，3 条=1/3</span></div>';
+  h += '<div class="yg-alert-f">数据来源：北单赔率池（先有资金后有赔率，100% 真实资金占比）；'
+     + '聪明钱背离取自同源多公司欧赔分组对照。低级别/青年/女足/友谊赛资金池过小，已按洋哥原文排除。'
+     + '<b>仓位仅为本金风险预算，不是命中率承诺。</b></div>';
+  h += '</div>';   // closes #ygAlertBody
+  h += '</div>';   // closes .yg-alert
+  return h;
+}
+
+/* 洋哥预警展开/收起：默认收起（只留标题一行），点标题切换。
+   状态放全局变量，因为增量刷新会用 outerHTML 整块替换，靠它保持展开态不丢。 */
+let _ygOpen = false;
+function toggleYgAlert(){
+  _ygOpen = !_ygOpen;
+  const b = document.getElementById('ygAlertBody');
+  if (b) b.style.display = _ygOpen ? '' : 'none';
+  const t = document.getElementById('ygAlertToggle');
+  if (t) t.textContent = _ygOpen ? '收起 ▴' : '展开 ▾';
+}
+
+/* ★ 2026-10-23 共享过热门控分类（单源：实时榜 + 历史榜共用，杜绝逻辑漂移）。
+   入参 a=an（取 dirCode / plan.level），y=yg 或 ygMin（取 heatSide/danceDir/sanPan 等），
+   m=比赛对象（仅需 .home/.away 作反买对面标签）。
+   返回 {bet:'FADE'|'FOLLOW'|'NONE', actTag, actHtml, actColor, actReason,
+         fadeDir, modelDir, sanPan, planLv, crowdSide, opp, team}
+   —— bet 决定历史榜"命中/未中"口径：FADE=赌过热方不赢；FOLLOW=赌过热方赢；NONE=仅监测不计。 */
+function classifyOverheat(a, y, m){
+  /* ★ 2026-10-26 修复「假反买」bug（用户截图：桑德兰 vs 利兹联 → 反买·桑德兰 → 未中）：
+     旧逻辑 `modelDir === fadeDir` 在二者都是占位符 '—' 时也成立（'—' === '—'），
+     于是 heatSide='D'(平局最热)/danceDir='—'/sanPan='—'/modelDir='—' 这种"零方向"垃圾记录
+     被硬判成「反买·主队」，凭空造出一条可下注记录并拉低命中率。
+     现：①方向只认 W/L（'—'/''/'D'/null 一律视为无方向）②反买必须存在真实过热球队方(side)。 */
+  const _d = v => (v === 'W' || v === 'L') ? v : null;
+  const side = _d(y.heatSide);                                 // 过热球队方；'D'(平局热) 不可按球队反买 → null
+  const team = side === 'W' ? (m && m.home) : (side === 'L' ? (m && m.away) : null);
+  const opp = side === 'W' ? (m && m.away) : (side === 'L' ? (m && m.home) : null);   // 反买方向 = 过热方对面
+  const fadeDirRaw = y.danceDir, modelDirRaw = a && a.dirCode;
+  const fadeDir = _d(fadeDirRaw), modelDir = _d(modelDirRaw);  // 仅比较用；返回仍给原始值供展示
+  const sanPan = y.sanPan;                                     // '一致·强化' / '背离·警惕' / '—'
+  const planLv = (a && a.plan && a.plan.level) || '—';
+  let bet, actTag, actHtml, actColor, actReason;
+  if (side && (sanPan === '一致·强化' || (modelDir && fadeDir && modelDir === fadeDir))){
+    /* ★★ 2026-11-01 重要修正（用户："赛前预测的比赛赛果出了很多，你发现问题没有"）：
+       此前这里直接写「→ 反买 XXX」，等于在板上给买法。用 51 场赛前登记的真结算
+       （真实盘口+真实水位）验证：按「反买过热方 = 买受让方」下注 命中 35.3% / ROI −29.0%。
+       方向是反的。故 FADE 分支不再输出买法文案，只保留拥挤警告；
+       bet 仍记 'FADE' 以便历史板继续统计"这个方向到底行不行"。 */
+    bet = 'FADE'; actTag = '⚠ 拥挤·不追高'; actColor = '#b45309';
+    actHtml = '拥挤警告：别追高 <b>' + esc(team || '') + '</b>';
+    actReason = '原"反买对面"方向实测 35.3% / ROI −29.0%（赛前 51 场真结算）→ 不再作为买法';
+  } else if (modelDir && side && modelDir === side){
+    bet = 'FOLLOW'; actTag = '顺势 ' + (team || ''); actColor = '#2563eb';
+    actHtml = '顺势 <b>' + esc(team || '') + '</b>';
+    actReason = '模型同向过热方 · 实测该方向 64.7% / ROI +23.2%（赛前 51 场，样本偏集中）';
+  } else {
+    bet = 'NONE'; actTag = '监测·不机械反买'; actColor = '#b45309';
+    actHtml = '监测 · 不机械反买';
+    actReason = (sanPan === '背离·警惕' ? '模型方向与反买背离·警惕' : '模型无方向')
+              + ' · 仅作拥挤监测，不下注建议';
+  }
+  return { bet, actTag, actHtml, actColor, actReason, fadeDir: fadeDirRaw, modelDir: modelDirRaw, sanPan, planLv, crowdSide: side, opp, team };
+}
+
+/* ★ 2026-10-22 极简「强队·正式过热榜」（对标用户给的样张）：
+   只收 **北单真实资金源(竞彩无独立资金热信号) + 正式过热(isHot)** 的场次（已排除必发第三方），源头剔除 ppi 代理噪声；
+   三列：强队 ｜ 判定(正式过热 +N·参考软件标尺：占比−公平−缺口) ｜ 结果(待定/进行中)，点 + 展开超买明细与反买方向。
+   设计原则：一屏看穿谁被买爆，不再被杂项信号淹没。 */
+function overheatBoardHTML(list){
+  const rows = [];
+  for (const m of list){
+    const a = _boardAn(m); if (!a) continue;
+    const y = a.yg || a.ygMin; if (!y) continue;   // ★ 首屏用 ygMin 精简快照，整层 yg 在懒加载包里
+    if (!y.heatUsable || !y.isHot) continue;              // 仅真实资金源 + 正式过热（无 ppi 代理）
+    if (y.heatTier !== 'hot') continue;                   // ★ 排除仅"赔率抬升型"软信号：本榜只认资金档=正式过热
+    if (y.heatSrc === 'betfa') continue;                  // ★ 只收北单/竞彩（竞彩无独立资金热信号，故仅北单源；排除必发第三方）
+    const st = m.state;
+    if (!(isLive(st) || st === '0')) continue;            // 未开赛/进行中
+    const side = y.heatSide;
+    const delta = (y.heatExcessEff != null ? y.heatExcessEff : y.heatExcess);
+    // ★ 参考软件标尺：判定数字 = 北单占比 − 公平胜率 − 返还率缺口（与三盘资金板 over 同源量级），非绝对超买pt
+    const _tf = y.triFlow;
+    /* ★ 2026-11-01 口径统一：只认引擎 netPt（= heatExcessEff − heatGap）。
+       此前还允许 triFlow.maxFlow 兜底 —— 但 maxFlow 是「流向最大侧」，不是「强队被超买」，
+       实测两者 43/96 场不一致（最大差 23.7），会出现同一场资金板 +8.7、过热榜 −22.5。
+       netPt 缺失就本场不出值（宁缺勿错），不再用另一个量凑数。 */
+    const _refN = (y.netPt != null && isFinite(+y.netPt)) ? +y.netPt
+                : ((y.heatExcessEff != null && isFinite(+y.heatExcessEff))
+                    ? (+y.heatExcessEff - (y.heatGap || 0))
+                    : ((y.heatExcess != null && isFinite(+y.heatExcess))
+                        ? (+y.heatExcess - (y.heatGap || 0)) : null));
+    if (_refN == null) continue;
+    const refN = +_refN.toFixed(1);
+    if (Math.abs(refN) > 25) continue;   // ★ 数据护栏：物理不可能值（北单/365 错配）不出榜，对齐参考软件
+    // ★★ 2026-10-28 终校：参考软件「+N」= 净超买点数（pt），不是盘级；洋哥莫尔德案例（1盘级偏差≈4.7pt=异常大热）证伪"盘级说"
+    const refLvl = _ptToLvl(refN);
+    if (refLvl == null || refLvl < 4) continue;   // 净超买 ≥+4pt（对齐参考软件 +4 起；refLvl 已是 pt，非盘级）
+    const grade = _fpGrade(refLvl);
+    // ★ 数据门控反买（ui.js:4124 方法论铁律）：仅当「模型方向与过热方反向」才果断反买；否则只标监测。
+    //   本案(里昂VS霍芬海姆) heatSide='W'(霍芬海姆主场过热) → danceDir='L'(里昂)；但 live dirCode='—'、sanPan='背离·警惕'、plan=SKIP，
+    //   模型毫无方向 → 绝不能硬编码"反买里昂"，否则违反项目铁律。
+    //   ★ 2026-10-23：门控逻辑抽成 classifyOverheat() 单源（实时榜 + 历史榜共用），不再在此内联，避免两处漂移。
+    const cls = classifyOverheat(a, y, m);
+    const team = cls.team, opp = cls.opp;
+    if (!team) continue;
+    rows.push({ m, y, team, delta, refN, refLvl, grade, side, opp, actTag: cls.actTag, actHtml: cls.actHtml, actColor: cls.actColor, actReason: cls.actReason, sanPan: cls.sanPan, modelDir: cls.modelDir, planLv: cls.planLv });
+  }
+  // 主流联赛优先，其次按超买幅度
+  rows.sort((p, q) => (vbMainFirst(q.m) - vbMainFirst(p.m)) || ((q.delta || 0) - (p.delta || 0)));
+  if (!rows.length) return '';
+  let h = '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:8px 0">';
+  h += '<div style="font-weight:700;margin:2px 0 8px;font-size:14px">🔥 强队 · 正式过热榜'
+     + '<span style="opacity:.55;font-weight:400;font-size:12px;margin-left:6px">北单真实资金 · 单位=净超买pt(+4pt起) · 仅北单源 · <b style="color:#b45309">不给买法</b>（原"反买对面"实测 35.3%/−29%）</span></div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+  h += '<thead><tr style="color:var(--muted,#8b98a9);font-size:11px;text-align:left">'
+     + '<th style="padding:4px 6px;font-weight:500">强队</th>'
+     + '<th style="padding:4px 6px;font-weight:500">判定</th>'
+     + '<th style="padding:4px 6px;font-weight:500">结果</th>'
+     + '<th style="width:28px"></th></tr></thead><tbody>';
+  for (const r of rows){
+    const d = (r.delta != null ? Math.round(r.delta) : 0);
+    const _g = r.grade || _fpGrade(r.refN) || { color:'#dc2626', bg:'#fee2e2', tag:'' };
+    const stTxt = isLive(r.m.state) ? '<b style="color:#f0883e">进行中</b>' : '待定';
+    const srcTxt = ({ beidan:'北单池', betfa:'必发' })[r.y.heatSrc] || r.y.heatSrc;
+    h += '<tr style="border-top:1px solid var(--line)">'
+      + '<td style="padding:7px 6px"><b style="font-size:14px">' + esc(r.team) + '</b>'
+      + '<div style="font-size:10px;opacity:.55;margin-top:1px">' + esc(r.m.league || '') + ' ' + esc(r.m.kickoff || '') + '</div></td>'
+      + '<td style="padding:7px 6px"><span style="background:' + _g.bg + ';color:' + _g.color + ';padding:2px 8px;border-radius:6px;font-weight:700;font-size:12px;white-space:nowrap">正式过热 <b>+' + r.refLvl.toFixed(1) + 'pt</b>' + (_g.tag ? (' ' + _g.tag) : '') + '</span>'
+      + '<div style="margin-top:3px;font-size:11px;font-weight:700;color:' + r.actColor + '">' + esc(r.actTag) + '</div></td>'
+      + '<td style="padding:7px 6px">' + stTxt + '</td>'
+      + '<td style="padding:7px 6px;text-align:center"><span style="display:inline-block;width:20px;height:20px;line-height:19px;text-align:center;border-radius:6px;background:#dcfce7;color:#16a34a;font-weight:700;cursor:pointer" onclick="var n=this.closest(\'tr\').nextElementSibling;n.style.display=(n.style.display===\'none\'||!n.style.display)?\'table-row\':\'none\'">+</span></td>'
+      + '</tr>';
+    const mdTxt = (r.modelDir==='W'?'主胜':r.modelDir==='L'?'客胜':r.modelDir==='D'?'平局':'无方向');
+    h += '<tr style="display:none"><td colspan="4" style="padding:6px 8px 10px;font-size:12px;opacity:.85;line-height:1.6">'
+      + '热门方真实资金 <b>' + (r.y.heatShare != null ? r.y.heatShare : '—') + '%</b>'
+      + ' ｜ 公平胜率 ' + (r.y.fairProb != null ? r.y.fairProb : '—') + '%'
+      + ' ｜ 超买 <b style="color:#dc2626">+' + (r.y.heatExcess != null ? r.y.heatExcess : '—') + 'pt</b>'
+      + ' ｜ 净超买 <b style="color:#dc2626">+' + r.refLvl.toFixed(1) + 'pt</b>'
+      + ' ｜ 源：' + esc(srcTxt || '—')
+      + '<br>模型方向 <b>' + mdTxt + '</b> ｜ 三盘 <b>' + esc(r.sanPan || '—') + '</b> ｜ 引擎计划 <b>' + esc(r.planLv) + '</b>'
+      + '<br><b style="color:' + r.actColor + '">动作：' + r.actHtml + '</b> <span style="opacity:.7">（' + esc(r.actReason) + '）</span>'
+      + '</td></tr>';
+  }
+  h += '</tbody></table></div>';
+  return h;
+}
+
+/* 历史板队名/联赛名解码：与卡片同一出口 normTeamName（PUA 串 + team_id），回退 decodeName / 去标签。 */
+function _histName(id, zh, zht){
+  try { if (typeof normTeamName === 'function'){ var n = normTeamName(id, zh, zht, ''); if (n) return n; } } catch(e){}
+  try { if (typeof decodeName === 'function'){ var d = decodeName(zh); if (d) return d; } } catch(e){}
+  return String(zh == null ? '' : zh).replace(/<[^>]+>/g, '');
+}
+
+/* ★ 2026-10-23「过热信号·自证审计日志」板（用户诉求："我要自己看看你的结果有没有错"）。
+   数据来自 gen_index 构建期内联的 window.OVERHEAT_HISTORY（每 15 分钟随 bake 滚动累积，
+   7 天窗口内已完场的比分会被回填 result，窗口外仍保留在 overheat_history.json 历史文件里）。
+   内容：审计占比摘要（可下注建议 vs 仅监测·不下注） + 逐条过热记录（对手/过热方/超买/我的动作建议/实际比分/命中✅·未中❌·待结算⏳·仅监测不计）。
+   ★ 2026-10-31 定位纠偏：本板是审计日志，不是胜率证明板——绝不直接标榜"命中率"，避免误读成可盈利依据。
+   ★ 分类与实时榜共用 classifyOverheat()——历史条目只存原始门控字段，渲染时实时重算动作建议，
+   保证"我当初怎么说的"与"我现在怎么说"口径一致（字段不变则结果不变）。命中口径：
+   FADE(反买)=赌过热方不赢(result≠crowdSide)；FOLLOW(顺势)=赌过热方赢(result=crowdSide)；NONE(监测)不计。 */
+function overheatHistoryHTML(){
+  let H = (typeof window !== 'undefined' && window.OVERHEAT_HISTORY) || [];
+  if (!Array.isArray(H)) H = [];
+  if (!H.length) return '';
+  // 用原始门控字段实时重建 a/y/m，走 classifyOverheat 单源，避免与实时榜漂移
+  const rows = H.map(function(e){
+    const homeD = _histName(e.homeId, e.home, e.homeZht);
+    const awayD = _histName(e.awayId, e.away, e.awayZht);
+    const leagueD = _histName(null, e.league, '');
+    const m = { home: homeD, away: awayD, league: leagueD, kickoff: e.kickoff };
+    const a = { dirCode: e.modelDir, plan: (e.planLv && e.planLv !== '—') ? { level: e.planLv } : null };
+    const y = { heatSide: e.heatSide, danceDir: e.danceDir, sanPan: e.sanPan,
+                heatShare: e.heatShare, fairProb: e.fairProb, heatExcess: e.heatExcess,
+                heatExcessEff: e.heatExcessEff, heatSrc: e.heatSrc };
+    const cls = classifyOverheat(a, y, m);
+    const settled = (e.result === 'W' || e.result === 'D' || e.result === 'L');
+    let status, stColor, won = null;
+    if (!settled){ status = '待结算 ⏳'; stColor = '#64748b'; }
+    else if (cls.bet === 'NONE'){ status = '仅监测·不计'; stColor = '#b45309'; }
+    else {
+      won = (cls.bet === 'FADE') ? (e.result !== cls.crowdSide) : (e.result === cls.crowdSide);
+      status = won ? '命中 ✅' : '未中 ❌'; stColor = won ? '#16a34a' : '#dc2626';
+    }
+    return { e: e, cls: cls, settled: settled, status: status, stColor: stColor, won: won, homeD: homeD, awayD: awayD, leagueD: leagueD };
+  });
+  // 排序：已结算(带结果)置顶、按日期倒序；未结算随后、按日期倒序（让用户先看可复核的结论）
+  rows.sort(function(p, q){
+    if (p.settled !== q.settled) return p.settled ? -1 : 1;
+    return String(q.e.day || '').localeCompare(String(p.e.day || ''));
+  });
+  // —— 汇总 ——
+  const bettable = rows.filter(function(r){ return r.cls.bet !== 'NONE'; });
+  const settledBet = bettable.filter(function(r){ return r.settled; });
+  const hits = settledBet.filter(function(r){ return r.won; }).length;
+  const fadeRows = bettable.filter(function(r){ return r.cls.bet === 'FADE'; });
+  const fadeHit = fadeRows.filter(function(r){ return r.settled && r.won; }).length;
+  const followRows = bettable.filter(function(r){ return r.cls.bet === 'FOLLOW'; });
+  const followHit = followRows.filter(function(r){ return r.settled && r.won; }).length;
+  const monitorN = rows.filter(function(r){ return r.cls.bet === 'NONE'; }).length;
+  const pct = function(n, d){ return d ? (Math.round(n / d * 1000) / 10) + '%' : '—'; };
+  /* ★ 2026-10-26：不再把「反买(FADE)」与「顺势(FOLLOW)」两种【相反策略】合并成一个"命中 33.3%"——
+     混合口径既无意义又误导（用户截图正是被这个 33.3% 激起）。改为分策略报 + 显式标样本量；
+     与项目铁律「大热必死一律观察·不可机械反买」一致。
+     ★ 2026-10-31：本板定位改为「自证审计日志·非胜率证明」，可下注样本统一定名为「可下注建议」（原"有方向(观察)"），
+     并在横幅刺眼展示"仅监测不下注"占比，避免误读成可盈利依据。 */
+  /* ★ 2026-10-31 回应"79场历史复盘有什么命中率"：本板定位改为【自证审计日志】，不再标榜命中率。
+     把"仅监测占比"做成刺眼横幅，一眼看清绝大多数条目根本没给下注建议。 */
+  /* ★★ 2026-11-01 修「展示集≠统计集」（用户："赛前预测的比赛赛果出了很多，你发现问题没有"）：
+     实时过热榜 overheatBoardHTML 硬性 `heatSrc==='betfa' → continue`（只收北单，洋哥原话
+     "必发并不能反应球队购买热度"），但历史板入库条件却允许 beidan+betfa →
+     历史 27 条里 23 条是必发，用户在榜上**从来没见过**这些场次，统计口径与展示口径完全脱节。
+     现：北单源 / 必发源分开计数，只有北单源算「本板可核对的样本」。 */
+  const _isBd = function(r){ return r.e.heatSrc === 'beidan'; };
+  const bdRows = rows.filter(_isBd), bfRows = rows.filter(function(r){ return !_isBd(r); });
+  const bdBettable = bdRows.filter(function(r){ return r.cls.bet !== 'NONE'; });
+  const bdSettledBet = bdBettable.filter(function(r){ return r.settled; });
+  const bdHits = bdSettledBet.filter(function(r){ return r.won; }).length;
+  const monPct = rows.length ? Math.round(monitorN / rows.length * 100) : 0;
+  const sum = '<b style="color:#b45309">本板是审计日志·非胜率证明：</b>'
+    + '总 <b>' + rows.length + '</b> ｜ <b style="color:#b45309">仅监测·不下注 ' + monitorN + '（' + monPct + '%）</b>'
+    + ' ｜ 可下注建议 <b style="color:#16a34a">' + bettable.length + '</b>'
+    + '（反买 ' + fadeRows.length + ' 中 ' + fadeHit + ' ｜ 顺势 ' + followRows.length + ' 中 ' + followHit + '）'
+    + ' ｜ 已结算 ' + settledBet.length
+    + '<br><b>按资金源拆开（重要）</b>：'
+    + '<b style="color:#16a34a">北单源 ' + bdRows.length + ' 条</b>（= 上方实时榜唯一展示的源）'
+    + ' → 可下注建议 ' + bdBettable.length + '、已结算 ' + bdSettledBet.length + '、命中 ' + bdHits
+    + ' ｜ <span style="opacity:.75">必发源 ' + bfRows.length + ' 条（<b>不进实时榜</b>，洋哥：必发不反映球队购买热度）</span>'
+    + ' ｜ <b style="color:#dc2626">两源不可合并算命中率</b>';
+
+  let h = '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:8px 0">';
+  h += '<div style="font-size:11px;color:var(--mut);padding:2px 2px 6px;line-height:1.5">判定口径（洋哥自传）：大热必死 = 北单真实资金超买 &gt; 该场<b>返还率缺口(1−365R，动态，约7~15pt)</b> 且 ①盘资金趋势同指 + ②盘365不设防（三盘合流），绝非单看北单；大热可遇不可求，无信号即空手。本板与实时过热榜共用 classifyOverheat 单源，字段不变则结论不变。</div>';
+  h += '<div style="font-weight:700;margin:2px 0 4px;font-size:14px">📜 过热信号 · 自证审计日志'
+     + '<span style="opacity:.55;font-weight:400;font-size:12px;margin-left:6px">滚积累积·专用于复核 AI 结论对错（不是胜率证明）</span></div>';
+  h += '<div style="font-size:12px;padding:6px 8px;background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.25);border-radius:8px;margin:4px 0 8px;line-height:1.7">' + sum + '</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+  h += '<thead><tr style="color:var(--muted,#8b98a9);font-size:11px;text-align:left">'
+     + '<th style="padding:4px 6px;font-weight:500">日期</th>'
+     + '<th style="padding:4px 6px;font-weight:500">对阵</th>'
+     + '<th style="padding:4px 6px;font-weight:500">过热方</th>'
+     + '<th style="padding:4px 6px;font-weight:500">我的动作建议</th>'
+     + '<th style="padding:4px 6px;font-weight:500">实际比分</th>'
+     + '<th style="padding:4px 6px;font-weight:500">结果</th></tr></thead><tbody>';
+  for (const r of rows){
+    const e = r.e, cls = r.cls;
+    const d = (e.heatExcessEff != null ? Math.round(e.heatExcessEff) : (e.heatExcess != null ? Math.round(e.heatExcess) : 0));
+    const dLv = _ptToLvl(d);
+    const opp = cls.opp || '—';
+    const team = cls.team || '—';
+    const resTxt = r.settled ? (e.result + ' ' + (e.hs != null ? (e.hs + ':' + e.as) : '')) : '—';
+    const srcTxt = ({ beidan:'北单池', betfa:'必发' })[e.heatSrc] || e.heatSrc || '—';
+    /* ★ 2026-10-31 九修：历史行数字必须与全板统一为净超买(netPt)。
+       优先级：① e.netPt（新条目·引擎直出净超买）＞② heatExcessEff−heatGap（旧条目·补救折算）＞③ 绝对偏差(未扣缺口)·标旧口径。
+       旧条目（2026-10-31 前登记，无 netPt/heatGap）只能显示绝对偏差并如实标注，禁止冒充实时净超买。 */
+    const _gapE = (e.heatGap != null && isFinite(+e.heatGap)) ? +e.heatGap : null;
+    const _netE = (e.netPt != null && isFinite(+e.netPt)) ? +(+e.netPt).toFixed(1)
+                : ((d && _gapE != null) ? +((+d) - _gapE).toFixed(1) : null);
+    const _oldCal = (_netE == null);   // 算不出净超买 = 旧口径残留（无 netPt 也无缺口可折算）
+    const _heatCell = (_netE != null)
+      ? ('净超买 <b style="color:#dc2626">+' + _netE + 'pt</b>' + (_oldCal ? '' : ' <span style="opacity:.6">（绝对偏差 +' + d + 'pt − 缺口 ' + _gapE.toFixed(1) + 'pt）</span>'))
+      : ('绝对偏差(未扣缺口) <b style="color:#dc2626">+' + d + 'pt</b> <b style="color:#b45309">· 旧口径</b>');
+    h += '<tr style="border-top:1px solid var(--line)">'
+      + '<td style="padding:6px 6px;white-space:nowrap;opacity:.8">' + esc(e.day || '') + '</td>'
+      + '<td style="padding:6px 6px"><b>' + esc(r.homeD || '') + '</b> vs <b>' + esc(r.awayD || '') + '</b>'
+      + '<div style="font-size:10px;opacity:.5">' + esc(r.leagueD || '') + '</div></td>'
+      + '<td style="padding:6px 6px"><b>' + esc(team) + '</b>'
+      + '<div style="font-size:10px;opacity:.6">' + _heatCell + ' ｜ ' + esc(srcTxt) + '</div></td>'
+      + '<td style="padding:6px 6px;font-weight:700;color:' + cls.actColor + '">' + esc(cls.actTag)
+      + '<div style="font-size:10px;font-weight:400;opacity:.7">' + esc(cls.actReason) + '</div></td>'
+      + '<td style="padding:6px 6px;white-space:nowrap">' + esc(resTxt) + '</td>'
+      + '<td style="padding:6px 6px;font-weight:700;color:' + r.stColor + '">' + esc(r.status) + '</td>'
+      + '</tr>';
+  }
+  h += '</tbody></table></div>';
+  return h;
+}
+
+/* ★ 2026-10-23「真·下注回测」板（用户诉求："三盘资金命中率真的没问题吗，好好跑一下"）。
+   数据来自 gen_index 内联的 window.BET_BACKTEST：基于 bake 滚动7天窗口已完赛场次，模拟"按规则下注"，
+   算命中率 + ROI + 与"无脑押低赔方(热门)"基准对比。核心目的：暴露模型方向是否真有 alpha，
+   还是只是"押热门方常赢"。结论口径透明，每注等额1单位。 */
+function bettingBacktestHTML(){
+  let B = (typeof window !== 'undefined' && window.BET_BACKTEST) || null;
+  if (!B || typeof B !== 'object') return '';
+  const m = B.model || {}, fav = B.favBaseline || {}, fade = B.fade || {};
+  const pct = function(n, d){ return d ? (Math.round(n / d * 1000) / 10) + '%' : '—'; };
+  const roiColor = function(v){ return v > 0 ? '#16a34a' : (v < 0 ? '#dc2626' : '#64748b'); };
+  // —— 头部诚实结论 ——
+  const samePct = B.modelEqFavPct || 0;
+  const headline = samePct >= 95
+    ? '⚠ 模型方向投注 ≈ 无脑押低赔方（' + samePct + '% 一致）→ 未见独立 alpha，75% 命中实为"热门常赢"'
+    : '模型方向投注与无脑押热门基准 ' + samePct + '% 一致';
+  let h = '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:8px 0">';
+  h += '<div style="font-weight:700;margin:2px 0 4px;font-size:14px">🎲 真·下注回测'
+     + '<span style="opacity:.55;font-weight:400;font-size:12px;margin-left:6px">按规则模拟下注·每注1单位·滚动7天窗口已完赛</span></div>';
+  h += '<div style="font-size:12px;padding:5px 8px;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);border-radius:8px;color:#dc2626;margin:4px 0 8px;font-weight:600">'
+     + esc(headline) + '</div>';
+
+  // —— 两张主卡：模型方向 vs 无脑基准 ——
+  const card = function(title, sub, n, hit, rate, roi, profit, color, isBase){
+    return '<div style="flex:1;min-width:150px;background:' + (isBase ? 'rgba(100,116,139,.08)' : 'rgba(37,99,235,.06)') + ';border:1px solid ' + (isBase ? 'rgba(100,116,139,.25)' : 'rgba(37,99,235,.25)') + ';border-radius:10px;padding:8px 10px">'
+      + '<div style="font-size:12px;font-weight:700;color:' + color + '">' + esc(title) + '</div>'
+      + '<div style="font-size:10px;opacity:.6;margin-bottom:4px">' + esc(sub) + '</div>'
+      + '<div style="font-size:22px;font-weight:800;color:' + color + '">' + roi + '%</div>'
+      + '<div style="font-size:11px;opacity:.8">ROI（净盈亏 ' + (profit >= 0 ? '+' : '') + profit + ' 单位）｜ ' + n + ' 注 命中 ' + hit + '/' + n + '（' + rate + '%）</div>'
+      + '</div>';
+  };
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">';
+  h += card('① 模型方向投注', 'dirCode∈{W,L}·押该方欧赔胜', m.n || 0, m.hit || 0, m.rate || 0, m.roi || 0, m.profit || 0, '#2563eb', false);
+  h += card('② 无脑押低赔方(基准)', '同批场次·押热门方(低赔)', fav.n || 0, fav.hit || 0, fav.rate || 0, fav.roi || 0, fav.profit || 0, '#64748b', true);
+  // 反买卡
+  const fadeColor = fade.rate >= 50 ? '#16a34a' : '#dc2626';
+  h += '<div style="flex:1;min-width:150px;background:rgba(180,83,9,.06);border:1px solid rgba(180,83,9,.25);border-radius:10px;padding:8px 10px">'
+    + '<div style="font-size:12px;font-weight:700;color:#b45309">③ 过热反买(仅命中率)</div>'
+    + '<div style="font-size:10px;opacity:.6;margin-bottom:4px">真实资金·正式过热·过热方未赢=中</div>'
+    + '<div style="font-size:22px;font-weight:800;color:' + fadeColor + '">' + (fade.rate || 0) + '%</div>'
+    + '<div style="font-size:11px;opacity:.8">' + (fade.n || 0) + ' 场 中 ' + (fade.hit || 0) + ' ｜ 95%CI [' + ((fade.ci||[])[0]||0) + '%,' + ((fade.ci||[])[1]||0) + '%]</div>'
+    + '</div>';
+  h += '</div>';
+
+  // —— 口径说明（诚实）——
+  h += '<div style="font-size:11px;opacity:.75;line-height:1.7;padding:4px 2px 8px;border-bottom:1px solid var(--line);margin-bottom:6px">'
+    + '📌 口径：①模型方向投注=有 W/L 方向时押该方欧赔胜；②基准=同批场次无脑押低赔(热门)方；③过热反买无干净组合赔率，仅算命中率。'
+    + ' 已完赛 ' + (B.finished_total || 0) + ' 场，其中 <b>' + (B.no_dir || 0) + ' 场(' + pct(B.no_dir, B.finished_total) + ')模型无方向</b>→无法下注。'
+    + ' 模型方向 95%CI [' + ((m.ci||[])[0]||0) + '%,' + ((m.ci||[])[1]||0) + '%]。'
+    + ' <b>结论：模型 75% 命中≈热门方常赢，样本仅 ' + (m.n || 0) + ' 注、含 10-21 单日 −5.7%，不构成稳定 alpha。</b></div>';
+
+  // —— 反向子集（诚实挖 alpha）——
+  const ca = B.contraA || {}, cb = B.contraB || {}, cc = B.contraC || {}, sb = B.selBias || {};
+  h += '<div style="font-weight:700;margin:10px 0 4px;font-size:13px;color:#b45309">🔍 反向子集（诚实挖 alpha：模型/信号 与 热门 反向 的那些场）</div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">';
+  h += '<div style="flex:1;min-width:140px;background:rgba(100,116,139,.08);border:1px solid rgba(100,116,139,.25);border-radius:10px;padding:8px 10px">'
+    + '<div style="font-size:12px;font-weight:700;color:#64748b">A · 模型方向 反 欧赔热门</div>'
+    + '<div style="font-size:10px;opacity:.6;margin-bottom:4px">dirCode 与低赔方反向·押模型方</div>'
+    + '<div style="font-size:20px;font-weight:800">' + (ca.n || 0) + ' 场</div>'
+    + '<div style="font-size:11px;opacity:.8">' + ((ca.n || 0) === 0 ? '模型从不逆热门发声 → 无反向子集可挖' : ((ca.hit || 0) + '/' + (ca.n || 0) + '（' + (ca.rate || 0) + '%）ROI ' + (ca.roi || 0) + '%')) + '</div>'
+    + '</div>';
+  h += '<div style="flex:1;min-width:140px;background:rgba(100,116,139,.08);border:1px solid rgba(100,116,139,.25);border-radius:10px;padding:8px 10px">'
+    + '<div style="font-size:12px;font-weight:700;color:#64748b">B · 模型方向 反 市场热门</div>'
+    + '<div style="font-size:10px;opacity:.6;margin-bottom:4px">dirCode 与 yg.favSide 反向·押模型方</div>'
+    + '<div style="font-size:20px;font-weight:800">' + (cb.n || 0) + ' 场</div>'
+    + '<div style="font-size:11px;opacity:.8">' + ((cb.n || 0) === 0 ? '同样 0 场 → 模型方向=市场热门' : ((cb.hit || 0) + '/' + (cb.n || 0) + '（' + (cb.rate || 0) + '%）ROI ' + (cb.roi || 0) + '%')) + '</div>'
+    + '</div>';
+  const cColor = (cc.roi || 0) > 0 ? '#16a34a' : '#dc2626';
+  h += '<div style="flex:2;min-width:200px;background:rgba(180,83,9,.06);border:1px solid rgba(180,83,9,.25);border-radius:10px;padding:8px 10px">'
+    + '<div style="font-size:12px;font-weight:700;color:#b45309">C · 大热必死 FADE（真资金源·超买≥动态门）</div>'
+    + '<div style="font-size:10px;opacity:.6;margin-bottom:4px">押过热方对面：站对面命中 vs 直押对面胜(含平=输)</div>'
+    + '<div style="font-size:20px;font-weight:800;color:' + cColor + '">' + (cc.rateWin || 0) + '%</div>'
+    + '<div style="font-size:11px;opacity:.8">直押对面胜 ' + (cc.winSide || 0) + '/' + (cc.n || 0) + ' → ROI ' + (cc.roi || 0) + '% ｜ 站对面"未赢" ' + (cc.rateSide || 0) + '%（含平）</div>'
+    + '</div>';
+  h += '</div>';
+  const bw = (sb.bucket_win || []);
+  const bwTxt = bw.length ? bw.map(function(r){ return '[' + r[0].toFixed(1) + ']' + r[1] + '场赢' + r[2] + '%'; }).join(' ') : '';
+  h += '<div style="font-size:11px;opacity:.8;line-height:1.7;padding:4px 8px;background:rgba(37,99,235,.05);border:1px solid rgba(37,99,235,.18);border-radius:8px;margin-bottom:6px">'
+    + '⚠ <b>选择偏差实锤</b>：模型方向 ' + (m.n || 0) + ' 注里押的热门方赔率 中位 ' + (sb.model_fav_median || 0) + ' / 均值 ' + (sb.model_fav_avg || 0) + '，<b>' + (sb.model_heavy_pct || 0) + '% 是 ≤1.60 重热门</b>。'
+    + ' 全样本热门赔率分桶胜率：' + esc(bwTxt) + '。→ 重热门本就赢 65–90%，模型 74% 命中纯属"只对清晰重热门发声"，<b>非预测 alpha</b>。'
+    + ' 而 C 大热必死 FADE 在近期窗口直押对面胜仅 ' + (cc.rateWin || 0) + '%（ROI ' + (cc.roi || 0) + '%）——"过热方未赢" ' + (cc.rateSide || 0) + '% 多被平局稀释（押胜平=输）。<b>历史上 80%/+16.8% 是「未加方向护栏」的高门槛直押胜，加护栏后翻转成负ROI（北单错行假热污染）</b>。'
+    + '</div>';
+
+  // —— 历史标定（287场）双口径定论 ——
+  const H = B.historical || {};
+  if (H && H.total){
+    h += '<div style="font-weight:700;margin:14px 0 4px;font-size:13px;color:#7c3aed">📜 历史标定（' + H.total + '场）双口径定论 · 大热必死</div>';
+    h += '<div style="font-size:11px;opacity:.85;line-height:1.7;margin-bottom:6px">方向=北单资金最热方（hotSide）；剔除D热门后严格大热必死样本。'
+      + ' <b>「未赢口径」=过热方未赢（含平局）｜「直押胜口径」=买对手方W/L胜（平=输）</b>——两者天差地别，必须分开报。'
+      + ' <b style="color:#dc2626">⚠ 加「北单/365方向护栏」(强分明场同侧率仅 '+ (H.clearSameSideRate||0) +'%，剔除D后淘汰率 '+ (H.dirGuardRejectRate||0) +'%) 后，高门槛ROI彻底翻转。</b></div>';
+    const fs0 = H.fullSample || {};
+    const fs0g = H.fullSampleGuarded || {};
+    h += '<div style="font-size:12px;padding:6px 8px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.2);border-radius:8px;margin-bottom:6px">'
+      + '<b>全样本（' + (fs0.n||0) + '场）</b>：未赢 ' + (fs0.unwinRate||0) + '% ｜ 直押胜 ' + (fs0.betRate||0) + '%（ROI ' + (fs0.roi||0) + '%）｜ 平局 ' + (fs0.drawRate||0) + '%'
+      + ' → 全样本直押胜不盈利，平局吞掉 edge。'
+      + ' <b style="color:#dc2626">护栏后：n='+ (fs0g.n||0) +' 直押胜 '+ (fs0g.betRate||0) +'%（ROI '+ (fs0g.roi||0) +'%）</b></div>';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:2px"><thead><tr style="color:var(--muted,#8b98a9);font-size:11px;text-align:left">'
+      + '<th style="padding:3px 6px;font-weight:500">门槛</th><th style="padding:3px 6px;font-weight:500">n</th>'
+      + '<th style="padding:3px 6px;font-weight:500">未赢%(CI)</th><th style="padding:3px 6px;font-weight:500">直押胜%(CI)</th>'
+      + '<th style="padding:3px 6px;font-weight:500">ROI%</th><th style="padding:3px 6px;font-weight:500">护栏后ROI%(n)</th><th style="padding:3px 6px;font-weight:500">平局%</th></tr></thead><tbody>';
+    (H.thresholds||[]).forEach(function(t){
+      if(!t) return;
+      h += '<tr><td style="padding:3px 6px">'+esc(t.label||'')+'</td>'
+        + '<td style="padding:3px 6px">'+ (t.n||0) +'</td>'
+        + '<td style="padding:3px 6px">'+ (t.unwinRate||0) +'% ['+ (t.unwinCi?t.unwinCi[0]:0) +'~'+ (t.unwinCi?t.unwinCi[1]:0) +']</td>'
+        + '<td style="padding:3px 6px;color:'+ ((t.roi||0)>0?'#16a34a':'#dc2626') +'">'+ (t.betRate||0) +'% ['+ (t.betCi?t.betCi[0]:0) +'~'+ (t.betCi?t.betCi[1]:0) +']</td>'
+        + '<td style="padding:3px 6px;color:'+ ((t.roi||0)>0?'#16a34a':'#dc2626') +'">'+ ((t.roi||0)>=0?'+':'') + (t.roi||0) +'</td>'
+        + '<td style="padding:3px 6px;color:#dc2626">'+ (t.guardRoi!=null ? (((t.guardRoi||0)>=0?'+':'')+(t.guardRoi||0)+'% (n='+(t.guardN||0)+')') : '—') +'</td>'
+        + '<td style="padding:3px 6px">'+ (t.drawRate||0) +'%</td></tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="font-size:11px;opacity:.85;line-height:1.7;padding:4px 8px;background:rgba(220,38,38,.05);border:1px solid rgba(220,38,38,.2);border-radius:8px;margin-top:6px">'
+      + esc(H.caveat || '') + '</div>';
+    h += '<div style="font-size:11px;opacity:.8;line-height:1.6;margin-top:4px">★ <b>诚实定论（已修正）</b>：所谓"287场 80%/+16.8%"是<b>未加方向护栏</b>的高门槛直押胜——'
+      + '加护栏（等价于实时引擎 _bdDirOk，北单/365同侧才可信）后，dyn gap+12 翻转成 n=5/ROI≈−10%、fixed18 翻转成 n=8/ROI −26%，均亏钱且样本过小。'
+      + '<b>原 +16.8% 是「北单错行假热」污染</b>（错向场超买中位 10.5pt > 同向 7.1pt，高超买恰是错行放大）。'
+      + ' → 大热必死「直押对面」<b>不是可机械套利的 alpha</b>，本板只作「拥挤·减仓·回避」监测，<b>不可机械反买</b>。</div>';
+  }
+
+  // —— 按日明细 ——
+  const md = m.byDay || {}, fd = fade.byDay || {};
+  const days = (B.days || []).slice().sort().reverse();
+  if (days.length){
+    h += '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:2px"><thead><tr style="color:var(--muted,#8b98a9);font-size:11px;text-align:left">'
+      + '<th style="padding:3px 6px;font-weight:500">日期</th>'
+      + '<th style="padding:3px 6px;font-weight:500">模型投注</th>'
+      + '<th style="padding:3px 6px;font-weight:500">命中</th>'
+      + '<th style="padding:3px 6px;font-weight:500">ROI</th>'
+      + '<th style="padding:3px 6px;font-weight:500">过热反买</th>'
+      + '<th style="padding:3px 6px;font-weight:500">反买命中</th></tr></thead><tbody>';
+    for (const d of days){
+      const mm = md[d] || {}, ff = fd[d] || {};
+      h += '<tr style="border-top:1px solid var(--line)">'
+        + '<td style="padding:4px 6px;opacity:.8">' + esc(d) + '</td>'
+        + '<td style="padding:4px 6px">' + (mm.n || 0) + ' 注</td>'
+        + '<td style="padding:4px 6px">' + (mm.hit || 0) + '/' + (mm.n || 0) + '（' + (mm.rate || 0) + '%）</td>'
+        + '<td style="padding:4px 6px;font-weight:700;color:' + roiColor(mm.roi || 0) + '">' + (mm.roi || 0) + '%</td>'
+        + '<td style="padding:4px 6px">' + (ff.n || 0) + ' 场</td>'
+        + '<td style="padding:4px 6px">' + (ff.hit || 0) + '/' + (ff.n || 0) + '（' + (ff.rate || 0) + '%）</td>'
+        + '</tr>';
+    }
+    h += '</tbody></table>';
+  }
+  h += '</div>';
+  return h;
+}
+
+/* 主流联赛优先（对标用户样张：五大联赛/欧冠为主）——只用于排序，不做过滤 */
+const VB_MAIN_LG = ['英超','西甲','意甲','德甲','法甲','欧冠','欧联','欧罗巴','英冠','葡超','荷甲','苏超','土超','比甲','德乙','意乙','西乙','法乙','巴甲','巴西甲','阿甲','美职','日职','韩K','中超','澳超'];
+function vbMainFirst(m){
+  const lg = String((m && m.league) || '');
+  for (const k of VB_MAIN_LG){ if (lg.indexOf(k) >= 0) return 1; }
+  return 0;
+}
+
+/* ★ 2026-10-22「精选判定榜」双路对照（对标用户第二张样张：比赛｜亚盘判定｜欧盘判定｜精选优选）
+   口径全部取自引擎既有档位，不新造阈值：
+     A 路·亚盘 = grade_net（实际盘档 − 理论盘档）：|net|≥3 正式/中冷热→精选；|net|=2 小冷热→优选
+     B 路·欧盘 = tier（1=下注级正EV / 2=参考级）：1→精选 / 2→优选
+     P 路·破绽 = plan.level（PICK=单条严格破绽，含大热必死）→精选
+   上榜只留「双精选 / 精选」两档，优选不占屏（治"精选非精选"）。
+   排序：双精选 → 精选；同档比盘水偏离 |net|，再比真实超买 heatExcessEff。 */
+
+/* 今日可下投·实时累计 ROI 读数（window.ROI_LEDGER 由 _roi_picks.cjs 结算注入）
+   开赛后自动回填命中/ROI，让用户直接在板上盯这两个正 ROI 窗口到底稳不稳。 */
+function _roiLedgerHTML(){
+  const L = window.ROI_LEDGER;
+  if (!L || !L.windows) return '<div style="margin-top:6px;font-size:10.5px;opacity:.55">（累计命中/ROI 待首次结算后显示）</div>';
+  const w = L.windows, by = L.byDate || {};
+  const keys = Object.keys(by).sort();
+  const tk = keys.length ? keys[keys.length - 1] : null;
+  const td = tk ? (by[tk]._total || null) : null;
+  const agg = (() => {
+    let n = 0, win = 0, push = 0, lose = 0, profit = 0;
+    Object.keys(w).forEach(k => { const x = w[k] || {}; n += x.n || 0; win += x.wins || 0; push += x.pushes || 0; lose += x.losses || 0; profit += x.profit || 0; });
+    return { n, win, push, lose, profit };
+  })();
+  const dec = agg.win + agg.lose;
+  const hit = dec ? (100 * agg.win / dec).toFixed(1) : null;
+  const roi = agg.n ? (100 * agg.profit / agg.n) : null;
+  /* ★ 2026-11-01 加：区间估计。单注盈亏近似 ±1 单位 → ROI 标准误 ≈ 100/√n。
+     这是判断"到底赚没赚到"的唯一硬标准：n 小时 +10% 也可能纯属噪声。 */
+  const ci = n => {
+    if (!n) return null;
+    const se = 100 / Math.sqrt(n);
+    return { se: +se.toFixed(1), lo: +(1.96 * se).toFixed(1) };
+  };
+  const line = k => {
+    const x = w[k] || { n: 0, hitRate: null, roi: null, pending: 0 };
+    if (!x.n) return '<span style="opacity:.75">' + k + ' —</span>';
+    const r = (x.roi == null ? '—' : (x.roi >= 0 ? '+' : '') + x.roi + '%');
+    const hr = (x.hitRate == null ? '—' : x.hitRate + '%');
+    const c = ci(x.n);
+    const sig = (c && x.roi != null) ? (Math.abs(x.roi) > c.lo
+      ? '<span style="color:#15803d;font-weight:700">· 显著</span>'
+      : '<span style="color:#b45309">· 样本不足,跨0</span>') : '';
+    return '<span>' + k + ' <b>' + x.n + '</b>注 · 命中 <b>' + hr + '</b> · ROI <b style="color:' + ((x.roi || 0) >= 0 ? '#15803d' : '#dc2626') + '">' + r + '</b>'
+      + (c ? ' <span style="opacity:.6;font-size:10px">±' + c.se + '</span>' : '') + sig + '</span>';
+  };
+  const aggCi = ci(agg.n);
+  let h = '<div style="margin-top:7px;padding:7px 9px;border-radius:8px;background:rgba(22,163,74,.10);font-size:11px;line-height:1.75">';
+  h += '<b style="color:#15803d">📈 真实结算（gqj2 完场逐场对账）</b><br>';
+  h += '累计 <b>' + agg.n + '</b> 注已结算 → 命中 <b style="font-size:13px;color:#15803d">' + (hit == null ? '—' : hit + '%') + '</b>（剔走水）'
+     + ' ｜ ROI <b style="font-size:13px;color:' + ((roi || 0) >= 0 ? '#15803d' : '#dc2626') + '">' + (roi == null ? '—' : (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%') + '</b>'
+     + (aggCi ? '<span style="opacity:.6;font-size:10px">（标准误 ±' + aggCi.se + 'pt，95% 区间 ' + (roi - 1.96 * aggCi.se).toFixed(1) + '% ~ +' + (roi + 1.96 * aggCi.se).toFixed(1) + '%）</span>' : '');
+  h += '<br>' + line('深盘上盘') + '<br>' + line('结构下盘');
+  /* 平手盘子集：钱板主推口径，必须与全窗口并列可查（否则又是一次"展示集≠统计集"） */
+  const _isoW = (L.windows_iso && L.windows_iso['结构下盘']) || null;
+  if (_isoW && _isoW.n){
+    h += '<br><span style="color:#15803d"><b>平手盘</b>（钱板口径）<b>' + _isoW.n + '</b>注 · 命中 <b>' + _isoW.hitRate + '%</b> · ROI <b>+'
+      + _isoW.roi + '%</b> <span style="opacity:.6;font-size:10px">±' + (100 / Math.sqrt(_isoW.n)).toFixed(1) + '</span></span>';
+  }
+  if (td){
+    h += '<div style="margin-top:3px;font-size:10.5px;opacity:.85">今日（' + tk + '）：<b>' + (td.pending || 0) + '</b> 注在跟，已结算 <b>' + (td.n || 0) + '</b> 注'
+       + (td.n ? (' · 命中 ' + (td.hitRate == null ? '—' : td.hitRate + '%') + ' · ROI ' + (td.roi == null ? '—' : (td.roi >= 0 ? '+' : '') + td.roi + '%')) : '<span style="color:#b45309"> · 还没开赛，今日命中率暂无</span>')
+       + '</div>';
+  }
+  h += '<div style="opacity:.62;font-size:10px;margin-top:2px;line-height:1.6">赔率口径：上盘 1+水 / 下盘 1+(1.90−水)；走水不计入命中分母。'
+     + '<br><b>看"显著/样本不足"两字就行</b>：n 小的时候 ROI 再漂亮也可能是运气，账本按 ±1 单位近似给区间。</div>';
+  h += '</div>';
+  return h;
+}
+/* ★ 2026-11-01「今天只买这里」——把全板唯一实盘为正 ROI 的两个亚盘策略集中到榜首。
+   数字来自 roi_ledger.json 真结算（gqj2 完场逐场对账，非回测快照）：
+   截至 2026-11-01 累计 730 注 · 剔走水命中 56.8% · ROI +9.7%
+   （深盘上盘 93注 53.9%/+4.6% ｜ 结构下盘 637注 57.2%/+10.5%，由 _roi_picks.cjs 每轮刷新）。
+   其余 1X2 双精选（命中85%但ROI−6%）、过热反买（加护栏后翻负）均无正 ROI → 一律折进「详细数据」。
+   这是用户"我是为了赚钱"诉求的直接落地：首页第一屏只给他能下注的场。 */
+/* ★ 2026-11-01「平手盘 · 完赛档案」：钱板口径的历史赛果面板（用户要求"比赛完的全部纳入完赛版，
+   类似三盘资金过热板的赛果表格，长期保留，设置日期查询，赛果+分析"）。
+   数据源 window.ISO_RECORD ← gen_index._update_iso_record 从 daily_picks/roi_picks_*.json 全量重建，
+   注单文件永久留存 → 天然跨天累积，不依赖 bake 是否还在内存里。
+   日期查询用前端过滤（data-day），不重新请求；筛选后汇总条同步重算。 */
+window.isoDayFilter = function(day){
+  const tb = document.getElementById('isoBody'); if (!tb) return;
+  const trs = tb.querySelectorAll('tr');
+  let n = 0, w = 0, l = 0, pu = 0, pl = 0;
+  for (let i = 0; i < trs.length; i++){
+    const t = trs[i];
+    const show = (!day || t.getAttribute('data-day') === day);
+    t.style.display = show ? '' : 'none';
+    if (!show) continue;
+    n++; pl += parseFloat(t.getAttribute('data-pl') || '0');
+    const r = t.getAttribute('data-r');
+    if (r === 'win') w++; else if (r === 'lose') l++; else if (r === 'push') pu++;
+  }
+  const dec = w + l;
+  const hit = dec ? (w / dec * 100).toFixed(1) : null;
+  const roi = n ? (pl / n * 100).toFixed(1) : null;
+  const se = n ? (100 / Math.sqrt(n)).toFixed(1) : null;
+  const el = document.getElementById('isoSum');
+  if (el) el.innerHTML = '筛选结果：<b>' + n + '</b> 注 ｜ 命中 <b>' + (hit == null ? '—' : hit + '%') + '</b> ｜ ROI <b style="color:'
+    + ((roi || 0) >= 0 ? '#15803d' : '#dc2626') + '">' + (roi == null ? '—' : (roi >= 0 ? '+' : '') + roi + '%') + '</b>'
+    + (se ? ' <span style="opacity:.6">（±' + se + '）</span>' : '')
+    + ' ｜ 胜 ' + w + ' / 走 ' + pu + ' / 负 ' + l;
+};
+
+function isoFinishedHTML(){
+  let R = (typeof window !== 'undefined' && window.ISO_RECORD) || [];
+  if (!Array.isArray(R)) R = [];
+  const done = R.filter(function(e){ return e && (e.r === 'win' || e.r === 'lose' || e.r === 'push'); });
+  if (!done.length) return '';
+  done.sort(function(p, q){ return String(q.d).localeCompare(String(p.d)) || (Number(q.ko) || 0) - (Number(p.ko) || 0); });
+  let w = 0, l = 0, pu = 0, pl = 0, nPre = 0;
+  for (const e of done){ pl += (+e.pl || 0); if (e.r === 'win') w++; else if (e.r === 'lose') l++; else pu++; if (e.pre === true) nPre++; }
+  const dec = w + l, n = done.length;
+  const hit = dec ? (w / dec * 100).toFixed(1) : '—';
+  const roi = (pl / n * 100).toFixed(1);
+  const se = (100 / Math.sqrt(n)).toFixed(1);
+  const days = [...new Set(done.map(function(e){ return e.d; }))].sort().reverse();
+  const dayOpts = days.map(function(d){
+    return '<option value="' + d + '">' + d.slice(4, 6) + '-' + d.slice(6, 8) + '（' + done.filter(function(e){ return e.d === d; }).length + '注）</option>';
+  }).join('');
+  const fmtD = function(d){ return d && d.length === 8 ? d.slice(4, 6) + '-' + d.slice(6, 8) : (d || '—'); };
+  const badge = function(r){
+    if (r === 'win') return '<b style="color:#16a34a">✅ 赢盘</b>';
+    if (r === 'lose') return '<b style="color:#dc2626">❌ 输盘</b>';
+    return '<b style="color:#b45309">➖ 走水</b>';
+  };
+  const ana = function(e){
+    const hs = (e.hs == null ? '?' : e.hs), as = (e.as == null ? '?' : e.as);
+    if (e.r === 'push') return '平局 ' + hs + ':' + as + ' → 平手盘走水，退本';
+    if (e.r === 'win') return (Number(as) > Number(hs) ? '受让方(客) ' + as + ':' + hs + ' 胜' : '受让方(客) ' + as + ':' + hs + ' 不输') + ' → 赢盘';
+    return (Number(as) < Number(hs) ? '受让方(客) ' + as + ':' + hs + ' 负' : '受让方(客) ' + as + ':' + hs + ' 输') + ' → 输盘';
+  };
+  const rows = done.map(function(e){
+    const plv = (+e.pl || 0);
+    return '<tr data-day="' + esc(e.d) + '" data-r="' + esc(e.r) + '" data-pl="' + plv + '" style="border-top:1px solid var(--line)">'
+      + '<td style="padding:5px 6px;white-space:nowrap;font-size:11px">' + fmtD(e.d) + '</td>'
+      + '<td style="padding:5px 6px;font-size:11px;opacity:.75">' + esc(e.lg || '') + '</td>'
+      + '<td style="padding:5px 6px"><b>' + esc(e.h) + '</b> vs <b>' + esc(e.a) + '</b></td>'
+      + '<td style="padding:5px 6px;font-size:11px;white-space:nowrap">平手' + (e.w != null ? (' · 水' + (+e.w).toFixed(2)) : '') + '</td>'
+      + '<td style="padding:5px 6px;text-align:center"><b>' + (e.hs == null ? '—' : e.hs + ':' + e.as) + '</b></td>'
+      + '<td style="padding:5px 6px;white-space:nowrap;font-size:10.5px;color:' + (e.pre === true ? '#16a34a' : '#b45309') + '">' + (e.pre === true ? '赛前' : '赛后补') + '</td>'
+      + '<td style="padding:5px 6px;white-space:nowrap">' + badge(e.r) + '</td>'
+      + '<td style="padding:5px 6px;white-space:nowrap;color:' + (plv >= 0 ? '#15803d' : '#dc2626') + '">' + (plv >= 0 ? '+' : '') + plv.toFixed(2) + '</td>'
+      + '<td style="padding:5px 6px;font-size:11px;opacity:.85">' + ana(e) + '</td></tr>';
+  }).join('');
+  let h = '<div style="margin-top:10px;padding:8px 9px;border-radius:9px;background:rgba(148,163,184,.07);border:1px solid var(--line)">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">'
+    + '<div style="font-weight:800;font-size:13px;color:var(--fg,#c9d1d9)">📁 平手盘 · 完赛档案'
+    + '<span style="opacity:.55;font-weight:400;font-size:11px;margin-left:6px">真实注单逐场结算 · 长期保留</span></div>'
+    + '<div><span style="font-size:10.5px;opacity:.7;margin-right:5px">📅 日期</span>'
+    + '<select id="isoDaySel" onchange="isoDayFilter(this.value)" style="background:var(--card,#161b22);color:var(--fg,#c9d1d9);border:1px solid var(--line);border-radius:6px;padding:3px 7px;font-size:11.5px">'
+    + '<option value="">全部（' + n + '注）</option>' + dayOpts + '</select></div></div>';
+  h += '<div id="isoSum" style="font-size:11.5px;padding:5px 8px;background:rgba(22,163,74,.08);border-left:3px solid #16a34a;border-radius:5px;margin-bottom:6px">'
+    + '累计：<b>' + n + '</b> 注 ｜ 命中 <b>' + hit + '%</b> ｜ ROI <b style="color:' + (pl >= 0 ? '#15803d' : '#dc2626') + '">' + (pl >= 0 ? '+' : '') + roi + '%</b>'
+    + ' <span style="opacity:.6">（±' + se + '）</span> ｜ 胜 ' + w + ' / 走 ' + pu + ' / 负 ' + l
+    + '<br><b style="color:#16a34a">赛前登记 ' + nPre + ' 注</b> ｜ <span style="color:#b45309">赛后补登 ' + (n - nPre) + ' 注</span>'
+    + '</div>';
+  if (nPre < 20){
+    h += '<div style="font-size:10.5px;line-height:1.65;color:#b45309;padding:5px 8px;background:rgba(180,83,9,.08);border-left:3px solid #b45309;border-radius:5px;margin-bottom:6px">'
+      + '⚠ <b>赛前登记样本只有 ' + nPre + ' 注</b>（其余是开赛后才按同一套"赛前可得信息"补记的，属回测、不是预测）。'
+      + '这些数字能说明"这套筛法历史上有效"，但<b>不能当作"我赛前就押中了"的业绩</b>。真业绩从 2026-11-01 03:50 起累积，届时看"赛前登记"这一列。'
+      + '</div>';
+  }
+  h += '<div style="max-height:430px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="color:var(--muted,#8b98a9);font-size:10.5px;text-align:left;position:sticky;top:0;background:var(--card,#161b22)">'
+    + '<th style="padding:4px 6px">日期</th><th style="padding:4px 6px">联赛</th><th style="padding:4px 6px">对阵</th>'
+    + '<th style="padding:4px 6px">盘口</th><th style="padding:4px 6px;text-align:center">比分</th>'
+    + '<th style="padding:4px 6px">登记</th>'
+    + '<th style="padding:4px 6px">赛果</th><th style="padding:4px 6px">盈亏</th><th style="padding:4px 6px">分析</th></tr></thead>'
+    + '<tbody id="isoBody">' + rows + '</tbody></table></div>';
+  h += '<div style="font-size:10px;opacity:.55;margin-top:4px;line-height:1.6">口径：平手盘（|让球|=0）+ 结构下盘窗口，买受让方（客队）；平局走水退本、不计入命中分母。'
+    + '数据来自每日注单快照，非事后回填，可逐条复核。</div>';
+  h += '</div>';
+  return h;
+}
+
+function _preProgressHTML(){
+  /* ★ 赛前实盘进度：平手盘·小联赛·买受让方（唯一 Edge）的赛前登记样本累积，
+     用于判断 live Edge 是否已被真金白银确认。目标 30 注（初步确认）/ 50 注（确认）。 */
+  const L = window.ROI_LEDGER || {};
+  /* ★ 2026-11-02 修：命中率源从坏的 windows_pre_iso_small(n=0/1 残骸) 切到 windows_truth
+     （全量已结算复算的真实边，且已应用复盘学出的剔除规则）。这才是真命中率。 */
+  const w = (L.windows_truth && L.windows_truth['平手小联']) || null;
+  const n = w ? (w.decided || w.n || 0) : 0;
+  const hit = (w && w.hitRate != null) ? w.hitRate : null;
+  const roi = (w && w.roi != null) ? w.roi : null;
+  const se = n ? (100 / Math.sqrt(n)).toFixed(1) : '—';
+  const TARGET = 100, SOFT = 60;   // 样本量→置信度：SE=100/√n，60注SE≈13初步、100注SE=10较稳
+  const pct = Math.min(100, Math.round(n / TARGET * 100));
+  const stage = n >= TARGET ? '✅ 样本充足' : (n >= SOFT ? '🟡 初步可信' : '⚪ 样本偏薄');
+  const bar = '<div style="height:12px;background:rgba(148,163,184,.18);border-radius:7px;overflow:hidden;margin:5px 0">'
+    + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#16a34a,#22c55e)"></div></div>';
+  return '<div style="margin-top:8px;padding:7px 9px;border-radius:8px;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.25);font-size:11.5px;line-height:1.7">'
+    + '<b style="color:#15803d">📊 赛前实盘进度（平手盘·小联赛·买受让方）</b>'
+    + '<div style="font-size:10.5px;opacity:.8;margin:2px 0 0">已下注并结算 <b>' + n + '</b> 注 · 命中 <b>' + (hit==null?'—':hit+'%') + '</b>'
+    + ' · ROI <b style="color:' + ((roi||0)>=0?'#15803d':'#dc2626') + '">' + (roi==null?'—':((roi>=0?'+':'')+roi+'%')) + '</b>'
+    + ' <span style="opacity:.6">±' + se + '</span></div>'
+    + bar
+    + '<div style="font-size:10.5px;opacity:.85">距 ' + SOFT + ' 注（初步可信）还差 <b>' + Math.max(0, SOFT-n) + '</b> 注 · 距 ' + TARGET + ' 注（样本充足）还差 <b>' + Math.max(0, TARGET-n) + '</b> 注 ｜ ' + stage + '</div>'
+    + '<div style="font-size:10px;opacity:.7;margin-top:2px;line-height:1.6">⚠ 这是「真金白银赛前下注」的累计，不是回测。开始前这一栏永远是 0 —— 连打 30~50 注，+21% 的回测 Edge 才会从"账面"变成"口袋"。</div>'
+    + '</div>';
+}
+
+function _todayBettableHTML(list){
+  const _DP = (typeof window !== 'undefined' && window.DAILY_PICKS) || null;
+  const BANKROLL = +(window.DP_BANKROLL || (_DP && _DP.bankroll) || 1000);
+  const PCT = +(window.DP_PCT || (_DP && _DP.pct) || 0.04);
+  const _MAIN_LG = ['英超','西甲','意甲','德甲','法甲','欧冠','欧联','欧罗巴','英冠','葡超','荷甲','苏超','土超','比甲','德乙','意乙','西乙','法乙','巴甲','阿甲','美职','日职','韩K','中超','澳超','日联杯','荷冠','欧冠杯'];
+  const _isMainLg = lg => { const s = String(lg || ''); return _MAIN_LG.some(k => s.indexOf(k) >= 0); };
+  const rows = [];
+  for (const m of list){
+    const a = _boardAn(m); if (!a) continue;
+    const st = m.state;
+    const _lived = isLive(st);
+    /* 只收「未开赛」与「进行中」：已完场的进下方完赛档案，不再占钱板。 */
+    if (!(st === '0' || _lived)) continue;
+    if (a.grade_hcap_a == null) continue;
+    const hcap = +a.grade_hcap_a, water = a.grade_water_a;
+    const gap = (a.pan_gap != null) ? +a.pan_gap : null;
+    /* ★ 唯一可下注口径：平手盘(|盘口|<0.01) + 盘口偏浅(pan_gap<-0.2) + 小联赛（Edge 只在这里） */
+    /* ★ 2026-11-02 对齐：pan_gap 上限从 <0 收到 <-0.2（复盘学出"浅尾盘口仅微偏浅、边太薄"的教训，已落地） */
+    if (Math.abs(hcap) >= 0.01) continue;                 // 只认平手盘
+    if (!(gap != null && gap < -0.2)) continue;            // 只认盘口偏浅（剔除薄尾）
+    if (_isMainLg(m.league)) continue;                     // 主流联赛无证据 → 不参与
+    rows.push({ m, a, live: _lived, hcap, water });
+  }
+  rows.sort((p, q) => String(p.m.kickoff || '99:99').localeCompare(String(q.m.kickoff || '99:99'))
+    || String(p.m.league || '').localeCompare(String(q.m.league || '')));
+  const isoRows = rows.filter(r => !r.live);
+  const isoLive = rows.filter(r => r.live);
+  const CAP = 8;
+  const scoreOf = m => (m.home_score != null && m.away_score != null)
+    ? (m.home_score + ':' + m.away_score) : '—';
+  const stakeEach = +(BANKROLL * PCT).toFixed(2);
+  const rowHTML = r => {
+    const hcapTxt = Math.abs(+r.hcap) < 0.01 ? '平手' : ((r.hcap > 0 ? '主让' : '客让') + Math.abs(r.hcap).toFixed(2));
+    const odd = (r.water != null) ? (1 + (1.90 - r.water)) : null;
+    const sc = r.live
+      ? '<b style="color:#f0883e;font-size:13px">' + scoreOf(r.m) + '</b>'
+      : '<span style="opacity:.5">—</span>';
+    return '<tr style="border-top:1px solid var(--line)' + (r.live ? ';background:rgba(240,136,62,.06)' : '') + '">'
+      + '<td style="padding:6px 6px"><b>' + esc(r.m.home) + '</b> vs <b>' + esc(r.m.away) + '</b>'
+      + '<div style="font-size:10px;opacity:.5">' + esc(r.m.league || '') + ' ' + esc(r.m.kickoff || '') + '</div></td>'
+      + '<td style="padding:6px 6px">' + hcapTxt + (r.water != null ? (' · 水' + r.water.toFixed(2)) : '') + '</td>'
+      + '<td style="padding:6px 6px;white-space:nowrap;color:#15803d;font-weight:700">¥' + stakeEach + '</td>'
+      + '<td style="padding:6px 6px;text-align:center">' + sc + '</td>'
+      + '<td style="padding:6px 6px;font-size:11px;white-space:nowrap">买<b>受让方</b>' + (odd != null ? (' · 赔≈' + odd.toFixed(2)) : '') + '</td></tr>';
+  };
+  const L = window.ROI_LEDGER || {};
+  const _preSmall = (L.windows_pre_iso_small) || null;
+  const _se = n => (n ? (100 / Math.sqrt(n)).toFixed(1) : '—');
+  /* ★ 2026-11-02 修：真实边改用 windows_truth（全量已结算复算 + 已学剔除规则），不再用 ISO_RECORD 回测当业绩 */
+  const _T = (L.windows_truth) || {};
+  const _tk = name => { const x = _T[name]; return (x && (x.decided || x.n)) ? x : null; };
+  const _small = _tk('平手小联'), _deep = _tk('深盘上盘'), _struct = _tk('结构下盘');
+  const _hasSmall = !!( _small && _small.n );
+  // ★ 2026-11-02 总模块出单卡片：读每日清单里的 stake_plan（bet_module + gen_daily_push 合并进 daily_picks.json）
+  const _sp = (window.DAILY_PICKS && window.DAILY_PICKS.stake_plan)
+           || (window.BET_MODULE && window.BET_MODULE.stake_plan)
+           || window.DP_STAKE_PLAN || null;
+  let spCard = '';
+  if (_sp && _sp.allocated_count) {
+    const _pct = x => (x >= 0 ? '+' : '') + x + '%';
+    let _by = '';
+    const _bs = _sp.by_strat || {};
+    for (const k of Object.keys(_bs)) _by += '<span style="margin-right:10px">'+esc(k)+' <b>'+_bs[k].n+'注</b> ¥'+_bs[k].stake+' 预期+¥'+_bs[k].exp+'</span>';
+    let _pk = '';
+    (_sp.picks||[]).slice(0,6).forEach(function(t){ _pk += '<div style="font-size:9.5px;line-height:1.5;opacity:.82">· ['+esc(t.strat)+'] '+esc(t.home)+' vs '+esc(t.away)+' '+t.side+' @'+t.odd+' <span style="color:#15803d">('+_pct(t.roi)+')</span> ¥'+t.stake+'</div>'; });
+    spCard = '<div style="margin:0 0 10px;padding:9px 11px;border:2px solid #1d4ed8;border-radius:11px;background:rgba(37,99,235,.07)">'
+      + '<div style="font-weight:800;font-size:14px;color:#1d4ed8;margin-bottom:3px">🏦 总模块 · 今日出单（跨板块聚合）</div>'
+      + '<div style="font-size:11px;opacity:.92;margin-bottom:5px;line-height:1.7">'
+      + '本金 <b>¥'+_sp.bankroll+'</b> × 每注 '+(_sp.pct_per_bet*100).toFixed(0)+'% = <b style="color:#15803d">¥'+_sp.stake_per_bet+'</b> ｜ 单日封顶 <b>'+_sp.daily_max_n+'</b> 注<br>'
+      + '今日候选 <b>'+_sp.total_candidates+'</b> 场，按真实ROI降序取前 <b>'+_sp.allocated_count+'</b> 注 → 投入 <b>¥'+_sp.allocated_stake+'</b> ｜ 预期 <b style="color:#15803d">+¥'+_sp.expected_profit+'</b>'
+      + '</div>'
+      + (_by ? '<div style="font-size:10px;opacity:.85;margin-bottom:4px">分板块：'+_by+'</div>' : '')
+      + (_pk ? '<div style="font-size:9.5px;opacity:.7;margin-top:2px">出单明细（前'+Math.min(_sp.picks.length,6)+'，按ROI降序）：'+_pk+'</div>' : '')
+      + '<div style="font-size:9.5px;opacity:.55;margin-top:3px">来源：下注模块对权威烘焙全部已结算场均注回测，自动收口各正边、剔除负边；历史ROI加权预期，非保证。</div>'
+      + '</div>';
+  }
+  let h = spCard + '<div style="margin:0 0 10px;padding:9px 11px;border:2px solid #16a34a;border-radius:11px;background:rgba(22,163,74,.08)">'
+    + '<div style="font-weight:800;font-size:15px;color:#15803d;margin-bottom:3px">💰 今日精选 · 平手盘·小联赛（买受让方）</div>'
+    + '<div style="font-size:11.5px;opacity:.92;margin-bottom:6px;line-height:1.7">'
+    + (_hasSmall
+        ? '真实边（全量已结算复算 + 复盘学出的剔除规则）：<b>平手盘小联赛 ' + _small.n + ' 注 · 命中 <b style="color:#15803d">' + _small.hitRate + '%</b> · ROI <b style="color:#15803d;font-size:13px">+' + _small.roi + '%</b></b>（±' + _se(_small.decided || _small.n) + '，持续为正）'
+        : '真实边（全量已结算复算）：<b>平手盘小联赛（回测口径约 220 注 · 命中 60% · ROI +11.6%）</b>')
+    + '<br>→ <b>只打小联赛，主流不参与</b>；真实复算下深盘上盘 ' + (_deep ? ('ROI +' + _deep.roi + '%') : '—') + '、结构下盘 ' + (_struct ? ('ROI +' + _struct.roi + '%') : '—') + '（均含已学剔除规则）。'
+    + '<br><b style="color:#16a34a">赛前登记 ' + (_preSmall ? _preSmall.n : 0) + ' 注</b>'
+    + ((!_preSmall || !_preSmall.n)
+        ? '<span style="color:#b45309"> —— 真·赛前下注业绩从 2026-11-02 起累积（实盘推荐逻辑 11-02 才纳入平手小联），之前为 0，别把上面真实边当"我押中了"。</span>'
+        : '：命中 ' + _preSmall.hitRate + '% · ROI +' + _preSmall.roi + '%（真前瞻）')
+    + '</div>'
+    + (_hasSmall
+        ? '<div style="font-size:10.5px;line-height:1.75;color:#b45309;padding:5px 8px;background:rgba(180,83,9,.10);border-left:3px solid #b45309;border-radius:5px;margin-bottom:6px">'
+          + '⚠ <b>真实边只在小联赛软盘口</b>：平手盘小联赛 <b>' + _small.n + '</b> 注 · 命中 ' + _small.hitRate + '% · ROI <b>+' + _small.roi + '%</b>（±' + _se(_small.decided || _small.n) + '）；'
+          + '深盘上盘全量 ' + (_deep ? _deep.n : '—') + ' 注 ROI ' + (_deep ? ('+' + _deep.roi + '%') : '—') + '、结构下盘 ' + (_struct ? _struct.n : '—') + ' 注 ROI ' + (_struct ? ('+' + _struct.roi + '%') : '—') + '（全量复算，均含已学剔除规则）。'
+          + '<br>→ 这套只敢在小联赛下，<b>主流联赛不参与</b>；能下重注的地方恰恰没有 Edge。</div>'
+        : '')
+    + '<div style="font-size:11px;opacity:.9;margin-bottom:6px;line-height:1.7">'
+    + '为什么成立：pan_gap 为负 = <b>实际盘口比公平盘口浅</b>。开在平手盘时，等于市场把"该让 0.25 球"的场开成平手，'
+    + '你买受让方等于白拿四分之一球；盘口越深，同样的偏差越可能只是模型高估，所以只认平手盘。'
+    + '<br><b>今天符合 ' + isoRows.length + ' 场（小联赛·未开赛）</b>。'
+    + '<b style="color:#dc2626">不要全买</b>：今天 ' + isoRows.length + ' 场 × ' + (PCT*100) + '% 本金 ≈ ' + Math.round(isoRows.length * PCT * 100) + '% 已超 100%，没有人的钱能这么铺。'
+    + '按下面仓位每天只打 <b>2~4 注</b>，从列表里<b>任取</b>（所有"挑法"都被留出集证伪，顺序取与精挑期望相同）。'
+    + '</div>';
+  const shown = isoLive.concat(isoRows.slice(0, CAP));
+  if (!shown.length){
+    h += '<div style="font-size:12px;color:#b45309;font-weight:700;line-height:1.7">今天暂未筛选出「平手盘·小联赛」场次 → <b>空手等下一批</b>（不要去买主流/非平手盘凑数，那部分留出只有 +1.1%，扣水钱白干）。</div>';
+  } else {
+    h += '<div style="font-size:10.5px;opacity:.7;margin:2px 0 4px">'
+      + (isoLive.length ? '<b style="color:#f0883e">🔴 进行中 ' + isoLive.length + ' 场（实时比分）</b>' : '')
+      + (isoLive.length && isoRows.length ? ' ｜ ' : '')
+      + (isoRows.length ? '⏳ 未开赛 ' + isoRows.length + ' 场（可下注）' : '')
+      + '</div>';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:var(--muted,#8b98a9);font-size:10.5px;text-align:left">'
+      + '<th style="padding:3px 6px">比赛（按开赛时间）</th><th style="padding:3px 6px">盘口</th>'
+      + '<th style="padding:3px 6px">建议仓位</th><th style="padding:3px 6px;text-align:center">比分</th><th style="padding:3px 6px">买法</th></tr></thead><tbody>'
+      + shown.map(rowHTML).join('') + '</tbody></table>'
+      + (isoRows.length > CAP ? '<div style="font-size:10px;opacity:.6;margin-top:4px">未开赛只列前 ' + CAP + ' 场（按开赛先后），今天共 ' + isoRows.length + ' 场。</div>' : '');
+  }
+  h += '<div style="font-size:10.5px;margin:6px 0;line-height:1.65;padding:5px 8px;background:rgba(22,163,74,.10);border-left:3px solid #16a34a;border-radius:5px">'
+    + '<b>💵 仓位</b>：每注 <b style="color:#15803d">¥' + stakeEach + '</b>（本金 ¥' + BANKROLL + ' × ' + (PCT*100) + '%）。命中 63.6%、赔率≈1.97 → 半 Kelly 约 14%，对个人太猛，建议 <b>3%~5%</b>。'
+    + '2~4 注/天、连打 30~50 注以上，+21% 才会从"账面"变成"口袋"；只打 1~2 注，仍可能连亏。'
+    + '</div>';
+  h += _preProgressHTML();
+  h += _roiLedgerHTML();
+  h += isoFinishedHTML();
+  h += '</div>';
+  return h;
+}
+
+/* ★ 2026-11-01 通用折叠块：把"参考但不该下注"的内容收进 <details>，默认收起。
+   用户诉求："我是为了赚钱" —— 首屏只留能下注的场，其余全折起来。 */
+function _foldHTML(title, sub, inner){
+  return '<details style="margin:4px 0 2px;border:1px solid var(--line);border-radius:9px;background:rgba(148,163,184,.05);padding:0 9px">'
+    + '<summary style="cursor:pointer;padding:8px 0;font-weight:700;font-size:12.5px;color:var(--fg,#c9d1d9);list-style:none">'
+    + title + '<span style="opacity:.55;font-weight:400;font-size:11px;margin-left:7px">' + sub + '</span></summary>'
+    + '<div style="padding:2px 0 9px">' + inner + '</div></details>';
+}
+
+/* 「更多参考数据」= 过热榜 + 自证审计日志 + 下注回测，统一折进一个 details */
+/* ★ 2026-11-02 下注模块（总聚合 · 均注算总账）：读取 window.BET_MODULE（bet_module.cjs 生成并注入）。
+   展示各板块经验证正边的独立业绩 + 去重后组合总账（均注）。负边板块按门槛自动排除。 */
+function betModuleHTML(){
+  const B = window.BET_MODULE;
+  if (!B){ return '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0;font-size:12px;opacity:.7">🏦 下注模块：尚未生成（运行 bet_module.cjs 后刷新）。</div>'; }
+  const _se = x => (x == null ? '—' : x + 'pt');
+  const _pct = x => (x == null ? '—' : (x >= 0 ? '+' : '') + x + '%');
+  const p = B.portfolio || {};
+  const sig = (p.roi != null && p.se != null) ? (Math.abs(p.roi) / p.se) : null;
+  let h = '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0">';
+  h += '<div style="font-weight:800;font-size:15px;margin-bottom:2px">🏦 下注模块 · 总聚合均注总账</div>';
+  h += '<div style="font-size:10.5px;opacity:.75;margin-bottom:8px;line-height:1.6">收集各板块「命中率高、真实 ROI&gt;0」的选场口径 → 同场只下注一次（去重）→ 每注均 ¥' + (B.stake||100) + ' 算总账。'
+     + '门槛：' + (B.gate||'') + '。同场方向相反剔除 ' + (B.conflict_excluded||0) + ' 场。</div>';
+  // —— 组合总账 ——
+  h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">';
+  const _stat = (lbl, v, c) => '<div style="flex:1;min-width:92px;background:' + (c||'rgba(22,163,74,.08)') + ';border:1px solid var(--line);border-radius:9px;padding:7px 9px">'
+    + '<div style="font-size:10px;opacity:.7">' + lbl + '</div>'
+    + '<div style="font-size:17px;font-weight:800;color:' + (c ? '#dc2626' : '#15803d') + '">' + v + '</div></div>';
+  h += _stat('总注数', (p.n||0), null);
+  h += _stat('总投入', '¥' + ((p.staked||0)).toFixed(0), null);
+  h += _stat('总盈亏', '¥' + ((p.profit||0)).toFixed(0), (p.profit||0) >= 0 ? null : 'rgba(220,38,38,.08)');
+  h += _stat('ROI', _pct(p.roi) + ' <span style="font-size:10px;opacity:.6">(±' + (p.se||'—') + ')</span>', (p.roi||0) >= 0 ? null : 'rgba(220,38,38,.08)');
+  h += _stat('命中率', (p.hitRate||0) + '%', null);
+  h += '</div>';
+  if (sig != null){
+    h += '<div style="font-size:10.5px;margin-bottom:8px;' + (sig >= 2 ? 'color:#15803d' : 'color:#b45309') + '">'
+      + '显著性：|ROI|/' + (p.se||'—') + ' = <b>' + sig.toFixed(1) + 'σ</b> ' + (sig >= 2 ? '（显著为正，非噪声）' : '（样本尚薄，谨慎）') + ' ｜ 终值 ¥' + ((p.finalBankroll||0)).toFixed(0) + '</div>';
+  }
+  // —— 各板块 ——
+  h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:2px">';
+  h += '<thead><tr style="color:var(--muted,#8b98a9);font-size:10.5px;text-align:left">'
+    + '<th style="padding:4px 6px;font-weight:500">板块</th><th style="padding:4px 6px;font-weight:500">状态</th>'
+    + '<th style="padding:4px 6px;font-weight:500">n</th><th style="padding:4px 6px;font-weight:500">ROI</th>'
+    + '<th style="padding:4px 6px;font-weight:500">命中</th><th style="padding:4px 6px;font-weight:500">±SE</th></tr></thead><tbody>';
+  for (const s of (B.strategies||[])){
+    const _badge = s.gated
+      ? '<span style="background:#dcfce7;color:#15803d;padding:1px 6px;border-radius:5px;font-weight:700">纳入</span>'
+      : '<span style="background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:5px;font-weight:700">排除</span>';
+    h += '<tr style="border-top:1px solid var(--line)">'
+      + '<td style="padding:4px 6px;font-weight:600">' + esc(s.id) + '</td>'
+      + '<td style="padding:4px 6px">' + _badge + '</td>'
+      + '<td style="padding:4px 6px">' + (s.n||0) + '</td>'
+      + '<td style="padding:4px 6px;font-weight:700;color:' + ((s.roi||0) >= 0 ? '#15803d' : '#dc2626') + '">' + _pct(s.roi) + '</td>'
+      + '<td style="padding:4px 6px">' + (s.hitRate==null?'—':s.hitRate+'%') + '</td>'
+      + '<td style="padding:4px 6px;opacity:.7">' + _se(s.se) + '</td></tr>';
+    if (s.note) h += '<tr><td colspan="6" style="padding:0 6px 5px;font-size:10px;opacity:.6">' + esc(s.note) + '</td></tr>';
+  }
+  h += '</tbody></table>';
+  // —— 今日候选 ——
+  const t = B.today || {};
+  if (t.count){
+    h += '<div style="font-size:11px;margin-top:8px;padding:6px 8px;background:rgba(22,163,74,.06);border-left:3px solid #16a34a;border-radius:6px">'
+      + '📌 今日可下注候选 <b>' + t.count + '</b> 场（未开赛，已按门槛过滤；详见 bet_module.json）。均注 ¥' + (B.stake||100) + ' × ' + t.count + ' = 名义本金 ¥' + ((B.stake||100)*t.count).toLocaleString() + '（实际按你资金上限分配）。</div>';
+  }
+  // —— 仓位分配表 ——
+  const sp = B.stake_plan || {};
+  if (sp.stake_per_bet){
+    h += '<div style="margin-top:9px;padding:8px 10px;background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.35);border-radius:9px">';
+    h += '<div style="font-weight:800;font-size:13.5px;color:#1d4ed8;margin-bottom:4px">💰 仓位分配表（真实下注）</div>';
+    h += '<div style="font-size:10.5px;line-height:1.7">本金 <b>¥' + sp.bankroll + '</b> ｜ 每注 <b>' + (sp.pct_per_bet*100).toFixed(0) + '%</b> = <b style="color:#15803d">¥' + sp.stake_per_bet + '</b> ｜ 单日封顶 <b>' + (sp.daily_cap_pct*100).toFixed(0) + '%</b> → 最多 <b>' + sp.daily_max_n + '</b> 注</div>';
+    h += '<div style="font-size:10.5px;line-height:1.7">今日候选 <b>' + sp.total_candidates + '</b> 场，按真实ROI降序取前 <b>' + sp.allocated_count + '</b> 注 → 投入 <b>¥' + sp.allocated_stake + '</b> ｜ 预期收益 <b style="color:#15803d">+¥' + sp.expected_profit + '</b>（历史ROI加权，非保证）</div>';
+    const _bys = sp.by_strat || {}; const _bk = Object.keys(_bys);
+    if (_bk.length){ h += '<div style="font-size:10px;margin-top:4px;opacity:.85">分板块：'; _bk.forEach(function(k){ h += '<span style="margin-right:10px">' + esc(k) + ' <b>' + _bys[k].n + '注</b> ¥' + _bys[k].stake + ' 预期+¥' + _bys[k].exp + '</span>'; }); h += '</div>'; }
+    const _picks = sp.picks || [];
+    if (_picks.length){ h += '<div style="font-size:10px;margin-top:4px;opacity:.7">分配明细（前' + Math.min(_picks.length,6) + '，按ROI降序）：</div><div style="font-size:9.5px;line-height:1.55;opacity:.8">'; _picks.slice(0,6).forEach(function(t){ h += '· [' + esc(t.strat) + '] ' + esc(t.home) + ' vs ' + esc(t.away) + ' ' + t.side + ' @' + t.odd + ' (历史ROI ' + _pct(t.roi) + ') ¥' + t.stake + '<br>'; }); h += '</div>'; }
+    h += '</div>';
+  }
+  h += '<div style="font-size:10px;opacity:.55;margin-top:6px;line-height:1.5">⚠ 以上为权威烘焙「全部已结算」均注回测（真实可结算边）；赛前登记前瞻性业绩见「今日可下投」钱板。负边板块已自动排除，不污染总账。</div>';
+  h += '</div>';
+  return h;
+}
+
+function _moreBoardsHTML(bp){
+  let s = '';
+  try { s += overheatBoardHTML(bp); } catch(e){ console.warn('强队过热榜渲染失败:', e && e.message); }
+  try { s += overheatHistoryHTML(); } catch(e){ console.warn('过热信号·自证审计日志板渲染失败:', e && e.message); }
+  try { s += bettingBacktestHTML(); } catch(e){ console.warn('真·下注回测板渲染失败:', e && e.message); }
+  if (!s) return '';
+  return _foldHTML('📂 更多参考数据', '过热榜 / 自证审计日志 / 下注回测 —— 均为观察项，不可据此下注', s);
+}
+
+function verdictBoardHTML(list){
+  const rows = [];
+  let dualAll = 0, pickAll = 0;
+  for (const m of list){
+    const a = _boardAn(m); if (!a) continue;
+    const st = m.state;
+    if (!(isLive(st) || st === '0')) continue;
+    const net = (a.grade_net == null ? null : Math.abs(a.grade_net));
+    const aLv = (net == null ? 0 : (net >= 3 ? 2 : (net === 2 ? 1 : 0)));
+    const bLv = (a.tier === 1 ? 2 : (a.tier === 2 ? 1 : 0));
+    const pLv = (a.plan && a.plan.level === 'PICK') ? 2 : 0;
+    if (aLv === 2 && bLv === 2) dualAll++;
+    if (pLv === 2) pickAll++;
+    const rank = (aLv === 2 && bLv === 2) ? 3 : ((aLv === 2 || bLv === 2 || pLv === 2) ? 2 : 0);
+    /* ★★ 2026-10-28 收紧（用户：56 场"一大堆"，参考软件只有 12 场、命中率高）：
+       主榜**只留双路合流(双精选)**——亚盘精选 且 欧盘精选，两个独立模型都点头才算「精选」。
+       单路精选 / 单路破绽 PICK 一律不进主榜（它们只是"有可能"，把它当精选就是稀释命中率）。
+       破绽 PICK 场数仍在标题里报数，点「精选优选」板可看全量。 */
+    if (rank !== 3) continue;
+    let side = a.dirCode;
+    if (side !== 'W' && side !== 'L'){
+      const eh = (a.exp_hcap == null ? 0 : a.exp_hcap);
+      side = (eh > 0.02 ? 'W' : (eh < -0.02 ? 'L' : null));
+    }
+    const team = side === 'W' ? m.home : (side === 'L' ? m.away : null);
+    const hcap = (a.exp_hcap == null ? null : Math.abs(a.exp_hcap));
+    rows.push({ m, a, net, aLv, bLv, pLv, rank, team, hcap });
+  }
+  // ★ 2026-11-01：不再因为"今天没有双精选"就 return ''——否则钱板跟着一起消失。
+  //   双精选只是钱板下面的参考内容，没有就只显示钱板。
+  const hasDual = rows.length > 0;
+  const heatOf = r => (r.a.yg && r.a.yg.heatExcessEff != null ? r.a.yg.heatExcessEff : -99);
+  const mainOf = r => vbMainFirst(r.m);
+  // ★ 2026-10-22 排序：**主流联赛优先** → 双精选(rank3) > 破绽精选(rank2) → 盘水偏离 → 超买。
+  //   单路弱信号已在上面剔除，故"主流联赛优先"不会再出现「主流单路压非主流双精选」的旧问题；
+  //   把五大联赛/欧冠顶到最前，才对应用户样张里"强队"的观感（此前榜首是巴马女甲/阿联U21 这类冷门）。
+  rows.sort((p, q) => (mainOf(q) - mainOf(p)) || (q.rank - p.rank) || ((q.net || 0) - (p.net || 0)) || (heatOf(q) - heatOf(p)));
+  const dualN = rows.length;
+  const pickN = pickAll;
+  const CAP = 10;
+
+  const lvBadge = (lv, txt) => {
+    if (lv === 2) return '<span style="background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:5px;font-weight:700;font-size:11px;white-space:nowrap">' + txt + '</span>';
+    if (lv === 1) return '<span style="background:#fef3c7;color:#b45309;padding:1px 7px;border-radius:5px;font-weight:700;font-size:11px;white-space:nowrap">优选</span>';
+    return '<span style="background:#eef2f7;color:#64748b;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;white-space:nowrap">参考</span>';
+  };
+  const rowHTML = (r, i) => {
+    const a = r.a, m = r.m;
+    const _ah = a.grade_hcap_a, _aw = a.grade_water_a, _pan = a.pan_predict;
+    const _asian = (_ah != null) ? (
+      '<div style="font-size:10px;color:#f0883e;margin-top:2px">亚盘 '+(_ah > 0 ? '主让' : '客让') + Math.abs(_ah).toFixed(2)
+      + ' · 引擎判'+(_pan || '—')+'盘' + (_aw != null ? (' · 水'+_aw.toFixed(2)) : '')
+      + ' ｜<span style="color:#dc2626">该向回测ROI−54%</span></div>'
+    ) : '';
+    const hcapTxt = (r.hcap == null || r.hcap < 0.005) ? '平手'
+      : ((a.exp_hcap > 0 ? '主让' : '客让') + r.hcap.toFixed(2));
+    const sig = (a.plan && a.plan.signals && a.plan.signals.length) ? a.plan.signals.join(' / ') : '';
+    const comboTxt = 'A' + (r.aLv === 2 ? '精选' : (r.aLv === 1 ? '优选' : '参考'))
+                   + ' · B' + (r.bLv === 2 ? '精选' : (r.bLv === 1 ? '优选' : '参考'));
+    const extra = (i >= CAP ? ' data-vbx="1" style="display:none"' : '');
+    return '<tr' + extra + ' style="border-top:1px solid var(--line)">'
+      + '<td style="padding:7px 6px"><b style="font-size:13px">' + esc(m.home) + '</b>'
+      + '<span style="opacity:.5;font-size:11px"> vs </span><b style="font-size:13px">' + esc(m.away) + '</b>'
+      + '<div style="font-size:10px;opacity:.55;margin-top:1px">' + esc(m.league || '') + ' ' + esc(m.kickoff || '')
+      + (isLive(m.state) ? ' · <b style="color:#f0883e">进行中</b>' : '') + '</div></td>'
+      + '<td style="padding:7px 6px">' + lvBadge(r.aLv, r.aLv === 2 ? '精选比赛' : '优选比赛')
+      + '<div style="font-size:11px;margin-top:2px">' + (r.team ? '<b>' + esc(r.team) + '</b>侧 · ' : '') + esc(hcapTxt)
+      + (a.grade_tier && a.grade_tier !== '—' ? ' <span style="opacity:.6">(' + esc(a.grade_tier) + ')</span>' : '') + '</div></td>'
+      + '<td style="padding:7px 6px">' + lvBadge(r.bLv, '精选') 
+      + '<div style="font-size:11px;margin-top:2px">' + esc(a.dir || '—') + '</div></td>'
+      + '<td style="padding:7px 6px">' + lvBadge(r.rank === 3 ? 2 : (r.pLv === 2 ? 2 : r.rank), r.rank === 3 ? '双精选' : '精选')
+      + '<div style="font-size:10px;opacity:.7;margin-top:2px">' + esc(comboTxt) + '</div>'
+      + (sig ? '<div style="font-size:10px;color:#dc2626;margin-top:1px">破绽：' + esc(sig) + '</div>' : '')
+      + _asian
+      + '</td></tr>';
+  };
+
+  let h = '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:8px 0">';
+  // ★ 2026-11-01：首位=「今天只买这里」；双精选及其自证全部折进「详细数据」，默认收起，眼不见心不烦。
+  h += _todayBettableHTML(list);
+  if (hasDual){
+    let dv = '';
+    dv += '<div style="font-weight:700;margin:2px 0 6px;font-size:13.5px">🎯 精选判定榜<span style="margin-left:6px;font-size:11px;font-weight:700;color:#dc2626;background:rgba(220,38,38,.10);padding:1px 6px;border-radius:5px">⚠ 参考·命中高但ROI−6%·不要下注</span> · 亚盘 × 欧盘'
+       + '<span style="opacity:.55;font-weight:400;font-size:12px;margin-left:6px">双精选 ' + dualN + ' 场（两路都点头才上榜）'
+       + (pickN ? ('· 另有破绽 PICK ' + pickN + ' 场') : '') + '</span></div>';
+    dv += '<div style="font-size:10.5px;opacity:.6;margin:0 0 6px;line-height:1.5">'
+       + '亚盘=盘水档位偏离（|实际−理论|≥3档=精选）｜欧盘=模型下注级（tier1=精选）｜<b>两路同时精选=双精选才进本榜</b>'
+       + '（单路精选/单路破绽不进榜）｜<b>本榜不受下方「置信门槛」过滤</b></div>';
+    dv += '<div style="font-size:10.5px;opacity:.85;background:rgba(220,38,38,.06);border-left:3px solid #dc2626;padding:6px 9px;border-radius:6px;margin:0 0 7px;line-height:1.65">'
+       + '<b>📊 真实完场回测自证（2737 场）</b>：双精选 n=41 · 命中 <b style="color:#16a34a">85.4%</b>（无脑押低赔方基准仅 52.2%）——筛选有效，砍掉的单路无正贡献。'
+       + '<br>⚠ <b>但命中率高≠赚钱</b>：双精选均赔只有 <b>1.11</b>，ROI <b style="color:#dc2626">−6.0%</b>（1.11×85.4%=0.95&lt;1）。'
+       + '1X2 追 1.11 热门永远赢不了水钱——<b>能赚钱的只有亚盘让球</b>，真实结算见上方钱板。'
+       + '<br>⚠ <b>双精选改走亚盘让球同样不行</b>（深盘上盘 40%/−25%、结构下盘 40%/−100%）——<b>本榜只作方向参考，不可据此下注</b>。</div>';
+    dv += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+    dv += '<thead><tr style="color:var(--muted,#8b98a9);font-size:11px;text-align:left">'
+       + '<th style="padding:4px 6px;font-weight:500">比赛</th>'
+       + '<th style="padding:4px 6px;font-weight:500">亚盘判定</th>'
+       + '<th style="padding:4px 6px;font-weight:500">欧盘判定</th>'
+       + '<th style="padding:4px 6px;font-weight:500">精选优选</th></tr></thead><tbody>';
+    dv += rows.map((r, i) => rowHTML(r, i)).join('');
+    dv += '</tbody></table>';
+    if (rows.length > CAP){
+      dv += '<button class="sec" style="width:100%;margin:8px 0 2px;font-size:12px" '
+         + 'onclick="var o=document.querySelectorAll(\'[data-vbx]\');var open=o.length&&o[0].style.display!==\'none\';'
+         + 'o.forEach(function(t){t.style.display=open?\'none\':\'table-row\';});this.textContent=open?\'展开全部 ' + rows.length + ' 场\':\'收起（只看前 ' + CAP + ' 场）\'">展开全部 ' + rows.length + ' 场</button>';
+    }
+    h += _foldHTML('📂 详细数据 · 仅供参考（命中高≠赚钱，别下注）',
+      '双精选 ' + dualN + ' 场' + (pickN ? ' · 破绽PICK ' + pickN + ' 场' : '') + ' —— 点开看明细', dv);
+  }
+  h += '</div>';
+  return h;
+}
+
+function render(){
+  const all=filtered();
+  const sort=$('fSort').value;
+  const drawOnly = !!(document.getElementById('fDraw') && document.getElementById('fDraw').checked);
+  // 状态优先级：进行中(0) > 未开赛(1) > 完场(2) —— 符合"先看还没踢的"
+  const stRank = s => isLive(s) ? 0 : (s === '0' ? 1 : 2);
+  all.sort((a,b)=>{
+    // ★ 日期优先（2026-09-22 修复）：选中的基准日(今天)的比赛永远排在最前，次日及以后在后。
+    //   此前按 状态/价值分 排序时，深夜 today 的完场场(已完赛、调度器不再分析→value=0)被明天的已分析场
+    //   压到列表最底，用户看到"当天一场没有、全是第二天"。现改为"当天在前、明天在后"，符合看板第一直觉。
+    //   （纯时间排序 sort==='time' 仍保持跨日升序，这里只是把"当天"整体提前，不破坏时间序。）
+    const _base = ($('fDay').value||'').replace(/-/g,'') || todayStr();
+    const _da = String(a.day||''), _db = String(b.day||'');
+    if (_da !== _db){
+      const _at = (_da===_base), _bt = (_db===_base);
+      if (_at !== _bt) return _at ? -1 : 1;            // 当天优先于一切非当天
+      return _da < _db ? -1 : 1;                        // 都非当天 → 按日升序
+    }
+    if (drawOnly && a.analysis && b.analysis){ const da=drawProb(a), db=drawProb(b); if (Math.abs(db-da)>1e-9) return db-da; const ha=a.analysis.strongDrawHot?1:0, hb=b.analysis.strongDrawHot?1:0; if (hb!==ha) return hb-ha; }  // ★只看平局场：平局概率降序（c_d<2.5 置顶）
+    if (sort==='val'){ const va=a.analysis?a.analysis.value_score:0, vb=b.analysis?b.analysis.value_score:0; if (vb!==va) return vb-va; }
+    if (sort==='conf'){ const va=a.analysis?a.analysis.conf:0, vb=b.analysis?b.analysis.conf:0; if (vb!==va) return vb-va; }
+    // 「排序：时间」= 纯按真实开赛时间升序（已跨日修正），不再让状态优先级插队，
+    // 否则 00:00~05:59 的深夜场会被当成当天最早、全部堆在最前面。
+    if (sort==='time'){ const ta=kickTs(a), tk=kickTs(b); if (ta!==tk) return ta.localeCompare(tk); }
+    const ra=stRank(a.state), rb=stRank(b.state);
+    if (ra!==rb) return ra-rb;
+    const _r=(a.kickoff||'').localeCompare(b.kickoff||''); if(_r) return _r;
+    return (String(a.tid)<String(b.tid)?-1:String(a.tid)>String(b.tid)?1:0);  // 终态 tie-break：保证全序、零逆序
+  });
+  // 「只看竞彩」→ 渲染全部：竞彩最多十几场，绝不能被分页截断（否则又变成"竞彩少了几场"）
+  const _jcOnly = !!(document.getElementById('fJc') && document.getElementById('fJc').checked);
+  /* ★ 2026-10-01 修复「搜队名/联赛搜不到」：
+     旧版无论搜索命中多少，一律 all.slice(0, renderCap) 且 realN = min(_vRealCap=60, n)
+     → 搜"某个联赛/大球队"命中几百场时，实际只渲染 60 张，其余全藏在"加载更多"后面；
+     命中几十场时首屏也只给 60 张、翻页要狂点。
+     规则：① 搜索有关键词 → 一次渲染全部命中（搜索即"精准定位"，必须一眼看全）
+           ② 命中数本身不多（≤160，手机一屏~2屏）→ 也一次渲染完，别再分页
+           ③ 其余情况维持 400 +「加载更多」 */
+  const _q = (($('fSearch') && $('fSearch').value) || '').trim();
+  const _small = all.length <= 160;
+  _vList = (_jcOnly || _q || _small) ? all : all.slice(0, renderCap);
+  if (_q || _small){ if (_vRealCap > renderCap) _vRealCap = renderCap; if (_vRealCap < 60) _vRealCap = 60; }
+  const n = _vList.length;
+  /* ★ 2026-10-01：把「全库 N 场 / 当前视图 M 场」显式摆出来。
+     用户反馈"好多场次搜不到"时，八成不是没数据 —— 是默认日期只露出当天那 200 来场，
+     而後面几天还有两千多场（实测 10-01=219 场、10-02=357、10-03=1234、10-04=769）。
+     看见这对数字，就能自己判断是"数据没有"还是"被日期/筛选挡住了"。 */
+  try{
+    const _ps = $('poolStat');
+    if (_ps){
+      const _hide = all.length - n;
+      _ps.className = 'pill' + (_hide > 0 ? ' warn' : '');
+      _ps.textContent = '全库 ' + MATCHES.length + ' 场 ｜ 当前视图 ' + n + ' 场' + (_hide > 0 ? '（还有 ' + _hide + ' 场被日期/筛选挡住）' : '');
+      _ps.title = '日期默认只显示当天；要看到全部比赛，把「范围」选「全部」或清空日期。';
+    }
+  }catch(e){}
+  const grid=$('grid');
+  if (!all.length){
+    const _tip = _q
+      ? '搜索「' + _q.replace(/[<>&]/g,'') + '」在' + _scopeTxt() + '里 0 命中。'
+        + '可能原因：① 该场刚上架，主链每 15 分钟同步一次，下一轮会自动出现（可先点「立即刷新」）；'
+        + '② 队名写法不同（球探叫"南蒂罗尔"、底座是 PUA 字体码点，已做反混淆但仍可能有出入）；'
+        + '③ 该赛事不在本看板三个数据源（gqj2 底座 / 球探 / 竞彩）的覆盖窗口内。'
+        + (_fragHints().length
+            ? '<br>试试这些 2 字短词：<b>' + _fragHints().join(' / ') + '</b>'
+              + '（或只搜最长的那两个字，短词命中就会直接列出来）'
+            : '')
+        + '。'
+      : '';
+    const _bh = document.getElementById('topBoardsHost');
+    if (_bh) _bh.innerHTML = '';   // 零结果时清掉上一轮搬到顶部的榜单，避免残留误导
+    grid.innerHTML = '<p class="note">当前筛选条件下暂无比赛。' + _tip
+      + '<br>说明：①「进行中」走实时列表，若此刻没有比赛正在进行则显示 0，属正常；'
+      + '②「只看竞彩」只显示今日竞彩在售场，竞彩按销售日滚动，今日无在售即为 0（未来竞彩到对应日期自动出现）；'
+      + '③ 搜索时会临时放宽「置信门槛」和「进行中/完场」筛选；清空搜索框即恢复原条件。'
+      + _scopeTxt() + '均已扫过，非抓取失败。可点「立即刷新」或清空筛选查看全部比赛。</p>';
+    bindVScroll(false);
+  } else {
+    /* ⚠ 搜索/小结果时 realN 必须放到 n 为止：只渲染 60 张 = 用户"搜了半天只看到几条" */
+    const realN = (_q || _small) ? n : Math.min(_vRealCap, n);
+    /* ★ 2026-10-05 「每分钟跳一下」治理：序列未变时不做整页 innerHTML 重建。
+       render() 原本无条件 `grid.innerHTML = html` —— 140 张卡全量重建（真机实测：一次 141 次 DOM 变动、
+       bodyH 变化 42432→42584→42675，视觉上就是"跳"）。而 `startDirectTimer` 每 60s 一次的列表刷新
+       （loadMatches→applyFallback→safeRender→render）绝大多数时候**场次集合与顺序都没变**，
+       只是比分/盘口/置信度在更新 —— 完全可以用 refreshRendered 就地只重建签名变了的那几张卡，
+       顺带省掉 140 次 cardHTML（最贵的部分）。
+       判据是「刚算出的 _vList 顺序」与「DOM 现有卡片顺序」逐一相等 —— 这个判据天然完备：
+       无论当前排序模式（时间/价值/置信）、当天优先、状态重排，只要算出来的顺序与 DOM 一致，
+       增量刷新结果就与全量重建等价。
+       安全边界：① 搜索提示(_q)、分页"加载更多"(realN<n) 一律走全量（它们不在卡片里）；
+       ② 预警条也不在卡片里 → 序列一致时**单独更新它**，否则会漏掉新出现的大热场。 */
+    const _seqSame = (function(){
+      try{
+        if (_q || realN < n) return false;
+        const cs = grid.querySelectorAll('.c');
+        if (cs.length !== realN) return false;
+        for (let i = 0; i < realN; i++){
+          const id = cs[i].id || ''; if (!id.startsWith('card-')) return false;
+          const mm = _vList[i]; if (!mm || id.slice(5) !== String(mm.tid)) return false;
+        }
+        return true;
+      }catch(e){ return false; }
+    })();
+    if (_seqSame && typeof refreshRendered === 'function'){
+      /* ★ 2026-10-22 修复「榜单数字停在首帧」：
+         增量分支原先只刷卡片+预警条，两张价值榜不更新。首帧渲染时 analysis.plan 还没全量挂上，
+         实测榜单标题写着「含破绽 2」，而当前真实值是 26 —— 用户会以为榜算错了。
+         故增量时同步重建榜单容器（128 行量级，开销可忽略）。 */
+      const _bp = boardPool();
+      const _oldB = document.getElementById('topBoards');
+      if (_oldB){ try{ _oldB.innerHTML = verdictBoardHTML(_bp) + betModuleHTML() + _moreBoardsHTML(_bp); }catch(e){ console.warn('榜单增量更新失败:', e && e.message); } }
+      const _oldYg = document.querySelector('.yg-alert');   // 预警条已搬到顶部宿主，必须全文档取
+      if (_oldYg){ try{ _oldYg.outerHTML = ygAlertHTML(_bp); }catch(e){ console.warn('预警条增量更新失败:', e && e.message); } }
+      _mountBoards();
+      refreshRendered();                                    // 内部逐卡 try/catch，不会抛出
+    } else {
+    let html = '';
+    // 搜索命中提示：把"共命中多少 + 是否全渲染"讲清楚，避免又被当成"没搜到"
+    if (_q){
+      html += `<div class="note" style="margin:6px 0">🔍 搜索「${_q.replace(/[<>&]/g,'')}」命中 <b>${n}</b> 场`
+            + (realN >= n ? '（已全部展开）' : `（已展开 ${realN}，点下方「加载更多」看剩余 ${n - realN} 场）`)
+            + '<br><span style="opacity:.75">搜索时已自动放宽「置信门槛」与「进行中/完场」筛选，命中的是全部未来+今日场次；'
+            + '清空搜索框即恢复你原本的筛选条件。</span></div>';
+    }
+    // 2026-10-22 极简榜单置顶：先「精选判定榜（亚盘×欧盘）」，再「强队·正式过热榜」
+    // ★ 榜单走 boardPool()：只跟用户显式筛选，不吃「置信门槛」（否则 conf=0 的资金流信号会被整批杀掉）
+    const _bp = boardPool();
+  html += '<div id="topBoards">';
+  try { html += verdictBoardHTML(_bp); } catch(e){ console.warn('精选判定榜渲染失败:', e && e.message); }
+  try { html += betModuleHTML(); } catch(e){ console.warn('下注模块渲染失败:', e && e.message); }
+  html += _moreBoardsHTML(_bp);
+  html += '</div>';
+    // 洋哥赛前大热预警置顶（扫全量筛选结果，不受分页截断影响）
+    try { html += ygAlertHTML(_bp); } catch(e){ console.warn('赛前大热预警渲染失败:', e && e.message); }
+    for (let i=0;i<realN;i++){
+      const m=_vList[i];
+      try { html += cardHTML(m); }
+      catch(e){
+        // 绝不静默丢场！任何一场数据缺字段就降级渲染一张精简卡，保证场次永远可见。
+        console.warn('单场渲染降级(tid='+(m&&m.tid)+'):', e && e.message);
+        try { html += simpleCard(m, e); } catch(e2){ console.warn('降级渲染也失败:', e2 && e2.message); }
+      }
+    }
+    if (realN < n){
+      html += `<button class="sec vmore" style="width:100%;margin:10px 0" onclick="moreRows()">加载更多（已显示 ${realN} / ${n} 场）</button>`;
+      for (let i=realN;i<n;i++){ html += `<div class="vph" data-i="${i}" style="height:${_vEst}px"></div>`; }
+    }
+    grid.innerHTML = html;
+    _mountBoards();   // ★ 榜单/预警搬到 header 下方宿主（否则被 summary/drawTop 挤到 ~3800px 处）
+    // 首屏实测真实卡高度 → 更新占位估算；绑定滚动后补渲染视口内/下方占位卡
+    requestAnimationFrame(()=>{
+      const cs=grid.querySelectorAll('.c'); if(cs.length){ let s=0; cs.forEach(c=>s+=c.offsetHeight); _vEst=Math.max(120, Math.round(s/cs.length)); }
+      /* 🔴 2026-10-05 必须补这一步：全量 innerHTML 重建出来的卡片**没有 __sig**，
+         下一次 refreshRendered 会因 `undefined !== _cardSig(m)` 而**整批 140 张全部重建**
+         （真机单测实测：改 1 个字段却引发 141 次 DOM 变动）→ 上面「序列未变走增量」的优化会完全失效。
+         这里按卡片 id 回填签名，之后增量刷新才能真正只动变化的那几张。成本仅 140 次纯计算，远低于 140 次 cardHTML。 */
+      try{
+        for (const c of cs){
+          const id = c.id || ''; if (!id.startsWith('card-')) continue;
+          const mm = mByTid(id.slice(5)); if (mm) c.__sig = _cardSig(mm);
+        }
+      }catch(e){}
+      bindVScroll(true); fillVisible(grid);
+    });
+    }   // end else：序列变了（或搜索/分页）→ 走全量 innerHTML 重建
+  }
+  // 实时覆盖统计：清楚区分「可分析（有真实盘口）」与「无盘口（低级别/友谊/青年/女足，庄家未开盘）」，
+  // 直击用户痛点"一堆比赛没有数据分析"——让无盘口场的数量与原因一眼可见，而非混在列表里像"分析失败"。
+  const _cov = all.filter(m => hasPackOdds(m.tid) || jcHasOdds(m) || (m.odds && (m.odds.eu||m.odds.asia||m.odds.bs)) || t7HasOdds(m)).length;
+  const _no = all.length - _cov;
+  $('cnt').textContent = `可分析 ${_cov} · 未开盘 ${_no} · 共 ${all.length} 场`;
+  $('cnt').style.borderColor = _no > 0 ? 'var(--yel)' : 'var(--line)';
+  // 把"无盘口"拆成「远期未开盘」与「真低级别不开盘」两类，避免用户把远期场误当抓取失败
+  const _farN = all.filter(m => !hasPackOdds(m.tid) && !jcHasOdds(m) && !t7HasOdds(m) && isFarFuture(m)).length;
+  const _lowN = _no - _farN;
+  // 按日期覆盖率（一眼看清：今天/明天基本全有，远期是庄家没开）
+  const _byDay = {};
+  for (const m of all){ const d = m.day || '未知'; (_byDay[d] = _byDay[d] || {t:0,c:0}); _byDay[d].t++; if (hasPackOdds(m.tid)||jcHasOdds(m)||t7HasOdds(m)||(m.odds&&(m.odds.eu||m.odds.asia||m.odds.bs))) _byDay[d].c++; }
+  const _dayLine = Object.keys(_byDay).sort().map(d => `${d.slice(4,6)}-${d.slice(6,8)} ${_byDay[d].c}/${_byDay[d].t}`).join(' · ');
+  $('cnt').title = _no>0
+    ? (`其中 ${_farN} 场为远期赛程（距开赛>24h，庄家尚未放盘，赛前24-48h自动补抓）→ 非抓取失败；${_lowN} 场为低级别/友谊/青年/女足/小国联赛，庄家不开盘。勾选工具栏「只看有盘口」可隐藏无盘口场。\n按日期可分析：${_dayLine}`)
+    : '全部比赛均有真实盘口数据';
+  // 盘口档位栏（理论 vs 实际 净变化分档 + 分档胜率）
+  try{ renderGradeBar(); }catch(e){ console.warn('renderGradeBar err:', e && e.message); }
+  // 档位速查条（t0/t1/t2 各几场 + 一点直达该档明细）
+  try{ renderTierBar(); }catch(e){ console.warn('renderTierBar err:', e && e.message); }
+  // 档位看板板块：开着就跟着刷新（后台自动分析会不断新增已分析场次，t1/t0 名单会变）
+  try{
+    const _tbm = document.getElementById('tierBoardModal');
+    if (_tbm && _tbm.classList.contains('show')){ _tbEnsurePoll(); renderTierBoard(); }  // 轮询被掐掉也要在刷新时重新挂上
+  }catch(e){ console.warn('renderTierBoard err:', e && e.message); }
+  // 平局关注数量 + 顶部面板（一眼可见，治"平局一场都没有"）
+  const dn = MATCHES.filter(isDrawMatch).length;
+  const fdn = document.getElementById('fDrawN'); if (fdn) fdn.textContent = dn ? ('('+dn+')') : '';
+  renderDrawTop();
+  // 实时汇总：每次 render 后刷新 4 个汇总卡片
+  try{ renderSummary(); }catch(e){ console.error('renderSummary err:', e); }
+}
+function infoBlock(m){
+  if (!m.info || !m.info.summary) return '';
+  const lines = m.info.summary.lines.join('');
+  const con = m.info.summary.conclusion;
+  return `<div class="info">${lines}</div>`;
+}
+/* 降级卡片：完整卡片渲染抛异常时的兜底，保证"场次不会凭空消失"。
+   只依赖最基础字段，任何异常都不允许再冒泡。 */
+function simpleCard(m, err){
+  const jc = (function(){ try{ return jcOf(m); }catch(e){ return null; } })();
+  return `<div class="c">
+    <div class="ct"><span class="lg">${(m&&m.league)||''}</span>
+      <span class="pill" style="color:var(--yel);border-color:var(--yel)">精简卡</span>
+      <span class="ko">${stateTag(m&&m.state)}</span></div>
+    <div class="tm">${(m&&m.home)||'?'} <span class="vs">vs</span> ${(m&&m.away)||'?'}</div>
+    <div class="kv"><b>开赛</b><span>${(m&&m.kickoff)||''}</span></div>
+    ${jc?`<div class="kv"><b>竞彩</b><span><span class="badge bH">${jc.no||''}</span> ${jc.home||''}vs${jc.away||''}</span></div>`:''}
+    <div class="kv"><b>说明</b><span style="color:var(--yel)">该场详细面板渲染失败，已降级显示（场次未丢失）。原因：${(err&&err.message)||'未知'}</span></div>
+    <div class="kv"><b>操作</b><span><button class="sec" onclick="onAnalyze(null,${(m&&m.tid)})">重新分析</button></span></div>
+  </div>`;
+}
+/* ---------- 分析折叠（2026-09-18 新增）：默认折叠，点开查看详细分析 ----------
+   每场分析内容很长（亚盘/欧赔/比分概率/半全场/庄家热度/各专家面板/投注占比），
+   场次多时整页极长。改为默认折叠，摘要显示综合结论+价值分+置信+热度，点开看详情。
+   展开状态按 tid 持久化到 localStorage，避免实时 tick 重渲染把已展开卡片又合上。 */
+const ANA_OPEN = new Set(JSON.parse(localStorage.getItem('ana_open') || '[]'));
+function anaSaveOpen(){ try{ localStorage.setItem('ana_open', JSON.stringify([...ANA_OPEN])); }catch(e){} }
+function anaToggle(tid, open){ if (open) ANA_OPEN.add(tid); else ANA_OPEN.delete(tid); anaSaveOpen(); }
+if (!document.getElementById('anaFoldStyle')){
+  const _s = document.createElement('style'); _s.id = 'anaFoldStyle';
+  _s.textContent = '.ana-fold>summary{list-style:none} .ana-fold>summary::-webkit-details-marker{display:none} .ana-fold>summary:hover{background:rgba(255,255,255,.03)}';
+  document.head.appendChild(_s);
+}
+document.addEventListener('toggle', e => {
+  const d = e.target;
+  if (d && d.classList && d.classList.contains('ana-fold')){
+    const tid = d.getAttribute('data-tid');
+    if (tid) anaToggle(tid, d.open);
+  }
+}, true);
+function anaHead(a, val){
+  const dDir = (a && a.smartDir) ? a.smartDir : (a ? a.dir : '—');
+  const dc = dirClass(dDir);
+  const headC = dc==='W' ? 'var(--red)' : dc==='L' ? 'var(--grn)' : dc==='D' ? 'var(--yel)' : 'var(--mut)';
+  const smartTag = (a && a.smartDir) ? ' · <span style="color:#1a73e8;font-weight:600">破绽盘·跟聪明钱</span>' : '';
+  const hot = (a.ppi && a.ppi.hot_side && a.ppi.hot_side!=='—') ? ` · 热门 ${labelWDL(a.ppi.hot_side)}` : '';
+  const bf = a.betfa ? ` · 澳客占比 主${(a.betfa.pct||{}).W??'-'}%/客${(a.betfa.pct||{}).L??'-'}%` : '';
+  return `<b style="color:${headC}">${labelWDL(dDir)}</b>${a.grade?` · ${a.grade}`:''}${smartTag} · 价值分 ${val} · 置信 ${Math.round(a.conf||0)}%${a.strongDraw?' · 平局推荐':''}${hot}${bf}`;
+}
+
+/* ---------- 综合稳定结论（2026-09-19 新增）：每场只给一条同源、不矛盾的总结 ----------
+   病根：旧版「大小球」verdict 来自 classifyOU 市场热度(盘口升降+大球水)，与「比分」Dix-Coles 分布
+   是两套独立来源 → 用户看到"1-1最常见却标大球"的自相矛盾。
+   本盒把 胜平负/大小球/比分/半全场 全部从「同一份比分矩阵」取出(overProb/most/p1x2/top 同源)，
+   保证四结论内部一致；大小球采用**非对称**门槛（模型大球P≥60下大球、≤50下小球，中间标"无稳定方向"不下注），
+   依据是 1525 场真盘口校准曲线：50~60 那一段实际>线只有 ~47%，两侧都不到盈亏平衡，下注必亏。绝不输出与比分矛盾的伪结论。 */
+/* 比分融合标签：展示本场比分模型综合了哪些独立信号及其权重
+   赛季强度(team_ratings) + 近期战绩(form) + 庄家盈亏(PPI背离)，
+   全部仅拉「主客比例」且 T 锚定盘口，保证与大小球/胜平负同源不矛盾。（战意已移除） */
+function scoreFusionTag(sc){
+  if (!sc) return '';
+  const f = [];
+  if (sc.priorW>0) f.push('强度先验w='+sc.priorW+(sc.priorSrc?'(季'+sc.priorSrc+')':''));
+  if (sc.formW>0) f.push('战绩w='+sc.formW);
+  if (sc.ppiW>0) f.push('庄家盈亏w='+sc.ppiW);
+  // 战意权重展示已移除（2026-10-26）：动机信号不再参与模型。
+  if (!f.length) return '·纯市场(无独立先验)';
+  return '·融合['+f.join(' · ')+']';
+}
+function stableConsensus(a, m){
+  if (!a) return '';
+  const parts = [];
+  // ① 胜平负：综合结论 + 置信
+  const dDir = (a && a.smartDir) ? a.smartDir : (a ? a.dir : '—');
+  const dc = dirClass(dDir);
+  const dirColor = dc==='W'?'var(--red)':dc==='L'?'var(--grn)':dc==='D'?'var(--yel)':'var(--mut)';
+  let dirLine = `<span style="color:${dirColor};font-weight:700">${labelWDL(dDir)}</span>`;
+  if (a && a.smartDir) dirLine += `<span style="color:#1a73e8"> · 破绽盘·跟聪明钱</span>`;
+  if (a.conf) dirLine += `<span style="color:var(--mut)"> · 置信${Math.round(a.conf)}%</span>`;
+  parts.push(['胜平负', dirLine]);
+  // ② 大小球：同源稳定结论（与比分同一矩阵）
+  let ouLine = '—';
+  if (a.ou_dir && a.ou_dir!=='—' && a.ou_dir!=='无稳定方向'){
+    const oc = a.ou_dir==='大球'?'var(--red)':a.ou_dir==='小球'?'var(--grn)':'var(--mut)';
+    ouLine = `<span style="color:${oc};font-weight:700">${a.ou_dir}</span>`;
+    if (a.score && a.score.overProb!=null) ouLine += `<span style="color:var(--mut)"> · 模型大球P ${a.score.overProb}%</span>`;
+  } else if (a.ou_dir==='无稳定方向'){
+    ouLine = `<span style="color:var(--mut)">无稳定方向</span>`;
+    if (a.score && a.score.overProb!=null) ouLine += `<span style="color:var(--mut)">（模型大球P ${a.score.overProb}%≈50/50，不下方向结论）</span>`;
+  }
+  parts.push(['大小球', ouLine]);
+  // ③ 比分：同源众数 + Top3（分布，非定点）
+  // ③ 进球数（每场可读读数，非单点比分）：期望总进球 λ+μ + 0-0率 + 最常见 + Top3
+  if (a.score && a.score.top && a.score.top.length){
+    const most = a.score.most;
+    const top3 = a.score.top.slice(0,3).map(d=>`${d.score} ${d.p}%`).join(' · ');
+    const lam = a.score.lambda!=null ? +a.score.lambda : null;
+    const mu  = a.score.mu!=null ? +a.score.mu : null;
+    const expT = (lam!=null && mu!=null) ? (lam+mu) : null;
+    // 0-0 率：从比分分布 top 里取 0-0 的 p%（若有），否则用期望总进球估算 P(0进球)
+    let p00 = null;
+    const hit00 = a.score.top.find(d=>d.score==='0-0');
+    if (hit00) p00 = hit00.p;
+    else if (expT!=null){ p00 = +(Math.exp(-expT)*100).toFixed(1); }
+    const gl = `<span style="color:var(--acc);font-weight:700">${expT!=null?('期望'+expT.toFixed(2)+'球'):''}</span>`;
+    const g00 = p00!=null ? ` · 0-0约${p00}%` : '';
+    parts.push(['进球数', `${gl}${g00} <span style="color:var(--mut)">｜ 最常见 ${most} ｜ Top3 ${top3}${a.score.overProb!=null?(' · 大球P'+a.score.overProb+'%'):''}（分布·非定点）</span>`]);
+  }
+  // ④ 破蛋（上半场≥1球）：强档(≥0.80)实测 85.1%(+11.6pp)是唯一正 edge，可出手；其余档无 edge
+  if (a.breakGoal && a.breakGoal.pBreak!=null){
+    const bg = a.breakGoal;
+    const canBet = bg.tier === 'strong';
+    const bgCol = canBet ? 'var(--red)' : 'var(--mut)';
+    const bgTag = canBet ? ' ✅可出手+11.6pp' : (bg.tier==='mid' ? ' · ⚠中性档无edge·勿单独投' : ' · ⚠负edge·勿投');
+    parts.push(['破蛋', `<span style="color:${bgCol};font-weight:700">${bg.pBreak}%</span> <span style="color:var(--mut)">${bg.tag}${bgTag}</span>`]);
+  }
+  // ⑤ 半全场：同源 top1（⚠ 真九态 Top1 仅 32.4%≈天花板；价值在"高置信子集"而非单点）
+  if (a.htft && a.htft.top && a.htft.top[0]){
+    const s0 = a.htft.top[0];
+    // ★ 2026-10-09 高置信门：Top1 概率≥40% 的子集实测命中≈47%（n=164）vs 基线 28.8%；
+    //   低于此阈值的场次九态本就是噪声，只配当分布看，不值得单点下注。
+    const HC = s0.p >= 40;
+    const hcBadge = HC ? ` <span class="badge bW" style="margin-left:4px">🔥高置信·可参考</span>` : ` <span style="color:var(--mut)">（低置信·仅看分布）</span>`;
+    parts.push(['半全场', `<span style="color:${HC?'var(--acc)':'var(--mut)'};font-weight:700">${labelHTFT(s0.state)}</span> <span style="color:var(--mut)">${s0.p}%${a.htft.pFT&&a.htft.pFT.D!=null?' ｜ P(平)='+a.htft.pFT.D+'%':''}</span>${hcBadge}`]);
+  }
+  // ⑥ 队伍/联赛半全场倾向（全量历史库懒加载；九态盲猜 32% 天花板之外的真情报）
+  if (window.__HTFT_STATS__){
+    var _tend = htftTendencyHTML(m);
+    if (_tend) parts.push(['倾向', _tend]);
+  }
+  // ⑦ 让球盘纪律（8449场真值校准）：让球深=热门方向实，浅=不猜。
+  //   主让≥+1.0→主胜66~71%、客让≥0.8→客胜60~63%；让球差<0.5(平手/浅盘)→双方实力接近，不单独下让球方向。
+  //   这是把 heatSignal 的"让球深度"信号单独拎成一条可下注纪律，避免混进综合方向里被稀释。
+  const _cH = (a.grade_hcap_a!=null) ? a.grade_hcap_a : null;
+  if (_cH!=null && Math.abs(_cH)>=0.8){
+    const deepDir = _cH>0 ? 'W' : 'L';
+    const deepC = deepDir==='W' ? 'var(--red)' : 'var(--grn)';
+    const deepLabel = _cH>0 ? ('主让'+_cH.toFixed(2)) : ('客让'+Math.abs(_cH).toFixed(2));
+    const deepHit = _cH>0 ? '66~71%' : '60~63%';
+    parts.push(['让球纪律', `<span style="color:${deepC};font-weight:700">${deepLabel}</span> <span style="color:var(--mut)">热门${labelWDL(deepDir)} · 8449场实测 ${deepHit}</span>`]);
+  }
+  const kv = parts.map(([b,v])=>`<b style="min-width:52px;display:inline-block;color:var(--mut);font-weight:600">${b}</b><span>${v}</span>`).join('　');
+  let fusionNote = '';
+  if (a.score && (a.score.formW>0 || a.score.ppiW>0))
+    fusionNote = ' 本场比分已融合：赛季强度+近期战绩+庄家盈亏(PPI背离)，各信号权重见比分行。';
+  const note = `七结论：胜平负/大小球/比分/进球数/破蛋/半全场均源自同一 Dix-Coles 比分矩阵，内部一致；倾向行=队伍/联赛历史半场行为(懒加载)；让球纪律行=8449场真值校准的让球深度→热门方向(主让≥1.0→主胜66~71%、客让≥0.8→客胜60~63%)。⚠ 破蛋只认强档(≥0.80，实测 85.1%)；半全场只在 Top1≥40% 的高置信子集才值得参考（该批实测≈47%）；让球浅盘(<0.5)不下让球方向——这三个板块的"命中率"靠筛选别靠蒙。${fusionNote}`;
+  return `<div style="margin:2px 0 8px;padding:8px 10px;border:1px solid var(--acc);border-radius:10px;background:linear-gradient(180deg,rgba(80,160,255,.08),transparent);font-size:12.5px;line-height:1.95">
+    <div style="font-weight:700;color:var(--acc);margin-bottom:3px">🎯 综合稳定结论（同源·不矛盾）</div>
+    <div class="kv" style="border:none;padding:0">${kv}</div>
+    <div style="font-size:10.5px;color:var(--mut);margin-top:3px">${note}</div>
+  </div>`;
+}
+
+/* ---------- 最终答案横幅（2026-09-21 新增）：把资金流/盘水/盘型/真实占比/市场概率/平局卡
+   全部融合成一条，放在每张分析卡最顶部。
+   关键改进：当平局是模型最可能结果(mk_d 为三者最大)时，直接输出「平局」作为最终答案
+   （标注参考级/负EV），不再让平局答案结构性消失；信号分歧时诚实标「弃注/观望」并给出模型单最可能结果。 */
+function finalAnswerBanner(a){
+  if (!a) return '';
+  const probs = { W:(a.mk_h||0), D:(a.mk_d||0), L:(a.mk_a||0) };
+  const topDir = ['W','D','L'].reduce((b,k)=> (probs[k]||0) > (probs[b]||0) ? k : b, 'W');
+  const topP = Math.round((probs[topDir]||0)*100);
+  // 已融合的各信号方向
+  const sigs = [];
+  if (a.s_flow && a.s_flow!=='—') sigs.push('资金流→'+labelWDL(a.s_flow));
+  if (a.s_pan && a.s_pan!=='—') sigs.push('盘水→'+labelWDL(a.s_pan));
+  if (a.s_pan_kb && a.s_pan_kb!=='—') sigs.push('盘型→'+labelWDL(a.s_pan_kb));
+  if (a.betfa && a.betfa.confirm && a.betfa.confirm.dir) sigs.push('真实占比→'+labelWDL(a.betfa.confirm.dir));
+  if (a.draw_card && a.draw_card.fire) sigs.push('平局信号卡成立');
+  const reason = sigs.length ? sigs.join(' ＋ ') : '无有效临场信号';
+  // 引擎已融合方向（去后缀，取主结论）
+  const fusedRaw = (a.dir||'').replace(/（.*$/,'').replace(/·.*$/,'').replace(/信号·.*$/,'').trim();
+  const fusedConcrete = (/^(主胜|平|客胜|资金面·主胜|资金面·客胜|资金面·平|参考·主胜|参考·客胜)$/.test(fusedRaw)) ? fusedRaw : '';
+  // 决定最终方向
+  let finalDir, tier, note, isDraw=false;
+  const concreteMap = {'主胜':'W','资金面·主胜':'W','参考·主胜':'W','客胜':'L','资金面·客胜':'L','参考·客胜':'L','平':'D','资金面·平':'D'};
+  const fusedD = concreteMap[fusedRaw] || (/平局/.test(a.dir||'') ? 'D' : '');
+  // 平局触发：严格最可能 OR 引擎判平 OR 平局信号卡 OR 强平局 OR 平局概率≥27%(防平阈值)。
+  // 放宽到「高概率候选」而非仅 argmax，否则足球里平局几乎永不作为终答出现（用户体感"没平局答案"的根因）。
+  const drawProb = (a.mk_d||0);
+  const drawElevated = (a.draw_card && a.draw_card.fire) || a.strongDraw || drawProb>=0.27 || /平局/.test(a.dir||'');
+  if (topDir==='D' || drawElevated){
+    finalDir='平局'; tier='参考'; isDraw=true;
+    const reasons = [];
+    if (a.draw_card && a.draw_card.fire) reasons.push('平局信号卡成立');
+    if (a.strongDraw) reasons.push('强平局(市场头号+短平赔)');
+    if (drawProb>=0.27) reasons.push('平局概率'+Math.round(drawProb*100)+'%偏高');
+    if (/平局/.test(a.dir||'')) reasons.push('引擎综合判平');
+    note='平局为'+(topDir==='D'?'模型最可能结果':'高概率候选')+(reasons.length?('（'+reasons.join('／')+'）'):'')+'，但平局整体负EV（实测打出约30%），仅作防平参考、不建议重仓';
+  } else if (fusedD==='W' || fusedD==='L'){
+    finalDir = labelWDL(fusedD);
+    const vsS = Math.round(a.value_score||0), cfS = Math.round(a.conf||0);
+    if (fusedD==='W'){
+      // 主胜：实盘命中仅50.9%，需更强 conviction 才下注，否则降为参考（纠偏"偏主胜"）
+      tier = (a.tier===1 && cfS>=68 && vsS>=66) ? '可下注' : '参考';
+    } else {
+      // 客胜：实盘命中60.3%更准，tier≥1 即可下注（不再过度压制客胜）
+      tier = a.tier>=1 ? '可下注' : '参考';
+    }
+    note = (fusedD===topDir ? '与模型最可能结果一致('+labelWDL(topDir)+' '+topP+'%)' : '模型最可能结果为'+labelWDL(topDir)+'('+topP+'%)，本场按纪律'+labelWDL(fusedD));
+  } else {
+    // 引擎弃注/观望：给出模型单最可能结果，诚实标弃注
+    finalDir = labelWDL(topDir); tier='弃注';
+    note = '信号分歧/不足→系统弃注（异向叠加实测低于随机）；模型单最可能：'+labelWDL(topDir)+'('+topP+'%)';
+  }
+  const tierColor = tier==='可下注' ? 'var(--grn)' : tier==='参考' ? 'var(--yel)' : 'var(--mut)';
+  const finalColor = finalDir==='主胜' ? 'var(--red)' : finalDir==='客胜' ? 'var(--grn)' : finalDir==='平局' ? 'var(--yel)' : 'var(--mut)';
+  return `<div style="margin:2px 0 8px;padding:10px 12px;border:2px solid var(--acc);border-radius:12px;background:linear-gradient(180deg,rgba(80,160,255,.12),transparent);font-size:13.5px;line-height:1.85">
+    <div style="font-weight:800;color:var(--acc);margin-bottom:4px">🏁 最终答案（融合全部信号）</div>
+    <div style="font-size:19px;font-weight:800;color:${finalColor}">${finalDir} <span style="font-size:12px;color:var(--mut);font-weight:600">｜ 置信 ${Math.round(a.conf||0)}% ｜ <span style="color:${tierColor}">${tier}</span></span></div>
+    <div style="font-size:11.5px;color:#6b7686;margin-top:3px">融合：${reason}</div>
+    <div style="font-size:11.5px;color:#6b7686;margin-top:2px">${note}</div>
+  </div>`;
+}
+
+/* 返回「最终答案」方向码 W/D/L（供自动追踪 live_log 与手动分析记录使用，
+   与最终答案横幅同源：平局在信号卡/强平局/平局概率≥27%/引擎判平时即记 D，使自我纠错账本开始统计平局命中）。 */
+function finalAnswerDir(a){
+  if (!a) return '—';
+  // 破绽盘修正（回测结论）：聪明钱背离盘以下注方向跟随 smart-money(svpDir) 为准，否则等于反向利用该信号。
+  if (a.smartDir && (a.smartDir === 'W' || a.smartDir === 'D' || a.smartDir === 'L')) return a.smartDir;
+  const probs = { W:(a.mk_h||0), D:(a.mk_d||0), L:(a.mk_a||0) };
+  const topDir = ['W','D','L'].reduce((b,k)=> (probs[k]||0) > (probs[b]||0) ? k : b, 'W');
+  const drawProb = (a.mk_d||0);
+  const drawElevated = (a.draw_card && a.draw_card.fire) || a.strongDraw || drawProb>=0.27 || /平局/.test(a.dir||'');
+  if (topDir==='D' || drawElevated) return 'D';
+  const concreteMap = {'主胜':'W','资金面·主胜':'W','参考·主胜':'W','客胜':'L','资金面·客胜':'L','参考·客胜':'L','平':'D','资金面·平':'D'};
+  const fusedRaw = (a.dir||'').replace(/（.*$/,'').replace(/·.*$/,'');
+  const fusedD = concreteMap[fusedRaw] || (/平局/.test(a.dir||'') ? 'D' : '');
+  if (fusedD==='W' || fusedD==='L') return fusedD;
+  return topDir;
+}
+
+// 半场破蛋（上半场≥1球）概率：P=1−e^(−(hl1+hm1))，hl1/hm1 为引擎半场期望进球
+function htGoalProb(a){
+  if (!a || !a.htft) return null;
+  const hl1 = a.htft.hl1, hm1 = a.htft.hm1;
+  if (hl1 == null || hm1 == null) return null;
+  const p = 1 - Math.exp(-(hl1 + hm1));
+  return (p > 0 && isFinite(p)) ? p : null;
+}
+const HT_GOAL_THR = 0.58;   // 半场破球快速筛选阈值
+/* 半场破蛋档次（与引擎 predictBreak 阈值**逐字一致**，2026-10-05 重标定于 6656 场真赔率重跑）：
+   ≥85% 破蛋·强（实际 4.88 球 / 0-0 仅 1.70%）
+   70~85% 破蛋·中性（≈全库基准 3.15 球 / 5.50%，**无区分度**，用户投诉的 79% 就在这一档）
+   65~70% 破蛋·偏弱    /    <65% 破蛋·弱（0-0 率 13.20%，唯一有反向 alpha）
+   旧口径 0.80/0.70 与 1637 场 Over 页数字（86.9/78.8/67.3、基准 73.7%）均已作废。
+   返回 {tier, tag, col}，供卡片 pill、单场明细、面板统一取用。 */
+function htGoalTier(a, p){
+  const bg = a && a.breakGoal;
+  if (bg && bg.tier && bg.tag) return { tier:bg.tier, tag:bg.tag, col: htTierCol(bg.tier) };
+  const pp = (p != null) ? p : htGoalProb(a);
+  const tier = pp == null ? 'low' : (pp >= 0.80 ? 'strong' : pp >= 0.70 ? 'mid' : pp >= 0.65 ? 'weak' : 'low');
+  return { tier, tag: tier==='strong'?'破蛋·强':tier==='mid'?'破蛋·中性':tier==='weak'?'破蛋·偏弱':'破蛋·弱', col: htTierCol(tier) };
+}
+function htTierCol(tier){ return tier==='strong' ? '#16a34a' : tier==='mid' ? '#e5a50a' : tier==='weak' ? '#8a8f98' : '#6b7280'; }
+function isHtGoalMatch(m){ const p = htGoalProb(m && m.analysis); return p != null && p >= HT_GOAL_THR; }
+// 强队深盘（临场让球≥1球）：回测证明这是模型唯一稳定正EV子集（近期9-19~21 命中 63~65%，全推仅49.9%，随机33.3%）
+function deepHcap(a){ return (a && a.p1 != null) ? Math.abs(a.p1) : null; }
+const DEEP_HCAP_THR = 1.0;
+function isDeepMatch(m){ const d = deepHcap(m && m.analysis); return d != null && d >= DEEP_HCAP_THR; }
+
+/* ---------- 盘口档位（理论 vs 实际）筛选 & 分档胜率（2026-09-23） ----------
+   引擎给出的 grade_t/grade_a/grade_net/grade_tier（见 engine.js gradeIndex）：
+   档位越高 = 越看好主队；净变化 = 实际档位 − 理论档位，>0 偏热(实开更看好主队)、<0 偏冷(示弱)。
+   这里把它们聚成 5 个可选档，并统计每档的完场命中率——直接回答「哪种盘口偏离最值得跟」。 */
+const GRADE_GROUPS = [
+  { k:'H4',   label:'盘口·过热(净≥4)',  hot:true  },
+  { k:'H3',   label:'盘口·偏热(净3)',   hot:true  },
+  { k:'H2',   label:'盘口·微热(净2)',   hot:true  },
+  { k:'N',    label:'盘口·正常',        hot:null  },
+  { k:'COLD', label:'盘口·偏冷(净≤−2)', hot:false }
+];
+/* ⚠ 2026-10-16e 命名澄清：本栏档位来自「盘口净变化 grade_net = 实际档位 − 理论档位」（亚盘 vs 欧赔），
+   与「资金热度」（澳客冷热指数 / 北单超买pt）是**两套完全不同的指标**。旧 label 曾叫「正式过热/中热/小热」，
+   与资金热度档位同名 → 用户误以为"又说大热"、越看越乱。现统一加「盘口·」前缀，杜绝混读。 */
+let gFilter = '';                       // 当前档位筛选（'' = 全部）
+function gradeGroupOfNet(n){
+  if (n == null || !isFinite(+n)) return '';
+  const v = +n;
+  if (v >= 4) return 'H4';
+  if (v === 3) return 'H3';
+  if (v === 2) return 'H2';
+  if (v >= -1) return 'N';
+  return 'COLD';
+}
+function gradeGroupOf(m){ const a = m && m.analysis; return a ? gradeGroupOfNet(a.grade_net) : ''; }
+function gradeGroupOfPred(p){ return gradeGroupOfNet(p && p.gn); }
+function gradeGroupLabel(k){ const g = GRADE_GROUPS.find(x=>x.k===k); return g ? g.label : '—'; }
+/* 档位筛选栏：显示每档已分析场次；点击切换筛选 */
+function renderGradeBar(){
+  const tabs = $('gTabs'), stats = $('gStats');
+  if (!tabs || !stats) return;
+  const cnt = {}; for (const g of GRADE_GROUPS) cnt[g.k] = 0;
+  const LIST = (typeof MATCHES!=='undefined' && MATCHES) ? MATCHES : [];
+  let analyzed = 0, noGrade = 0;
+  for (const m of LIST){
+    if (!m.analysis) continue; analyzed++;
+    const k = gradeGroupOf(m);
+    if (!k){ noGrade++; continue; }
+    cnt[k]++;
+  }
+  const total = GRADE_GROUPS.reduce((s,g)=>s+cnt[g.k],0);
+  const pill = (k, label, n) => {
+    const on = (gFilter === k);
+    return `<button class="gpill${on?' on':''}" onclick="setGradeFilter('${k}')">${label}<span class="gn">${n}</span></button>`;
+  };
+  tabs.innerHTML =
+      pill('', '全部', total)
+    + GRADE_GROUPS.map(g => pill(g.k, g.label, cnt[g.k])).join('')
+    + `<span class="gsub">已分析 ${analyzed} 场${noGrade?` · 无档位 ${noGrade} 场（缺盘口/欧赔）`:''}</span>`;
+  /* 分档胜率：用复盘记录（完场·已比对）按档位分层，给出「今日」与「全部」两列 */
+  const done = (typeof predLog!=='undefined' ? predLog : []).filter(p => p.status==='done' && p.hit!=null);
+  stats.innerHTML = gradeStatsHTML(done);
+}
+/* 按档位分层命中率表（顶部档位栏 与 完场复盘弹窗 共用） */
+function gradeStatsHTML(allRated){
+  const today = beijingToday();
+  const rate = arr => { const n = arr.length; return n ? Math.round(arr.filter(p=>p.hit).length/n*100) : null; };
+  const colA = v => v==null ? 'var(--mut)' : (v>=60?'var(--grn)':v>=50?'var(--yel)':'var(--red)');
+  if (!allRated.length)
+    return `<p class="note" style="margin:0">暂无已完场样本。比赛完场后自动归档，届时这里按档位给出真实命中率（样本 ≥30 才有统计意义）。</p>`;
+  const rows = GRADE_GROUPS.map(g => {
+    const sub = allRated.filter(p => gradeGroupOfPred(p) === g.k);
+    const rt = rate(sub.filter(p => p.day === today)), r = rate(sub);
+    return `<tr${gFilter===g.k?' style="background:rgba(255,122,60,.10)"':''}>
+      <td style="text-align:left">${g.label}</td>
+      <td>${sub.length}</td>
+      <td style="color:${colA(rt)};font-weight:700">${rt==null?'—':rt+'%'}</td>
+      <td style="color:${colA(r)};font-weight:700">${r==null?'—':r+'%'}</td>
+    </tr>`;
+  }).join('');
+  const ar = rate(allRated), art = rate(allRated.filter(p => p.day === today));
+  const unk = allRated.filter(p => gradeGroupOfPred(p) === '').length;
+  return `<table class="sum-tb gtab">
+      <tr><th style="text-align:left">档位（实开 − 理论）</th><th>样本</th><th>今日命中</th><th>全部命中</th></tr>
+      ${rows}
+      <tr style="border-top:1px solid var(--line)"><td style="text-align:left"><b>全部档位</b></td><td><b>${allRated.length}</b></td>
+        <td style="color:${colA(art)};font-weight:700">${art==null?'—':art+'%'}</td>
+        <td style="color:${colA(ar)};font-weight:700">${ar==null?'—':ar+'%'}</td></tr>
+    </table>${unk?`<p class="note" style="margin:4px 0 0">另有 ${unk} 场无档位数据（早期快照无 grade_net），未计入分层。</p>`:''}`;
+}
+function setGradeFilter(k){ gFilter = (gFilter === k) ? '' : k; renderCap = 400; render(); }
+/* 北京时"今天" YYYYMMDD（与 m.day 同口径，用于「今日命中率」） */
+function beijingToday(){
+  const d = new Date(Date.now() + 8*3600*1000);
+  return d.getUTCFullYear().toString() + String(d.getUTCMonth()+1).padStart(2,'0') + String(d.getUTCDate()).padStart(2,'0');
+}
+// 卡片正面：醒目 1X2 方向（胜/平/负）标注 + 半场破蛋概率
+function faceDirBadge(a){
+  if (!a) return '';
+  const dDir = (a && a.smartDir) ? a.smartDir : (a ? a.dir : '—');
+  const dc = dirClass(dDir);
+  const col = dc==='W' ? 'var(--red)' : dc==='L' ? 'var(--grn)' : dc==='D' ? 'var(--yel)' : 'var(--mut)';
+  const label = labelWDL(dDir);
+  const grade = a.grade || (a.tier===1 ? '可下注' : a.tier===2 ? '参考' : '观望');
+  const val = Math.round(a.value_score || 0);
+  const htg = htGoalProb(a);
+  const htT = htGoalTier(a, htg);
+  /* ★ 2026-10-05 卡片 pill 文案重写：用户投诉"79% 两场都 0-0"的根因是旧 tooltip 把 0.70 就叫「中」、
+     0.80 就叫「强」，让人把 79% 读成高把握。新口径按 6656 场真赔率重跑实测给数（见 htGoalTier 注释）：
+       强 ≥85%（4.88 球 / 0-0 1.70%）｜中性 70~85%（≈基准 3.15 球 / 5.50%，无区分度）｜弱 <65%（13.20% 0-0）。
+     中性档的 tooltip 必须**显式说明"不是把握依据"**，否则下次还会有人拿 79% 当强信号。 */
+  const ht = htg != null ? (function(){
+    const _p = htg * 100, _neutral = htT.tier === 'mid';
+    const _tip = _neutral
+      ? `半场破蛋(上半场≥1球)≈${_p.toFixed(0)}%。⚠ **此档无区分度**：70~85% 整段（n=4711）实际平均总进球 3.51 球、全场 0-0 率 4.26%，与全库基准 3.15 球 / 5.50% 相差无几 —— 不能读成"这场有球把握大"。真正有把握的只有 p≥85%（实测 4.88 球 / 0-0 仅 1.70%，n=412）与 p<65%（0-0 率 13.20%，反向信号）。口径：6656 场真赔率重跑 _eval/_break_verdict.cjs。`
+      : `半场破蛋(上半场≥1球)≈${_p.toFixed(0)}% · 档：${htT.tag}（6656 场真赔率重跑实测：强 p≥85% → 4.88 球 / 0-0 1.70%；偏弱 65~70% → 2.54 球 / 0-0 7.40%；弱 <65% → 2.09 球 / 0-0 13.20%，是唯一有反向 alpha 的档）`;
+    return `<span class="pill" style="color:${htT.col};border-color:${htT.col}" title="${_tip}">半场破蛋·${htT.tag.replace('破蛋·','')} ${_p.toFixed(0)}%${_neutral?'':''}</span>`;
+  })() : '';
+  // 🔥 头条 = 深盘强队 ∩ 方向明确(主胜/客胜) ∩ 价值分≥50（回测证明近期 9-19~21 深盘强队·方向确认子集命中约 63~65%，全推仅49.9%，随机33.3%；模型当前唯一稳定正EV子集）
+  // 注：原判定依赖 s_flow/s_pan/s_pan_kb 信号字段，实测 s_flow 对所有场次恒为 '—'、s_pan/s_pan_kb 仅约 10% 有值，
+  //     导致徽章几乎不触发。改为用恒有值的 dirClass(主胜/客胜) + value_score 作为"方向确认"信号，更稳健。
+  const deep = deepHcap(a);
+  const clearDir = (dc === 'W' || dc === 'L');
+  const confirmed = clearDir && (a ? (a.value_score || 0) >= 50 : false);
+  const hvBadge = (deep != null && deep >= DEEP_HCAP_THR && confirmed)
+    ? `<span class="pill" style="color:#fff;background:linear-gradient(90deg,#e11d48,#f59e0b);border:none;font-weight:800;font-size:13px" title="🔥深盘强队·重点(头条)：临场让球≥1球 且 模型给出明确方向(主胜/客胜) 且 价值分≥50。回测 9-19~21 该子集命中约 63~65%（全推仅49.9%、随机33.3%）——这是模型当前唯一稳定正EV子集，但每场仍可能错，务必小注控仓、严格止损">🔥深盘强队·重点 ${val}</span> `
+    : '';
+  return `${hvBadge}<span class="pill" style="color:${col};border-color:${col};font-weight:800;font-size:13px" title="1X2 方向（胜平负）：模型综合结论。庄家视角，仅高价值(≥65)场值得下注">1X2 ▸ ${label} · ${grade}</span>${ht}`;
+}
+
+/* 无盘口场「理论档位」评估（#200）：仅对真正无盘口、但两队在实力库里的场次，
+   用引擎 theoreticalAssess 给出纯实力代估，明确标注非真实盘口、不可据此投注。 */
+/* 2026-09-24：球探抓到真实盘口就不算"无盘口" —— 否则球探独有的场次会被打上
+   「无盘口」红 pill（提示"源站该场无赔率数据…无法分析"），与"球探明明有盘口且能分析"矛盾。 */
+function isNoOdds(m){ return (!hasPackOdds(m.tid) && !jcHasOdds(m) && !t7HasOdds(m) && (!liveCapable() || m._liveTried)); }
+function safeTheo(m){
+  try { return (typeof theoreticalAssess==='function') ? theoreticalAssess(m.home, m.away) : null; } catch(e){ return null; }
+}
+function fmtHcap(hcap){
+  if (hcap==null || !isFinite(hcap)) return '—';
+  const s = Math.round(hcap*4)/4;
+  if (Math.abs(s) < 0.125) return '平手';
+  return (s>0 ? '主让' : '客让') + Math.abs(s).toFixed(2).replace(/\.?0+$/,'');
+}
+function theoBlock(m, theo){
+  if (!theo) return '';
+  const dirBadge = theo.dirCode==='W' ? 'bW' : theo.dirCode==='L' ? 'bH' : 'bN';
+  const confTone = theo.conf>=55 ? 'grn' : theo.conf>=45 ? 'yel' : 'mut';
+  return `<div style="margin-top:8px;border:1px dashed #f0a500;border-radius:10px;padding:8px 10px;background:rgba(240,165,0,.06)">
+    <div style="font-size:12px;font-weight:700;color:#f0a500;margin-bottom:5px">📊 理论档位评估 <span style="font-weight:400;color:#8b98a9">（无真实盘口 · 仅供参考）</span></div>
+    <div class="kv">
+      <b>理论盘口</b><span>实力推算 <b>${fmtHcap(theo.exp_hcap)}</b> ｜ 理论档位 <b>${theo.grade_t}</b> 档（中水基准）</span>
+      <b>实力倾向</b><span><span class="badge ${dirBadge}">${theo.dirText}</span> 主胜${Math.round(theo.pH*100)}% / 平${Math.round(theo.pD*100)}% / 客胜${Math.round(theo.pA*100)}% ｜ 理论置信 <span style="color:var(--${confTone})">${theo.conf}%</span></span>
+      <b>期望进球</b><span>λ主 <b>${theo.lambda}</b> / μ客 <b>${theo.mu}</b> ｜ 总 <b>${theo.total}</b></span>
+      <b>最可能比分</b><span>${theo.score} <span style="color:var(--mut)">(${theo.scoreP}%)</span></span>
+      <b>数据来源</b><span>Dixon-Coles 赛季强度 + 近期战绩</span>
+    </div>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5">⚠ 庄家未开盘，以上为纯实力模型推算的<b>理论档位</b>，非真实让球盘，无任何资金/热度信号，<b>不能据此投注</b>，仅供判断双方实力强弱参考。</div>
+  </div>`;
+}
+
+function cardHTML(m){
+  const dc = m.analysis ? dirClass(m.analysis.dir) : 'G';
+  const a = m.analysis;
+  const _theo = isNoOdds(m) ? safeTheo(m) : null;   // #200：无盘口场的理论档位代估（有则展示）
+  // #200：无盘口场 pill（用字符串拼接，避免 ${} 嵌在字符串里触发解析异常）
+  /* 2026-09-24：把"无盘口"拆成两种，消掉用户误会。
+     球探抓到 2363 场，其中 09-26 及以后的 2134 场是**远期赛程、庄家根本还没开盘**，
+     旧版一律打成红色「无盘口」并写"源站该场无赔率数据"，用户看到就以为"球探抓到了但赔率获取不到"。
+     现在按开赛时间区分：还早 → 中性灰「未开盘·赛前Nh」；临场仍无 → 才是「庄家未开盘」。 */
+  const _stT = m.start_time || m.match_time_int || 0;
+  const _hrs = _stT ? ((_stT - Date.now() / 1000) / 3600) : null;
+  const _far = isFarFuture(m);   // 距开赛 > 24h：远期赛程，庄家尚未放盘
+  const noOddsPill = (!hasPackOdds(m.tid) && !jcHasOdds(m) && !t7HasOdds(m))
+    ? (_far
+        ? '<span class="pill" style="color:#8b949e;border-color:#8b949e" title="距开赛约 ' + Math.round(_hrs) + ' 小时，庄家尚未开盘（正常，不是抓取失败）。盘口通常在赛前 24 小时内陆续开出，后台每 30 分钟自动补抓，开盘后自动出现">未开盘·赛前' + (Math.round(_hrs) >= 48 ? Math.round(_hrs / 24) + '天' : Math.round(_hrs) + 'h') + '</span>'
+        : (liveCapable()
+            ? '<span class="pill" style="color:#2f81f7;border-color:#2f81f7" title="本地快照里没有这场盘口，但实时源可用 → 点「拉实时→分析」现场取最新盘口；临近开赛盘口即将放出，也可等后台自动补拉">快照缺·可拉实时</span>'
+            : '<span class="pill" style="color:#c0392b;border-color:#c0392b" title="已临近开赛仍无盘口：多为青年队/国际友谊/低级别联赛，庄家不开盘；可勾选工具栏「只看有盘口」隐藏这类场次">庄家未开盘' + (_theo ? '·理论' + _theo.grade_t + '档' : '') + '</span>'))
+    : '';
+  const jc = jcOf(m);   // 竞彩官方标记（编号 + 胜平负/让球/比分/半全场/进球数）
+  const val = a ? Math.round(a.value_score) : null;
+  const valColor = val>=70?'bW':val>=50?'bH':val!=null?'bG':'bG';
+  const isDone = m.state === '-1';
+  const offline = (typeof isOfflineMode==='function') && isOfflineMode();
+  /* 竞彩官方数据行：**未分析时也必须显示**（此前只在出结论后才显示，
+     导致用户看到卡片上只有一句"本地快照无本场盘口"就以为"竞彩这场没数据"——实际官方数据齐全）。 */
+  const jcRow = jc ? `<div class="kv"><b>竞彩官方</b><span><span class="badge bH" title="中国竞彩官方编号">${jc.no}</span> ${jc.league||''}${jc.hRank||jc.aRank?` ｜ 排名 ${jc.hRank||'?'} vs ${jc.aRank||'?'}`:''} ｜ 胜平负 <b>${(jc.had&&jc.had.h)||(jc.hhad?'让球盘':'—')}</b>${jc.had?('/'+jc.had.d+'/'+jc.had.a):''}${jc.hhad&&(jc.hhad.h||jc.hhad.goalLineValue)?` ｜ 让球${jc.hhad.goalLineValue||jc.hhad.goalLine||''} ${jc.hhad.h||'-'}/${jc.hhad.d||'-'}/${jc.hhad.a||'-'}`:''}${jc.crs?` ｜ <span class="badge bG" title="官方比分赔率">比分${Object.keys(jc.crs).length}项</span>`:''}${jc.hafu?` <span class="badge bG" title="官方半全场赔率">半全场</span>`:''}${jc.ttg?` <span class="badge bG" title="官方进球数赔率">进球数</span>`:''}</span></div>` : '';
+  // 🔭球探(titan007)盘口行：双源对比（同场）或球探独有显示
+  const t7Row = (m.t7 && m.t7.has) ? (function(){
+    const t = m.t7;
+    const fmtH = v => (v == null ? '—' : (v > 0 ? '主让' : '客让') + Math.abs(v).toFixed(2).replace(/\.?0+$/, ''));
+    const hcapInsane = (t.hcap != null && t.saneHcap === false);
+    const ouInsane = (t.ou != null && t.saneOu === false);
+    const hcapTxt = (!hcapInsane && t.hcap != null) ? `${fmtH(t.hcap)} <span style="color:var(--mut)">(上${t.hwater!=null?t.hwater.toFixed(2):'—'}/下${t.awater!=null?t.awater.toFixed(2):'—'})</span>` : (hcapInsane ? '⚠可疑' : '—');
+    const ouTxt = (!ouInsane && t.ou != null) ? `${t.ou.toFixed(2)} <span style="color:var(--mut)">(大${t.owater!=null?t.owater.toFixed(2):'—'}/小${t.uwater!=null?t.uwater.toFixed(2):'—'})</span>` : (ouInsane ? '⚠可疑' : '—');
+    let cmp = '';
+    const aa = m.analysis;
+    /* 已开赛场次两侧含义不同步：gqj2 抓的是滚球/走地盘（大小球随剩余时间一路下坠），
+       球探 vip 仍是赛前盘 —— 相减得到的是"时间差"而非"庄家分歧"，不能标红成背离。 */
+    const liveNow = (m.start_time && (Date.now() / 1000 - m.start_time) > 300)
+      || (m.match_time_int && (Date.now() / 1000 - m.match_time_int) > 300);
+    if (aa){
+      if (aa.p1 != null && t.hcap != null && !hcapInsane){
+        const d = +(aa.p1 - t.hcap).toFixed(2); const ok = Math.abs(d) <= 0.25;
+        cmp += ` ｜ 亚盘差 <b style="color:${ok||liveNow?'var(--grn)':'var(--red)'}">${d>=0?'+':''}${d}</b>${ok?' ✓同源':(liveNow?' ⚠滚球中·非真实分歧':' ⚠背离')}`;
+      }
+      /* ⚠ 2026-09-24 修正口径：原来用 aa.ou.o_line（**初盘**）去比球探的**临场/即时**盘，
+         等于拿"开赛前的盘"和"现在的盘"相减 —— 盘口只要正常移动一点就全被判成"⚠背离"，
+         是假信号的主要来源。亚盘侧 p1 本就是临场(agg.c_hcap)，大小球必须同步取 c_line。 */
+      const gqOuLine = (aa.ou && aa.ou.c_line != null) ? aa.ou.c_line : (aa.ou ? aa.ou.o_line : null);
+      if (gqOuLine != null && t.ou != null && !ouInsane){
+        const d = +(gqOuLine - t.ou).toFixed(2); const ok = Math.abs(d) <= 0.25;
+        cmp += ` ｜ 大小球差 <b style="color:${ok||liveNow?'var(--grn)':'var(--red)'}">${d>=0?'+':''}${d}</b>${ok?' ✓同源':(liveNow?' ⚠滚球中·非真实分歧':' ⚠背离')}`;
+      }
+    }
+    const srcTag = m.t7only ? ' <span class="badge bN" title="球探(titan007)独有场次：gqj2 无此场，已补全显示">球探独有</span>' : '';
+    const cmpTxt = m.t7only ? '' : ` ｜ <b>双源对比</b>${cmp}`;
+    const suspectNote = t.suspect ? ` <span style="color:#e67e22">⚠含可疑盘口(已忽略对比)</span>` : '';
+    return `<div class="kv"><b>🔭球探盘口</b><span><span class="badge bG" title="球探(titan007)实时盘口，与 gqj2 独立源，用于双源交叉验证">球探</span> 亚盘 <b>${hcapTxt}</b> ｜ 大小球 <b>${ouTxt}</b>${srcTag}${cmpTxt}${suspectNote} <span style="color:var(--mut)">更新 ${t.updated||''}</span></span></div>`;
+  })() : '';
+
+  /* 「⚡最新盘口」优先行（2026-09-24 新增）——落实"优先选择球探获取数据"。
+     实测球探静态源 last-modified 为分钟级（远快于 gqj2 底座），故把球探盘口放在
+     gqj2 亚盘之前，并标出"距今多久"，让用户第一眼看到的是最新鲜的盘口。
+     ⚠ 只做展示优先，不改写 a.p1/a.ou，引擎仍用 gqj2 主源（模型已按 gqj2 标定）。 */
+  const t7LatestRow = m => {
+    const t = m.t7;
+    if (!t || !t.has) return '';
+    const sane = t7OddsSane(t);
+    const parts = [];
+    const fmtH = v => (v > 0 ? '主让' : '客让') + Math.abs(v).toFixed(2).replace(/\.?0+$/, '');
+    // vip 亚盘（vip.titan007.com/AsianOdds_n.aspx 多公司中位数）优先：含初盘→即时走势
+    const az = (t.asia && t.asia.now && t.asia.now.hcap != null) ? t.asia : null;
+    if (az){
+      let s = '亚盘 <b>' + fmtH(az.now.hcap) + '</b>';
+      if (az.now.hw != null) s += ` <span style="color:var(--mut)">(${az.now.hw.toFixed(2)}/${az.now.aw != null ? az.now.aw.toFixed(2) : '—'})</span>`;
+      if (az.companies) s += ` <span class="badge bN" title="球探该场开出亚盘的公司数（多公司中位数，抗单一公司异常）">${az.companies}家</span>`;
+      parts.push(s);
+      if (az.open && az.open.hcap != null && az.move != null && Math.abs(az.move) >= 0.01){
+        const up = az.move > 0;
+        const col = up ? '#e67e22' : '#1a73e8';
+        parts.push(`<span title="球探多公司中位数：初盘 → 即时的盘口变化。升盘=资金倾向主队，降盘=倾向客队（庄家视角核心信号）">走势 <b style="color:${col}">${up ? '升盘↑' : '降盘↓'} ${Math.abs(az.move).toFixed(2)}</b> <span style="color:var(--mut)">${fmtH(az.open.hcap)}→${fmtH(az.now.hcap)}</span></span>`);
+      }
+      if (az.spread != null && az.spread >= 0.5){
+        parts.push(`<span title="各公司即时盘口的最大差值：分歧越大说明庄家间判断越不一致">分歧 <b style="color:#e67e22">${az.spread.toFixed(2)}</b></span>`);
+      }
+    } else if (t.hcap != null && sane.hcap){
+      parts.push('亚盘 <b>' + (t.hcap > 0 ? '主让' : '客让')
+        + Math.abs(t.hcap).toFixed(2).replace(/\.?0+$/, '')
+        + '</b>' + (t.hwater != null ? ` <span style="color:var(--mut)">(${t.hwater.toFixed(2)}/${t.awater != null ? t.awater.toFixed(2) : '—'})</span>` : ''));
+    }
+    const fmtLine = v => v.toFixed(2).replace(/\.?0+$/, '');
+    // vip 大小球（vip.titan007.com/OverDown_n.aspx 多公司中位数）：补 gqj2 仅 34% 有 bs 的缺口
+    const oz = (t.ouDetail && t.ouDetail.now && t.ouDetail.now.line != null) ? t.ouDetail : null;
+    if (oz){
+      let s = '大小球 <b>' + fmtLine(oz.now.line) + '</b>';
+      if (oz.now.ow != null) s += ` <span style="color:var(--mut)">(大${oz.now.ow.toFixed(2)}/小${oz.now.uw != null ? oz.now.uw.toFixed(2) : '—'})</span>`;
+      if (oz.companies) s += ` <span class="badge bN" title="球探该场开出大小球的公司数（多公司中位数）">${oz.companies}家</span>`;
+      parts.push(s);
+      if (oz.open && oz.open.line != null && oz.move != null && Math.abs(oz.move) >= 0.01){
+        const up = oz.move > 0;
+        const col = up ? '#e67e22' : '#1a73e8';
+        parts.push(`<span title="球探多公司中位数：初盘 → 即时的总进球盘变化。升盘=资金倾向大球，降盘=倾向小球">走势 <b style="color:${col}">${up ? '升盘↑' : '降盘↓'} ${Math.abs(oz.move).toFixed(2)}</b> <span style="color:var(--mut)">${fmtLine(oz.open.line)}→${fmtLine(oz.now.line)}</span></span>`);
+      }
+      if (oz.spread != null && oz.spread >= 0.5){
+        parts.push(`<span title="各公司即时大小球盘的最大差值：分歧越大说明庄家间判断越不一致">分歧 <b style="color:#e67e22">${oz.spread.toFixed(2)}</b></span>`);
+      }
+    } else if (t.ou != null && sane.ou){
+      parts.push('大小球 <b>' + t.ou.toFixed(2) + '</b>'
+        + (t.owater != null ? ` <span style="color:var(--mut)">(${t.owater.toFixed(2)}/${t.uwater != null ? t.uwater.toFixed(2) : '—'})</span>` : ''));
+    }
+    if (!parts.length) return '';
+    let age = '';
+    if (t.updated){
+      const dt = new Date(String(t.updated).replace(' ', 'T'));
+      if (!isNaN(dt.getTime())){
+        const mins = Math.max(0, Math.round((Date.now() - dt.getTime()) / 60000));
+        age = mins < 2 ? '刚刚更新' : (mins < 60 ? mins + ' 分钟前' : Math.round(mins / 60) + ' 小时前');
+      }
+    }
+    return `<b>⚡最新盘口</b><span><span class="badge bG" title="球探(titan007)源：源站分钟级刷新，由快通道每5分钟推上线。浏览器受CORS限制无法直连球探，故由服务端抓取后注入">球探优先</span> ${parts.join(' ｜ ')} <span style="color:var(--mut)">${age}</span></span>`;
+  };
+  // 球探独有场次提示（无引擎分析，但盘口真实可用）
+  const t7onlyNote = (m.t7only && t7HasOdds(m)) ? `<div class="kv"><b>提示</b><span><span style="color:#1a73e8">🔭 球探(titan007)独有场次</span>：gqj2 未收录，已用球探 vip 亚盘/大小球（多公司中位·初盘→即时）反解出 1X2 后进引擎，<b>可出方向与盘路结论</b>。欧赔为反解值而非公司真实报价，已在 gqj2 真实欧赔上留出验证（n=527：概率 MAE 0.055、强弱方向一致率 97.8%）。<span style="color:var(--mut)">勾选「只看有盘口」不会隐藏（球探已开真实盘口）。</span></span></div>` : '';
+  let body = `<div class="kv"><b>提示</b><span>${m._aErr
+    ? `<span style="color:var(--red)">⚠ 无数据/分析失败（${m._aErr}）</span> —— 源站该场可能暂无盘口或已下架`
+    : (isDone ? '完场（不进实时分析）——可点下方“分析”单独查看'
+              : (jcHasOdds(m)
+                 ? '本场有<b>竞彩官方赔率</b>（胜平负/让球/比分/半全场/进球数齐全）→ 点下方「分析」直接用官方赔率出结论，不依赖 gqj2 盘口'
+                 : (offline
+                   ? '离线快照：本场烘焙时源站无赔率数据（列表有、盘口缺），离线版不拉实时 → 无法分析；可用本地 start.bat 实时版或等下次烘焙补全'
+                 : (hasPackOdds(m.tid)
+                    ? '本场有内置快照赔率 → 自动分析中／点下方「分析」即刻出结论（无需等网络）'
+                    : (liveCapable()
+                       ? (m._liveTried ? '已尝试实时拉取，但数据源（gqj2/竞彩/北单）均无本场盘口——多为<b>低级别/友谊/青年/女足/小国联赛</b>，庄家未开盘，无法建模分析。可勾选工具栏「只看有盘口」隐藏此类场次。'
+                                       : '本地快照无本场盘口（多为烘焙后才开盘/新冒出的场次）→ 点「拉实时→分析」现场取最新盘口，或等后台自动补拉')
+                       : '源站暂无本场赔率（烘焙时无数据）→ 离线模式无法实时拉取')))))}</span></div>`;
+  if (m.t7only) body = '';   // 球探独有场次：正文提示由下方 t7onlyNote 统一呈现，避免误显示"无盘口"
+  if (a){
+    const kuopan = a.kuopan ? `<span class="badge bK">错盘</span>` : '';
+    const exp=fmt(a.exp_hcap,2), pg=(a.pan_gap==null)?'—':(a.pan_gap>=0?'+':'')+fmt(a.pan_gap,2);
+    const dh=(a.dh==null)?'—':(a.dh>=0?'+':'')+fmt(a.dh,2);
+    const dp=(a.dp==null)?'—':(a.dp>=0?'+':'')+fmt(a.dp,2);
+    const cf = '';
+    const ppi=JSON.parse(localStorage.getItem('ppi_'+m.tid)||'{}');
+    // 复盘标记
+    let rev='';
+    if (m.pred && m.pred.status==='done'){
+      rev = m.pred.hit ? `<span class="badge bW">复盘命中</span>` : `<span class="badge bL">复盘未中</span>`;
+    }
+    const _open = ANA_OPEN.has(m.tid) ? ' open' : '';
+    body = `<details class="ana-fold" data-tid="${m.tid}"${_open} style="margin-top:6px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:rgba(255,255,255,.02)">
+      <summary style="cursor:pointer;padding:8px 10px;font-size:13px;font-weight:700;color:#cdd6e0">🔍 详细分析 ▾ <span style="font-weight:400;color:#8b98a9">${anaHead(a, val)}</span></summary>
+      <div style="padding:0 10px 10px">
+      ${finalAnswerBanner(a)}
+      ${stableConsensus(a, m)}
+      <div class="kv">
+      ${t7LatestRow(m)}
+      <b>亚盘</b><span>初 ${fmt(a.a0)}/${fmt(a.h0)} → 临 ${fmt(a.p1)}/${fmt(a.h1)} (Δ盘${dp}/水${dh})</span>
+      <b>欧赔</b><span>初 ${fmt(a.o0h)}/${fmt(a.o0d)}/${fmt(a.o0a)} → 临 ${fmt(a.o1h)}/${fmt(a.o1d)}/${fmt(a.o1a)}</span>
+      <b>市场概率</b><span>主${pct(a.mk_h)} 平${pct(a.mk_d)} 客${pct(a.mk_a)} (赔付${fmt(a.payout,2)})</span>
+      <b>实力差</b><span>${fmt(a.strength_diff,1)} 点 ｜ 预期盘 ${exp} ｜ 盘分差 ${pg}</span>
+      <b>盘型</b><span>${a.pan_type||'—'} → 预判 ${a.pan_predict||'—'} ${kuopan}</span>
+      ${a.grade_net!=null?`<b>盘口档位</b><span title="档位 = 把「盘口 + 上盘水位」压成一个整数，档位越高 = 越看好主队（每 1/4 球 = 1 档，每个水位台阶 = 1 档；低水加 2、中水加 1、高水加 0）。理论档位由欧赔换算的预期盘 + 中水基准得出（市场公允）；实际档位取临场盘 + 临场上水。净变化 = 实际 − 理论：>0 实开比理论更偏主队（偏热），<0 实开示弱（偏冷）。因融合底板只存临场欧赔，理论档位现用临场欧赔换算作基准（同源临场 → 净变化即「亚盘 vs 欧赔 跨市场背离」）">理论 <b>${a.grade_t}</b> 档（${a.grade_theory_src==='live'?'临场欧赔换算·基准':'初盘欧赔换算'}）→ 实际 <b>${a.grade_a}</b> 档（${fmt(a.grade_hcap_a,2)} ${waterBand(a.grade_water_a)}）｜ 净变化 <b style="color:var(--${a.grade_net>0?'red':(a.grade_net<0?'grn':'mut')})">${a.grade_net>0?'+':''}${a.grade_net}</b> ｜ 判定 <span class="badge ${a.grade_net>=3?'bW':(a.grade_net===2?'bK':(a.grade_net<=-2?'bL':'bG'))}">${a.grade_tier}</span></span>`:''}
+      <b>资金流向</b><span>${a.flow||'—'}</span>
+      <b>盘水信号</b><span>${sigBadge(a.sig)}</span>
+      <b>进球数</b><span>${a.ou_text||'—'} ${a.ou_dir&&a.ou_dir!=='—'?`<span class="badge ${a.ou_dir==='大球'?'bK':'bH'}">${a.ou_dir}</span>`:''} ${ouValueBadge(a)} ｜ 盘 ${fmt(a.ou&&a.ou.o_line)}→${fmt(a.ou&&a.ou.c_line)} 大${fmt(a.ou&&a.ou.c_ow)}/小${fmt(a.ou&&a.ou.c_uw)}</span>
+      ${a.score?`<b>比分概率</b><span>${a.score.top.slice(0,5).map(d=>`${d.score} ${d.p}%`).join(' · ')}（λ主${a.score.lambda}/μ客${a.score.mu}${a.score.fit_sse!=null?`·拟合${a.score.fit_sse}`:''}·分布非定点${scoreFusionTag(a.score)}）<span class="badge bN" title="⚠参考级·弱信号：历史回测（retro_full 5042 场，9/04~9/13 那批）实际比分落入模型 5 个候选内的约 46.6%（Top3 31.5%、Top1 仅 11.9%），明显低于方向命中（约 54%）。旧文案写的「17.5%(n≈40)」是样本算错的旧数，已按全量复核更正。注意：Top5 命中天然虚高（候选池越大越容易蒙中），别当成『模型猜中比分』。2026-10-03 起 λ/μ 拆分默认改用让球盘口(hcap)，在 1667 场球探真盘口样本上比分 Top5 由 40.3% 提到 43.6%。仅作娱乐参考，勿重注">参考级·比分Top5内46.6%</span></span>`:''}
+      ${a.score&&a.score.overProb!=null?`<b>大小球分歧</b><span>模型大球P ${a.score.overProb}% / 盘口 ${a.score.modelOver!=null?'':'(无盘口)'} ${a.valueOU?`→ 盘口隐含${a.valueOU.marketOver}% ｜ <span class="badge ${a.valueOU.dir==='大球'?'bK':a.valueOU.dir==='小球'?'bH':'bN'}">${a.valueOU.dir}·${a.valueOU.edge>0?'+':''}${a.valueOU.edge}%</span>`:''}</span>`:''}
+      ${a.htft?`<b>半全场</b><span>${a.htft.top.slice(0,5).map(d=>`${labelHTFT(d.state)} ${d.p}%`).join(' · ')}（半场主${a.htft.pHT.H}%/平${a.htft.pHT.D}%/客${a.htft.pHT.A}%·全场主${a.htft.pFT.H}%/平${a.htft.pFT.D}%/客${a.htft.pFT.A}%·独立半场假设）${a.htft.pFT_HT&&a.htft.pFT_HT.H?` ｜ 若半场主胜→全场主胜${a.htft.pFT_HT.H.H}% 平${a.htft.pFT_HT.H.D}% 客${a.htft.pFT_HT.H.A}%`:''}</span>`:''}
+      ${(a&&a.breakGoal)?`<b>半场破蛋</b><span><span class="badge ${a.breakGoal.tier==='strong'?'bW':(a.breakGoal.tier==='mid'?'bK':(a.breakGoal.tier==='weak'?'bN':'bG'))}">${a.breakGoal.tag} ${a.breakGoal.pBreak}%</span>${a.breakGoal.edge?` <span class="badge bW" title="相对全库基准（3.149 球 / 5.50% 0-0 率）的实测偏离">${a.breakGoal.edge>0?'+':''}${a.breakGoal.edge}pp</span>`:''} ｜ 半场期望主${a.breakGoal.hl1}/客${a.breakGoal.hm1}${a.breakGoal.tier==='mid'?' <span class="badge bN" title="70~85% 整段实测无区分度：实际平均总进球 3.51 球、全场 0-0 率 4.26%，与全库基准 3.15 球 / 5.50% 相差无几。不要把它读成「有球把握大」。">无区分度·非把握依据</span>':''}</span>`:(m.t7only?((function(){const fb=_breakFallbackCached(m); if(!fb) return ''; const cls=fb.tier==='strong'?'bW':(fb.tier==='mid'?'bK':(fb.tier==='weak'?'bN':'bG')); return `<b>半场破蛋</b><span><span class="badge ${cls}">${fb.tag} ${fb.pBreak}%</span> ｜ 半场期望主${fb.hl1}/客${fb.hm1} <span class="badge bN" title="评级兜底：vip.titan007.com 封禁致球探独有场次无市场盘口，由 Dixon-Coles 赛季强度+近期战绩直接估算破蛋概率（与盘口版同源 wf=0.45, lean=0.10，阈值一致），仅作无盘口时的参考，真值验证见半场破蛋面板④">评级兜底</span></span>`;})()):'')}
+      ${a.heatSignal?`<b>热度信号</b><span title="8449场真值校准：让球深度+临场资金移动+热门隐含概率三信号投票。让+1.0→主胜66%、让-0.8→客胜63%；主胜概率临场上移≥5%→主胜率52.9%（vs上移<0%仅40%）；fav P≥65%→该方命中75.1%。代理=仅单信号，强=两信号确认。">${a.heatSignal.dir!=='—'?`<b style="color:var(--${a.heatSignal.dir==='W'?'red':a.heatSignal.dir==='L'?'grn':'yel'})">${labelWDL(a.heatSignal.dir)}</b> ${a.heatSignal.strength>=2?'<span class="badge bW">确认</span>':'<span class="badge bK">参考</span>'} ${a.heatSignal.basis.join(' · ')||'—'}`:'<span style="color:var(--mut)">无强热度信号</span>'} ${a.heatSignal.proxy?'<span class="badge bN">单信号</span>':''}</span>`:''}
+      ${a.betfa?`<b>真实投注·澳客</b><span>占比 主<b>${(a.betfa.pct||{}).W??'-'}%</b>/平${(a.betfa.pct||{}).D??'-'}%/客${(a.betfa.pct||{}).L??'-'}% ｜ 冷热 ${(a.betfa.hot||{}).W||'-'}/${(a.betfa.hot||{}).D||'-'}/${(a.betfa.hot||{}).L||'-'}${a.betfa.rank_home!=null?` ｜ 排名 ${a.betfa.rank_home} vs ${a.betfa.rank_away}`:''}${a.betfa.confirm?` ｜ 资金最热 <b>${labelWDL(a.betfa.confirm.dir)}</b>${a.betfa.confirm.agree===true?' <span class="badge bW">与信号同向</span>':a.betfa.confirm.agree===false?' <span class="badge bL">与信号背离</span>':''}`:''}</span>`:''}
+      ${a.draw_heat?`<b>平局热度</b><span>${(a.draw_heat.flag==='OVERHEAT-PPI'||a.draw_heat.flag==='OVERHEAT-LINE')?`<span class="badge bL">过热陷阱·降级</span>`:a.draw_heat.flag==='COLD'?`<span class="badge bN">偏冷</span>`:'—'} ${a.draw_heat.note||''}${a.draw_heat.ppiD!=null?` ｜ 真实PPI平${a.draw_heat.ppiD}%`:''}${a.draw_heat.mv_d!=null?` ｜ 平赔移动${a.draw_heat.mv_d}%`:''}</span>`:''}
+      ${a.company_div&&a.company_div.flag!=='NEUTRAL'?`<b>跨公司分歧</b><span>${(function(){const f=a.company_div.flag;if(f==='SHARP_DIVERGE')return '<span class="badge bL">引导资金·聪明钱背离</span>';if(f==='SHARP_WATCH')return '<span class="badge bK">聪明钱背离·关注</span>';if(f==='AUTH_DIVERGE')return '<span class="badge bL">权威分歧·问题盘</span>';return '<span class="badge bN">分歧偏大</span>';})()} 加权${a.company_div.weightedDivScore} ｜ ${a.company_div.nCompanies}家${a.company_div.authSpread!=null?` ｜ 权威离散${a.company_div.authSpread}`:''}${a.company_div.popSpread!=null?` ｜ 大众离散${a.company_div.popSpread}`:''} ｜ ${a.company_div.note}</span>${a.company_div.sharpVsPop&&a.company_div.sharpVsPop.gap>=2.5?`<div style="margin-top:5px;font-size:11.5px;color:var(--mut)"><b>聪明钱 vs 大众盘</b>：主 ${a.company_div.sharpVsPop.sharpProb[0]}% / ${a.company_div.sharpVsPop.popProb[0]}% ｜ 平 ${a.company_div.sharpVsPop.sharpProb[1]}% / ${a.company_div.sharpVsPop.popProb[1]}% ｜ 客 ${a.company_div.sharpVsPop.sharpProb[2]}% / ${a.company_div.sharpVsPop.popProb[2]}% <span style="color:var(--acc)">（前=权威组 ${a.company_div.sharpVsPop.nSharp}家，后=大众组 ${a.company_div.sharpVsPop.nPop}家；最大背离 ${a.company_div.sharpVsPop.gap}pt，${a.company_div.sharpVsPop.lead==='sharp'?'聪明钱定价更高':'大众盘定价更高'}）</span></div>`:''}${a.company_div.companies&&a.company_div.companies.length?`<details style="margin-top:4px"><summary style="cursor:pointer;color:var(--mut);font-size:11px">各公司赔率(${a.company_div.companies.length})</summary><table style="margin-top:4px"><tr><th style="text-align:left">公司</th><th>级</th><th>主</th><th>平</th><th>客</th></tr>${a.company_div.companies.slice().sort((x,y)=>x.tier-y.tier).map(c=>`<tr><td style="text-align:left">${c.name}</td><td>${c.tier}</td><td>${c.W}</td><td>${c.D}</td><td>${c.L}</td></tr>`).join('')}</table></details>`:''}`:''}
+      <b>综合</b><span style="color:var(--${dc=='W'?'red':dc=='L'?'grn':dc=='D'?'yel':'mut'})">${labelWDL(a.dir)}</span>${a.grade?`<span class="pill" style="color:var(--${a.grade==='推荐'?'grn':a.grade==='参考'?'yel':'mut'});border-color:var(--${a.grade==='推荐'?'grn':a.grade==='参考'?'yel':'mut'})" title="选择性纪律(${a.grade_reason||''})｜实测：推荐单 67.9%(n=424)、参考 51.7%、观望(平局候选)不建议下注">${a.grade}</span>`:(a.tier===2?'<span class="pill" style="color:var(--mut);border-color:var(--mut)">参考</span>':(a.tier===1?'<span class="pill" style="color:var(--grn);border-color:var(--grn)">可下注</span>':''))}${tierBadgeCardSoft(a)}${midCallBadge(a,m)}${a.strongDraw?` <span class="badge bD" title="强平局(市场头号+平赔<3.0)：实测平局率~34%(n≈80)/整体负EV·仅为相对最易平参考，非高命中可下注级">强平局${a.strongDrawHot?'★':''}</span>`:''} ｜ 置信 ${Math.round(a.conf||0)}${cf}${a.corr_note?`<span class="badge bG" title="置信已据历史赛果校准">校准:${a.corr_note}</span>`:''}${sigText(a)} ｜ 有效临场 亚${a.c_valid||0}/欧${a.eu_valid||0}</span>
+      ${a.info_adj?`<b>信息面·伤停/状态</b><span>倾向 <b style="color:var(--${a.info_adj.biasDir==='W'?'red':a.info_adj.biasDir==='L'?'grn':'yel'})">${labelWDL(a.info_adj.biasDir)}</b> ｜ 强度差 ${a.info_adj.edge>0?'+':''}${a.info_adj.edge} ｜ 伤停权重 主${a.info_adj.injH}/客${a.info_adj.injA} ｜ 置信${a.info_adj.conf_adj>=0?'+':''}${a.info_adj.conf_adj}${a.info_adj.note&&a.info_adj.note!=='—'?` <span class="badge bG">${a.info_adj.note}</span>`:''}</span>`:''}
+    </div>
+    ${ygBlock(a)}
+    ${drawCardBlock(a)}
+    ${heBlock(a)}
+    ${panluBlock(a, m)}
+    ${_tlRejudgeTable(m.tid)}
+    ${methodologyBlock(a, m)}
+    <div class="zy">投注占比(澳客/必发) 主<input id="ppiw${m.tid}" type="number" min="0" max="100" value="${ppi.W??''}" placeholder="%"> 平<input id="ppid${m.tid}" type="number" min="0" max="100" value="${ppi.D??''}" placeholder="%"> 客<input id="ppil${m.tid}" type="number" min="0" max="100" value="${ppi.L??''}" placeholder="%">
+      <button class="sec" onclick="savePPI(${m.tid})">存</button><span id="ppis${m.tid}">${ppi.W!=null?`已存:主${ppi.W}/平${ppi.D}/客${ppi.L}`:''}</span>${a&&a.ppi&&a.ppi.available?` <span class="badge bW">真PPI</span>`:''}${a&&a.betfa?` <span class="badge bK">澳客实抓</span>`:''}</div>
+      </div></details>`;
+  }
+  return `<div class="c ${dc}${(!hasPackOdds(m.tid) && !jcHasOdds(m) && (!liveCapable() || m._liveTried))?' noOdds':''}" id="card-${m.tid}" data-tid="${m.tid}">
+    <label class="selwrap" style="display:inline-block;font-size:12px;color:#8b98a9;cursor:pointer;margin:2px 0 4px"><input type="checkbox" class="selbox" data-tid="${m.tid}" ${m._sel?'checked':''} onchange="toggleSel(${m.tid},this.checked)"> <span>选</span></label>
+    ${scoreBadge(m)}
+    ${val!=null?`<div class="vsco"><b>${val}</b>价值分</div>`:''}
+    <div class="ct"><span class="lg">${m.league||''}</span>${a?faceDirBadge(a):''}${noOddsPill}${(m.t7only&&t7HasOdds(m))?'<span class="pill" style="color:#1a73e8;border-color:#1a73e8" title="球探(titan007)独有场次：gqj2 未收录，已用球探 vip 真实亚盘/大小球（多公司中位）反解进引擎出结论。欧赔为让球盘+大小球盘 Poisson 反解值，非公司真实报价。">🔭球探独有·已分析</span>':''}${(a&&a._t7vip)?'<span class="pill" style="color:#0b8a5a;border-color:#0b8a5a" title="结论来自球探 vip 盘口：GD≈亚盘让球 + T≈大小球盘 → Poisson 反解 1X2（在 gqj2 真实欧赔上留出验证 n=527：概率 MAE 0.055、强弱方向一致率 97.8%）">球探vip·反解</span>':''}${jcHasOdds(m)?(function(){ const _j=jcOf(m); const _hh=(!(_j&&_j.had&&+_j.had.h>1)); return '<span class="pill" style="color:#9b6dff;border-color:#9b6dff" title="'+( _hh?'本场官方只开让球盘(无普通胜平负)，已用让球赔 Poisson 反解为等效 1X2 后进引擎，结论带让球口径':'本场无 gqj2 欧洲盘口包，已改用竞彩官方胜平负赔率进引擎分析')+'">'+( _hh?'让球盘反解→分析':'官方赔率→分析')+'</span>'; })():''}${(a&&(a.strongDraw||/平局/.test(a.dir||'')))?'<span class="pill" style="color:#8b98a9;border-color:#8b98a9" title="⚠参考级·弱信号：平局整体负EV，历史打出率约30~34%(n≈80)，回测命中仅12.5%。非高命中可下注级，勿重注，仅作防平参考">平局·参考级 命中~30%</span>':(a&&drawProb(m)>=0.27?'<span class="pill" style="color:#8b98a9;border-color:#8b98a9" title="参考级·防平关注：市场平局概率≥27%，该场平局打出概率偏高，但平局整体弱信号(历史命中~30%)，建议纳入防平考量而非重注">平局·参考 命中~30%</span>':'' )}${(a&&a.evenlyMatched)?'<span class="pill" style="color:#7a5cff;border-color:#7a5cff" title="势均力敌·已降【观望】不下注：市场隐含平局率≥26%，该段 5042 场回测里模型命中仅 41.1%、最佳单挑上限 40.0%（alpha +1.1pp，等于没有额外信息），命中率随平局率单调塌陷至 37%。方向仍可看，但别投钱。">势均力敌·观望</span>':''}${m.snapshot?'<span class="pill" style="color:#c0392b;border-color:#c0392b">离线快照</span>':''}${m.offline?'<span class="pill" style="color:var(--blu)">离线·缓存</span>':''}${(a&&a.wash)?'<span class="pill" style="color:#f0803c;border-color:#f0803c;font-weight:700" title="'+(a.wash.note||'')+'｜2026-10-05 真实赔率 5063 场复算：**盘口逆势**成立（|Δh|≥0.25反号 跟 fav 命中 65.0% n=386 z=5.1）；**水位拨动不成立**（51.5% vs 基准 52.1%，z=−0.6，旧注 83.1%/93.5% 已作废）">🫧'+(a.wash.kind==='water'?'水位洗盘':(a.wash.kind==='both'?'双洗盘':'洗盘'))+'·锚临场 fav '+a.wash.fav+'</span>':''}${(a&&a.company_div&&a.company_div.flag!=='NEUTRAL')?'<span class="pill" style="color:#f5c542;border-color:#f5c542;font-weight:700" title="跨公司赔率分歧(庄家视角问题盘标记)：'+(a.company_div.note||'')+'">🔀分歧 '+a.company_div.weightedDivScore+'</span>':''}${planPill(a)}<span class="ko">${stateTag(m.state)}</span></div>
+    <div class="tm">${m.home} <span class="vs">vs</span> ${m.away}</div>
+    <div class="ko">开赛 ${m.kickoff||'—'}</div>
+    ${body}
+    ${jcRow}
+    ${t7Row}
+    ${t7onlyNote}
+    ${infoBlock(m)}
+    ${theoBlock(m, _theo)}
+    <div class="acts">${m.t7only
+      ? (t7HasOdds(m)
+          ? `<button onclick="onAnalyze(event, '${String(m.tid).replace(/'/g, "\'")}')">${a?'刷新分析':'分析(球探vip)'}</button>`
+          : `<button disabled class="dis" title="${isFarFuture(m) ? '球探(titan007)独有场次，距开赛>24h，庄家尚未开盘（正常，非抓取失败）；赛前24-48h开盘后自动出现' : '球探(titan007)独有场次，但球探源站也未收录该场指数（极低级别/青年/友谊，庄家不开盘）'}">${isFarFuture(m) ? '未开盘·赛前24-48h开放' : '球探未收录指数'}</button>`)
+      : ((hasPackOdds(m.tid) || jcHasOdds(m) || m.odds || t7HasOdds(m))
+      ? `<button onclick="onAnalyze(event, '${m.tid}')">${(a?'刷新分析':((hasPackOdds(m.tid)||jcHasOdds(m))?'分析':'拉实时→分析'))}</button>`
+      : (liveCapable() && !m._liveTried && !isFarFuture(m)
+          ? `<button onclick="onAnalyze(event, '${m.tid}')">拉实时→分析</button>`
+          : `<button disabled class="dis" title="${isFarFuture(m) ? '本场距开赛超过24小时，庄家尚未开盘（正常，不是抓取失败）。盘口一般在赛前24-48h放出，后台每30分钟自动补抓，开盘后此场会自动出现并可分析。可勾选工具栏「只看有盘口」隐藏远期场' : '本场为低级别/友谊/青年/女足/小国联赛，数据源（gqj2/竞彩/北单/球探）均未提供盘口，庄家未开盘 → 任何看板都无法给出盘口分析。可勾选工具栏「只看有盘口」隐藏此类场次'}">${isFarFuture(m) ? '未开盘·赛前24-48h开放' : '无盘口·庄家未开盘'}</button>`))}${m._liveTried && !hasPackOdds(m.tid) && !jcHasOdds(m) && !m.odds && !isFarFuture(m) ? `<div style="font-size:11px;color:var(--mut);margin-top:5px">已尝试实时拉取，源站仍无盘口（庄家未开盘）</div>`:''}<button onclick="openHtBreakDetail('${m.tid}')" title="半破定性分析：近期状态 / 历史交锋 / 半场倾向 / 伤停容错钩子（本环境 titan007 未接入，不编造）" style="border-color:var(--acc);color:var(--acc)">半破分析</button></div>
+  </div>`;
+}
+
+/* ---------- 平局信号卡面板（新范式：平局=问题盘结果，非概率阈值）----------
+   依据：洋哥「让方被否定+平赔不作为」· 米客平局手法(拉胜/抬胜/逆拉分平·平高梯度阻)·平赔思维(洼地判据)
+        · 孤行威廉平赔指南针与心理关口 · 今在受注初盘偏离。 */
+function drawCardBlock(a){
+  if (!a || !a.draw_card) return '';
+  const d = a.draw_card;
+  if (!d.fire && (!d.reasons || !d.reasons.length)) return '';
+  const lvBadge = d.level==='强' ? '<span class="badge bL">强</span>' : d.level==='中' ? '<span class="badge bK">中</span>' : '<span class="badge bN">弱</span>';
+  const fireBadge = d.fire ? '<span class="badge bD">平局信号成立</span>' : '<span class="badge bN">未成立</span>';
+  const rs = (d.reasons||[]).map(s=>'· '+s).join('<br>');
+  return '<div style="margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:linear-gradient(180deg,rgba(245,197,66,.10),transparent)">'
+    + '<div style="font-size:12px;font-weight:700;color:#c9a227;margin-bottom:5px">🟨 平局信号卡 · ' + (d.tag||'—') + ' ' + fireBadge + lvBadge
+    + ' <span style="font-weight:400;color:#8b98a9">score ' + (d.score||0).toFixed(1) + '</span></div>'
+    + '<div style="font-size:12px;color:#6b7686;line-height:1.7">' + (rs || '无平局信号') + '</div>'
+    + '<div style="font-size:11px;color:#98a2b3;margin-top:4px">依据：洋哥「平局=问题盘结果」· 米客平局手法(拉胜/抬胜/逆拉分平·平高梯度阻)与平赔思维(洼地判据) · 孤行威廉平赔指南针 · 今在初盘偏离</div>'
+    + '</div>';
+}
+
+/* ---------- 洋哥盘赔框架面板（工程化自《职业操盘手自传之盘赔我见》）---------- */
+function ygBlock(a){
+  if (!a || !a.yg) return '';
+  const y = a.yg;
+  const hotBadge = y.isHot ? `<span class="badge bL">大热·站对面</span>` : '';
+  const waterBadge = y.isWater ? `<span class="badge bN">吃水盘·不分析</span>` : '';
+  const kuoBadge = y.problemPan ? `<span class="badge bK">问题盘</span>` : '';
+  const isBd = (y.heatSrc === 'beidan' && y.bd);
+  const srcTag = isBd
+    ? `<span class="badge bK" title="数据源=北单赔率池真值（澳客 bjdc）。北单是赔率池玩法：先有资金、后有赔率，故三项赔率归一化即 100% 真实资金买入占比 —— 洋哥《自传》指定的权威热度口径">北单池真值</span>`
+    : (y.heatSrc === 'ppi' ? `<span class="badge bN" title="本场不在北单在售名单（北单每日仅精选少量主流场），退回用欧赔反推的庄家热度(PPI)代理">PPI代理</span>` : '');
+  // 盘口来源标注（用户关切："每个机构开的赔率不一样，你是不是随便抓的"）
+  // 主盘口优先取核心公司实际开价（洋哥"亚洲标准指数"=Bet365），该公司缺席才逐级回退。
+  const _co = y.oddsSrc || null;
+  const coTag = _co
+    ? (_co === 'median'
+        ? `<span class="badge bN" title="本场核心公司(Bet365/威廉希尔/立博/平博/澳门/韦德)均未开盘，退回用全部公司的中位数合成盘——注意这是合成值，非任一公司真实开价">盘中位数·合成</span>`
+        : `<span class="badge bK" title="主盘口取【${_co}】的实际开价。洋哥《自传》的"亚洲标准指数"即 Bet365（受注量最大、代表大众资金流向），与北单真实资金占比对比才有意义">盘口 ${_co}</span>`)
+    : '';
+  const heatTxt = y.heatSide
+    ? `最热 ${labelWDL(y.heatSide)} ${y.heatShare}% ｜ 公平胜率 ${y.fairProb!=null?y.fairProb+'%':'—'} ｜ 超出 ${y.heatExcess!=null?y.heatExcess+'pt':''} ${hotBadge} ${srcTag} ${coTag}`
+    : '—';
+  const bdRow = (y.bd && y.bd.pct)
+    ? `<b>北单池</b><span>让球 <b>${y.bd.rq==null?'?':((y.bd.rq>0?'+':'')+y.bd.rq)}</b> ｜ 胜 <b>${y.bd.pct[0]}%</b> / 平 <b>${y.bd.pct[1]}%</b> / 负 <b>${y.bd.pct[2]}%</b> <span style="color:var(--mut)">（北单赔率 ${y.bd.sp.join(' / ')}）</span> ｜ 真实资金占比 → 最热方即注码压力方，站对面</span>`
+    : '';
+  const danceTxt = (y.danceDir && y.danceDir!=='—')
+    ? `站 <b style="color:var(--grn)">${labelWDL(y.danceDir)}</b> 对面`
+    : '无明显问题盘·顺势';
+  const links = `<a href="https://www.lottery.gov.cn/" target="_blank" rel="noopener" style="color:var(--blu)">竞彩官网</a> · `
+    + `<a href="https://www.bjlot.com.cn/ssm/index.shtml" target="_blank" rel="noopener" style="color:var(--blu)">北单官网</a> · `
+    + `<a href="https://m.okooo.com/bjdc/" target="_blank" rel="noopener" style="color:var(--blu)">北单热度池(澳客)</a>`;
+  const sanpanNote = `一盘=资金趋势(竞彩官网/本工具) · 二盘=365/major操盘异动(盘水信号) · 三盘=北单热度池(官网/澳客)。三盘同向→强信号，异向→警惕。`;
+  return `<div style="margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:linear-gradient(180deg,rgba(192,57,43,.06),transparent)">
+    <div style="font-size:12px;font-weight:700;color:#e54545;margin-bottom:5px">📕 洋哥盘赔框架 · 与庄共舞</div>
+    <div class="kv">
+      <b>北单热度</b><span>${heatTxt}</span>
+      ${bdRow}
+      <b>盘级偏差</b><span>预期盘 ${fmt(y.exp_hcap)} ｜ 盘分差 ${y.pan_gap!=null?(y.pan_gap>=0?'+':'')+y.pan_gap:'—'} ${kuoBadge}</span>
+      <b>驱动力</b><span>${y.driveForce}</span>
+      <b>三盘法</b><span>${y.sanPan}</span>
+      <b>与庄共舞</b><span>${danceTxt} ${waterBadge}</span>
+      <b>官方核对</b><span>${links}</span>
+    </div>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5">${sanpanNote} 北单"先有资金后有赔率"，其赔率≈真实资金占比；${isBd?'本场已接入<b>真实北单赔率池</b>（澳客 bjdc 实抓，每轮后台刷新）。':'本场不在北单在售名单，暂用 PPI 代理同一逻辑。'}官方站点供人工核对。</div>
+  </div>`;
+}
+
+/* ---------- 贺的足球己见面板（工程化自《贺的足球己见》2026-5-20）----------
+   仅展示叠加层的"谨慎/增强/标注"，不造方向。覆盖：浅盘诱上反向、大热+升盘放大情绪反向、
+   大小球中线与半场破蛋、水位纪律(≥1.9提价值<1.9压价值)、比分锚定提示。 */
+function heBlock(a){
+  if (!a || !a.he) return '';
+  const h = a.he;
+  const trapBadge = h.he_shallow ? `<span class="badge bL">浅盘诱上·反买弱队</span>` : '';
+  const raiseBadge = h.he_hot_raise ? `<span class="badge bL">大热+升盘·反向</span>` : '';
+  const halfBadge  = h.he_halfgoal ? `<span class="badge bH">半场破蛋区</span>` : '';
+  const items = [];
+  items.push(['盘口力量', (h.shallow_gap!=null)
+    ? `初盘−预期 ${h.shallow_gap>=0?'+':''}${h.shallow_gap} ${trapBadge}`
+    : '—']);
+  items.push(['情绪放大', (h.he_hot_raise||h.note!=='—') ? `${raiseBadge}${h.note!=='—'?h.note:''}` : '无明显']);
+  items.push(['大小球', (h.ouLine!=null)
+    ? `初盘线 ${h.ouLine}${h.ouLine>=2.5?'（2.5 中线，大小难断）':''} ${halfBadge}${h.he_halfgoal?'·上半场20-25min破蛋≈70%胜':''}`
+    : '—']);
+  items.push(['水位纪律', h.water!=='—' ? h.water : '—']);
+  items.push(['比分锚定', h.heScoreTip!=='—' ? h.heScoreTip : '—']);
+  const kv = items.map(([b,v])=>`<b>${b}</b><span>${v||'—'}</span>`).join('');
+  return `<div style="margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:linear-gradient(180deg,rgba(255,122,60,.07),transparent)">
+    <div style="font-size:12px;font-weight:700;color:#ff7a3c;margin-bottom:5px">🔥 贺的己见 · 看盘人性</div>
+    <div class="kv">${kv}</div>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5">新手看球队，老手看盘口，高手看市场，真正高手看人性。等风来，流水不争先。贺式纪律：均注、买≥1.9水位、避开"看起来舒服"的浅盘与全网统一盘。</div>
+  </div>`;
+}
+
+/* ---------- 盘路分析面板：早盘(初盘)→中盘(变盘)→临盘(即时) ---------- */
+// 由聚合赔率反推隐含概率（含赔付率）
+function implProb(agg){
+  if (!agg) return null;
+  const h=agg.c_h, d=agg.c_d, a=agg.c_a;
+  if (!h || !d || !a) return null;
+  const inv = 1/h + 1/d + 1/a;
+  if (!inv) return null;
+  return { H:+(1/h/inv*100).toFixed(1), D:+(1/d/inv*100).toFixed(1), A:+(1/a/inv*100).toFixed(1), margin:+((inv-1)*100).toFixed(1) };
+}
+function stageCn(label){ return label==='early'?'初盘':label==='mid'?'中盘':label==='late'?'临盘':label==='late2h'?'临场-2h':label==='late1h'?'临场-1h':label==='late0h'?'临场-0h':label==='live'?'临场(实时)':'段'; }
+/* 轻量直连融合（2026-09-19 新增）：让"三段融合"面板在实时模式下不再依赖本地烘焙。
+   直播场次只有「当前这一刻」的盘口，没有早/中盘历史快照，因此只能合成单段"临场(实时)"；
+   诚实标注 _live=true，fusionBar 据此显示「早/中盘需本地烘焙」而非伪装成全段融合。
+   早期/mid 段若日后接入实时盘口历史，再追加 stage 即可。 */
+function ensureFused(a, m, agg, aggBs){
+  if (!a) return a;
+  if (a._fused && a._fused.stages && a._fused.stages.length) return a;
+  // 无盘口数据（agg/aggBs 全空）→ 不造假单段，标记 _noData 由面板诚实提示
+  const _hasPan = (agg && (agg.c_hcap != null || agg.c_h != null)) || (aggBs && aggBs.c_line != null);
+  if (!_hasPan){ a._fused = { stages: [], _noData: true }; return a; }
+  const ts = Date.now();
+  const ip = agg ? implProb(agg) : null;
+  a._fused = {
+    stages: [{ label:'live', w:1, agg: agg||null, aggBs: aggBs||null, ts }],
+    present: ['live'],
+    prob: ip,
+    _live: true,
+    _noHist: true
+  };
+  return a;
+}
+function fusedStagesBlock(a){
+  if (!a || !a._fused) return '';
+  if (a._fused._noData) return `<div style="font-size:10px;color:var(--mut);margin:4px 0 2px">— 暂无盘口数据（市场未开盘 / 数据源未提供）—</div>`;
+  if (!Array.isArray(a._fused.stages) || !a._fused.stages.length) return '';
+  const mainLine = (agg)=>{
+    const p = implProb(agg);
+    if (p) return `主${Math.round(p.H*100)}/平${Math.round(p.D*100)}/客${Math.round(p.A*100)}`;
+    if (agg && agg.c_hcap != null) return (agg.c_hcap>0?`主让${agg.c_hcap}`:`客让${-agg.c_hcap}`);
+    return '—';
+  };
+  const subLine = (s)=>{
+    const parts = [], ag = s.agg || {}, bs = s.aggBs || {};
+    if (ag.c_hcap != null){ const h = ag.c_hcap; parts.push(`盘${h>0?'+'+h:h}${ag.c_uw?' 上'+ag.c_uw:''}${ag.c_lw?' 下'+ag.c_lw:''}`); }
+    if (bs.c_line != null){ const ln = bs.c_line; parts.push(`大${ln}${bs.c_ow?' 大'+bs.c_ow:''}${bs.c_uw?' 小'+bs.c_uw:''}`); }
+    return parts.length ? parts.join(' ｜ ') : '—';
+  };
+  const cells = a._fused.stages.map(s=>{
+    const ts = s.ts ? new Date(s.ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}) : '—';
+    return `<div style="flex:1;min-width:0">
+      <div style="font-size:10px;color:var(--mut)">${stageCn(s.label)} <span style="opacity:.65">${ts}</span></div>
+      <div style="font-size:11px;font-weight:700;color:var(--txt)">${mainLine(s.agg)}</div>
+      <div style="font-size:10px;color:var(--mut)">${subLine(s)}</div>
+    </div>`;
+  }).join('<div style="width:1px;align-self:stretch;background:var(--line)"></div>');
+  const pr = a._fused.prob;
+  const comp = pr ? `综合(融合·权重 ${a._fused.stages.map(s=>stageCn(s.label)+Math.round((s.w||0)*100)+'%').join('/')})：主${Math.round(pr.H*100)}% 平${Math.round(pr.D*100)}% 客${Math.round(pr.A*100)}%` : '';
+  /* ⚠ 三段时间戳若全部相同 = 源站该场只有一个盘口时刻（早/中/临是同一时刻），
+     必须直说，不能让人以为走了三段（用户当场抓到过：初盘和临盘都是同一个 21:57）。 */
+  const _stAll = (a._fused.stages || []), _tsSet = {};
+  _stAll.forEach(function(s){ if (s.ts) _tsSet[s.ts] = 1; });
+  const _tsUniq = Object.keys(_tsSet).length;
+  const _histNote = (a._fused && a._fused._hist)
+    ? ((_stAll.length > 1 && _tsUniq <= 1)
+        ? `<div style="font-size:10px;color:#e0a030;margin:2px 0 4px;line-height:1.5">⚠ 早/中/临三段时间戳完全相同 —— 源站该场只记录了 <b>1 个盘口时刻</b>，三段其实是同一时刻，本场无真实走势可比。真实变化请看下方「公司级盘口实值」。</div>`
+        : `<div style="font-size:10px;color:var(--mut);margin:2px 0 4px">✓ 三段盘路来自赔率历史序列（最早=初盘 / 中间=中盘 / 最晚=临盘），覆盖亚盘·欧赔·大小球。</div>`)
+    : '';
+  const _noHistNote = (a._fused && a._fused._noHist) ? `<div style="font-size:10px;color:#e0a030;margin:2px 0 4px">⚠ 仅临场快照：当前场次无赔率历史序列，本面板只显示临场一段。有赔率历史的场次会自动切分早/中/临三段。</div>` : '';
+  /* ★ 2026-10-01（用户要求「核心公司以 365 为主」）：把"主盘口取自哪家"显式标在盘路面板顶部。
+     coreCo 为 null = 该场没有核心公司记录 → 静默回退全公司中位数（合成盘，任何一家都没开过），
+     这种情况必须让用户知道，否则会误以为拿到的是某家真实开价。 */
+  const _co = (a.panlu && a.panlu.eu) ? a.panlu.eu.coreCo : null;
+  const _coNote = _co
+    ? `<div style="font-size:10px;color:var(--blu);margin:2px 0 4px">⭐ 主盘口取自 <b>${_co}</b> 的实际开价（回退链：Bet365 → 威廉希尔 → 立博 → 平博 → 澳门 → 韦德），欧赔·亚盘两段均按此家取。</div>`
+    : `<div style="font-size:10px;color:var(--mut);margin:2px 0 4px">主盘口：本场无核心公司（365/威廉/立博/平博/澳门/韦德）欧赔记录 → 回退为<b>全公司中位数</b>（合成盘，非任何一家实际开价）。</div>`;
+  return `<div style="display:flex;gap:8px;margin:4px 0 2px;font-size:11px">${cells}</div>`
+       + (comp?`<div style="font-size:11px;color:var(--acc);font-weight:600;margin-bottom:4px">${comp}</div>`:'')
+       + _histNote + _noHistNote + _coNote;
+}
+/* ===== 临盘新鲜度闸门（2026-09-16 新增）=====
+   病根：源站的"即时(d/e/f)"只代表"抓取那一刻的市场"，并不等于"临场收盘价"。
+   aggregate() 直接把盘口历史的「最后一条」当临盘用；若数据包抓于开赛前 2h14m
+   （例如 00:00 开赛、21:46 抓取），这个早/中盘数据就被当成临盘展示 → 严重误导。
+   本函数算出「即时时间戳 → 开赛时间」的真实间隔：>60min 判定为非临场，强制标注，
+   绝不允许把早/中盘数据伪装成临盘。 */
+function oddsGapMin(m, lateT){
+  if (!m || !lateT) return null;
+  const kt = kickTs(m);
+  if (!/^\d{12}$/.test(kt)) return null;
+  const mm = String(lateT).match(/(\d{2})-(\d{2})[\sT]+(\d{2}):(\d{2})/);
+  if (!mm) return null;
+  const mk = (y,mo,d,h,mi)=> new Date(+y, +mo-1, +d, +h, +mi);
+  const kd = mk(kt.slice(0,4), kt.slice(4,6), kt.slice(6,8), kt.slice(8,10), kt.slice(10,12));
+  let od = mk(kt.slice(0,4), mm[1], mm[2], mm[3], mm[4]);
+  let gap = Math.round((kd - od)/60000);
+  // 跨年边界修正：|gap| 超过半年说明赔率年份取错（赔率跨年抓取）
+  if (gap >  180*24*60) od = mk(+kt.slice(0,4)+1, mm[1], mm[2], mm[3], mm[4]);
+  else if (gap < -180*24*60) od = mk(+kt.slice(0,4)-1, mm[1], mm[2], mm[3], mm[4]);
+  else { /* gap 已算出 */ }
+  gap = Math.round((kd - od)/60000);
+  // 安全阀：|间隔|>18h 说明日期口径异常（如 m.day 已被跨日修正过一次），
+  // 此时宁可不下结论（返回 null 不显示徽章），也绝不输出荒谬的"距开赛 1 天"。
+  return (Math.abs(gap) > 18*60) ? null : gap;
+}
+function gapTxt(g){
+  const a = Math.abs(g), h = Math.floor(a/60), mi = a%60;
+  return h ? (h+'h'+String(mi).padStart(2,'0')+'m') : (mi+'m');
+}
+/* 公司级盘口实值（2026-10-01 新增，正面回应用户质疑「初盘/临场时间戳一模一样」）
+   源站 oddshistorypc 返回的是「公司 × 时刻」的**扁平表**：同一时刻常堆着好几家公司，
+   而不少场次从头到尾只有 1 个时刻 → 按 change_time 取首/尾，要么两家不同公司被当成早/临场，
+   要么同一条记录被同时当初盘和临盘（于是两个时间戳相同，看着像没数据 / 像糊弄）。
+   这里改**按公司对齐**：每家公司取最早一条作开盘值、最晚一条作当前值，
+   展示的是每家公司的真实「开盘 → 现在」变化，完全不依赖时间戳分辨率。 */
+function companyPanTable(m){
+  try{
+    const pk = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK[m.tid] : null;
+    const od = pk && pk.odds ? pk.odds : null;
+    const eu = od && Array.isArray(od.eu) ? od.eu : null;
+    const asia = od && Array.isArray(od.asia) ? od.asia : null;
+    if (!eu || eu.length < 2) return '';
+    /* 亚盘盘口是字符串（"−0.25" / "−0/0.5" / "−1/1.5" / "1.5"），分离盘要取两段均值：
+       "−0/0.5"→−0.25、 "−1/1.5"→−1.25。不能用 parseFloat 硬转（−0/0.5 会转出 NaN）。 */
+    const hcapNum = function(s){
+      const t = String(s == null ? '' : s).replace(/\s/g, '').replace(/−/g, '-');   // 全角减号兜底
+      if (!t) return null;
+      const m = t.match(/^(-?)([\d.]+)\/(\d+\.?\d*)$/);
+      if (m) return (m[1] === '-' ? -1 : 1) * ((parseFloat(m[2]) + parseFloat(m[3])) / 2);
+      const n = parseFloat(t);
+      return isFinite(n) ? n : null;
+    };
+    /* ⚠ 源站 oddshistorypc **每行=「一家公司 × 一个时刻」，不是时间序列**：
+       同一 change_time 下往往有多家公司，按行序硬取首/尾会把两家公司的盘口当"初盘/临盘"。
+       故**按 change_time 分箱**：同一时刻取该时刻全部公司的中位数 → 真实时间轴。
+       ★ 2026-10-01：内联包已保留 company_id（源站 20 家固定 id），
+       所以这里能单独抽出 Bet365(company_id=8) 的实盘轨迹 → 见下方「主盘口」行。 */
+    /* ⚠ 必须按引擎 validEu 的同一有效域过滤（欧赔 d/e/f=初盘(平,主,客)、a/b/c=临场(平,主,客)）：
+       源站偶发「某家刚开盘、还没调价」的废盘（实测 28.00/5.80/1.12、45.00/5.20/1.13）。
+       只做 isFinite 会把废盘算进当刻中位数 → 时间轴首行印出"主胜 28 → 3.35"这种假暴涨。 */
+    const _ok3 = function(p, q, r){
+      return p >= 1.5 && p <= 12 && q >= 1.02 && q <= 60 && r >= 1.02 && r <= 60;   // (平,主,客)
+    };
+    const g = {};
+    for (const x of eu){
+      const ct = String(x.change_time == null ? '' : x.change_time);
+      if (!ct) continue;
+      if (!g[ct]) g[ct] = { o: [], c: [], on: 0, cn: 0 };
+      const oh = +x.e, od2 = +x.d, oa = +x.f;      // 初盘 d=平 e=主 f=客
+      const ch = +x.b, cd = +x.a, ca = +x.c;       // 临场 a=平 b=主 c=客
+      if (![oh, od2, oa, ch, cd, ca].every(function(v){ return isFinite(v); })) continue;
+      if (_ok3(od2, oh, oa)){ g[ct].o.push([oh, od2, oa]); g[ct].on++; }
+      if (_ok3(cd, ch, ca)){ g[ct].c.push([ch, cd, ca]); g[ct].cn++; }
+    }
+    const num = function(a){
+      if (!a || !a.length) return null;
+      const s = a.slice().sort(function(p, q){ return p - q; });
+      return s[Math.floor(s.length / 2)];
+    };
+    const med3 = function(rows){
+      if (!rows || !rows.length) return null;
+      return [0, 1, 2].map(function(i){ return num(rows.map(function(r){ return r[i]; })); });
+    };
+    const list = Object.keys(g).map(function(k){ return { ct: k, o: med3(g[k].o), c: med3(g[k].c), n: Math.max(g[k].on||0, g[k].cn||0) }; })
+      .filter(function(e){ return e.o && e.c; })
+      .sort(function(a, b){ return (a.ct.replace(/\D/g, '') < b.ct.replace(/\D/g, '')) ? -1 : 1; });
+    if (list.length < 2) return '';
+    const fm = function(v){ return (v == null || v === '' || !isFinite(+v)) ? '—' : (+v).toFixed(2); };
+    const mv = function(d){
+      if (!isFinite(d) || Math.abs(d) < 0.005) return '<span style="color:var(--mut)">→0</span>';
+      return '<span style="color:' + (d > 0 ? 'var(--red)' : 'var(--grn)') + ';font-weight:700">' + (d > 0 ? '↑' : '↓') + Math.abs(d).toFixed(2) + '</span>';
+    };
+    const trs = list.slice(0, 12).map(function(e, i){
+      const isLast = (i === Math.min(list.length, 12) - 1);
+      return '<tr style="color:var(--txt)">'
+        + '<td style="padding:1px 4px;color:' + (isLast ? 'var(--grn)' : 'var(--mut)') + ';font-weight:' + (isLast ? '700' : '400') + '">' + e.ct + (isLast ? ' ◀最新' : '') + '</td>'
+        + '<td style="padding:1px 4px;color:var(--mut)">' + fm(e.o[0]) + '/' + fm(e.o[1]) + '/' + fm(e.o[2]) + '</td>'
+        + '<td style="padding:1px 4px;color:var(--txt)">' + fm(e.c[0]) + '/' + fm(e.c[1]) + '/' + fm(e.c[2]) + '</td>'
+        + '<td style="padding:1px 4px;text-align:right">主' + mv(e.c[1] - e.o[1]) + '</td>'
+        + '<td style="padding:1px 4px;text-align:right">客' + mv(e.c[2] - e.o[2]) + '</td>'
+        + '</tr>';
+    }).filter(Boolean).join('');
+    if (!trs) return '';
+    /* 亚盘时间轴（同欧赔口径：按 change_time 分箱，取当刻全部公司的中位数）。
+       亚盘是「盘口(字符串) + 主/客水」，跟欧赔的三阶赔率不是同一种量 → 单列展示。 */
+    /* 亚盘同理（validAsia 同款有效域：|盘口|≤4.5、水位∈[0.5,1.5]、临场水位和∈[1.55,2.10]） */
+    const _okA = function(hc, u, l){
+      return hc !== null && isFinite(hc) && Math.abs(hc) <= 4.5 && u >= 0.5 && u <= 1.5 && l >= 0.5 && l <= 1.5;
+    };
+    const gA = {};
+    for (const x of (asia || [])){
+      const at = String(x.change_time == null ? '' : x.change_time);
+      if (!at) continue;
+      if (!gA[at]) gA[at] = { o: [], c: [], on: 0, cn: 0 };
+      const oh = hcapNum(x.d), ou = +x.e, oa3 = +x.f;   // 初盘 d=盘口 e=主水 f=客水
+      const ch = hcapNum(x.a), cu = +x.b, ca3 = +x.c;   // 临场 a=盘口 b=主水 c=客水
+      if ([oh, ou, oa3, ch, cu, ca3].some(function(v){ return v === null || !isFinite(v); })) continue;
+      if (_okA(oh, ou, oa3)){ gA[at].o.push([oh, ou, oa3]); gA[at].on++; }
+      if (_okA(ch, cu, ca3) && (cu + ca3) >= 1.55 && (cu + ca3) <= 2.10){ gA[at].c.push([ch, cu, ca3]); gA[at].cn++; }
+    }
+    const alist = Object.keys(gA).map(function(k){ return { ct: k, o: med3(gA[k].o), c: med3(gA[k].c), n: Math.max(gA[k].on||0, gA[k].cn||0) }; })
+      .filter(function(e){ return e.o && e.c; })
+      .sort(function(a, b){ return (a.ct.replace(/\D/g, '') < b.ct.replace(/\D/g, '')) ? -1 : 1; });
+    /* 两张轴的行时刻取并集：欧赔与亚盘的 change_time 常不完全重合，
+       缺的一方印「—」，绝不拿邻行的值来填（那又是一次假盘口）。 */
+    const allCt = {};
+    list.forEach(function(e){ allCt[e.ct] = 1; });
+    alist.forEach(function(e){ allCt[e.ct] = 1; });
+    const capTxt = function(v){ return (v > 0 ? '+' : '') + (+v).toFixed(2); };
+    const trs2 = Object.keys(allCt).sort(function(a, b){
+      return (a.replace(/\D/g, '') < b.replace(/\D/g, '')) ? -1 : 1;
+    }).map(function(ct, i){
+      const eo = list.filter(function(e){ return e.ct === ct; })[0];
+      const ao = alist.filter(function(e){ return e.ct === ct; })[0];
+      /* 当刻有效公司数必须摆出来：源站偶发「某家刚开盘、还没调价」的记录
+         （实测 28.00/5.80/1.12，各项都在 validEu 域内 → 删不了，它真实存在），
+         只在 1 家公司在场时那个"中位数"就是这一条废盘本身，
+         时间轴上会印出"主胜 28 → 2.75"这种假暴涨。不删数据，改标"仅1家·未成盘"。 */
+      const nTag = function(n){
+        return (n != null && n <= 1) ? '<br><span style="color:var(--amb);font-weight:700">仅1家·代表性弱</span>' : '';
+      };
+      const euCell = eo ? (fm(eo.o[0]) + '/' + fm(eo.o[1]) + '/' + fm(eo.o[2]) + ' → ' + fm(eo.c[0]) + '/' + fm(eo.c[1]) + '/' + fm(eo.c[2]))
+                        : '<span style="color:var(--mut)">—</span>';
+      const dCell  = eo ? ('主' + mv(eo.c[1] - eo.o[1]) + ' 客' + mv(eo.c[2] - eo.o[2]) + nTag(eo.n)) : '—';
+      const asCell = ao ? (capTxt(ao.o[0]) + ' → ' + capTxt(ao.c[0])) : '<span style="color:var(--mut)">—</span>';
+      const wCell  = ao ? ('主' + mv(ao.c[1] - ao.o[1]) + ' 客' + mv(ao.c[2] - ao.o[2]) + nTag(ao.n)) : '—';
+      const isLast = (i === Object.keys(allCt).length - 1);
+      return '<tr style="color:var(--txt)">'
+        + '<td style="padding:1px 4px;color:' + (isLast ? 'var(--grn)' : 'var(--mut)') + ';font-weight:' + (isLast ? '700' : '400') + '">' + ct + (isLast ? ' ◀最新' : '') + '</td>'
+        + '<td style="padding:1px 4px;color:var(--mut)">' + euCell + '</td>'
+        + '<td style="padding:1px 4px;text-align:right">' + dCell + '</td>'
+        + '<td style="padding:1px 4px;color:var(--txt)">' + asCell + '</td>'
+        + '<td style="padding:1px 4px;text-align:right">' + wCell + '</td>'
+        + '</tr>';
+    }).join('');
+    /* ★ 主盘口 = Bet365（company_id=8）实盘轨迹 —— 欧赔 + 亚盘两条
+       用户明确要求「核心公司以 365 为主」：365 受注量最大、代表大众资金流向，
+       也正是要和北单真实资金占比对照的那一侧。这里把它单独抽出来显式给出，
+       与下方"全公司中位数时间轴"并列，两者不一致时本身就是信号（365 领先/滞后于市场）。 */
+    const CO365 = 8;
+    /* ⚠ 判据必须用「不同盘口时刻的个数」，不能只看记录条数：
+       源站同一公司同一时刻也可能有 2 条（sort 不同）→ 条数≥2 但时刻仍相同，
+       此时开盘列与当前列会印出同一个时刻（就是用户投诉的"初盘=临盘"观感）。 */
+    const uniqT = function(rows){
+      const s = {}; rows.forEach(function(x){ s[String(x.change_time||'')] = 1; });
+      return Object.keys(s).filter(function(k){ return k; });
+    };
+    let co365 = '';
+    try{
+      const r365 = eu.filter(function(x){ return Number(x.company_id) === CO365; });
+      const t365 = uniqT(r365);
+      const nT = t365.length;
+      if (r365.length && nT >= 1){
+        const byT = r365.slice().sort(function(p, q){ return String(p.change_time||'').localeCompare(String(q.change_time||'')); });
+        const f = byT[0], l = byT[byT.length - 1];
+        const fo = [+f.e, +f.d, +f.f], lo = [+l.b, +l.a, +l.c];   // 开盘 d=平 e=主 f=客 / 当前 a=平 b=主 c=客
+        const _fin = function(v){ return v.every(function(w){ return isFinite(w); }); };
+        if (_fin(fo) && _fin(lo) && _ok3(fo[1], fo[0], fo[2]) && _ok3(lo[1], lo[0], lo[2])){
+          co365 = '<div style="font-size:10.5px;background:rgba(58,142,230,.08);border:1px solid rgba(58,142,230,.3);border-radius:6px;padding:3px 5px;margin-bottom:4px;line-height:1.5">'
+            + '<b style="color:var(--blu)">⭐ 主盘口 Bet365 实盘</b>'
+            + '<span style="color:var(--mut)">欧赔 · ' + r365.length + ' 条 / ' + nT + ' 个盘口时刻：</span>'
+            + '主/平/客 <b>' + fo.map(fm).join('/') + '</b>（' + String(f.change_time||'') + '）'
+            + ' → <b>' + lo.map(fm).join('/') + '</b>（' + String(l.change_time||'') + '）'
+            + ' ｜ 主' + mv(lo[0] - fo[0]) + ' 客' + mv(lo[2] - fo[2])
+            /* ⚠ 只有 1 个盘口时刻时，上面那组「开盘→当前」是源站在同一次抓拍里给的新旧两套盘
+               （a/b/c=临场、d/e/f=初盘），盘口本身确实变过 → 这是真调整，不算"初盘=临盘"；
+               但"跨时段走势"不存在，必须说清楚，免得被当成长时间轴的首尾。 */
+            + (nT <= 1
+                ? '<br><span style="color:var(--amb)">（365 本场只有 1 个盘口时刻 → 无跨时段走势；上面是同一次抓拍里的「旧盘→新盘」真实调整，跨时段方向请以下方时间轴为准）</span>'
+                : '')
+            + '</div>';
+        }
+      } else {
+        co365 = '<div style="font-size:10px;color:var(--mut);margin-bottom:4px">（本场无 Bet365 欧赔记录 → 主盘口按回退链 威廉希尔→立博→平博→澳门→韦德 取，或全公司中位数）</div>';
+      }
+    }catch(e){}
+    /* 亚盘同口径：365 自己的 盘口/主水/客水 开盘 → 临场 + 升降盘方向 */
+    let as365 = '';
+    try{
+      if (asia && asia.length){
+        const a3 = asia.filter(function(x){ return Number(x.company_id) === CO365; });
+        if (a3.length){
+          const at = uniqT(a3), nAT = at.length;
+          const byT = a3.slice().sort(function(p, q){ return String(p.change_time||'').localeCompare(String(q.change_time||'')); });
+          const f = byT[0], l = byT[byT.length - 1];
+          const fo = hcapNum(f.d), fu = +f.e, fl = +f.f;     // 初盘 d=盘口 e=主水 f=客水
+          const lo = hcapNum(l.a), lu = +l.b, ll = +l.c;     // 临场 a=盘口 b=主水 c=客水
+          const _finA = function(v){ return isFinite(v); };
+          if ([fo, fu, fl, lo, lu, ll].every(_finA) && _okA(fo, fu, fl) && _okA(lo, lu, ll) && (lu + ll) >= 1.55 && (lu + ll) <= 2.10){
+            const dh = +(lo - fo).toFixed(2);
+            const stepTxt = (Math.abs(dh) < 0.01)
+              ? '<span style="color:var(--mut)">盘口未动</span>'
+              : '<span style="color:' + (dh > 0 ? 'var(--red)' : 'var(--grn)') + ';font-weight:700">' + (dh > 0 ? '升盘 +' : '降盘 ') + dh.toFixed(2) + '</span>';
+            as365 = '<div style="font-size:10.5px;background:rgba(58,142,230,.08);border:1px solid rgba(58,142,230,.3);border-radius:6px;padding:3px 5px;margin-bottom:4px;line-height:1.5">'
+              + '<b style="color:var(--blu)">⭐ 主盘口 Bet365 实盘</b>'
+              + '<span style="color:var(--mut)">亚盘 · ' + a3.length + ' 条 / ' + nAT + ' 个盘口时刻：</span>'
+              + '盘口 <b>' + (fo > 0 ? '+' : '') + fo.toFixed(2) + '</b> → <b>' + (lo > 0 ? '+' : '') + lo.toFixed(2) + '</b> ' + stepTxt
+              + ' ｜ 主水 <b>' + fu.toFixed(2) + '</b>→<b>' + lu.toFixed(2) + '</b>' + mv(lu - fu)
+              + ' 客水 <b>' + fl.toFixed(2) + '</b>→<b>' + ll.toFixed(2) + '</b>' + mv(ll - fl)
+              + (nAT <= 1
+                  ? '<br><span style="color:var(--amb)">（亚盘同样只有 1 个盘口时刻 → 无跨时段走势，上面是同次抓拍的「旧盘→新盘」）</span>'
+                  : '')
+              + '</div>';
+          }
+        } else {
+          /* 亚盘 365 缺席很常见（全库 1193 场有亚盘、仅 686 场有 365 亚盘），
+             此时明确告知"主盘口亚盘段走了回退链"，避免误以为 365 就这么开的盘。 */
+          const fb = asia.filter(function(x){ return Number(x.company_id) === 9 || Number(x.company_id) === 4 || Number(x.company_id) === 47 || Number(x.company_id) === 1; });
+          const fbName = fb.length ? '威廉希尔→立博→平博→澳门' : '全公司中位数';
+          as365 = '<div style="font-size:10px;color:var(--mut);margin-bottom:4px">（本场无 Bet365 亚盘记录 → 主盘口亚盘段回退取 ' + fbName + '）</div>';
+        }
+      }
+    }catch(e){}
+    const dH = list[list.length - 1].c[1] - list[0].c[1];
+    const dA = list[list.length - 1].c[2] - list[0].c[2];
+    const dir = (Math.abs(dH) < 0.03 && Math.abs(dA) < 0.03)
+      ? '该时段内市场盘口<b>基本没动</b>'
+      : ('全场时段内 <b>主' + (dH > 0 ? '升' : '降') + Math.abs(dH).toFixed(2) + ' / 客' + (dA > 0 ? '升' : '降') + Math.abs(dA).toFixed(2) + '</b>（' + (dA < dH ? '资金在往<b>客队</b>一侧走' : '资金在往<b>主队</b>一侧走') + '）');
+    /* ★ 2026-11-03 逐家公司「开盘→当前」表（用户核心诉求："每家公司的总盘、365 初盘、升降盘/水，好好观察"）。
+       按 company_id 分组：每家公司取最早一条=开盘、最晚一条=当前（d/e/f=初盘 平主客，a/b/c=临场 平主客）。
+       365/立博/威廉/英特 优先置顶，其余公司按开盘主胜赔率升序列出。 */
+    const CO_NAME = { "1":"澳门","3":"SB/皇冠","4":"立博","7":"SNAI","8":"Bet365","9":"威廉希尔","12":"易胜博","14":"韦德","17":"明陞","19":"Interwette","22":"10BET","23":"金宝博","24":"12bet/沙巴","31":"利记","35":"盈禾","42":"18bet","47":"平博","48":"香港马会","49":"BWin","50":"1xbet" };
+    const _coGroup = function(arr, keyFn){ const g = {}; (arr||[]).forEach(function(x){ const k = keyFn(x); if (!k) return; (g[k]=g[k]||[]).push(x); }); return g; };
+    /* 有效开盘/临场：d/e/f=初盘(平主客)、a/b/c=临场(平主客)。
+       ⚠ 源站常给"刚开盘还没调价"的废盘（实测 19/1.02/67、45/5.2/1.13），
+       且 d/e/f（初盘）与 a/b/c（临场）可能**分别**有效/无效（365 常有 d/e/f 垃圾、a/b/c 正常）。
+       → 初盘/临场**分开判**：开盘取最早"初盘有效"条，临场取最晚"临场有效"条，
+         绝不像旧写法要求同一条两个都有效（会把 365 整家剔掉，核心公司在逐家表消失）。 */
+    const _okEuOpen = function(x){ const p=[+x.d,+x.e,+x.f]; return p.every(function(v){return isFinite(v);}) && _ok3(p[0],p[1],p[2]); };
+    const _okEuCur = function(x){ const q=[+x.a,+x.b,+x.c]; return q.every(function(v){return isFinite(v);}) && _ok3(q[0],q[1],q[2]); };
+    const _coEarly = function(rows){ if (!rows||!rows.length) return null; const by = rows.slice().sort(function(p,q){ return String(p.change_time||'').localeCompare(String(q.change_time||'')); }); for (const r of by){ if (_okEuOpen(r)) return r; } return null; };
+    const _coLate = function(rows){ if (!rows||!rows.length) return null; const by = rows.slice().sort(function(p,q){ return String(p.change_time||'').localeCompare(String(q.change_time||'')); }); for (let i=by.length-1;i>=0;i--){ if (_okEuCur(by[i])) return by[i]; } return null; };
+    /* 亚盘行字段与欧赔不同（d=初盘盘口、e=初盘主水、f=初盘客水；a=临场盘口、b=临场主水、c=临场客水），
+       须用亚盘有效域 _okA（|盘口|≤4.5、水位∈[0.5,1.5]）独立判断，不能复用欧赔的 _okEuOpen/_okEuCur。 */
+    const _okAOpen = function(x){ const h=hcapNum(x.d), u=+x.e, l=+x.f; return h!==null && isFinite(h) && isFinite(u) && isFinite(l) && _okA(h,u,l); };
+    const _okACur = function(x){ const h=hcapNum(x.a), u=+x.b, l=+x.c; return h!==null && isFinite(h) && isFinite(u) && isFinite(l) && _okA(h,u,l) && (u+l)>=1.55 && (u+l)<=2.10; };
+    const _coEarlyA = function(rows){ if (!rows||!rows.length) return null; const by = rows.slice().sort(function(p,q){ return String(p.change_time||'').localeCompare(String(q.change_time||'')); }); for (const r of by){ if (_okAOpen(r)) return r; } return null; };
+    const _coLateA = function(rows){ if (!rows||!rows.length) return null; const by = rows.slice().sort(function(p,q){ return String(p.change_time||'').localeCompare(String(q.change_time||'')); }); for (let i=by.length-1;i>=0;i--){ if (_okACur(by[i])) return by[i]; } return null; };
+    const euG = _coGroup(eu, function(x){ return x.company_id != null ? String(x.company_id) : ''; });
+    const asG = _coGroup(asia, function(x){ return x.company_id != null ? String(x.company_id) : ''; });
+    const coIds = Object.keys(euG);
+    const PRI = ['8','9','4','19'];   // 365 / 威廉希尔 / 立博 / Interwette
+    coIds.sort(function(a,b){ const ia=PRI.indexOf(a), ib=PRI.indexOf(b); if(ia>=0&&ib>=0) return ia-ib; if(ia>=0) return -1; if(ib>=0) return 1; return (CO_NAME[a]||'').localeCompare(CO_NAME[b]||''); });
+    const coRows = coIds.map(function(cid){
+      const rows = euG[cid];
+      const f = _coEarly(rows), l = _coLate(rows);
+      const fo = f?[+f.e,+f.d,+f.f]:null, lo = l?[+l.b,+l.a,+l.c]:null;
+      /* ⚠ 初盘/临场可能只有一侧有效（365 常见 d/e/f=垃圾、a/b/c=正常）：
+         缺失一侧时用另一侧占位并标注，绝不整家消失（核心公司必须在表里）。 */
+      let foTag='', loTag='';
+      if (!fo && !lo) return '';
+      if (!fo){ fo = lo.slice(); foTag = '<span style="color:var(--amb);font-size:8.5px">(初盘缺失)</span>'; }
+      if (!lo){ lo = fo.slice(); loTag = '<span style="color:var(--amb);font-size:8.5px">(临场缺失)</span>'; }
+      const name = CO_NAME[cid] || ('公司'+cid);
+      const hi = (PRI.indexOf(cid)>=0);
+      const dH = +(lo[0]-fo[0]).toFixed(2), dD = +(lo[1]-fo[1]).toFixed(2), dA = +(lo[2]-fo[2]).toFixed(2);
+      const _mv2 = function(d){ if (!isFinite(d)||Math.abs(d)<0.005) return '<span style="color:var(--mut)">→0</span>'; return '<span style="color:'+(d>0?'var(--red)':'var(--grn)')+';font-weight:700">'+(d>0?'↑':'↓')+Math.abs(d).toFixed(2)+'</span>'; };
+      /* 亚盘该公司 */
+      let aCell = '<span style="color:var(--mut)">—</span>', wCell = '<span style="color:var(--mut)">—</span>';
+      const arows = asG[cid];
+      if (arows && arows.length){
+        const af = _coEarlyA(arows), al = _coLateA(arows);
+        const afo = af?[hcapNum(af.d), +af.e, +af.f]:null, alo = al?[hcapNum(al.a), +al.b, +al.c]:null;
+        if (afo && alo && [].concat(afo,alo).every(function(v){ return v!==null && isFinite(v); }) && _okA(afo[0],afo[1],afo[2]) && _okA(alo[0],alo[1],alo[2])){
+          const capT = function(v){ return (v>0?'+':'')+v.toFixed(2); };
+          aCell = '<b>'+capT(afo[0])+'</b>→<b>'+capT(alo[0])+'</b> '+_mv2(alo[0]-afo[0]);
+          wCell = '主'+_mv2(alo[1]-afo[1])+' 客'+_mv2(alo[2]-afo[2]);
+        }
+      }
+      return '<tr style="color:var(--txt);'+(hi?'background:rgba(58,142,230,.07)':'')+'">'
+        + '<td style="padding:1px 5px;font-weight:'+(hi?'700':'400')+';'+(hi?'color:var(--blu)':'')+'">'+(hi?'⭐ ':'')+name+(hi?' <span style="font-size:8.5px;color:var(--mut);font-weight:400">核心</span>':'')+'</td>'
+        + '<td style="padding:1px 5px;color:var(--mut)">'+fm(fo[0])+'/'+fm(fo[1])+'/'+fm(fo[2])+(foTag?'&nbsp;'+foTag:'')+'</td>'
+        + '<td style="padding:1px 5px;color:var(--txt)">'+fm(lo[0])+'/'+fm(lo[1])+'/'+fm(lo[2])+(loTag?'&nbsp;'+loTag:'')+'</td>'
+        + '<td style="padding:1px 5px;text-align:right">主'+_mv2(dH)+' 客'+_mv2(dA)+'</td>'
+        + '<td style="padding:1px 5px">'+aCell+'</td>'
+        + '<td style="padding:1px 5px;text-align:right">'+wCell+'</td>'
+        + '<td style="padding:1px 5px;color:var(--mut);font-size:9px">'+((f&&f.change_time)||'—')+' → '+((l&&l.change_time)||'—')+'</td>'
+        + '</tr>';
+    }).filter(Boolean).join('');
+    const coTbl = coRows
+      ? '<div style="font-size:11px;font-weight:700;color:#e0a030;margin:6px 0 3px">📊 逐家公司「开盘→当前」（欧赔 + 亚盘 盘口/水位 · 每家真实升降）</div>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:10.5px">'
+        + '<thead><tr style="color:var(--mut)">'
+        + '<th style="text-align:left;padding:1px 5px">公司</th>'
+        + '<th style="text-align:left;padding:1px 5px">欧赔 开盘 主/平/客</th>'
+        + '<th style="text-align:left;padding:1px 5px">欧赔 当前 主/平/客</th>'
+        + '<th style="text-align:right;padding:1px 5px">主/客 Δ</th>'
+        + '<th style="text-align:left;padding:1px 5px">亚盘 盘口 开盘→当前</th>'
+        + '<th style="text-align:right;padding:1px 5px">主/客 水位Δ</th>'
+        + '<th style="text-align:left;padding:1px 5px">时刻</th>'
+        + '</tr></thead><tbody>'+coRows+'</tbody></table>'
+        + '<div style="font-size:10px;color:var(--mut);margin:2px 0">⭐=核心公司（365 受注量最大，代表大众资金流向）；欧赔 Δ 红↑/绿↓=升降，绿=降赔=庄家看好该侧；亚盘 Δ 为正=升盘（让得更多/受让更深）。每家公司取最早=开盘、最晚=当前，源站同一时刻多公司已按 company_id 对齐。</div>'
+      : '';
+    return '<div style="margin-top:6px;border-top:1px dashed var(--line);padding-top:6px">'
+      + co365 + as365
+      + coTbl
+      + '<div style="font-size:11px;font-weight:700;color:var(--acc);margin-bottom:3px">盘口时间轴（每时刻取当刻全部公司的中位数：欧赔 主/平/客、亚盘 盘口+主/客水）</div>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:10.5px">'
+      + '<thead><tr style="color:var(--mut)">'
+      + '<th style="text-align:left;padding:1px 4px">盘口时刻</th>'
+      + '<th style="text-align:left;padding:1px 4px">欧赔 主/平/客 开盘→当前</th>'
+      + '<th style="text-align:right;padding:1px 4px">主/客 Δ</th>'
+      + '<th style="text-align:left;padding:1px 4px">亚盘 盘口 开盘→当前</th>'
+      + '<th style="text-align:right;padding:1px 4px">主/客 水位Δ</th>'
+      + '</tr></thead>'
+      + '<tbody>' + trs2 + '</tbody></table>'
+      /* 全轴代表性：源站很多场"时刻是有了、但每刻只有 1~2 家在报价"，
+         这时中位数≈那一家的原始开盘，不能直接当"市场走势"读 —— 必须给数字 + 建议看哪。 */
+      const weakN = list.filter(function(e){ return (e.n || 0) <= 1; }).length;
+      const weakTip = weakN
+        ? ' ⚠ 其中 <b>' + weakN + '/' + list.length + '</b> 个时刻只有 1 家公司报价（该刻"中位数"≈这一家的原始开盘，代表性弱），这类场请优先看上方 <b>365 主盘口实盘</b>。'
+        : '';
+    return '<div style="font-size:10px;color:var(--mut);margin-top:3px">首行=最早时刻、末行=最新时刻；→ ' + dir + '。亚盘盘口为正=主队让球，负=客队让球。' + weakTip + '</div></div>';
+  }catch(err){ return ''; }
+}
+/* ★ 2026-11-02 临场重判逐帧轨迹（接到 timeline 上·用户："能抓住实时、据不同时刻变化判断"）。
+   对 odds_timeline.json 该场逐帧，用 sdLiveRejudge 逐帧算 verdict，展开「初→临」盘路如何影响重判。
+   数据支撑见 sdLiveRejudge 注释：有实质变动(留出 75.7%/+50.4%) > 无变动(61.5%/+19.5%) > 基线(68.5%/+33.8%)。
+   ★ 2026-11-02 从 companyPanTable 尾部移出：companyPanTable 开头要 od.eu.length>=2 才往下走，
+     缺欧赔明细的场会把整个表（含轨迹）吞掉 → 轨迹应独立挂在 panluBlock，不依赖欧赔门禁。 */
+function _tlRejudgeTable(tid){
+  try{
+    const T = window.__ODDS_TL__ || {};
+    const seq = (T.items||{})[String(tid)];
+    if (!seq || !seq.length) return '';
+    const fz = (T.frozen||{})[String(tid)];
+    const a = (typeof packAnalysis === 'function') ? (packAnalysis(tid) || {}) : {};
+    const lj = sdLiveRejudge(a);
+    const _vt = (v) => v==='strong' ? '<span style="color:#5fd49a;font-weight:700">🟢确认</span>'
+      : (v==='normal' ? '<span style="color:#94a3b8;font-weight:700">⚪维持</span>' : '<span style="color:#94a3b8;font-weight:700">⏳待确认</span>');
+    const fmtH = v => (v>0?'主让':'客让')+Math.abs(v).toFixed(2).replace(/0$/,'');
+    const rows = seq.slice().reverse().map((f, i) => {
+      const p = (f.p != null) ? +f.p : null, h = (f.h != null) ? +f.h : null;
+      const p0 = (f.p0 != null) ? +f.p0 : null, h0 = (f.h0 != null) ? +f.h0 : null;
+      let verdict = 'pending', tag = '待确认', reason = '帧缺初盘/盘口';
+      if (p != null && h != null && p0 != null){
+        const dp = +(p - p0).toFixed(3), dh = +(h - h0).toFixed(3);
+        const moved = (Math.abs(dp) >= 0.05 || Math.abs(dh) >= 0.05);
+        verdict = moved ? 'strong' : 'normal';
+        tag = moved ? '确认' : '维持';
+        reason = moved ? '盘路变动(｜dp｜'+Math.abs(dp).toFixed(2)+' ｜dh｜'+Math.abs(dh).toFixed(2)+')' : '平盘平水';
+      }
+      return '<tr style="color:var(--txt)"><td style="padding:1px 4px;color:'+(i===0?'var(--grn)':'var(--mut)')+';font-weight:'+(i===0?'700':'400')+'">'+String(f.t||'').slice(5)+(i===0?' ◀最新':'')+'</td>'
+        + '<td style="padding:1px 4px">'+(p!=null?fmtH(p):'—')+' @ '+(h!=null?h.toFixed(2):'—')+'</td>'
+        + '<td style="padding:1px 4px">'+(p0!=null?fmtH(p0):'—')+'→'+(p!=null?fmtH(p):'—')+'</td>'
+        + '<td style="padding:1px 4px">'+_vt(verdict)+'</td>'
+        + '<td style="padding:1px 4px;font-size:10px;color:var(--mut)">'+reason+'</td></tr>';
+    }).join('');
+    return '<div style="margin-top:6px;border-top:1px dashed var(--line);padding-top:6px">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--acc);margin-bottom:3px">⚡ 临场重判轨迹（逐帧·据盘路变化·'+_vt(lj && lj.verdict)+' 当前：'+(lj && lj.tag || '—')+'）</div>'
+      + '<div style="font-size:10px;color:var(--mut);margin-bottom:4px">'+((fz?'🔒开赛定格 · ':'⏳赛前抓取中 · ')+'共 '+seq.length+' 帧。盘路实质变动(｜dp｜≥0.05 或 ｜dh｜≥0.05)→🟢确认；平盘平水→⚪维持；所有方向桶均正(留出71~83%/+36~+72%)→不做"撤"。'+esc((lj && lj.reason)||''))+'</div>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:10.5px"><thead><tr style="color:var(--mut)"><th style="text-align:left;padding:1px 4px">时刻</th><th style="text-align:left;padding:1px 4px">让盘@水位</th><th style="text-align:left;padding:1px 4px">初→现盘口</th><th style="text-align:left;padding:1px 4px">重判</th><th style="text-align:left;padding:1px 4px">依据</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }catch(e){ return ''; }
+}
+/* ===== 《足球财富》欧亚转换诊断（让球胜负核心工具，2026-11-03 接书）=====
+ * 从即时欧赔(o1h/o1d/o1a)或模型 λ,μ 反解预期进球 → 上盘打穿概率 → 折合上水；
+ * 与实际上水(grade_water_a)对比：实水<折水=庄家控赔看好上盘；>折水=造热/可能过热。
+ * 经真实完场验证：此差异作机械买卖信号无独立边（原义45%/反向49%/深盘高水买下盘51%），
+ * 故仅作诊断展示，不给买卖信号——与书"欧亚转换须结合基本面、非机械规则"一致。 */
+function _eaFact(n){ let r=1; for(let i=2;i<=n;i++) r*=i; return r; }
+function _eaSkellam(l,m,mg){ mg=mg||12; const P=new Array(2*mg+1).fill(0);
+  for(let i=0;i<=mg;i++){ const pi=Math.exp(-l)*Math.pow(l,i)/_eaFact(i);
+    for(let j=0;j<=mg;j++){ const pj=Math.exp(-m)*Math.pow(m,j)/_eaFact(j); const g=i-j;
+      if(g>=-mg&&g<=mg) P[g+mg]+=pi*pj; } } return P; }
+function _eaCover(P,h){ const mi=12; let win=0,half=0;
+  for(let g=-12;g<=12;g++){ if(g>h)win+=P[g+mi]; else if(g===h)half+=P[g+mi]*0.5; } return win+half; }
+function _eaSolveLM(h,d,a){ const ih=1/h,id=1/d,ia=1/a; const s=ih+id+ia; h=ih/s;d=id/s;a=ia/s; let l=1.5,m=1.2;
+  for(let it=0;it<60;it++){ const P=_eaSkellam(l,m),mi=12; let Ph=0,Pd=0;
+    for(let g=-12;g<=12;g++){ if(g>0)Ph+=P[g+mi]; else if(g===0)Pd+=P[g+mi]; }
+    const e1=Ph-h,e2=Pd-d,dl=1e-3;
+    const Pl=_eaSkellam(l+dl,m),Pml=_eaSkellam(l,m+dl);
+    let Phl=0,Pdl=0,Phm=0,Pdm=0;
+    for(let g=-12;g<=12;g++){ if(g>0){Phl+=Pl[g+mi];Phm+=Pml[g+mi];} else if(g===0){Pdl+=Pl[g+mi];Pdm+=Pml[g+mi];} }
+    const dPh_dl=(Phl-Ph)/dl,dPd_dl=(Pdl-Pd)/dl,dPh_dm=(Phm-Ph)/dl,dPd_dm=(Pdm-Pd)/dl;
+    const det=dPh_dl*dPd_dm-dPh_dm*dPd_dl; if(Math.abs(det)<1e-9)break;
+    const dl_=(e1*dPd_dm-e2*dPh_dm)/det,dm_=(dPh_dl*e2-dPd_dl*e1)/det;
+    l-=dl_*0.7;m-=dm_*0.7; if(l<0.05)l=0.05;if(m<0.05)m=0.05;if(l>6)l=6;if(m>6)m=6;
+    if(Math.abs(e1)<1e-4&&Math.abs(e2)<1e-4)break; } return {l,m}; }
+function _euAsiaGap(a){
+  if(!a) return {ok:false};
+  const hc=a.grade_hcap_a, w=a.grade_water_a;
+  if(hc==null||w==null) return {ok:false};
+  const o1h=a.o1h,o1d=a.o1d,o1a=a.o1a;
+  const lam=(a.score&&a.score.lambda), mu=(a.score&&a.score.mu);
+  let l,m;
+  if(o1h&&o1d&&o1a){ const s=_eaSolveLM(o1h,o1d,o1a); l=s.l; m=s.m; }   // 欧亚转换用市场欧赔反解（书之本意）
+  else if(lam&&mu){ l=+lam; m=+mu; }                                    // 无欧赔退化为模型λ/μ
+  else return {ok:false};
+  const ah=Math.abs(hc);
+  const cov = hc>0 ? _eaCover(_eaSkellam(l,m), hc) : _eaCover(_eaSkellam(l,m), ah);
+  const foldedW = (1-cov)/cov;
+  const gap = +(w - foldedW).toFixed(3);
+  let verdict;
+  /* ⚠ 2026-11-03 折水合理性护栏：foldedW 超出 [0.15, 4] 属数据/模型异常。
+     深让盘 + 模型极端预期（cov≈5%）会让 foldedW 飙到 17，此时"实水<折水=控赔"恒成立 → 伪控赔信号。
+     越界时降级为"折水异常·不可判"，绝不输出假控赔/造热（这就是 11-03 阿古达 vs 萨巴1928 打脸的根因）。 */
+  const wLo = 0.15, wHi = 4.0;
+  if (foldedW < wLo || foldedW > wHi){
+    verdict={t:'折水异常·不可判', c:'var(--amb)', ic:'?', note:'模型覆盖率极端(折水'+foldedW.toFixed(2)+'超出['+wLo+','+wHi+']正常域)，欧亚转换不作控赔/造热判断'};
+  }
+  else if(gap < -0.03) verdict={t:'控赔·实水<折水', c:'var(--grn)', ic:'✓', note:'庄家压低上盘赔付→真实看好上盘（需结合基本面确认）'};
+  else if(gap > 0.03) verdict={t:'造热·实水>折水', c:'var(--red)', ic:'⚠', note:'上盘回报偏高→可能过热/造热，谨慎或反买'};
+  else verdict={t:'中性·实水≈折水', c:'var(--mut)', ic:'=', note:'欧亚吻合，无明显倾向'};
+  return {ok:true, foldedWater:+foldedW.toFixed(3), actualWater:+w.toFixed(3), gap, verdict, coverProb:+(cov*100).toFixed(1)};
+}
+
+/* ★ 2026-11-03 《足球财富》让球胜负·庄家视角判读（欧亚转换 + 盘路演变 合参）
+ * 仅作"盘面怎么读"的解读（书之本意），非买卖信号——真实完场验证：实水<折水机械买上盘 43.9%、深盘机械 41.1%，均无独立边。
+ * 故本判读忠实描述盘路机制（控赔/造热/阻上），不臆造"买哪边"。 */
+function _eaPanluRead(e, t){
+  if (!e || !e.ok) return null;
+  /* ⚠ 折水异常（模型覆盖率极端、超出 [0.15,4] 正常域）→ 欧亚转换不可信，明确"不可判"，
+     绝不当成控赔/造热/无倾向输出（11-03 阿古达打脸根因：foldedW=17 导致伪控赔）。 */
+  if (/折水异常/.test(e.verdict.t)) return { t:'折水异常·欧亚不可判', c:'var(--amb)' };
+  const ctrl = /控赔/.test(e.verdict.t), heat = /造热/.test(e.verdict.t);
+  const pl = t ? t.label : '';
+  const cp = /升盘降水|降盘降水/.test(pl);   // 控赔型盘路：庄家降赔付看好该侧
+  const zs = /升盘升水|降盘升水/.test(pl);   // 阻上型盘路
+  if (ctrl && cp) return { t:'庄家压低上盘赔付(控赔·盘路一致)', c:'var(--grn)' };
+  if (ctrl && zs) return { t:'控赔但升赔阻上', c:'var(--yel)' };
+  if (ctrl)       return { t:'控赔·盘路未动', c:'var(--mut)' };
+  if (heat && zs) return { t:'造热+阻上·上盘过热', c:'var(--red)' };
+  if (heat && cp) return { t:'造热却降赔付·矛盾', c:'var(--yel)' };
+  if (heat)       return { t:'造热·上盘回报偏高', c:'var(--red)' };
+  return { t:'欧亚吻合·无倾向', c:'var(--mut)' };
+}
+/* ★ 2026-11-03 庄家视角·实操口诀：把综合判读翻译成"怎么落到操作上"的人话。
+   （诚实口径：这是读盘解读的落地提示，不是机械买卖信号——真实完场验证无独立边。）
+   rd 来自 _eaPanluRead；结合盘路标签 t 给出"信几分 / 怎么用"。 */
+function _eaPanluAction(rd, t){
+  const lab = t ? t.label : '';
+  const cp = /升盘降水|降盘降水/.test(lab);   // 控赔型盘路
+  const zs = /升盘升水|降盘升水/.test(lab);   // 阻上型盘路
+  const flat = /平盘平水/.test(lab);
+  if (!rd) return { act:'—', c:'var(--mut)', tip:'无欧亚/盘路数据' };
+  const txt = rd.t || '';
+  if (/控赔·盘路一致/.test(txt)) return { act:'上盘方向有庄家支撑', c:'var(--grn)', tip:'欧亚控赔+盘路控赔双确认→上盘方向相对可信；可与模型方向同向考虑' };
+  if (/控赔但升赔阻上/.test(txt)) return { act:'控赔但阻上·矛盾', c:'var(--yel)', tip:'欧亚看好上盘、盘路却阻上→分歧，减仓或观望，勿重仓' };
+  if (/控赔·盘路未动/.test(txt)) return { act:'控赔但盘路未动', c:'var(--mut)', tip:'只有欧亚一侧在说控赔，盘口没配合→证据弱，仅作参考' };
+  if (/造热\+阻上/.test(txt)) return { act:'上盘过热·防打脸', c:'var(--red)', tip:'欧亚造热+盘路阻上→上盘被做热，警惕强队不打出；模型指强队时尤其小心' };
+  if (/造热却降赔付/.test(txt)) return { act:'造热却降赔付·矛盾', c:'var(--yel)', tip:'资金推上盘但庄家反而降赔→庄家可能顺势接盘，方向需再看' };
+  if (/造热/.test(txt)) return { act:'上盘回报偏高·谨慎', c:'var(--red)', tip:'实水>折水=上盘被造热，价值被吃；勿追高' };
+  if (/无倾向/.test(txt)) return { act:'欧亚吻合·无倾向', c:'var(--mut)', tip:'实水≈折水，欧亚一致→无额外信息，别硬找方向' };
+  return { act:'—', c:'var(--mut)', tip:'' };
+}
+function _eaPanluCell(x){
+  const e = x.ea, t = x.trail;
+  if ((!e || !e.ok) && !t) return '<span style="font-size:10px;color:var(--mut)">—</span>';
+  let s = '';
+  if (e && e.ok){
+    s += '<span style="font-size:10px">实水 '+e.actualWater+' <b style="color:'+e.verdict.c+'">'+e.verdict.ic+'</b> 折水 '+e.foldedWater+'</span><br>';
+    s += '<span style="font-size:9px;color:'+e.verdict.c+'">'+e.verdict.t+'</span>';
+  }
+  if (t){
+    s += '<br><span style="display:inline-block;padding:1px 5px;border-radius:5px;font-weight:700;color:#fff;background:'+t.color+';font-size:9.5px">'+t.label+'</span>';
+  }
+  const rd = _eaPanluRead(e, t);
+  if (rd) s += '<br><span style="font-size:9px;color:'+rd.c+'">'+rd.t+'</span>';
+  return s;
+}
+function _eaPanluCellA(a){ return _eaPanluCell({ ea:_euAsiaGap(a), trail:panluTrail(a) }); }
+/* ★ 2026-11-03 庄家视角·实操口诀单元格（深盘板新列）：综合判读 + 人话操作提示。
+   与 _eaPanluCell（判读本身）并列，用户要"实操口诀另起一列"。 */
+function _eaPanluActionCell(x){
+  try{
+    const e = x.ea, t = x.trail;
+    const rd = _eaPanluRead(e, t);
+    if (!rd) return '<span style="font-size:10px;color:var(--mut)">—</span>';
+    const ac = _eaPanluAction(rd, t);
+    return `<span style="font-size:10px;color:${ac.c};font-weight:700">${ac.act}</span><br><span style="font-size:9px;color:var(--mut)">${ac.tip}</span>`;
+  }catch(err){ return '<span style="font-size:10px;color:var(--mut)">—</span>'; }
+}
+
+/* ★ 2026-11-03 合成方向分级单元格（赛前冻结）：把「模型方向 + 庄家视角 + 盘路」合成结论做成每场一列。
+   与判读/口诀列并列：判读=怎么读盘、口诀=怎么用、本列=系统最终给的下注动作（A强推/B减仓/C反买/C0不可判）。
+   读数只来自 freeze_combo.cjs 在赛前封盘快照上算好写回的 an.comboTier（绝不碰赛果），故非马后炮。 */
+function _comboTierCell(x){
+  let t = x.comboTier;
+  // fallback：构造时没摊到 x.comboTier 时，直接读权威冻结位置（OFFLINE_PACK 与 __BAKE_RAW__ 同源，任选其一即可）
+  if ((!t || !t.tier)){
+    const tid = x && x.tid;
+    let a = null;
+    if (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK && tid && OFFLINE_PACK[tid]) a = OFFLINE_PACK[tid].an;
+    if ((!a || !a.comboTier || !a.comboTier.tier) && typeof window !== 'undefined' && window.__BAKE_RAW__ && window.__BAKE_RAW__.packs && tid){
+      const p = window.__BAKE_RAW__.packs[tid]; if (p) a = p.an;
+    }
+    if (a && a.comboTier && a.comboTier.tier) t = a.comboTier;
+  }
+  if (!t || !t.tier) return '<span style="font-size:10px;color:var(--mut)">—</span>';
+  const MAP = {
+    A:  { c:'var(--grn)', bg:'rgba(34,160,80,.15)', txt:'强推' },
+    B:  { c:'var(--yel)', bg:'rgba(224,170,48,.15)', txt:'减仓·观望' },
+    C:  { c:'var(--red)', bg:'rgba(229,69,69,.15)', txt:'反买警示' },
+    C0: { c:'var(--mut)', bg:'rgba(120,120,120,.12)', txt:'不可判' }
+  };
+  const st = MAP[t.tier] || MAP.C0;
+  const dirTxt = t.dir==='W'?'主胜方向':(t.dir==='L'?'客胜方向':(t.dir==='下盘'?'下盘方向(受让)':(t.dir==='监测'?'监测·只读':'')));
+  const _txt = (t.label && t.label!==st.txt) ? t.label : st.txt;   // 结构下盘等带专属 label 时优先显示
+  return `<div style="display:inline-block;padding:2px 7px;border-radius:6px;font-weight:800;font-size:11px;color:${st.c};background:${st.bg};border:1px solid ${st.c}">${t.tier}·${_txt}</div>`
+       + (dirTxt?`<div style="font-size:9.5px;color:${st.c};margin-top:2px;font-weight:700">${dirTxt}</div>`:'')
+       + `<div style="font-size:9px;color:var(--mut);margin-top:1px;line-height:1.3">${t.act||''}</div>`;
+}
+/* ★ 资金过热板专用：该板"过热→买下盘"方向已被样本外证伪(ROI −29%)，按项目铁律只报读数、不写死推荐。
+   故系统方向列固定显「监测·只读·不提供买法」，避免用户把观察信号当下单依据。不进入 A/B/C 分级。 */
+function _monitorTierCell(){
+  return '<div style="display:inline-block;padding:2px 7px;border-radius:6px;font-weight:800;font-size:11px;'
+       + 'color:#64748b;background:rgba(100,116,139,.15);border:1px solid #64748b">监测·只读</div>'
+       + '<div style="font-size:9px;color:var(--mut);margin-top:2px;line-height:1.3">过热信号样本外证伪<br>仅观察·不提供买法</div>';
+}
+/* 优选精选/账本板用：从 an 现算 ea/trail 再出实操口诀（这些板没有 deep 行对象）。 */
+function _eaPanluActionCellA(a){
+  try{
+    if (!a) return '<span style="font-size:10px;color:var(--mut)">—</span>';
+    const ea = _euAsiaGap(a), tr = panluTrail(a);
+    const rd = _eaPanluRead(ea, tr);
+    if (!rd) return '<span style="font-size:10px;color:var(--mut)">—</span>';
+    const ac = _eaPanluAction(rd, tr);
+    return `<span style="font-size:10px;color:${ac.c};font-weight:700">${ac.act}</span><br><span style="font-size:9px;color:var(--mut)">${ac.tip}</span>`;
+  }catch(e){ return '<span style="font-size:10px;color:var(--mut)">—</span>'; }
+}
+
+function panluBlock(a, m){
+  if (!a || !a.panlu || !a.panlu.has) return '';
+  const p = a.panlu;
+  // —— 临盘新鲜度判定：>60min 距开赛 = 非临场，强制红字标注 ——
+  let staleWarn = '', lateHead = '即时(临)';
+  try{
+    const g = oddsGapMin(m, p.lateT);
+    if (g != null){
+      if (g > 60){
+        lateHead = '即时(⚠非临场)';
+        staleWarn = `<div style="font-size:11px;color:var(--red);background:rgba(255,82,82,.08);border:1px solid rgba(255,82,82,.35);border-radius:8px;padding:5px 7px;margin-bottom:5px;line-height:1.55">`
+          + `⚠ <b>非临场数据</b>：本场"即时"赔率取于 <b>${p.lateT}</b>，距开赛还有 <b>${gapTxt(g)}</b>（&gt;1h）。`
+          + `源站"即时"=抓取那一刻，并非临场收盘价；本场临场段(-2h/-1h/-0h)未抓到 → 该值只能当<b>早/中盘</b>用，<b>不可当临盘</b>。</div>`;
+      } else if (g >= 0){
+        lateHead = '即时(临)';
+        staleWarn = `<div style="font-size:11px;color:var(--grn);margin-bottom:5px">✓ <b>临场数据</b>：${p.lateT}，距开赛 ${gapTxt(g)}</div>`;
+      } else {
+        lateHead = '即时(已开赛)';
+      }
+    }
+  }catch(e){}
+  const f = v => (v==null||v===''||v===undefined) ? '—' : v;
+  const t = s => `<span style="color:var(--mut);font-size:10px">${f(s)}</span>`;
+  const ar = o => {
+    if (!o) return '<span style="color:var(--mut)">持平</span>';
+    const col = o.dir==='↑' ? 'var(--red)' : (o.dir==='↓' ? 'var(--grn)' : 'var(--mut)');
+    return `<span style="color:${col};font-weight:600">${o.dir} ${f(o.d)}</span>`;
+  };
+  const eu = p.eu, as = p.asia, ou = p.ou;
+  /* ⚠ 2026-10-01：源站 oddshistorypc 返回的是「公司 × 时刻」扁平表，同一时刻常有多家、
+     且很多场只有 1 个时刻 → 早/临场时间戳相同或把两家不同公司当成早/临场（用户当面抓到：
+     「克罗地亚U19 这场初盘和临盘都是 21:57」）。这里如实标注，不再重复印同一个时间戳。 */
+  const euCtSame = !!(eu && eu.earlyT && eu.earlyT === eu.lateT);
+  const euTcell = euCtSame
+    ? `<span style="color:#e0a030">同一时刻<br><span style="opacity:.8">源站仅 ${eu.ctN==null?'1':eu.ctN} 个盘口时刻</span></span>`
+    : t(eu.earlyT);
+  const euTcellLate = euCtSame
+    ? `<span style="color:#e0a030">（无跨时段变化<br>看下表的「公司级实值」）</span>`
+    : t(eu.lateT);
+  let rows = '';
+  if (eu && (a.eu_valid||0) >= 3){
+    rows += `<tr><td style="padding:2px 4px">欧赔</td>`
+      + `<td style="padding:2px 4px">主${fmt(eu.early.h)}/平${fmt(eu.early.d)}/客${fmt(eu.early.a)}<br>${euTcell}</td>`
+      + `<td style="padding:2px 4px">主${fmt(eu.late.h)}/平${fmt(eu.late.d)}/客${fmt(eu.late.a)}<br>${euTcellLate}</td>`
+      + `<td style="padding:2px 4px">主${ar(eu.h)} 平${ar(eu.d)} 客${ar(eu.a)}</td></tr>`;
+  }
+  if (as && (a.c_valid||0) >= 3){
+    rows += `<tr><td style="padding:2px 4px">亚盘</td>`
+      + `<td style="padding:2px 4px">盘${fmt(as.earlyHcap)} 水${fmt(as.earlyUW)}/${fmt(as.earlyLW)}</td>`
+      + `<td style="padding:2px 4px">盘${fmt(as.lateHcap)} 水${fmt(as.lateUW)}/${fmt(as.lateLW)}</td>`
+      + `<td style="padding:2px 4px">盘${ar(as.hcap)} 上${ar(as.uw)} 下${ar(as.lw)}`
+      + `${(a.asia_dir&&a.asia_dir!=='无方向'&&a.asia_dir!=='—'?` <span class="badge bN" title="让球方向：仅当实测有边时给出。2026-10-05 撤回旧门（判据符号笔误），正确判据下逐格受让覆盖 44~57%，全线低于 54.1% 盈亏线 → 不给方向、只展示盘口">${a.asia_dir}</span>`:'')}</td></tr>`;
+  }
+  if (ou){
+    rows += `<tr><td style="padding:2px 4px">大小球</td>`
+      + `<td style="padding:2px 4px">盘${fmt(ou.earlyLine)} 大${fmt(ou.earlyOW)}/小${fmt(ou.earlyUW)}</td>`
+      + `<td style="padding:2px 4px">盘${fmt(ou.lateLine)} 大${fmt(ou.lateOW)}/小${fmt(ou.lateUW)}</td>`
+      + `<td style="padding:2px 4px">${ar(ou.line)} ${ar(ou.ow)} ${(a.ou_dir&&a.ou_dir!=='—'&&a.ou_dir!=='无稳定方向')?`<span class="badge ${a.ou_dir==='大球'?'bK':a.ou_dir==='小球'?'bH':'bN'}">${a.ou_dir}</span>`:(a.ou_dir==='无稳定方向'?'<span class="badge bN">无稳定方向</span>':'')}${(a.ou_heat&&a.ou_heat.dir&&a.ou_heat.dir!=='—')?` <span style="font-size:10px;color:var(--mut)" title="市场热度(交叉校验, 非结论)">市:${a.ou_heat.dir}</span>`:''}</td></tr>`;
+  }
+  /* ★ 2026-11-03 接《足球财富》欧亚转换 + 盘路演变（让球胜负两大核心工具）：
+     ① 欧亚转换：实际亚盘上水 vs 欧赔折合上水。实水<折水=庄家压低上盘赔付(控赔)；实水>折水=造热/可能过热。
+     ② 盘路演变：初盘→临场 盘口/水位移动。升盘降水/降盘降水=庄家控赔(看好该侧)；升盘升水/降盘升水=阻上。
+     两者合参给出"庄家视角判读"。已用真实完场验证：作机械买卖信号无独立边(欧亚原义43.9%/深盘41.1%)，故仅作诊断解读。*/
+  const ea = _euAsiaGap(a);
+  const tr = panluTrail(a);
+  if (ea.ok || tr){
+    const rd = _eaPanluRead(ea.ok ? ea : null, tr);
+    rows += `<tr><td style="padding:2px 4px;color:#e0a030;font-weight:600">庄家视角<br><span style="font-size:9px;font-weight:400;color:var(--mut)">欧亚+盘路</span></td>`
+      + `<td style="padding:2px 4px" colspan="2">${ea.ok?('实水 <b>'+ea.actualWater+'</b> ／ 折水 <b>'+ea.foldedWater+'</b><br><span style="font-size:10px;color:var(--mut)">上盘打穿概率 '+ea.coverProb+'%</span>'):'<span style="font-size:10px;color:var(--mut)">欧亚转换：盘口/欧赔不齐</span>'}</td>`
+      + `<td style="padding:2px 4px">${ea.ok?('<span style="color:'+ea.verdict.c+';font-weight:600">'+ea.verdict.ic+' '+ea.verdict.t+'</span>'):''}`
+      + (tr?('<br><span style="display:inline-block;margin-top:2px;padding:1px 5px;border-radius:5px;font-weight:700;color:#fff;background:'+tr.color+';font-size:9.5px">'+tr.label+'</span>'):'')
+      + (rd?('<br><span style="font-size:9.5px;color:'+rd.c+'">'+rd.t+'</span>'):'')+'</td></tr>';
+    rows += `<tr><td></td><td colspan="3" style="padding:2px 4px;font-size:10px;color:var(--mut);line-height:1.5">足球财富：实水&lt;折水=庄家控赔；&gt;折水=造热；升盘降水/降盘降水=控赔看好该侧，升盘升水/降盘升水=阻上。本判读为盘面解读、非买卖信号；真实完场验证机械买卖无独立边（欧亚原义43.9% / 深盘41.1%）。</td></tr>`;
+  }
+  if (!rows) return '';
+  const sum = (p.summary && p.summary.length) ? p.summary.map(s=>'· '+s).join('<br>') : '盘口走势平稳，无明显异动';
+  /* 盘口时刻统计（诚实口径）：源站返回的是「公司 × 时刻」扁平表，不是逐时序列，
+     这里如实告诉用户本场有几个真实盘口时刻，别让"两段相同时间戳"看起来像没数据。 */
+  /* 2026-10-02：把「初盘距开赛几小时」直接印出来，让"初盘是不是临场前2小时"自己说话，不用嘴解释。
+     初盘定义 = 源站 oddshistorypc 里**最早的那一条记录**（= 市场最早开盘），不是临场前某个固定点。 */
+  let ctBar = '';
+  try{
+    const ctN = (eu && eu.ctN!=null) ? eu.ctN : null;
+    /* ⚠ 2026-10-02：初盘距开赛必须**独立于 ctN 渲染**。
+       融合包里 a.panlu.eu 常常缺失 → ctN=null → 老写法整块被 if(ctN!=null) 跳过，
+       这行永远印不出来。ts 取自 _fused.stages 的 early 段（= 源站最早那条记录），不依赖任何字符串解析。 */
+    let gapLine = '';
+    try{
+      const _sg = (a && a._fused && a._fused.stages) || null;
+      const _e = _sg ? _sg.find(function(s){ return s.label === 'early' && s.ts; }) : null;
+      /* ⚠ 2026-10-02 修正：开赛时刻必须用 match_time_int / start_time（Unix 秒，UTC），
+         绝不能拿 _day + match_time 拼字符串拼——match_time 是**举办地当地时间**，
+         凌晨海外场（巴甲/澳甲）拼出来差一整轮，会算出"初盘晚于开赛 2 小时"的假象。
+         e.ts 与它同为 UTC 基准（e.ts 数值级是 ms 但代表秒），统一 +8h 到北京。 */
+      let kMs = null;
+      try{
+        const _ktS = (m && (m.start_time || m.match_time_int)) || 0;
+        if (_ktS) kMs = (+_ktS) * 1000 + 28800000;
+      }catch(e5){ kMs = null; }
+      /* 兜底：gqj2 场卡片只暴露 day+kickoff；kickTs 拼的正是 "YYYYMMDDHHMM" 紧凑串
+         （day 已由 tsToBeijingDay(match_time_int) 修正过跨日），比裸 _day 可靠。
+         ⚠ 不要在这里补 '000' 凑毫秒——会把 12 位紧凑串撑成 15 位，正则失配 → 整行印不出。 */
+      if (!kMs) kMs = _ctDate2(kickTs(m));
+      if (_e && kMs){
+        const h = (kMs - _e.ts) / 3600000;      // 正 = 初盘早于开赛；负 = 源站赛中/赛后补开盘
+        let c, tail;
+        if (h < -0.5){                          // 初盘晚于开赛
+          c = 'var(--amb)';
+          tail = `<span style="opacity:.8">· 源站<b>赛前没开盘</b>，这条是赛中/赛后补的盘，谈"初→临走势"没意义</span>`;
+        }else if (h < 2){
+          c = 'var(--amb)';
+          tail = `<span style="opacity:.8">· 距开赛不到 2h 才开盘，盘口新鲜但观察窗口极短</span>`;
+        }else if (h < 6){
+          c = '#e0a030';
+          tail = `<span style="opacity:.8">· 距开赛 2~6h 开盘</span>`;
+        }else{
+          c = 'var(--grn)';
+          tail = `<span style="opacity:.8">· 初盘不是"临赛前2小时"，是庄家开盘那一刻；&gt;6h 绿 / 2~6h 橙 / &lt;2h 红</span>`;
+        }
+        gapLine = `<div style="font-size:10.5px;color:var(--mut);margin:2px 0 4px">初盘（市场最早开盘）＝源站最早一条记录 <b style="color:${c}">${h>=0?'':'-'}${Math.abs(h).toFixed(1)}h</b> 前　`
+          + tail + `</div>`;
+      }
+    }catch(e2){ gapLine = ''; }
+    if (ctN != null){
+      const same = (eu.earlyT && eu.earlyT === eu.lateT) || ctN <= 1;
+      ctBar = `<div style="font-size:10px;color:var(--mut);margin:3px 0 5px;line-height:1.5">`
+        + `盘口时刻：欧赔 ${eu.rows==null?'?':eu.rows} 条记录 / <b style="color:${same?'#e0a030':'var(--grn)'}">${ctN} 个不同时刻</b>`
+        + (eu.earlyT ? ` ｜ 最早 <b>${f(eu.earlyT)}</b> ~ 最晚 <b>${f(eu.lateT)}</b>` : '')
+        + (same ? ` — <b style="color:#e0a030">该场源站只有 1 个盘口时刻，没有逐时走势可比</b>，真实变化见下方「公司级实值」。` : '')
+        + `</div>`;
+    }
+    if (gapLine) ctBar = ctBar ? (gapLine + ctBar) : gapLine;
+  }catch(e){ ctBar = ''; }
+  // 三段融合状态条：已抓早/中/临盘哪些段、权重、本场是否被融合
+  let fusionBar = '';
+  if ((FUSED_META && FUSED_META.stages && FUSED_META.stages.length) || (a._fused && a._fused.stages && a._fused.stages.length)){
+    let chips = '', probTxt = '';
+    if (a._fused && a._fused._live){
+      /* 轻量直连（实时模式、无本地烘焙）：只有当前这一刻盘口，诚实合成单段"临场(实时)"，
+         并明确标注早/中盘历史需本地烘焙，绝不伪装成全段融合。 */
+      const st = a._fused.stages[0] || {};
+      const w = Math.round((st.w||1)*100);
+      const ts = st.ts ? new Date(st.ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}) : '—';
+      chips = `<span class="badge" style="background:rgba(41,98,255,.14);color:var(--acc);border:1px solid var(--acc)">临场(实时) ${w}% · ✓${ts}</span>`
+            + ` <span class="badge" style="background:rgba(91,102,117,.12);color:var(--gry);border:1px solid var(--gry)">早/中盘需本地烘焙</span>`;
+      const pr = a._fused.prob;
+      probTxt = pr ? `融合概率 主${Math.round(pr.H)}% 平${Math.round(pr.D)}% 客${Math.round(pr.A)}%` : '';
+    } else if (FUSED_META && FUSED_META.stages){
+      const present = (a._fused && a._fused.present) || [];
+      const actStages = (a._fused && a._fused.stages) || [];
+      const byLabel = {}; actStages.forEach(s=>{ byLabel[s.label] = s; });
+      // 5 段方案：早场(放出)/中场(中点)/临场-2h/-1h/-0h。每场实际抓取的时段与权重如实显示，缺失标 ✗缺失。
+      chips = FUSED_META.stages.map(s => {
+        const got = present.indexOf(s.label) >= 0;
+        const st = byLabel[s.label];
+        const w = (got && st) ? (st.w||0) : 0;
+        const col = got ? 'var(--grn)' : 'var(--gry)';
+        const ts = (st && st.ts) ? new Date(st.ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}) : (got?'?':'—');
+        return `<span class="badge" style="background:rgba(91,102,117,.18);color:${col};border:1px solid ${col}">${s.cn} ${Math.round(w*100)}% · ${got?('✓'+ts):'✗缺失'}</span>`;
+      }).join(' ');
+      const pr = a._fused && a._fused.prob ? a._fused.prob : null;
+      probTxt = pr ? `融合概率 主${Math.round(pr.H*100)}% 平${Math.round(pr.D*100)}% 客${Math.round(pr.A*100)}%` : '';
+    }
+    fusionBar = `<div style="font-size:11px;margin-bottom:6px;line-height:1.7">${chips}${probTxt?` ｜ <b style="color:var(--acc)">${probTxt}</b>`:''}</div>`;
+  }
+  return `<div style="margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:linear-gradient(180deg,rgba(41,98,255,.06),transparent)">
+    <div style="font-size:12px;font-weight:700;color:#2a6bff;margin-bottom:5px">📈 盘路分析 · 初盘(开盘) → 临场(即时)</div>
+    ${staleWarn}
+    ${ctBar}
+    ${fusionBar}
+    ${fusedStagesBlock(a)}
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="color:var(--mut)"><th style="text-align:left;padding:2px 4px">项目</th><th style="text-align:left;padding:2px 4px">初盘(早)</th><th style="text-align:left;padding:2px 4px">${lateHead}</th><th style="text-align:left;padding:2px 4px">走势</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${companyPanTable(m)}
+    <div style="font-size:11px;color:var(--mut);margin-top:5px;line-height:1.5">${(eu && eu.ctN != null && eu.ctN <= 1) ? '中盘变盘窗口：—（本场仅 1 个盘口时刻，无中盘记录）' : ('中盘变盘窗口：<b>' + f(p.midTime) + '</b>')} ｜ ${sum}</div>
+  </div>`;
+}
+
+/* ---------- 分析方法 · 思路与结论（2026-09-18 新增）----------
+   用户诉求：分析区里「每个分析方法」都要能看清「分析思路(原理)」与「结论(本场落地)」。
+   设计：① 思路=该方法的推理原理（静态，人人一样）；② 结论=基于本场 a.* 实值动态生成。
+   以可展开 <details> 挂到每张卡片，不破坏现有密集布局；无数据的维度仅留思路并标注缺数。
+   庄家视角：结论一律给分布/方向+置信，不编单点"必中"。 */
+function methodologyBlock(a, m){
+  if (!a) return '';
+  const S = v => (v==null||v===undefined||v===''||(typeof v==='number'&&!isFinite(v))) ? null : v;
+  const num = (v,d=2) => S(v)==null ? '—' : fmt(v,d);
+  const wdl = k => ({W:'主胜',D:'平局',L:'客胜'}[k]||'—');
+  const items = [];
+  const push = (t, idea, c) => items.push({t, idea, c: (c==null||c==='') ? '—' : c});
+
+  // 1 亚盘 · 初盘→临场演变
+  {
+    const dp=S(a.dp), dh=S(a.dh);
+    let c='—';
+    if(dp!=null||dh!=null){
+      const move = (dp==null?0:dp) > 0.01 ? '升盘(看深一方)' : ((dp==null?0:dp) < -0.01 ? '降盘(看浅一方)' : '盘口持平');
+      c = `初盘 ${num(a.a0)}/${num(a.h0)} → 临场 ${num(a.p1)}/${num(a.h1)}；Δ盘口 ${dp==null?'—':(dp>=0?'+':'')+fmt(dp,2)}、Δ上水 ${dh==null?'—':(dh>=0?'+':'')+fmt(dh,2)} → ${move}` + (a.kuopan?'，已标记错盘':'');
+    }
+    push('亚盘 · 初盘→临场演变',
+      '对比初盘与临场盘口级数及上/下水：盘口或水位向某方移动，通常代表庄家与资金对该方预期升温；但降幅过大需防"诱盘"（制造便宜假象反向收割）。', c);
+  }
+  // 2 欧赔 · 初盘→临场演变
+  {
+    let c='—';
+    if(S(a.o0h)!=null||S(a.o1h)!=null){
+      const dH=(S(a.o1h)!=null&&S(a.o0h)!=null)?+(a.o1h-a.o0h).toFixed(2):null;
+      const dD=(S(a.o1d)!=null&&S(a.o0d)!=null)?+(a.o1d-a.o0d).toFixed(2):null;
+      const dA=(S(a.o1a)!=null&&S(a.o0a)!=null)?+(a.o1a-a.o0a).toFixed(2):null;
+      const chg=[]; if(dH!=null)chg.push('主'+(dH>0?'升':dH<0?'降':'平')+Math.abs(dH)); if(dD!=null)chg.push('平'+(dD>0?'升':dD<0?'降':'平')+Math.abs(dD)); if(dA!=null)chg.push('客'+(dA>0?'升':dA<0?'降':'平')+Math.abs(dA));
+      c = `初 ${num(a.o0h)}/${num(a.o0d)}/${num(a.o0a)} → 临 ${num(a.o1h)}/${num(a.o1d)}/${num(a.o1a)}${chg.length?'；'+chg.join(' '):''}（赔率降=该结果被看好/被资金追捧）`;
+    }
+    push('欧赔 · 初盘→临场演变',
+      '比较初盘与临场欧赔三项；某项赔率下降=该结果概率上升（被看好或被资金追捧）；赔付率越高庄家利润越薄、定价越"诚实"。', c);
+  }
+  // 3 市场隐含概率
+  push('市场隐含概率',
+    '由临场欧赔反推含赔付率的概率，是"市场怎么看这场"最直接的投影；赔付系数=1/Σ(1/赔率)，越接近 1 庄家抽成越低、定价越"诚实"。',
+    `主 ${pct(a.mk_h)} 平 ${pct(a.mk_d)} 客 ${pct(a.mk_a)}（赔付系数 ${num(a.payout)}${S(a.payout)!=null?'，约 '+Math.round(a.payout*100)+'%':''}）`);
+  // 4 实力差与预期盘
+  {
+    const sd=S(a.strength_diff), exp=S(a.exp_hcap), pg=S(a.pan_gap);
+    let c='—';
+    if(sd!=null||pg!=null){
+      const tag = pg==null?'':(pg>0.25?'实际盘偏深·看让球一方':pg<-0.25?'实际盘偏浅·看受让一方':'基本吻合预期');
+      c = `模型实力差 ${sd==null?'—':fmt(sd,1)} 点 → 理论盘 ${num(exp)}；实际盘相对理论盘差 ${pg==null?'—':(pg>=0?'+':'')+fmt(pg,2)} 点（${tag}）`;
+    }
+    push('实力差与预期盘',
+      '以两队历史实力差推算理论让球盘，与实际盘对比：实际盘深于预期=盘口更看好该方（可能含价值或错盘），浅于预期则反之。', c);
+  }
+  // 5 盘型与预判
+  push('盘型与预判',
+    '依亚盘盘口区间归类盘型（如半球/一球/球半），不同盘型对应不同的"赢半/走水/全赢"边界，结合模型给出胜负/平倾向。',
+    `${a.pan_type||'—'} → 模型预判 ${a.pan_predict||'—'}${a.kuopan?'（错盘）':''}`);
+  // 6 资金流向/盘水信号
+  push('资金流向 / 盘水信号',
+    '盘口水位异动方向即资金与庄家意图的投影；结合信号卡区分"顺势而上"与"诱盘反向"。',
+    `资金流向 ${a.flow||'—'} ｜ 盘水信号 ${sigText(a)||'—'}`);
+  // 7 进球数 / 大小球
+  {
+    let c='—';
+    if(a.ou_text||a.ou_dir){
+      c = `${a.ou_text||'—'}${a.ou_dir&&a.ou_dir!=='—'?'，模型偏向 '+a.ou_dir:''}${a.ou_value?'，发现价值单（'+(a.ou_dir==='大球'?'大球侧·模型大球概率≥60%':'小球侧·模型大球概率≤35%')+'）':''}`;
+    }
+    push('进球数 / 大小球',
+      '以 Dixon-Coles 进球期望（模型大球概率）对比大小球盘口，找出被低估的一侧；非对称门控——只有 op≤35 判小球、op≥60 判大球，中间不下注（校准曲线显示 54~60 是输家区）。', c);
+  }
+  // 8 比分概率（Dixon-Coles）
+  {
+    let c='—';
+    if(a.score&&a.score.top&&a.score.top.length){
+      c = `最可信比分区间：${a.score.top.slice(0,5).map(d=>d.score+' '+d.p+'%').join(' · ')}（λ主${num(a.score.lambda)}/μ客${num(a.score.mu)}，仅给分布、不给单点）`;
+    }
+    push('比分概率（Dixon-Coles）',
+      'Dixon-Coles 双变量 Poisson 拟合两队进球率 λ/μ，给出比分概率分布；最可信区间是概率最高的几项，而非单一预测（符合"只给分布、不下单点"的约定）。', c);
+  }
+  // 9 半全场
+  {
+    let c='—';
+    if(a.htft&&a.htft.top&&a.htft.top.length){
+      c = `概率最高半全场：${a.htft.top.slice(0,5).map(d=>labelHTFT(d.state)+' '+d.p+'%').join(' · ')}`;
+    }
+    push('半全场',
+      '在半场与全场独立假设下联合九态概率，重点看"半场某结果→全场某结果"的条件概率（如半场主胜后全场主胜概率）。', c);
+  }
+  // 10 庄家热度 / PPI
+  {
+    let c='—';
+    if(a.ppi){
+      const hot = wdl(a.ppi.hot_side)==='—'?'无明显热门':wdl(a.ppi.hot_side);
+      const ppiTxt = (a.ppi.ppi&&a.ppi.ppi.W!=null) ? `；PPI 主${Math.round(a.ppi.ppi.W*100)}/平${Math.round(a.ppi.ppi.D*100)}/客${Math.round(a.ppi.ppi.L*100)}` : '';
+      c = `${a.ppi.available?'已接入真实投注占比(真PPI)':'用赔率隐含作热度代理'}；热门 ${hot}${ppiTxt}`;
+    }
+    push('庄家热度 / PPI',
+      '真实 PPI=投注占比×赔率，偏离公平定价即"热度"或"价值"；未接入真实占比时，用赔率隐含概率作代理热度。庄家视角下：低 PPI=被低估=潜在价值侧。', c);
+  }
+  // 11 真实投注 · 澳客/必发
+  {
+    let c='—';
+    if(a.betfa){
+      const pctW=S(a.betfa.pct&&a.betfa.pct.W), pctD=S(a.betfa.pct&&a.betfa.pct.D), pctL=S(a.betfa.pct&&a.betfa.pct.L);
+      let s = `真实资金占比 主${pctW!=null?pctW+'%':'—'}/平${pctD!=null?pctD+'%':'—'}/客${pctL!=null?pctL+'%':'—'}`;
+      if(a.betfa.confirm) s += `；资金最热 ${wdl(a.betfa.confirm.dir)}` + (a.betfa.confirm.agree===true?'（与盘路同向·增强）':a.betfa.confirm.agree===false?'（与盘路背离·警惕）':'');
+      c = s;
+    }
+    push('真实投注 · 澳客/必发',
+      '澳客/必发的实际成交资金占比是最硬的"市场体温"；与盘路信号同向增强可信度，背离则提示可能诱盘。', c);
+  }
+  // 12 平局热度
+  {
+    let c='—';
+    if(a.draw_heat){
+      const flag = a.draw_heat.flag==='OVERHEAT-PPI'||a.draw_heat.flag==='OVERHEAT-LINE'?'平局过热·判定陷阱并降级':a.draw_heat.flag==='COLD'?'平局偏冷':'—';
+      c = `${flag}${a.draw_heat.note?('；'+a.draw_heat.note):''}${a.draw_heat.ppiD!=null?'；真实PPI平 '+a.draw_heat.ppiD+'%':''}${a.draw_heat.mv_d!=null?'；平赔移动 '+a.draw_heat.mv_d+'%':''}`;
+    }
+    push('平局热度',
+      '平局单独监控热度；真实 PPI 或平赔移动显示过热时，常为"诱平陷阱"，应降级处理而非追平（平局整体负 EV）。', c);
+  }
+  // 13 跨公司分歧
+  {
+    let c='—';
+    if(a.company_div&&a.company_div.flag!=='NEUTRAL'){
+      c = `${a.company_div.flag==='AUTH_DIVERGE'?'权威公司分歧·问题盘嫌疑':'多家公司分歧偏大'}；加权离散 ${a.company_div.weightedDivScore||'—'}${a.company_div.nCompanies?('，'+a.company_div.nCompanies+'家公司'):''}${a.company_div.authSpread!=null?'；权威离散 '+a.company_div.authSpread:''}`;
+    }
+    push('跨公司分歧',
+      '多家公司赔率离散度反映市场对赛果的分歧；权威公司之间分歧大=该场为"问题盘"嫌疑，结论需更谨慎。', c);
+  }
+  // 14 信息面 · 伤停/状态
+  {
+    let c='—';
+    if(a.info_adj){
+      c = `倾向 ${wdl(a.info_adj.biasDir)}；强度差 ${a.info_adj.edge>0?'+':''}${a.info_adj.edge}；伤停权重 主${a.info_adj.injH}/客${a.info_adj.injA}；置信修正 ${a.info_adj.conf_adj>=0?'+':''}${a.info_adj.conf_adj}${a.info_adj.note&&a.info_adj.note!=='—'?'；'+a.info_adj.note:''}`;
+    }
+    push('信息面 · 伤停/状态',
+      '伤停与状态按权重修正模型方向；关键伤停可推翻纯实力差结论，强伤停一方应下调其胜算。', c);
+  }
+  // 15 综合（庄家视角融合）
+  {
+    const g = a.grade || (a.tier===2?'参考':a.tier===1?'可下注':'—');
+    push('综合（庄家视角融合）',
+      '多源加权融合（庄家视角）：盘口初临演变+市场隐含概率+实力差预期盘+热度/PPI+信息面伤停交叉验证，输出方向、评级与置信度（置信已用历史命中率纠偏，绝不承诺单点必中）。',
+      `${labelWDL(a.dir)} ｜ 评级 ${g} ｜ 置信 ${Math.round(a.conf||0)}%${a.corr_note?'；'+a.corr_note:''}${a.value_score!=null?'；价值分 '+Math.round(a.value_score):''}`);
+  }
+
+  const rows = items.map(it=>{
+    const conclCls = it.c==='—' ? 'color:var(--mut)' : 'color:var(--txt)';
+    return `<div style="margin:7px 0;padding-left:10px;border-left:3px solid var(--line)">
+      <div style="font-size:12px;font-weight:700;color:var(--acc)">${it.t}</div>
+      <div style="font-size:11px;color:#8b98a9;line-height:1.55;margin:2px 0"><b style="color:#6b7686">思路</b> · ${it.idea}</div>
+      <div style="font-size:12px;line-height:1.6;${conclCls}"><b style="color:#6b7686">结论</b> · ${it.c}</div>
+    </div>`;
+  }).join('');
+  const n = items.filter(it=>it.c!=='—').length;
+  return `<details style="margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:linear-gradient(180deg,rgba(255,122,60,.05),transparent)">
+    <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#ff7a3c">🧭 分析方法 · 思路与结论（共 ${items.length} 项，本场 ${n} 项有数据）</summary>
+    <div style="margin-top:6px">${rows}</div>
+  </details>`;
+}
+
+/* ---------- 交互 ---------- */
+// 价值Top10 点击直达：清掉会挡住该场的过滤 -> 按价值分排序 -> 渲染 -> 滚动并高亮卡片，必要时补分析
+function gotoMatch(tid){
+  const m = MATCHES.find(x=>String(x.tid)===String(tid));
+  if(!m){ toast('未找到该场'); return; }
+  // 只清"过滤类"条件（状态/竞彩/盘口/置信/搜索/联赛）；保留当前日期与范围（该场本就在当前 MATCHES 内）
+  const fState=$('fState'); if(fState) fState.value='';
+  const fLg=$('fLg'); if(fLg) fLg.value='';
+  const fConf=$('fConf'); if(fConf) fConf.value='0';
+  const fSearch=$('fSearch'); if(fSearch) fSearch.value='';
+  const cJc=document.getElementById('fJc'); if(cJc) cJc.checked=false;
+  const cBd=document.getElementById('fBd'); if(cBd) cBd.checked=false;
+  const cHt=document.getElementById('fHt'); if(cHt) cHt.checked=false;
+  const cDeep=document.getElementById('fDeep'); if(cDeep) cDeep.checked=false;
+  const bdNote=document.getElementById('bdNote'); if(bdNote) bdNote.style.display='none';
+  const cOdds=document.getElementById('fOdds'); if(cOdds) cOdds.checked=false;
+  gFilter='';                       // 同时清掉盘口档位筛选，否则目标场可能被档位过滤挡住
+  const fSort=$('fSort'); if(fSort) fSort.value='val';
+  renderCap=400; render();
+  const card=document.getElementById('card-'+tid);
+  if(card){
+    card.scrollIntoView({behavior:'smooth', block:'center'});
+    card.style.transition='box-shadow .3s, outline .3s';
+    card.style.outline='3px solid var(--acc)';
+    card.style.boxShadow='0 0 18px rgba(255,122,60,.6)';
+    setTimeout(()=>{ card.style.outline=''; card.style.boxShadow=''; }, 2400);
+  }
+  if(!m.analysis){ onAnalyze(null, tid); }
+  else { toast(m.home+' vs '+m.away+' · 价值分 '+(Math.round(m.analysis.value_score||0))+(m.analysis.dir?(' · '+labelWDL(m.analysis.dir)):'')); }
+}
+async function onAnalyze(ev, tid){
+  const m = MATCHES.find(x=>String(x.tid)===String(tid)); if(!m) return;
+  // ★ 2026-10-08 拆包：先确保明细（odds/fused/an明细）到位并合并回 OFFLINE_PACK，否则离线分析读不到 odds
+  /* ★ 2026-10-29：主包里没有这场（窗口外场次）→ 再拉 rest 包补上，保证点哪场都能出明细 */
+  try { await _ensureDetail(); await _mergeDetailAsync(tid); } catch(e){}
+  try { await _ensureStats(); } catch(e){}
+  // 离线无赔率：直接说明原因，避免“分析失败/拉不到数据”黑盒
+  if (!isAnalyzable(m)){
+    toast('本场缺赔率快照，且实时源不可用（离线模式）→ 无法分析；可用本地 start.bat 启动实时版');
+    return;
+  }
+  const btn = ev && ev.currentTarget;
+  /* ★ 2026-09-24：用户点「分析」= 明确想要这一场的最新盘口 → 先确保球探数据是服务端最新。
+     内部带 30s 节流，且只在服务端时间戳变化时才真正下载大文件（通常 <1s，不会拖慢分析）。 */
+  try{ await pullFreshTitan007(); }catch(e){}
+  // 实时源可用时，用户手点"分析/刷新分析" = 明确想要这一场的最新盘口 →
+  // force=true 走网络拉实时赔率（1 次请求，受 rateGate 限速）；批量分析仍走快照，不逐场拉网
+  /* ★ 2026-09-17 修（用户截图投诉"卡在拉取最新盘口…"）：
+     原 `force = liveCapable()` 会让**纯竞彩场**（只有官方赔率、源站没有 gqj2 盘口包）也去联网拉 gqj2，
+     那类场次对源站请求注定空返回 → 多轮重试叠加超时 → 按钮长时间停在「拉取最新盘口…」转圈。
+     而卡片提示自己写着"直接用官方赔率出结论，不依赖 gqj2 盘口" —— 代码必须与提示一致：
+     只有烘焙里**真有 gqj2 盘口包**的场次才值得联网拉最新；纯竞彩场直接本地用官方赔率秒出结论。 */
+  /* ★ 2026-09-23 修：用户实测「拉实时→分析」直接失败，根因是**构造性死路**——
+     卡片按钮文案 '拉实时→分析' 只在 `!hasPackOdds && !jcHasOdds` 时出现（ui.js 卡片处），
+     而旧 force 判定 `liveCapable() && hasPackOdds(m.tid)` 恰恰要求 hasPackOdds=true。
+     二者互斥 ⇒ 点这个按钮 force 恒为 false ⇒ analyzeMatch 走快照分支 ⇒ 必抛
+     「本场无内置快照赔率（直连模式不批量拉取…）」= 按钮点了 100% 失败。
+     正确语义：用户**手点** = 明确要这一场的最新盘口，只要实时源可用就联网拉。
+     唯一保留的例外是「纯竞彩场」（有官方赔率、源站无 gqj2 盘口包）——那类场拉源站
+     注定空返回，按 2026-09-17 的结论继续用官方赔率本地秒出（避免按钮长时间转圈）。 */
+  const force = liveCapable() && (hasPackOdds(m.tid) || (!jcHasOdds(m) && !t7HasOdds(m)));
+  if(btn){ btn.disabled=true; btn.textContent = force ? '拉取最新盘口…' : '分析中…'; }
+  try{
+    await analyzeMatch(m, force);
+    m._manual = true;   // 用户手点过的场次：不因"置信门槛"被过滤掉（修复"点了之后比赛消失"）
+    ANA_OPEN.add(m.tid); anaSaveOpen();   // 用户主动拉最新 → 分析后直接展开该场，立刻看到结果
+    if (force) toast('已拉取最新盘口：'+m.home+' vs '+m.away);
+  }catch(e){
+    /* 失败原因必须**落到卡片上**（此前只 toast，3 秒后消失 → 用户只看到"点了没反应"）。
+       m._aErr 会被卡片「提示」行渲染成持久红字，并带上"已尝试实时拉取"以区分"没试过"。 */
+    m._aErr = (force ? '已实时拉取但失败：' : '') + (e && e.message ? e.message : '未知错误');
+    toast('分析失败：' + (e && e.message ? e.message : '未知错误'));
+  }
+  finally{
+    // 兜底：render() 会重建卡片按钮，但若中途抛错/被跳过，必须保证按钮不会永久卡在"拉取中"
+    if (btn && document.body.contains(btn)){ btn.disabled = false; btn.textContent = m.analysis ? '刷新分析' : '分析'; }
+  }
+  render();
+  /* ★ 2026-10-04 性能修复：原来这行是 refreshRendered(true)，但 render() 本身就是
+     grid.innerHTML=html 的**全量重建**（卡片内容已经是最新的），紧跟再来一次 refreshRendered(true)
+     会无视 __sig 把所有已渲染卡片（realN≈140 张）再重建第二遍 —— 点一次分析 = 280 张卡 × 2 遍。
+     故删掉：render() 已保证盘路块（含新拉到的初盘/临场时间戳）刷新。 */
+}
+async function batchAnalyze(){
+  const arr=filtered();
+  if(!arr.length){ toast('无比赛可分析'); return; }
+  if(arr.length>60 && !confirm(`当前筛选 ${arr.length} 场，将逐个拉取盘口+交锋（约 ${Math.ceil(arr.length/4)*1.2|0}s）。继续？`)) return;
+  $('conn').className='pill warn'; $('conn').textContent='● 批量分析中…';
+  let done=0;
+  const pool=4;
+  async function worker(){
+    while(true){
+      const m=arr.shift(); if(!m) break;
+      try{ await analyzeMatch(m); }catch(e){}
+      done++; if(done%5===0) $('cnt').textContent=`分析 ${done}/${arr.length+done} 场`;
+    }
+  }
+  await Promise.all(Array.from({length:pool}, worker));
+  $('conn').className='pill live'; $('conn').textContent='● 实时';
+  $('fSort').value='val';
+  render();
+  toast(`批量分析完成，已按价值分排序`);
+}
+
+/* ---------- KB ---------- */
+let kbBuilt=false;
+function openKb(){ if(!kbBuilt){ buildKb(); kbBuilt=true; } $('kbModal').classList.add('show'); }
+function closeKb(){ $('kbModal').classList.remove('show'); }
+function openMethodRef(){ const _m=document.getElementById('methodRefModal'); if(_m)_m.classList.add('show'); }
+function closeMethodRef(){ const _m=document.getElementById('methodRefModal'); if(_m)_m.classList.remove('show'); }
+
+/* ── 本机复现 BetGiant 确定性塔罗（深挖方向④）────────────────────────────
+   忠实复现其公开方法论：seed=SHA-256(主队|客队|日期) → 同一场永远同组牌 →
+   三张牌阵 Past/Present/Outcome → Outcome 按本板赔率隐含公平概率对齐。
+   目的：现场证明「玄学壳=叙事包装」，底层就是本板已有的概率分布。 */
+const ARCANA = [
+  {i:0,en:'The Fool',zh:'愚人',arch:'新开始·冒险',v:'neu'},
+  {i:1,en:'The Magician',zh:'魔术师',arch:'意志·行动力',v:'pos'},
+  {i:2,en:'The High Priestess',zh:'女祭司',arch:'直觉·隐秘',v:'neu'},
+  {i:3,en:'The Empress',zh:'皇后',arch:'丰饶·滋养',v:'pos'},
+  {i:4,en:'The Emperor',zh:'皇帝',arch:'秩序·掌控',v:'pos'},
+  {i:5,en:'The Hierophant',zh:'教皇',arch:'传统·规则',v:'neu'},
+  {i:6,en:'The Lovers',zh:'恋人',arch:'结合·抉择',v:'pos'},
+  {i:7,en:'The Chariot',zh:'战车',arch:'行动·意志取胜',v:'pos'},
+  {i:8,en:'Strength',zh:'力量',arch:'内在力量',v:'pos'},
+  {i:9,en:'The Hermit',zh:'隐者',arch:'内省·独行',v:'neu'},
+  {i:10,en:'Wheel of Fortune',zh:'命运之轮',arch:'周期·转折',v:'neu'},
+  {i:11,en:'Justice',zh:'正义',arch:'平衡·公正',v:'neu'},
+  {i:12,en:'The Hanged Man',zh:'倒吊人',arch:'牺牲·视角转换',v:'neu'},
+  {i:13,en:'Death',zh:'死神',arch:'终结·剧变',v:'neg'},
+  {i:14,en:'Temperance',zh:'节制',arch:'调和·中庸',v:'pos'},
+  {i:15,en:'The Devil',zh:'恶魔',arch:'束缚·欲望',v:'neg'},
+  {i:16,en:'The Tower',zh:'高塔',arch:'突变·崩塌',v:'neg'},
+  {i:17,en:'The Star',zh:'星星',arch:'希望·指引',v:'pos'},
+  {i:18,en:'The Moon',zh:'月亮',arch:'幻象·不安',v:'neg'},
+  {i:19,en:'The Sun',zh:'太阳',arch:'明朗·正向结果',v:'pos'},
+  {i:20,en:'Judgement',zh:'审判',arch:'觉醒·定论',v:'pos'},
+  {i:21,en:'The World',zh:'世界',arch:'圆满·完成',v:'pos'}
+];
+function sha256Bytes(bytes){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  let l=bytes.length, bitLen=l*8;
+  bytes=bytes.concat([0x80]);
+  while(bytes.length%64!==56) bytes.push(0x00);
+  const hi=Math.floor(bitLen/0x100000000), lo=bitLen>>>0;
+  bytes.push((hi>>>24)&255,(hi>>>16)&255,(hi>>>8)&255,hi&255,(lo>>>24)&255,(lo>>>16)&255,(lo>>>8)&255,lo&255);
+  const rotr=(x,n)=>(x>>>n)|(x<<(32-n));
+  for(let off=0;off<bytes.length;off+=64){
+    const w=new Array(64);
+    for(let i=0;i<16;i++){const j=off+i*4; w[i]=(bytes[j]<<24)|(bytes[j+1]<<16)|(bytes[j+2]<<8)|bytes[j+3];}
+    for(let i=16;i<64;i++){const s0=rotr(w[i-15],7)^rotr(w[i-15],18)^(w[i-15]>>>3); const s1=rotr(w[i-2],17)^rotr(w[i-2],19)^(w[i-2]>>>10); w[i]=(w[i-16]+s0+w[i-7]+s1)|0;}
+    let a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+    for(let i=0;i<64;i++){
+      const S1=rotr(e,6)^rotr(e,11)^rotr(e,25); const ch=(e&f)^((~e)&g); const t1=(h+S1+ch+K[i]+w[i])|0;
+      const S0=rotr(a,2)^rotr(a,13)^rotr(a,22); const maj=(a&b)^(a&c)^(b&c); const t2=(S0+maj)|0;
+      h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;
+    }
+    H[0]=(H[0]+a)|0;H[1]=(H[1]+b)|0;H[2]=(H[2]+c)|0;H[3]=(H[3]+d)|0;H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0;
+  }
+  let hex=''; for(let i=0;i<8;i++) hex+=('00000000'+(H[i]>>>0).toString(16)).slice(-8);
+  return hex;
+}
+function sha256(str){
+  const bytes=[];
+  for(let i=0;i<str.length;i++){const c=str.charCodeAt(i);
+    if(c<0x80) bytes.push(c);
+    else if(c<0x800) bytes.push(0xc0|(c>>6),0x80|(c&0x3f));
+    else if(c>=0xd800&&c<0xe000){i++;const c2=str.charCodeAt(i);const cp=0x10000+(((c&0x3ff)<<10)|(c2&0x3ff));bytes.push(0xf0|(cp>>18),0x80|((cp>>12)&0x3f),0x80|((cp>>6)&0x3f),0x80|(cp&0x3f));}
+    else bytes.push(0xe0|(c>>12),0x80|((c>>6)&0x3f),0x80|(c&0x3f));
+  }
+  return sha256Bytes(bytes);
+}
+function tarotCell(role,c,isOut){
+  return '<div class="tc-slot'+(isOut?' out':'')+'"><div class="tc-role">'+role+'</div><div class="tc-arc">'+c.i+'</div><div class="tc-name">'+c.en+'<br><span class="tc-zh">'+c.zh+'</span></div><div class="tc-arch">'+c.arch+'</div></div>';
+}
+function openTarot(){ const _m=document.getElementById('tarotModal'); if(_m)_m.classList.add('show'); try{ renderTarotBoard(); }catch(e){ console.warn('tarot board',e); } }
+function closeTarot(){ const _m=document.getElementById('tarotModal'); if(_m)_m.classList.remove('show'); }
+/* 独立板块「塔罗对照分析」：跑今日全部带赔率概率的比赛 + 零额外 alpha 结构性对撞证明。
+   忠实复现 BetGiant 公开方法论：seed=SHA-256(主队|客队|日期) → 三张牌阵 → Outcome 吉凶档位由 max 概率≥0.42 决定。 */
+function renderTarotBoard(){
+  const box=document.getElementById('tarotBoard'); if(!box) return;
+  const proofBox=document.getElementById('tarotProof');
+  if(typeof MATCHES==='undefined'||!MATCHES||!MATCHES.length){ box.innerHTML='<p class="note">暂无比赛数据。</p>'; if(proofBox)proofBox.innerHTML=''; return; }
+  const todayDay=(typeof BAKE_RANGE!=='undefined'&&BAKE_RANGE&&BAKE_RANGE[0])||(typeof todayStr==='function'?todayStr():'');
+  const pool=[];
+  for(const m of MATCHES){
+    const tid=m.tid;
+    const p=(typeof OFFLINE_PACK!=='undefined'&&OFFLINE_PACK)?OFFLINE_PACK[tid]:null;
+    const a=p?p.an:null; if(!a) continue;
+    const mk_h=a.mk_h,mk_d=a.mk_d,mk_a=a.mk_a;
+    if(!(mk_h>0)||!(mk_d>0)||!(mk_a>0)) continue;
+    const mp=(typeof matchPhase==='function')?matchPhase(m):{day:'',time:''};
+    const day=mp.day||m._day||m.day;
+    if(todayDay&&String(day)!==String(todayDay)) continue;
+    const home=displayTeam(m,'home'); const away=displayTeam(m,'away');
+    pool.push({a,mk_h,mk_d,mk_a,day,home,away,time:mp.time||''});
+  }
+  if(!pool.length){ box.innerHTML='<p class="note">今日无带赔率概率的比赛。</p>'; if(proofBox)proofBox.innerHTML=''; return; }
+  // 按开赛时间升序（解决用户此前"没按时间排"的痛点）
+  pool.sort((x,y)=>{ const k=o=>String(o.day||'')+String(o.time||'00:00').replace(/:/g,''); return k(x).localeCompare(k(y)); });
+  const posPool=ARCANA.filter(c=>c.v==='pos').map(c=>c.i);
+  const neuPool=ARCANA.filter(c=>c.v==='neu').map(c=>c.i);
+  let html='<div class="tarot-grid">';
+  let align=0, nWithFav=0, nPos=0;
+  for(const it of pool){
+    const favored=(it.mk_h>=it.mk_d&&it.mk_h>=it.mk_a)?'H':(it.mk_a>=it.mk_d&&it.mk_a>=it.mk_h)?'A':'D';
+    const seedStr=it.home+'|'+it.away+'|'+it.day;
+    const hash=sha256(seedStr);
+    const bytes=hash.match(/../g).map(h=>parseInt(h,16));
+    const take=(b0,b1)=>((bytes[b0]<<8)|bytes[b1])%22;
+    const idxs=[]; let i0=take(0,1); if(idxs.indexOf(i0)<0) idxs.push(i0);
+    let i1=take(2,3); while(idxs.indexOf(i1)>=0) i1=(i1+1)%22; idxs.push(i1);
+    const maxp=Math.max(it.mk_h,it.mk_d,it.mk_a);
+    let i2, pool2=(maxp>=0.42)?posPool:neuPool;
+    if(maxp>=0.42) nPos++;
+    i2=pool2[((bytes[6]<<8)|bytes[7])%pool2.length]; while(idxs.indexOf(i2)>=0) i2=pool2[(pool2.indexOf(i2)+1)%pool2.length];
+    idxs.push(i2);
+    const c0=ARCANA[idxs[0]],c1=ARCANA[idxs[1]],c2=ARCANA[idxs[2]];
+    // 塔罗倾向：maxp≥0.42 时指向 max 侧；否则中性（不分胜负倾向）
+    const tarotLean=(maxp>=0.42)?favored:'D';
+    if(tarotLean===favored) align++;
+    if(favored!=='D') nWithFav++;
+    const favTxt=favored==='H'?('主胜 '+(it.mk_h*100).toFixed(1)+'%'):favored==='A'?('客胜 '+(it.mk_a*100).toFixed(1)+'%'):('平局 '+(it.mk_d*100).toFixed(1)+'%');
+    const dayFmt=(it.day||'').toString().replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3');
+    const leanTxt=tarotLean==='D'?'平衡·不分胜负倾向':(tarotLean==='H'?'指向主队':'指向客队');
+    html+='<div class="tarot-card">'+
+      '<div class="tc-head">'+it.home+' <span class="tc-vs">vs</span> '+it.away+'<br><span class="tc-meta">'+dayFmt+' · '+(it.time||'')+' · 本板 '+favTxt+'</span></div>'+
+      '<div class="tc-cards">'+tarotCell('Past',c0)+tarotCell('Present',c1)+tarotCell('Outcome',c2,true)+'</div>'+
+      '<div class="tc-seed">seed=SHA-256("<span class="mono">'+seedStr.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span>")<br><span class="mono" style="font-size:10px">'+hash.slice(0,32)+'…</span></div>'+
+      '<div class="tc-note">Outcome（'+c2.en+'·'+c2.zh+'）吉凶档位 = '+(maxp>=0.42?'正向池（max≥42%）':'中性池')+'，由本板概率算出、与 seed 无关。塔罗倾向：'+leanTxt+'，与本板方向一致。</div>'+
+    '</div>';
+  }
+  html+='</div>';
+  box.innerHTML=html;
+  const n=pool.length;
+  const alignPct=n?(align/n*100).toFixed(1):'0';
+  const proof='<div class="tarot-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">'+
+    '<div class="tarot-card"><div class="tc-head">分析场次</div><div class="tc-arc" style="color:#a855f7">'+n+'</div><div class="tc-arch">今日带赔率概率的比赛</div></div>'+
+    '<div class="tarot-card"><div class="tc-head">塔罗倾向 ≡ 本板方向</div><div class="tc-arc" style="color:#a855f7">'+alignPct+'%</div><div class="tc-arch">'+align+'/'+n+' 场完全一致</div></div>'+
+    '<div class="tarot-card"><div class="tc-head">进正向牌池</div><div class="tc-arc" style="color:#a855f7">'+nPos+'</div><div class="tc-arch">max≥42% · 有明确指向</div></div>'+
+    '<div class="tarot-card"><div class="tc-head">反向信号</div><div class="tc-arc" style="color:#a855f7">0</div><div class="tc-arch">从未逆模型</div></div>'+
+    '</div>'+
+    '<p class="note" style="border-left:3px solid #a855f7;margin-top:10px"><b>结论（结构性，无需赛果即可证伪）：</b>塔罗 Outcome 卡的「吉凶档位」完全由本板概率 <code>maxp≥0.42</code> 决定（≥则抽正向牌池、否则中性牌池），而 <code>seed=SHA-256(队名+日期)</code> 只决定抽 22 张里的「哪一张」，与比赛实际结果<b>零相关</b>。因此：<br>'+
+    '① 上面 '+alignPct+'% 的场次塔罗倾向与本板方向完全一致；其余差异<b>仅发生在</b>模型本身就不确定（max&lt;42%）时塔罗保持中性——<b>从出现过一次反向信号（0 场）</b>，即塔罗是严格跟随模型、绝不逆模型的指示器；<br>'+
+    '② 既然 seed 不含任何赛果信息，把模型概率「翻译成牌面」后，<b>不可能凭空多出任何预测力</b>——塔罗命中率 ≡ 模型概率命中率 ≡ 直接看赔率隐含概率的命中率，三者是同一个数；<br>'+
+    '③ 所以「塔罗/六爻 + AI 高命中」的本质 = <b>统计建模为主、玄学壳为辅</b>。本板（PPI/Dixon-Coles/Elo + 自有 7,870 场完场真值标定，精选 96%/优选 85%）走同一条统计路，只是不披玄学外衣，且敢把证伪（流速差 z=0.38 废信号）摊开。<br>'+
+    '<b>一句话：这个板块不是来预测的，是用来把「玄学有 alpha」这个幻觉当场拆穿的。</b></p>';
+  if(proofBox) proofBox.innerHTML=proof;
+  const nEl=document.getElementById('tarotN'); if(nEl) nEl.textContent=n;
+}
+function buildKb(){
+  const KB = window.KB;
+  const sh = KB.strength_handicap.table.map(r=>`<tr><td>${r.gap}</td><td>${r.diff_desc}</td><td>${r.home_hcap}</td><td>${r.away_hcap}</td></tr>`).join('');
+  const pt = KB.pan_types.rules.map(r=>`<tr><td>${r.type}</td><td>${r.cond}</td><td>${r.logic}</td><td>${r.default}</td></tr>`).join('');
+  const eu = KB.euro_rules.rules.map(r=>`<li>${r}</li>`).join('');
+  const sz = KB.size_ball.rules.map(r=>`<li>${r}</li>`).join('');
+  const cb = KB.combo.principles.map(r=>`<li>${r}</li>`).join('');
+  const wb = KB.water_bands.bands.map(b=>`<tr><td>${b.name}</td><td>${b.min}~${b.max}</td></tr>`).join('');
+  $('kbContent').innerHTML = `
+   <h3>① 广实分档 ↔ 预期让球（孤行）</h3><p class="note">${KB.strength_handicap.note}</p>
+   <table><tr><th>广实差</th><th>档位</th><th>主队让球</th><th>客队让球</th></tr>${sh}</table>
+   <h3>② 秦俑十大盘型（盘分差=实际初盘−预期盘口）</h3><p class="note">${KB.pan_types.note}</p>
+   <table><tr><th>盘型</th><th>触发条件</th><th>逻辑</th><th>默认</th></tr>${pt}</table>
+   <h3>③ 水位分层</h3><table><tr><th>档</th><th>范围</th></tr>${wb}</table>
+   <h3>④ 欧赔招式（米客/孤行）</h3><ul>${eu}</ul>
+   <h3>⑤ 大小球</h3><ul>${sz}</ul>
+   <h3>⑥ 投注组合与风控（仓位 1:3:5:10）</h3><ul>${cb}</ul>`;
+}
+
+/* ---------- 自动刷新 ---------- */
+function setupAuto(){
+  if (timer){ clearInterval(timer); timer = null; }
+  // 列表轮询统一交给 startDirectTimer（无条件 60s，内部按 fAuto 语义启停），此处避免重复定时器
+  if ($('fAuto') && $('fAuto').checked) startDirectTimer();
+  else if (typeof _directTimer !== 'undefined' && _directTimer){ clearInterval(_directTimer); _directTimer = null; }
+}
+
+/* ---------- 直连模式（手机零依赖实时：不开电脑、不开代理） ---------- */
+let _directTimer = null;
+function startDirectTimer(){
+  if (_directTimer) clearInterval(_directTimer);
+  // 无条件轮询：不再以 SOURCE.state 为前置（离线/探测失败时恰恰最需要重试）。
+  // getList 自身会按「同源→直连→公共代理」重连，网络恢复后自动回到实时，无需人工刷新。
+  _directTimer = setInterval(()=>{ if (!document.hidden) loadMatches(); }, 60000);
+}
+/* 先用快照秒出内容 → 后台探测直连 → 成功则升级为实时（比分/状态实时，赔率分析用快照） */
+async function upgradeToDirect(){
+  if (SOURCE.state !== 'offline') return;
+  const h = await probeDirect();
+  if (h){ SOURCE = { state:'direct', base: h }; updateConn(); hideOfflineBanner(); toast('✅ 已直连实时源站：比分/状态每 60 秒刷新（点开单场可拉最新赔率）'); loadMatches(); startDirectTimer(); return; }
+  const ph = await probeProxy();
+  if (ph){ SOURCE = { state:'proxy', base: ph }; updateConn(); hideOfflineBanner(); toast('✅ 已连公共代理：比分/状态每 60 秒刷新（点开单场可拉最新赔率）'); loadMatches(); startDirectTimer(); return; }
+  toast('未连上实时数据源，继续使用离线快照（数据为烘焙时刻）');
+}
+
+/* ---------- 球探(titan007) 实时盘口并列面板 ----------
+ * 背景：逛球街(gqj2) 在某些网络下会回退到 15 分钟烘焙快照，出现"更新滞后"观感。
+ * 球探(sports.tiyuhu.com/qiutan/) 本身是个壳，内部 iframe 嵌的是 titan007 的实时盘口——
+ * 它更新比烘焙快照快。把这个页面作为**并列实时面板**嵌进看板，与 gqj2 分析同屏并排，
+ * 用户点开即可看球探的最新场次 + 赔率变化，两源同步、互不依赖（gqj2 卡了还有球探兜底）。
+ * 注意：该站无 X-Frame-Options / CSP frame-ancestors，可安全嵌；gen_index.py 的 CSP 已加
+ * frame-src https: 放行外链 iframe。iframe 懒加载（首次打开才拉），不浪费带宽。 */
+function initQiutan(){
+  // 1) 注入样式（保持本文件自包含，重建 index.html 不丢）
+  if (!document.getElementById('qtCss')){
+    const st = document.createElement('style'); st.id = 'qtCss';
+    st.textContent =
+      '.qt-drawer{position:fixed;top:0;right:0;bottom:0;width:min(580px,94vw);background:var(--card);'
+      + 'border-left:1px solid var(--line);z-index:55;transform:translateX(100%);transition:transform .25s;'
+      + 'display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(0,0,0,.4)}'
+      + '.qt-drawer.open{transform:translateX(0)}'
+      + '.qt-drawer .qt-h{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line)}'
+      + '.qt-drawer .qt-h h3{margin:0;font-size:14px;color:#fff;flex:1;font-weight:700}'
+      + '.qt-drawer .qt-h a{font-size:11px;color:var(--blu);text-decoration:none;white-space:nowrap}'
+      + '.qt-drawer .qt-x{background:var(--card2);color:var(--txt);border:1px solid var(--line);'
+      + 'border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px}'
+      + '.qt-drawer iframe{flex:1;border:0;width:100%;background:#fff}'
+      + '.qt-drawer .qt-tip{font-size:11px;color:var(--mut);padding:6px 12px;border-top:1px solid var(--line)}';
+    document.head.appendChild(st);
+  }
+  // 2) 工具栏按钮（挂到 .ctrls 末尾）
+  const ctrls = document.querySelector('.ctrls');
+  if (ctrls && !document.getElementById('btnQt')){
+    const b = document.createElement('button');
+    b.className = 'sec'; b.id = 'btnQt'; b.textContent = '🔭 球探实时';
+    b.title = '并列查看球探(titan007)实时盘口/赔率变化，与 gqj2 分析同屏同步（避免单一源滞后）';
+    b.onclick = toggleQiutan;
+    ctrls.appendChild(b);
+  }
+  // 3) 抽屉容器（懒挂 iframe）
+  if (!document.getElementById('qtDrawer')){
+    const d = document.createElement('div');
+    d.className = 'qt-drawer'; d.id = 'qtDrawer';
+    d.innerHTML =
+      '<div class="qt-h"><h3>🔭 球探实时盘口（titan007）</h3>'
+      + '<a href="https://sports.tiyuhu.com/qiutan/" target="_blank" rel="noopener">新窗口↗</a>'
+      + '<button class="qt-x" id="qtClose">收起</button></div>'
+      + '<iframe id="qtFrame" src="" referrerpolicy="no-referrer" title="球探实时盘口"></iframe>'
+      + '<div class="qt-tip">数据来自球探(titan007)实时页面，与本看板 gqj2 源独立更新；'
+      + '若某场 gqj2 滞后，可在此对照最新盘口与赔率变化。</div>'
+      + '<div id="qtT7Status" class="qt-tip"></div>';
+    document.body.appendChild(d);
+    d.querySelector('#qtClose').onclick = closeQiutan;
+    const t7s = d.querySelector('#qtT7Status'); if (t7s) t7s.innerHTML = t7StatusHTML();
+  }
+  // 自动打开球探面板（每浏览器会话仅一次，避免 15 分钟自刷新反复弹出）：用户要求"球探为主"展示
+  /* 2026-10-03 手机端补充：窄屏（≤720）**不再自动弹**。
+     实测 iPhone 390px 宽：抽屉宽 min(580px,94vw)=366px、right:0 打开后 left≈23px，
+     直接盖住右半屏（顶部「立即刷新/批量分析」和横滑控件全在里面），且命中测试打到 iframe 上——
+     用户点不动控件还以为按钮坏了（本次修「☰ 更多」时就被它挡出一次假阴性）。
+     手机屏幕小：主看板优先，球探面板改由工具栏「🔭 球探实时」按钮手动点开（宽屏仍自动弹）。 */
+  /* ★ 2026-10-22 取消自动弹开：580px 抽屉从右侧滑出会直接盖住顶部两张价值榜（精选判定榜/正式过热榜），
+     实测首屏右半屏被「球探数据未载入」的空白 iframe 占满，正是用户说的"一堆杂七杂八"。
+     球探盘口是**对照工具**，不是主线：改为一律由工具栏「🔭 球探实时」按钮手动点开（手机端本来就是这样）。 */
+  try { sessionStorage.setItem('qtAutoOpened', '1'); } catch(e){}
+}
+/* 球探交叉校验数据（fetch_t7.cjs 本机无头浏览器抓取 titan007 盘口 → t7_odds.js → window.T7_ODDS）。
+ * 云端刷新管线无浏览器，故该数据由本机运行 fetch_t7.cjs 抓取后随本地部署带入；无数据时整套机制静默降级。 */
+function t7Lookup(home, away){
+  const D = window.TITAN007 || window.T7_ODDS;
+  if (!D || !Array.isArray(D.matches)) return null;
+  const norm = s => String(s||'').replace(/\s+/g,'');
+  const h = norm(home), a = norm(away);
+  for (const r of D.matches){
+    const rh = norm(r.home), ra = norm(r.away);
+    if ((rh===h && ra===a) || (rh===a && ra===h)) return r;
+  }
+  return null;
+}
+function t7StatusHTML(){
+  // ⚠ 2026-09-24 修正：这里原来只读 window.T7_ODDS（早期「本机无头浏览器抓取」时代的变量），
+  //    而服务端管线早已改由 titan007.js 注入 window.TITAN007 —— 结果云端明明载入了 2364 场，
+  //    状态区却恒显示「球探抓取数据未载入（云端默认无）」，用户据此反复质疑"球探没抓过来"。
+  //    现在以 TITAN007 为准，T7_ODDS 仅作历史兜底。
+  const D = window.TITAN007 || window.T7_ODDS;
+  if (!D || !Array.isArray(D.matches)) return '<span class="note">球探数据未载入</span>';
+  const ms = D.matches;
+  const nAsia = ms.filter(r => r.asia).length;
+  const nOu = ms.filter(r => r.ouDetail).length;
+  return '<span class="badge bN">球探已载入 ' + ms.length + ' 场</span>'
+    + ' <span class="badge bG" title="vip.titan007.com/AsianOdds_n.aspx 逐场多公司中位数">vip亚盘 ' + nAsia + '</span>'
+    + ' <span class="badge bG" title="vip.titan007.com/OverDown_n.aspx 逐场多公司中位数">vip大小球 ' + nOu + '</span>'
+    + ' 更新：' + (D.updated || '—');
+}
+let _qtOpen = false, _qtLoaded = false;
+function toggleQiutan(){ _qtOpen ? closeQiutan() : openQiutan(); }
+function openQiutan(){
+  const d = document.getElementById('qtDrawer');
+  if (!d) return;
+  d.classList.add('open'); _qtOpen = true;
+  if (!_qtLoaded){
+    const f = document.getElementById('qtFrame');
+    if (f) f.src = 'https://sports.tiyuhu.com/qiutan/';   // 懒加载：首次打开才拉
+    _qtLoaded = true;
+  }
+  if (typeof toast === 'function') toast('已打开球探实时盘口（与 gqj2 同屏同步）');
+}
+function closeQiutan(){
+  const d = document.getElementById('qtDrawer');
+  if (!d) return;
+  d.classList.remove('open'); _qtOpen = false;
+}
+
+/* ---------- 启动 ---------- */
+/* ★ 2026-10-02：async + 等烘焙快照解压完成再开跑。
+   为什么不"后台并行解码、init 立即执行"：loadMatches() 内部用 BAKE_READY/FALLBACK_DATA
+   做【快照兜底合并】（实时拉空的分片要从快照回填），它读的是同步变量；若 init 先跑，
+   这些读点全拿到 false → 快照兜底静默失效，表现为"刷新后少几百场比赛且补不回来"。
+   代价只是首屏多等一次本地解压（约 100~300ms），换来所有既有同步逻辑零改动。 */
+async function init(){
+  await _bakeReady();      // gzip 版主快照到位；同步版（__BAKE_RAW__ 已存在）会立即 resolve
+  const _todayD = todayStr().replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');    // 原生 date 输入需要 YYYY-MM-DD
+  $('fDay').value = _todayD;
+  restoreFilters();                                                          // 自刷新重载后恢复用户筛选
+  /* ★ 2026-10-19 修复「跨日仍停在昨天」：restoreFilters 会用 sessionStorage 里上次保存的 fDay 覆盖今天
+     （用户实测：数据已生成到 10-19 00:02，日期框仍停在 2026/10/18，必须手点 10-19 再刷新）。
+     恢复后再校正一次：若恢复值早于系统今天 → 强制回今天。 */
+  try{
+    const _fd = $('fDay');
+    const _cur = String((_fd && _fd.value) || '').replace(/-/g,'');
+    if (_fd && (!_cur || _cur < todayStr())) _fd.value = _todayD;
+  }catch(e){}
+  /* 页面长时间开着跨午夜：若日期框仍是「打开时那天」，系统日期一变就自动前进并重拉；
+     用户若手动选了别的日期（cur ≠ _initDay）则不动，不打扰复盘。 */
+  try{
+    let _initDay = todayStr();
+    setInterval(function(){
+      try{
+        const t = todayStr(); if (t === _initDay) return;
+        const fd = $('fDay'); if (!fd) return;
+        const cur = String(fd.value || '').replace(/-/g,'');
+        if (cur === _initDay){ fd.value = t.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'); _initDay = t; loadMatches(); }
+      }catch(e){}
+    }, 30000);
+  }catch(e){}
+  /* ★ 2026-09-24：点「更新」= 先热拉服务端最新球探产物（绕缓存），再拉 gqj2 实时列表。
+     旧版只 loadMatches()，而球探盘口是全站最鲜的源 → 用户感觉"点了没变化"。 */
+  $('btnRef').onclick = async ()=>{
+    const btn = $('btnRef'); const old = btn ? btn.textContent : '';
+    try{
+      if (btn){ btn.textContent = '拉取中…'; btn.disabled = true; }
+      const r = await pullFreshTitan007({ force:true });
+      if (r && r.ok && r.fresh) toast('已拉取最新球探数据 ' + (r.count || 0) + ' 场（更新于 ' + t7AgeText(r.updated) + '）');
+      else if (r && r.ok) toast('球探数据已是最新（' + t7AgeText(r.updated || t7LocalUpdated()) + '）');
+      else toast('球探数据拉取失败：' + ((r && r.err) || '未知'));
+    }catch(e){}
+    try{ if (btn){ btn.disabled = false; btn.textContent = old || '更新'; } }catch(e){}
+    loadMatches();
+  };
+  $('btnKb').onclick = openKb;
+  $('btnBatch').onclick = batchAnalyze;
+  $('btnReview').onclick = openReview;
+  { const _br = $('btnRecap'); if (_br) _br.onclick = openRecap; }   // 📋 推荐复盘（注单逐条对错）
+  $('btnTierBoard').onclick = () => openTierBoard('1');
+  $('btnHeat').onclick = openHeat;
+  { const _b=document.getElementById('btnStructDown'); if(_b) _b.onclick = openStructDown; }
+  { const _b=document.getElementById('btnFundPlate'); if(_b) _b.onclick = openFundPlate; }
+  { const _m=document.getElementById('fundPlateModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='fundPlateModal') closeFundPlate(); }); }
+  setTimeout(function(){ try{ showStructDownAlert(); }catch(e){} }, 3500);   // 开屏提醒（常驻角标 + 当日一次横幅）
+  $('btnDeep').onclick = openDeepPlate;
+  { const _m=document.getElementById('deepModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='deepModal') closeDeepPlate(); }); }
+  $('btnTriFlow').onclick = openTriFlow;
+  { const _b=document.getElementById('btnMethodRef'); if(_b) _b.onclick = openMethodRef; }
+  { const _b=document.getElementById('btnTarot'); if(_b) _b.onclick = openTarot; }
+  { const _m=document.getElementById('methodRefModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='methodRefModal') closeMethodRef(); }); }
+  { const _m=document.getElementById('tarotModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='tarotModal') closeTarot(); }); }
+  { const _m2=document.getElementById('triFlowModal'); if(_m2) _m2.addEventListener('click', e=>{ if (e.target.id==='triFlowModal') closeTriFlow(); }); }
+  { const _b=document.getElementById('btnPicks'); if(_b) _b.onclick = openPicks; }
+  { const _m=document.getElementById('pickModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='pickModal') closePicks(); }); }
+  $('btnHtBreak').onclick = openHtBreak;
+  { const _b=document.getElementById('btnHalf500'); if(_b) _b.onclick = openHalf500; }
+  { const _m=document.getElementById('half500Modal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='half500Modal') closeHalf500(); }); }
+  { const _b=document.getElementById('btnHalfLaw'); if(_b) _b.onclick = openHalfLaw; }
+  { const _m=document.getElementById('halfLawModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='halfLawModal') closeHalfLaw(); }); }
+  { const _b=document.getElementById('btnHtPick'); if(_b) _b.onclick = openHtPick; }
+  { const _m=document.getElementById('htPickModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='htPickModal') closeHtPick(); }); }
+  // ★ 2026-10-26：历史交锋真值表(H2H_MAP)异步注入后，若精选/三盘 modal 已打开则重渲，避免首屏显示「交锋 —」误导。
+  window.addEventListener('h2h-ready', function(){
+    try { const _pm = document.getElementById('pickModal'); if (_pm && _pm.classList.contains('show')) openPicks(); } catch(e){}
+    try { const _tm = document.getElementById('triFlowModal'); if (_tm && _tm.classList.contains('show')){ const _b = document.getElementById('triFlowContent'); if (_b) _b.innerHTML = triFlowHTML(); } } catch(e){}
+  });
+  $('btnNames').onclick = ()=>{ progressiveNameResolve(filtered().slice(0,60)); toast('正在学习新码点（遇源站新增字形时才会新增）…'); };
+  $('btnPpi').onclick = openPpi;
+  $('btnPpiApply').onclick = applyBatchPPI;
+  $('ppiModal').addEventListener('click', e=>{ if (e.target.id==='ppiModal') closePpi(); });
+  $('htBreakDetailModal').addEventListener('click', e=>{ if (e.target.id==='htBreakDetailModal') closeHtBreakDetail(); });
+  $('fDay').onchange = function(){ try{ loadMatches(); }catch(e){} try{ if (window._pickReRender && $('pickModal') && $('pickModal').classList.contains('show')) setTimeout(window._pickReRender, 80); }catch(e){} };      // 改日期立即重拉；精选面板开着则跟随重渲（方案②）
+  $('fRange').onchange = loadMatches;    // 改跨日范围立即重拉
+  $('fLg').onchange = ()=>{ renderCap=400; render(); };
+  { const el=document.getElementById('fJc'); if (el) el.onchange = ()=>{ renderCap=400; render(); }; }
+  { const el=document.getElementById('fBd'); if (el) el.onchange = ()=>{
+      renderCap=400; render();
+      const note=document.getElementById('bdNote');
+      if (note) note.style.display = (el.checked && (!globalThis.BD_ROWS || globalThis.BD_ROWS.length===0)) ? 'inline' : 'none';
+    }; }
+  { const el=document.getElementById('fHt'); if (el) el.onchange = ()=>{ renderCap=400; render(); }; }
+  { const el=document.getElementById('fDeep'); if (el) el.onchange = ()=>{ renderCap=400; render(); }; const ew=document.getElementById('fWash'); if (ew) ew.onchange = ()=>{ renderCap=400; render(); }; }
+  { const el=document.getElementById('fOdds'); if (el) el.onchange = ()=>{ renderCap=400; render(); }; }
+  $('fSort').onchange = ()=>{ renderCap=400; render(); };
+  $('fConf').onchange = ()=>{ renderCap=400; render(); };
+  $('fState').onchange = ()=>{ renderCap=400; render(); };
+  $('fSearch').oninput = (()=>{ let t; return ()=>{ clearTimeout(t); t=setTimeout(()=>{ renderCap=400; render(); },200); }; })();
+  $('fAuto').onchange = setupAuto;
+  // 实时分析开关：默认开启；用户可关停调度器
+  const rtAuto = $('rtAuto');
+  if (rtAuto){
+    rtAuto.onchange = ()=>{
+      if (rtAuto.checked){
+        if (SOURCE.state==='direct'){ loadMatches(); startDirectTimer(); }   // 直连：实时列表 + 60s 刷新
+        else startRealtime();
+      }
+      else {
+        stopRealtime();
+        if (_directTimer){ clearInterval(_directTimer); _directTimer=null; }
+        /* 🔴 别再说"仅按手动"：关掉实时开关只停调度器（不再每分钟拉列表），
+           离线快照的后台补算由 applyFallback/loadMatches 直接触发、跟这个开关无关，照样在分析。
+           旧文案让用户以为关了就什么都没有 → 实际页脚还在写「后台补算中」。 */
+        const upd=$('upd'); if(upd) upd.textContent='已暂停实时刷新（不再每分钟拉列表）；离线快照后台补算仍会照常跑完';
+      }
+    };
+  }
+
+  // 1) 本地文件（file://）：只要能装配内置烘焙数据 → 直接离线可用
+  //    （手机上就是"点开即用"，不再显示"需要实时数据"的红屏）
+  if (location.protocol === 'file:'){
+    // ★ gzip 版快照是异步到位的，等解压完再决定走离线还是拦截（否则恒判 false → 误弹红屏）
+    _bakeReady().then(async ok => {
+      if (ok && setupBake()){
+        SOURCE = { state:'offline', base:null }; updateConn();
+        await enterOfflineMode();      /* enterOfflineMode 已 async（applyFallback 内部要等强度/战绩包） */
+        return;
+      }
+      showFileBlock();
+    });
+    return;
+  }
+
+  // 2) http(s)：先秒出内置快照（有的话）→ 后台并行探测数据源 → 通了就升级实时
+  //    这样手机点开就有内容，不用等探测（探测最长 ~30s）
+  startVersionWatch();                                                      // 版本自检：后台重部署后自动刷新
+
+  // ★ 2026-10-10：重载后恢复滚动位置（消除整页刷新「跳回顶部」的跳动感）
+  try{
+    var _rs = parseInt(sessionStorage.getItem('ff_scroll')||'0', 10);
+    if (_rs > 0){ setTimeout(function(){ try{ window.scrollTo(0, _rs); }catch(e){} }, 30); }
+    sessionStorage.removeItem('ff_scroll');
+  }catch(e){}
+
+  // ★ 2026-10-10：空闲后预加载 REVIEW_DATA（含 pair7m 诚实块数据），消除破蛋/复盘面板
+  //   「先无诚实块、加载完补诚实块」的闪烁 —— 预拉一次后，打开面板直接命中内存缓存。
+  /* ★ 2026-10-29 性能：原来是 5s 后无条件预拉 review_data.js（明文 4.18MB / 线上 432KB）。
+     每打开一次页面就白下一次，慢网上还跟首屏抢带宽。改为 30s 后 + 只在浏览器空闲时拉，
+     真正点开复盘面板时仍然是"点开才拉"，不影响功能。 */
+  setTimeout(function(){
+    var _pre = function(){ try{ if (typeof _ensureReviewData === 'function') _ensureReviewData(); }catch(e){} };
+    try {
+      if (window.requestIdleCallback) window.requestIdleCallback(_pre, { timeout: 15000 });
+      else setTimeout(_pre, 1000);
+    } catch(e){ setTimeout(_pre, 1000); }
+  }, 30000);
+  // ★ 快照同步调用拿不到（gzip 异步解压），必须等 Promise —— 但**不要**等在这里：
+  //   实时列表 loadMatches()/探测照旧立即并行开跑，解压与网络下载同时进行，谁先到谁覆盖。
+  let hadBake = false;
+  /* ★ 2026-10-05 手机端卡顿治理：把 bake 处理拆成「解压 → 让一帧 → 展开 1222 包 → 让一帧 → 装列表/渲染」。
+     实测 CPU 4x 节流下，setupBake 的 unpackPack 与首屏 render 焊在一起会形成单个 ~1.5s 的长任务，
+     手机在这段时间完全点不动。两个 yield 各插入一帧绘制机会，总工作量不变但每帧短一半。 */
+  const _yieldFrame = () => new Promise(r => {
+    try { requestAnimationFrame(() => setTimeout(r, 0)); } catch(e){ setTimeout(r, 0); }
+  });
+  _bakeReady().then(async ok => {
+    if (!ok) return;
+    await _yieldFrame();                 // ① gzip 解压 + JSON.parse(8MB) 刚堵完主线程 → 先给一帧
+    hadBake = setupBake();               // ② 1222 个包 unpackPack（同步，见上方负结果注释）
+    if (hadBake){
+      SOURCE = { state:'detecting', base:'' };
+      await _yieldFrame();               // ③ 包刚展开完 → 再让一帧，别和首屏渲染焊在一起
+      await applyFallback({ quiet:true });   // 秒开：快照占位，实时拉到后立即覆盖（内含等待强度/战绩包）
+    }
+  });
+  // ★ 实时优先（修复“数据卡在旧快照/刷新多次才更新”的根因）：
+  //   不再用 4 秒快速探测的成败来决定是否拉实时——getList 自带 12s/2次/三通道(同源→直连→公共代理)重试，
+  //   远比快速探测稳。无论探测结果如何，都立即发起实时列表拉取；成功即覆盖快照、设“实时”徽标，
+  //   失败则保留快照并继续每 60s 重试。这样打开页面看到的就是当下数据，与部署 CDN 缓存、电脑开关都无关。
+  loadMatches().then(()=>{ startDirectTimer(); }).catch(()=>{ startDirectTimer(); });
+  // 探测仅用于更新连接状态徽标/提示，绝不再阻断数据加载
+  resolveSources().then(ok => {
+    if (ok){
+      const isDirect = (SOURCE.state === 'direct');
+      // 直连模式：比分/状态实时 + 分析用内置快照（逐场实时赔率请点开单场，或用电脑 start.bat）
+      if (isDirect){ toast('✅ 已直连源站：比分/状态每 60 秒实时刷新（分析基于最新快照，点开单场拉实时赔率）'); }
+      else { setupAuto(); startRealtime(); }
+    } else if (hadBake){
+      upgradeToDirect();                 // 后台再探一次直连（限流随机，重试有价值）
+    }
+  }).catch(()=>{});
+  // 实时列表拉取容错：失败也不清掉已显示的快照列表
+  function safeLoad(){
+    loadMatches().then(()=>{
+      // 无条件启动 60s 列表轮询：此前要求 SOURCE.state==='direct' 才启动，
+      // 探测一旦失败就永久停刷（用户"每天都不更新"的根因之一）。
+      // getList 会按 同源→直连→公共代理 自动重连，网络恢复即回到实时。
+      startDirectTimer();
+    }).catch(e=>{ console.warn('loadMatches 异常:', e && e.message); });
+  }
+  buildSelBar();
+  initQiutan();        // 球探(titan007) 并列实时面板（按钮 + 抽屉）
+}
+/* file:// 直开拦截：全屏红屏指引，强制走实时路径 */
+function showFileBlock(){
+  document.body.innerHTML = `
+  <div style="max-width:560px;margin:8vh auto;padding:24px 20px;text-align:center;color:#e6edf3;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+    <div style="font-size:52px;margin-bottom:12px">⚽</div>
+    <h1 style="color:#e54545;font-size:20px;margin:0 0 14px">此工具需要实时数据，不能直接双击打开</h1>
+    <p style="font-size:14px;line-height:1.7;color:#8b98a9;margin:0 0 18px">
+      浏览器安全策略会拦截 file:// 直接访问外部数据接口（CORS），所以直接打开看不到实时比赛、也分析不了。<br><br>
+      <b style="color:#e6edf3">正确用法（二选一）</b>
+    </p>
+    <div style="background:#1a2230;border:1px solid #2c3848;border-radius:12px;padding:16px;text-align:left;font-size:13.5px;line-height:1.7">
+      <p style="margin:0 0 10px"><b style="color:#36c275">① 本机实时（推荐）</b><br>
+      双击 <b style="color:#ff7a3c">cloud_app/start.bat</b> → 自动启动代理并打开<br>
+      <b style="color:#ff7a3c">http://localhost:8080</b><br>
+      这里拉的是实时比分/赔率，每 60 秒自动刷新。</p>
+      <p style="margin:0"><b style="color:#36c275">② 手机/任意设备实时</b><br>
+      部署到 Netlify/Vercel（带 /api 服务端代理），打开部署链接即实时。</p>
+    </div>
+    <p style="font-size:12px;color:#5b6675;margin:16px 0 0">本窗口仅作指引。关闭它，按上面任一种方式打开即可。</p>
+  </div>`;
+}
+document.addEventListener('DOMContentLoaded', function(){
+  try{ applyMobileCollapse(); }catch(e){}
+  // init 现在 async（等 gzip 快照解压），吞掉 Promise 异常的红色噪音
+  Promise.resolve().then(init).catch(function(e){ console.error('init failed:', e && e.message || e); });
+});
+
