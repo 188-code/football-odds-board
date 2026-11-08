@@ -8070,13 +8070,22 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
     if (e && e.opFrozen && e.opFrozenAt){
       var _d = new Date((+e.opFrozenAt) * 1000);
       var _p2 = function(n){ return String(n).padStart(2,'0'); };
+      var _tr2 = (Array.isArray(e.dirTrail) ? e.dirTrail : []);
+      var _trChg2 = 0;
+      for (var _tj = 1; _tj < _tr2.length; _tj++){ if (String(_tr2[_tj].dir||'') !== String(_tr2[_tj-1].dir||'')) _trChg2++; }
       _frozenTxt = '<div style="font-size:8.5px;color:#2faa6a;margin-top:2px;font-weight:700">🔒 开赛定格 '
-        + _p2(_d.getMonth()+1) + '-' + _p2(_d.getDate()) + ' ' + _p2(_d.getHours()) + ':' + _p2(_d.getMinutes()) + '</div>';
+        + _p2(_d.getMonth()+1) + '-' + _p2(_d.getDate()) + ' ' + _p2(_d.getHours()) + ':' + _p2(_d.getMinutes())
+        + (_tr2.length ? (' · 赛前' + _tr2.length + '帧·方向变' + _trChg2 + '次') : '') + '</div>';
     } else if (e && e.opAsOf){
       var _a = new Date((+e.opAsOf) * 1000);
       var _q2 = function(n){ return String(n).padStart(2,'0'); };
+      /* ★ 2026-11-09：用户质疑「意见是不是开盘到结束都一样」——把赛前轨迹帧数/方向变化次数亮出来。 */
+      var _tr = (Array.isArray(e.dirTrail) ? e.dirTrail : []);
+      var _trChg = 0;
+      for (var _ti = 1; _ti < _tr.length; _ti++){ if (String(_tr[_ti].dir||'') !== String(_tr[_ti-1].dir||'')) _trChg++; }
       _frozenTxt = '<div style="font-size:8.5px;color:#b45309;margin-top:2px">⏳ 赛前实时·更新于 '
-        + _q2(_a.getHours()) + ':' + _q2(_a.getMinutes()) + '（开赛即定格）</div>';
+        + _q2(_a.getHours()) + ':' + _q2(_a.getMinutes()) + '（开赛即定格）'
+        + (_tr.length ? (' · 赛前' + _tr.length + '帧·方向变' + _trChg + '次') : '') + '</div>';
     }
   }catch(_x){}
 
@@ -8110,6 +8119,9 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   var _diffMax = (op.diffMax != null) ? +op.diffMax : null;
   var _overGap = op.overGap === true;
   var _hotZh  = SIDE[op.diffSide] || op.diffSide || '';
+  /* ★ 2026-11-09：破缺口判线是 1−365R（引擎 ygDiff.gap），而 op.gap 是热度缺口(heatGap，净超买分母)，
+     两者同名不同量。必须并列给出判线，否则「洋哥差7.9 vs 缺口8.1」看似矛盾（真判据是 7.9 > 5.5）。 */
+  var _gap365 = (op.R365 != null && isFinite(+op.R365)) ? +(((1 - +op.R365) * 100).toFixed(1)) : null;
   /* 三盘合流（洋哥核心：①资金同指 + ②365不设防 + ③北单破缺口）——历史 op 里可用字段：
      overGap(③破缺口) + eaVerdict(②不设防=非控赔) + jcDev(①同指，缺失视为通过) */
   var _triOK = false;
@@ -8147,7 +8159,7 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
         + ';background:'+_bc+'26;border:1px solid '+_bc+'">'+esc(_bt)+'</div>';
   if (_diffMax != null){
     h += '<div style="font-size:9px;color:'+_bc+';margin-top:2px;font-weight:700">庄家视野：洋哥差值 '
-       + _diffMax.toFixed(1) + '%' + (_overGap ? '（破缺口）' : '') + (_hotZh ? ' · 资金涌入'+_hotZh : '') + '</div>';
+       + _diffMax.toFixed(1) + '%' + (_overGap ? ('（破缺口' + (_gap365 != null ? ('·判线365缺口' + _gap365.toFixed(1)) : '') + '）') : '') + (_hotZh ? ' · 资金涌入'+_hotZh : '') + '</div>';
   } else if (op.over != null){
     h += '<div style="font-size:9px;color:'+_bc+';margin-top:2px;font-weight:700">净超买 '+op.over+'pt</div>';
   }
@@ -8162,8 +8174,9 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   else parts.push('<span style="color:#4b5563;opacity:.65">①竞彩偏差 无数据</span>');
   if (op.jcLvl != null) parts.push('<span style="color:#ff7a3c">①竞彩盘级差 '+(op.jcLvl>0?'+':'')+(+op.jcLvl).toFixed(0)+'级</span>');
   else parts.push('<span style="color:#4b5563;opacity:.65">①竞彩盘级差 无数据</span>');
-  if (op.gap != null) parts.push('<span style="color:#c9d1d9">缺口(1−365R) '+(+op.gap).toFixed(1)+'</span>');
-  else parts.push('<span style="color:#4b5563;opacity:.65">缺口 无数据</span>');
+  if (op.gap != null) parts.push('<span style="color:#c9d1d9">热度缺口(净超买判线) '+(+op.gap).toFixed(1)+'</span>');
+  if (_gap365 != null) parts.push('<span style="color:#c9d1d9">365缺口(破缺口判线) '+_gap365.toFixed(1)+'</span>');
+  else if (op.gap == null) parts.push('<span style="color:#4b5563;opacity:.65">缺口 无数据</span>');
   h += '<div style="font-size:9px;line-height:1.55;margin-top:2px;padding:3px 5px;background:rgba(100,116,139,.06);border-left:2px solid rgba(100,116,139,.25);border-radius:0 4px 4px 0">'
      + '<div style="color:#4aa3ff;font-weight:700;font-size:8.5px;letter-spacing:.03em;margin-bottom:1px">洋哥四量判读</div>'
      + '<div style="display:flex;flex-wrap:wrap;gap:1px 8px">'+parts.join('<span style="opacity:.4">｜</span>')+'</div></div>';
@@ -15365,7 +15378,11 @@ function _monitorTierCell(r){
   const _jc = (yg4 && yg4.jc) || null;
   const _jcDev = _n1(_jc && _jc.dev != null ? _jc.dev : (r && r.jcDev));                        // ①盘·竞彩归一 vs 365归一 资金倾斜pt
   const _jcLd = _n1(_jc && _jc.lvlDiff != null ? _jc.lvlDiff : (_jc && _jc.lvlDiffUp != null ? _jc.lvlDiffUp : null)); // ①盘·竞彩换算盘级 vs 真实亚盘 等级差
-  const _gap = _n1((yg4 && yg4.heatGap != null) ? yg4.heatGap : (r && r.gap));                  // 返还率缺口 1−365R（动态大热阈值）
+  const _gap = _n1((yg4 && yg4.heatGap != null) ? yg4.heatGap : (r && r.gap));                  // 热度缺口 heatGap（净超买分母；★非 1−365R，别混标）
+  /* ★ 2026-11-09：破缺口判线 = 1−365R，与上面的热度缺口是两个量。用 R365 现算并列展示。 */
+  const _ygdR2 = _n1((r && r.ygDiff && r.ygDiff.R365 != null) ? r.ygDiff.R365
+    : ((yg4 && yg4.ygDiff && yg4.ygDiff.R365 != null) ? yg4.ygDiff.R365 : null));
+  const _gap365 = (_ygdR2 != null) ? +(((1 - _ygdR2) * 100).toFixed(1)) : null;
   const _quadLine = (function(){
     const parts=[];
     if (_bdLd!=null) parts.push('<span style="color:'+(_bdTag? '#3a8ee6':'#3a8ee6')+'">③北单盘级差 '+(_bdLd>0?'+':'')+_bdLd.toFixed(2)+(Math.abs(_bdLd)>=2?'级⚠':(Math.abs(_bdLd)>=1?'级':'级'))+(_bdTag?'('+_bdTag+')':'')+'</span>');
@@ -15374,8 +15391,9 @@ function _monitorTierCell(r){
     else parts.push('<span style="color:#4b5563;opacity:.65">①竞彩偏差 无数据</span>');
     if (_jcLd!=null) parts.push('<span style="color:#ff7a3c">①竞彩盘级差 '+(_jcLd>0?'+':'')+_jcLd.toFixed(2)+'级'+(_jcLd>=1?'⚠':'')+'</span>');
     else parts.push('<span style="color:#4b5563;opacity:.65">①竞彩盘级差 无数据</span>');
-    if (_gap!=null) parts.push('<span style="color:#c9d1d9">缺口(1−365R) '+_gap.toFixed(1)+'</span>');
-    else parts.push('<span style="color:#4b5563;opacity:.65">缺口 无数据</span>');
+    if (_gap!=null) parts.push('<span style="color:#c9d1d9">热度缺口(净超买判线) '+_gap.toFixed(1)+'</span>');
+    if (_gap365!=null) parts.push('<span style="color:#c9d1d9">365缺口(破缺口判线) '+_gap365.toFixed(1)+'</span>');
+    else if (_gap==null) parts.push('<span style="color:#4b5563;opacity:.65">缺口 无数据</span>');
     return '<div style="font-size:9px;line-height:1.55;margin-top:2px;padding:3px 5px;background:rgba(100,116,139,.06);border-left:2px solid rgba(100,116,139,.25);border-radius:0 4px 4px 0">'
          + '<div style="color:#4aa3ff;font-weight:700;font-size:8.5px;letter-spacing:.03em;margin-bottom:1px">洋哥四量判读</div>'
          + '<div style="display:flex;flex-wrap:wrap;gap:1px 8px">'+parts.join('<span style="opacity:.4">｜</span>')+'</div></div>';
