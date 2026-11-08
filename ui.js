@@ -8225,6 +8225,16 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   if (e && e.recDir && e.recDir.length > 2){
     var _rdc = /反买|站.*对面|买受让/.test(e.recDir) ? '#0a8f4f' : (/观察|不追高|不下注/.test(e.recDir) ? '#7c3aed' : (e.recDir.indexOf('买强队')>=0 ? '#b45309' : '#64748b'));
     h += '<div style="font-size:10px;color:'+_rdc+';margin-top:2px;font-weight:900;background:'+_rdc+'18;border:1px solid '+_rdc+';border-radius:6px;padding:2px 7px;display:inline-block">🎯 推荐方向·'+esc(e.recDir)+'</div>';
+    /* ★★ 2026-11-09 算法审计实锤：账本 7 号 100% / 8 号 38 场是 11-08 标定前的 v1 旧口径
+       （水位票方向反、还带独立 365 控赔票），现行 v2 从 8 号 23:45 起、9 号 25 场全 v2。
+       不标版本就会把旧算法成绩当成现行算法业绩——此前所有 65.2% / 58.8% 读数皆属 v1。
+       历史意见按铁律「开赛即冻结」不改写，只做版本标注。 */
+    var _rvTxt, _rvCol;
+    if (/实测偏受让|实测偏强/.test(e.recDir)) { _rvTxt = 'v2 · 现行（11-08 标定后）'; _rvCol = '#15803d'; }
+    else if (/365控赔\+1S|正常\+1S|上盘(低|高)水[0-9.]+\+1U/.test(e.recDir)) { _rvTxt = 'v1 · 旧口径（标定前）· 该场成绩不计入现行算法业绩'; _rvCol = '#b45309'; }
+    else if (/翻转/.test(e.recDir)) { _rvTxt = '观察·翻转（铁律不投票，无版本）'; _rvCol = '#7c3aed'; }
+    else { _rvTxt = '口径未识别'; _rvCol = '#64748b'; }
+    h += '<div style="font-size:8.5px;color:'+_rvCol+';margin-top:2px">规则版本 '+esc(_rvTxt)+'</div>';
     /* ★ 2026-11-08 文案自洽（用户箭头指「判定说只观察、推荐却买强队」打架）：
        资金未合流(吃水区)时，上方判定标签显示"只观察"，但投票引擎仍可能基于水位/控赔/盘级差
        独立给出方向 → 两套口径（资金过热 vs 多信号投票），加一行说明，避免读者误判为自相矛盾。
