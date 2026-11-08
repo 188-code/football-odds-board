@@ -122,6 +122,73 @@ footer{color:var(--mut);font-size:12px;text-align:center;margin-top:28px}
 <div class="note"><strong>下一步（不攒数据、不等待）：</strong>① 用轨迹里同帧的 over / netPt 对照，做「修 over 兜底 + 统一 overGap 定义」的反事实验证，两段同向才改方向；② 在线轨迹攒出真实开盘帧后，用同一套门限重验动态票；③ 训练/留出样本扩到 11-09、11-10 完场，避免单日污染。</div>
 </div>
 
+
+<div class="card" id="over-audit">
+<h2>第五轮 · 修 over 兜底 / 统一破缺口：169 条全样本反事实回放（2026-11-09 00:20）</h2>
+<p class="sub">数据源：线上 CVM 权威账本（不是本地副本）；样本 = 赛前登记(pre) 且已结算 <b>169 条</b>，
+训练 11-03~11-07 = 108 / 留出 11-08 = 61。结算用真实上盘水位，ROI = 总盈亏 / 注数。</p>
+
+<h3>① 判定：三种「改方向」候选全部否决</h3>
+<table>
+<thead><tr><th>口径</th><th>训练 108 场</th><th>留出 61 场</th><th>ΔROI 训练 / 留出</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>R0 冻结原文（真实业绩）</td><td>34注 69.7% +31.6%</td><td>13注 53.8% +4.5%</td><td>—</td><td>参照</td></tr>
+<tr><td>A v4 重算 · 现行破缺口</td><td>42注 61.9% +21.1%</td><td>18注 72.2% +46.2%</td><td>基线</td><td>基线</td></tr>
+<tr><td><b>B 换成正确净超买&gt;0</b></td><td>38注 60.5% +17.8%</td><td>20注 75.0% +52.2%</td><td class="bad">−3.2pt / +6.0pt</td><td class="bad">✗ 两段反向 → 否决</td></tr>
+<tr><td>C 只修「缺失兜底」</td><td>42注 61.9% +21.1%</td><td>18注 72.2% +46.2%</td><td>0 / 0</td><td>方向改写 <b>0/169</b> 场</td></tr>
+<tr><td>D 撤掉破缺口票</td><td>31注 58.1% +13.7%</td><td>16注 75.0% +51.8%</td><td class="bad">−7.3pt / +5.6pt</td><td class="bad">✗ 两段反向 → 否决</td></tr>
+</tbody></table>
+<div class="note"><strong>按铁律：投票权重 / 方向一个字不动。</strong>「修破缺口定义」在训练段变差、留出段变好，
+是典型的单日噪声，不能拿 11-08 那 20 注的 +52.2% 当证据。合计 58 注 65.5% / +29.7% 与现行 65.0% / +28.6% 也在 ±SE 内（±13pt）。</div>
+
+<h3>② 主动纠正上一轮的两处口径错误</h3>
+<table>
+<thead><tr><th>上一轮说法</th><th>核查结果</th></tr></thead>
+<tbody>
+<tr><td>「overGap 双扣缺口，129 条兜底中 68 条翻转」</td><td class="bad"><b>错。</b><code>engine.js:4775</code> 主判 <code>overGap = 上盘差值 &gt; 该场专属缺口</code>，
+与「净超买 &gt; 0」数学同源，定义没错。二次扣缺口只发生在 <code>overGap</code> 缺失时的兜底 <code>(over−gap)&gt;0</code>：
+全账本仅 <b>9/369</b> 条，其中赛前已结算 4 条且<b>全是「翻转·只观察」档</b>（不进投票）。</td></tr>
+<tr><td>「逐帧库与账本破缺口判定 43% 不一致 = 定义 bug」</td><td class="bad"><b>错。</b>主要来自 D 盘留存逐帧库（开盘/临盘帧）与 CVM 赛前定格帧的
+<b>数据源 / 帧时刻差异</b>，不是同一量的两种定义。直接拿它替换主判就是 B 口径，已被两段验证否决。</td></tr>
+</tbody></table>
+
+<h3>③ 真正站得住的实锤：净超买显示值算错了</h3>
+<table>
+<thead><tr><th>证据</th><th>数值</th></tr></thead>
+<tbody>
+<tr><td>账本 <code>entry.netPt</code> / <code>op.netPt</code> 非空条数</td><td class="bad"><b>0 / 369</b> —— 首屏 <code>ygMin</code> 漏保留 netPt，
+<code>_np</code> 恒 None，<code>over</code> 100% 走 <code>triFlow.maxFlow − gap</code> 错误兜底</td></tr>
+<tr><td>逐帧库对齐 51 场：引擎 over vs 正确净超买绝对偏差</td><td>中位 <b>8.8pt</b> / P90 16.8pt / 最大 <b>24.9pt</b></td></tr>
+<tr><td>线上 dirTrail 同帧留痕 26 帧（第三包上线后）</td><td><b>11 帧对不上</b>，中位 6.6pt / 最大 <b>29.2pt</b></td></tr>
+<tr><td>实例 tid 3023529（11-09 赛前帧）</td><td class="bad">引擎 <code>over = +6.2</code>，正确净超买 <code>−23.0</code>，
+差 <b>29.2pt</b>；同帧意见却是「买受让·主队」</td></tr>
+</tbody></table>
+<p><code>over</code> 被 UI 当作「净超买 pt」显示（<code>ui.js:8086/8151</code>）并参与判档（<code>8422</code>），
+所以这是<b>用户能直接看到的错数</b>，不是后台字段。<b>但方向由 <code>op.overGap</code> 决定，over 不参与投票</b> —— 这是能把数值改对而不动模型的关键。</p>
+
+<h3>④ 本轮上线内容（只修数值，零方向改写）</h3>
+<table>
+<thead><tr><th>改动</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td>首屏 <code>ygMin</code> 补 <code>netPt</code>（仅北单源，一个标量）</td><td>引擎权威净超买 = excessPt − heatGap 能进账本与 UI</td></tr>
+<tr><td><code>over</code> 改用正确净超买；缺失时用 excessPt−heatGap 现算</td><td>显示 / 判档数值改对，与 <code>_ygNet</code> 唯一标尺同源</td></tr>
+<tr><td>新增 <code>overVote</code> = 旧口径值，专门供方向判据</td><td>投票链逐字等价旧版，<b>recDir 不因数值修复而改变</b></td></tr>
+<tr><td>赛前活跃条目数值随盘口动态刷新（只数值字段）</td><td>用户要的「开盘→临盘动态」；开赛即冻结，不碰 heatSide 等身份字段</td></tr>
+</tbody></table>
+
+<h3>⑤ 上线前验证</h3>
+<ul>
+<li>本地重建：账本 <b>367→367</b>、已结算 297、<b>recDir 0 改写 / 票数 0 改写 / 条目 0 丢失</b>；<code>py_compile</code> 通过。</li>
+<li>模拟 3 场赛前条目：<code>frameOver === frameNetPt</code> 全部成立（−9.5 / −9.2 / −17.3），<code>netPtSrc=engine</code>。</li>
+<li><b>对照实验</b>：用线上第三包旧版代码跑同一模拟，2 条意见改写与新版<b>完全一致</b> → 改写来自「把冻结条目强制改回赛前」触发的正常刷新，与数值修复无关。</li>
+<li>全样本 C 口径：修兜底后方向改写 <b>0/169</b> 场。</li>
+</ul>
+
+<div class="note"><strong>口径红线：</strong>本包是<b>数值口径修复</b>，不是模型升级，不宣称提升命中率。
+任何改投票权重 / 方向的候选，仍须训练段与留出段 ROI 和命中率同向改善且每段 n≥10 —— 本轮 B、D 均未通过，故一律不动。
+11-09 / 11-10 完场后按同一套门限重验，避免单日污染。</div>
+</div>
+
 <footer>口径红线：赛前登记(pre) 与赛后补登(post) 分开 · 命中率≠赚钱 · UI 展示集=统计集 · 任何业绩带 ±SE 并标注跨 0 · 无两段同向验证不得改模型</footer>
 </div>
 </body>
