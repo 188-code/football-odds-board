@@ -8347,6 +8347,21 @@ function fundplateHistoryHTML(){
   const rate = dec.length ? Math.round(nWin/dec.length*1000)/10 : null;
   const roi = (dec.length+nPush) ? Math.round((nWin*0.9 - nLose)/(dec.length+nPush)*1000)/10 : null;
   const nStrong = items.filter(e=> { const _np = _fpNetPt(e); return _np != null && _np >= 8; }).length;
+  /* ★ 2026-11-09 修（用户质问「9 号推荐方向错误率接近 100%」）：
+     结果列的 ✅/❌ 是「顺买过热强队」统计视角的输赢，不是上方「🎯 推荐方向」的命中。
+     9 号已结算 11 场里 8 场受让赢盘 → 满屏 ❌，但当日方向注全是买受让，被标 ❌ 的恰是命中。
+     这里单列推荐方向自己的赛前战绩：pre + 已结算 + 非走水 + 方向注；
+     买强队命中=result lose(让球方赢盘)，买受让命中=result win(受让赢盘)；观察档不计分母。 */
+  const _recDirRows = items.filter(function(e){
+    if (!_isPre(e) || !e.result || e.result==='push' || e.result==='pending') return false;
+    const r = String(e.recDir||'');
+    return r.indexOf('买强队')===0 || r.indexOf('买受让')===0;
+  });
+  const _recDirHit = _recDirRows.filter(function(e){
+    const r = String(e.recDir||'');
+    return (r.indexOf('买强队')===0 && e.result==='lose') || (r.indexOf('买受让')===0 && e.result==='win');
+  }).length;
+  const _recDirRate = _recDirRows.length ? Math.round(_recDirHit/_recDirRows.length*1000)/10 : null;
   /* ★ 2026-10-29 登记时机透明化（用户质疑"是本来就有，还是比赛开始后才加进去的"）：
      ts = 首次登记时刻（gen_index upsert 不再覆盖）；与开赛时间(day+kickoff)对比，
      晚于开赛 = ⚠赛后补登（多为数据中断/自清空 bug 修复后的重录），规则本身不看赛果。 */
@@ -8420,6 +8435,8 @@ function fundplateHistoryHTML(){
     + _kpi('赛前登记', nPre+' 场', '#16a34a')
     + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
     + _kpi('赛前已结算', (dec.length+nPush)+' 场（待结算 '+nPend+'）')
+    + _kpi('🎯 推荐方向·赛前', (_recDirRows.length ? (_recDirHit+'/'+_recDirRows.length+' 中 · '+_recDirRate+'%') : '—'),
+           (_recDirRate!=null && _recDirRate>=50 ? '#16a34a' : '#dc2626'))
     + (_isFiltered ? _filteredKpi
         : ((_preL ? _kpi('赛前·押受让方', (_preL.hit==null?'—':_preL.hit+'%')+' / '+_fpct(_preL.roi), (_preL.roi>0?'#16a34a':'#dc2626')) : '')
          + (_preU ? _kpi('赛前·押让球方', (_preU.hit==null?'—':_preU.hit+'%')+' / '+_fpct(_preU.roi), (_preU.roi>0?'#16a34a':'#dc2626')) : '')));
@@ -8454,9 +8471,22 @@ function fundplateHistoryHTML(){
        现改为按本板真实方向"顺买过热强队"计：让球方(强队)赢盘=✅赢、受让方赢盘=❌输。
        过热方"可打出可不打出"——这是统计边(64.7%命中 / 35.3%不中)，不是单场预测，不冒充实测。 */
     let rs='待结算 ⏳', rc='#94a3b8', bg='transparent';
-    if (e.result==='lose'){ rs='✅ 顺买强队·赢盘 '+(e.underMargin); rc='#16a34a'; bg='rgba(22,163,74,.10)'; }
-    else if (e.result==='push'){ rs='走盘 0'; rc='#b45309'; bg='rgba(180,83,9,.10)'; }
-    else if (e.result==='win'){ rs='❌ 顺买强队·输盘 '+(e.underMargin>0?'+'+e.underMargin:e.underMargin); rc='#dc2626'; bg='rgba(220,38,38,.10)'; }
+    if (e.result==='lose'){ rs='统计视角·顺买强队 ✅赢盘 '+(e.underMargin); rc='#16a34a'; bg='rgba(22,163,74,.10)'; }
+    else if (e.result==='push'){ rs='统计视角·走盘 0'; rc='#b45309'; bg='rgba(180,83,9,.10)'; }
+    else if (e.result==='win'){ rs='统计视角·顺买强队 ❌输盘 '+(e.underMargin>0?'+'+e.underMargin:e.underMargin); rc='#dc2626'; bg='rgba(220,38,38,.10)'; }
+    /* ★ 2026-11-09：另起一行给「🎯 推荐方向」自己的命中标记，避免与上一行统计视角混淆。 */
+    let recBadge = '<span style="opacity:.6">🎯 推荐方向：待结算</span>';
+    if (e.result && e.result!=='pending'){
+      const _rd = String(e.recDir||'');
+      const _isDir = (_rd.indexOf('买强队')===0 || _rd.indexOf('买受让')===0);
+      if (e.result==='push') recBadge = '<span style="color:#b45309">🎯 推荐方向：走水·不计</span>';
+      else if (!_isDir) recBadge = '<span style="opacity:.7">🎯 推荐方向：观察档·不计</span>';
+      else {
+        const _win = (_rd.indexOf('买强队')===0 && e.result==='lose') || (_rd.indexOf('买受让')===0 && e.result==='win');
+        recBadge = '<span style="color:'+(_win?'#16a34a':'#dc2626')+';font-weight:800">🎯 推荐方向：'+(_win?'✅ 中':'❌ 挂')+'</span>'
+          + '<span style="font-size:9.5px;opacity:.75"> · '+(_isPre(e)?'赛前登记':'赛后补登·不计')+'</span>';
+      }
+    }
     const margin = (e.underMargin!=null) ? ('<div style="font-size:10px;opacity:.6">盘口净差 '+e.underMargin+'</div>') : '';
     const _eLvl = _ptToLvl(_fpNetPt(e));
     const _hg = _fpGrade(_eLvl);
@@ -8480,7 +8510,8 @@ function fundplateHistoryHTML(){
          并如实标注该场是否赛前登记（赛前登记才有预测意义；赛后补登无价值）。 */
       +'<td style="padding:6px 7px;color:#b45309;font-weight:700">拥挤警告·不追高·'+esc(strong)+'</td>'
       +'<td style="padding:6px 7px;white-space:nowrap;font-weight:700">'+esc(sc)+'</td>'
-      +'<td style="padding:6px 7px;font-weight:800;color:'+rc+';white-space:nowrap">'+rs+margin+'</td>'
+      +'<td style="padding:6px 7px;font-weight:800;color:'+rc+';white-space:nowrap">'+rs+margin
+        +'<div style="margin-top:3px;font-size:10.5px;font-weight:700;white-space:normal">'+recBadge+'</div></td>'
       +'</tr>';
   }).join('');
   let h = '<div style="margin:16px 0 4px;padding:12px 14px;background:linear-gradient(135deg,#141b26,#111823);border:1px solid var(--line);border-radius:12px;color:#dbe6f2">';
@@ -8493,6 +8524,8 @@ function fundplateHistoryHTML(){
      + (_preU ? (' ｜ 押<b>让球方</b>（过热强队本身）命中 <b>' + (_preU.hit==null?'—':_preU.hit+'%') + '</b> · ROI <b style="color:#7ee2a8">' + _fpct(_preU.roi) + '</b>') : '')
      + '<br><b>旁证</b>：286 场历史回测加护栏后同一方向 −26.2%；赛前实测三连穿（拉齐奥 2:6、弗拉门戈 1:4、格雷米奥 2:0 下盘全输）。'
      + '<b>所以本板从今天起不再给「下盘受让」买法</b>，只作拥挤度追踪。'
+     + '<br><b style="color:#ffe08a">⚠️ 结果列的 ✅/❌ 是「顺买过热强队」统计视角，不是「🎯 推荐方向」的战绩：受让赢盘会标 ❌，但买受让的意见恰恰命中。</b>'
+     + '推荐方向是否命中请看每行新增的「🎯 推荐方向：✅中 / ❌挂」标记，以及顶部「🎯 推荐方向·赛前」KPI（只算赛前登记的方向注，观察档不计）。'
      + '</div>';
   /* ★ 2026-11-04 Q5：用户"命中率跟盲猜没区别"——根因是上方 41.7%/58.3% 是<b>全部受让/让球注的混合毛数</b>
      （含已证伪的「反买下盘」35.3%/-29% 与各类非边注），被稀释到接近盲猜。此处单独亮出<b>真正能下的三个边</b>
