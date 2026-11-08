@@ -8060,6 +8060,31 @@ function _deriveRecDir(e){
     return '观察·五五开'+tally.replace(')','·不下注)');
   }catch(_e){ return '无方向'; }
 }
+/* ★★ 2026-11-09 第七包：净超买「唯一出口」。
+   线上账本同一场曾出现三个不同值：e.over（首帧旧口径 ex−gap）/ op.over（冻结快照）/ dirTrail 末帧 netPt（权威 excessPt−heatGap）。
+   历史卡片显示 op.over，判档 _ptToLvl 与计数却用 e.over → 同页自相矛盾：
+   11-09 有帧 26 场里 11 场差 >3pt、最大 34.5pt（13.3 vs −21.2，符号相反）。
+   统一优先级：末帧 netPt（开赛前最后一次赛前读数）> e.netPt > op.netPt > op.over > e.over。
+   老条目无前四者时仍回落 e.over，历史读数不变；方向判据 overVote / op.overGap / _deriveRecDir 一律不碰。 */
+function _fpNetPt(e){
+  if (!e) return null;
+  var tr = e.dirTrail;
+  if (Array.isArray(tr) && tr.length){
+    for (var _ni = tr.length - 1; _ni >= 0; _ni--){
+      var _nv = tr[_ni] && tr[_ni].netPt;
+      if (_nv != null && isFinite(+_nv)) return +_nv;
+    }
+  }
+  if (e.netPt != null && isFinite(+e.netPt)) return +e.netPt;
+  var _o = e.op;
+  if (typeof _o === 'string'){ try{ _o = JSON.parse(_o); }catch(_ne){ _o = null; } }
+  if (_o){
+    if (_o.netPt != null && isFinite(+_o.netPt)) return +_o.netPt;
+    if (_o.over != null && isFinite(+_o.over)) return +_o.over;
+  }
+  if (e.over != null && isFinite(+e.over)) return +e.over;
+  return null;
+}
 function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   var op = (e && e.op) || {};
   var hasOp = op && Object.keys(op).length > 1;
@@ -8092,7 +8117,8 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   if (!hasOp){
     // 老条目：只有净超买口径
     var b0 = [];
-    if (e.over != null) b0.push('净超买 <b>'+e.over+'</b>pt');
+    var _npt0 = _fpNetPt(e);
+    if (_npt0 != null) b0.push('净超买 <b>'+(+_npt0).toFixed(1)+'</b>pt');
     if (e.gap != null)  b0.push('缺口 '+(+e.gap).toFixed(1)+'pp');
     if (e.excess != null) b0.push('绝对偏差 '+(+e.excess).toFixed(1)+'pp');
     /* ★★ 2026-11-06：老条目无 recDir/op，用现有 heatSide+strongIsHome+over 推出方向，
@@ -8160,8 +8186,8 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   if (_diffMax != null){
     h += '<div style="font-size:9px;color:'+_bc+';margin-top:2px;font-weight:700">庄家视野：洋哥差值 '
        + _diffMax.toFixed(1) + '%' + (_overGap ? ('（破缺口' + (_gap365 != null ? ('·判线365缺口' + _gap365.toFixed(1)) : '') + '）') : '') + (_hotZh ? ' · 资金涌入'+_hotZh : '') + '</div>';
-  } else if (op.over != null){
-    h += '<div style="font-size:9px;color:'+_bc+';margin-top:2px;font-weight:700">净超买 '+op.over+'pt</div>';
+  } else if (_fpNetPt(e) != null){
+    h += '<div style="font-size:9px;color:'+_bc+';margin-top:2px;font-weight:700">净超买 '+(+_fpNetPt(e)).toFixed(1)+'pt</div>';
   }
 
   // ===== 2) 洋哥四量判读（与实时 _quadLine 同版式） =====
@@ -8320,7 +8346,7 @@ function fundplateHistoryHTML(){
   const nPend = items.length - decAll.length - items.filter(e=> e.result==='push').length;
   const rate = dec.length ? Math.round(nWin/dec.length*1000)/10 : null;
   const roi = (dec.length+nPush) ? Math.round((nWin*0.9 - nLose)/(dec.length+nPush)*1000)/10 : null;
-  const nStrong = items.filter(e=> +e.over>=8).length;
+  const nStrong = items.filter(e=> { const _np = _fpNetPt(e); return _np != null && _np >= 8; }).length;
   /* ★ 2026-10-29 登记时机透明化（用户质疑"是本来就有，还是比赛开始后才加进去的"）：
      ts = 首次登记时刻（gen_index upsert 不再覆盖）；与开赛时间(day+kickoff)对比，
      晚于开赛 = ⚠赛后补登（多为数据中断/自清空 bug 修复后的重录），规则本身不看赛果。 */
@@ -8432,7 +8458,7 @@ function fundplateHistoryHTML(){
     else if (e.result==='push'){ rs='走盘 0'; rc='#b45309'; bg='rgba(180,83,9,.10)'; }
     else if (e.result==='win'){ rs='❌ 顺买强队·输盘 '+(e.underMargin>0?'+'+e.underMargin:e.underMargin); rc='#dc2626'; bg='rgba(220,38,38,.10)'; }
     const margin = (e.underMargin!=null) ? ('<div style="font-size:10px;opacity:.6">盘口净差 '+e.underMargin+'</div>') : '';
-    const _eLvl = _ptToLvl(e.over);
+    const _eLvl = _ptToLvl(_fpNetPt(e));
     const _hg = _fpGrade(_eLvl);
     const _hCol = _hg ? _hg.color : '#e54545';
     const _hTag = _hg ? (' <span style="font-size:10px;font-weight:700;color:'+_hg.color+'">'+_hg.tag+'</span>') : '';
