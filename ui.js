@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-08-quality-grade-v3';   // 治「刷新数据时突然跳回主页面」：外壳更新不再空闲即整页跳转，改为右下角非遮挡提示 + 用户点「更新」或切后台 8 秒才重载；重载前后 captureViewState/restoreViewState 自动恢复打开的板块、日期筛选、板块内滚动。数据软刷新照常后台进行，完全不打断阅读。纯展示层改动，不动模型数字/门规则。
+const UI_V = '2026-11-08-vote-calib-v4';   // 治「刷新数据时突然跳回主页面」：外壳更新不再空闲即整页跳转，改为右下角非遮挡提示 + 用户点「更新」或切后台 8 秒才重载；重载前后 captureViewState/restoreViewState 自动恢复打开的板块、日期筛选、板块内滚动。数据软刷新照常后台进行，完全不打断阅读。纯展示层改动，不动模型数字/门规则。
 /* 源站主机（2026-09-13 实测结论，已据此重排优先级）：
      · m.gqj2.tv    —— 实战稳定主源。列表/赔率(oddshistorypc)/交锋(analysis) 均稳定 HTTP 200，
                         且路径**带** /api 前缀。www.gqj2.tv 仅是它的 301 跳转别名。
@@ -7775,15 +7775,16 @@ function _fundPlateTodayPicks(opt){
         if (_heat4.n>=3){ vU+=2; vw.push('热度分'+_heat4.n+'·大热必死+2U'); }
         else if (_heat4.n===2){ vU+=1; vw.push('热度分2+1U'); }
         else if (_heat4.n===0){ vS+=1; vw.push('常温+1S'); }
+        /* ★★ 2026-11-08 三盘交叉复盘标定（与 gen_index.py 两个构建块口径逐字一致）：
+           水位票方向翻转(正常水位偏受让/高低水偏强)、撤掉独立365票(零信号)。
+           训练11-07 65.2%→71.4%，留出11-08 50.0%→61.5%，两段同向才上。 */
         if (_wtr!=null){
-          if (_wtr>=1.0){ vU+=1; vw.push('上盘高水'+_wtr.toFixed(2)+'+1U'); }
-          else if (_wtr<0.80){ vU+=1; vw.push('上盘低水'+_wtr.toFixed(2)+'+1U'); }
-          else { vS+=1; vw.push('水位'+_wtr.toFixed(2)+'正常+1S'); }
+          if (_wtr>=1.0){ vS+=1; vw.push('上盘高水'+_wtr.toFixed(2)+'·实测偏强+1S'); }
+          else if (_wtr<0.80){ vS+=1; vw.push('上盘低水'+_wtr.toFixed(2)+'·实测偏强+1S'); }
+          else { vU+=1; vw.push('水位'+_wtr.toFixed(2)+'正常·实测偏受让+1U'); }
         }
         if (_og3){ vU+=1; vw.push('破缺口+1U'); }
         if (_ld3!=null && Math.abs(_ld3)>=2){ vU+=1; vw.push('盘级差'+_ld3+'+1U'); }
-        if (_ea3.indexOf('造热')>=0){ vU+=2; vw.push('365造热+2U'); }
-        else if (_ea3.indexOf('控赔')>=0){ vS+=1; vw.push('365控赔+1S'); }
         const _tally='(投票S'+vS+':U'+vU+'·'+vw.join(' ')+')';
         if (vS-vU>=2) return '买强队·'+_favNow+_tally;
         if (vU-vS>=2) return '买受让·'+_oppNow+_tally;
@@ -8045,15 +8046,14 @@ function _deriveRecDir(e){
     else if (sc === 2){ vU += 1; vw.push('热度分2+1U'); }
     else if (sc === 0){ vS += 1; vw.push('常温+1S'); }
     var wtr = (e.water != null && isFinite(+e.water)) ? +e.water : null;
+    /* ★ 2026-11-08 标定：水位票方向翻转、撤掉独立365票（同上，口径必须一致） */
     if (wtr != null){
-      if (wtr >= 1.0){ vU += 1; vw.push('上盘高水'+wtr.toFixed(2)+'+1U'); }
-      else if (wtr < 0.80){ vU += 1; vw.push('上盘低水'+wtr.toFixed(2)+'+1U'); }
-      else { vS += 1; vw.push('水位'+wtr.toFixed(2)+'正常+1S'); }
+      if (wtr >= 1.0){ vS += 1; vw.push('上盘高水'+wtr.toFixed(2)+'·实测偏强+1S'); }
+      else if (wtr < 0.80){ vS += 1; vw.push('上盘低水'+wtr.toFixed(2)+'·实测偏强+1S'); }
+      else { vU += 1; vw.push('水位'+wtr.toFixed(2)+'正常·实测偏受让+1U'); }
     }
     if (og === true){ vU += 1; vw.push('破缺口+1U'); }
     if (ld != null && isFinite(+ld) && Math.abs(+ld) >= 2){ vU += 1; vw.push('盘级差'+(+ld)+'+1U'); }
-    if (eavd.indexOf('造热') >= 0){ vU += 2; vw.push('365造热+2U'); }
-    else if (eavd.indexOf('控赔') >= 0){ vS += 1; vw.push('365控赔+1S'); }
     var tally = '(投票S'+vS+':U'+vU+'·'+vw.join(' ')+')';
     if (vS - vU >= 2) return '买强队·'+teamTxt+tally;
     if (vU - vS >= 2) return '买受让·'+oppTxt+tally;
