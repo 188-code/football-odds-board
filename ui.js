@@ -8066,6 +8066,29 @@ function _deriveRecDir(e){
    11-09 有帧 26 场里 11 场差 >3pt、最大 34.5pt（13.3 vs −21.2，符号相反）。
    统一优先级：末帧 netPt（开赛前最后一次赛前读数）> e.netPt > op.netPt > op.over > e.over。
    老条目无前四者时仍回落 e.over，历史读数不变；方向判据 overVote / op.overGap / _deriveRecDir 一律不碰。 */
+/* ★★ 2026-11-09 引擎代际分类唯一出口（用户抓包：369 条里 119 条被标「口径未识别」，
+   其实是投票引擎上线前的规则引擎时代。不按代际分，任何命中率都是三段算法混算）。
+   代际：
+     v0   规则引擎（10-28~11-05，recDir 形如「买强队·主队(主流·命中60%·ROI+16%)」）
+     v1   多信号投票引擎初版（11-06 起，水位「正常+1S」、带独立「365控赔+1S」票）
+     v2   11-08 三盘交叉标定后现行版（「实测偏受让/实测偏强」、正常水改投+1U、撤独立365票）
+     flip 翻转档（铁律只观察不投票，无方向代际）
+   —— 历史意见按「开赛即冻结」不改写，这里只做标注，不影响任何方向计算。 */
+function _fpEra(e){
+  if (!e) return { k:'unk', txt:'口径未识别', col:'#64748b' };
+  var s = String(e.recDir || '');
+  if (/主流·命中|小联赛高热|小联赛低热/.test(s))
+    return { k:'v0', txt:'v0 · 规则引擎（投票引擎上线前）· 该场成绩不计入现行算法业绩', col:'#b45309' };
+  if (/实测偏受让|实测偏强/.test(s))
+    return { k:'v2', txt:'v2 · 现行（11-08 三盘标定后）', col:'#15803d' };
+  if (/365控赔\+1S|正常\+1S|上盘(低|高)水[0-9.]+\+1U/.test(s))
+    return { k:'v1', txt:'v1 · 旧口径（标定前）· 该场成绩不计入现行算法业绩', col:'#b45309' };
+  if (/翻转/.test(s))
+    return { k:'flip', txt:'观察·翻转（铁律不投票，无版本）', col:'#7c3aed' };
+  if (/五五开/.test(s))
+    return { k:'v2', txt:'v2 · 现行（投票依据文字缺失，按赛前快照记）', col:'#15803d' };
+  return { k:'unk', txt:'口径未识别', col:'#64748b' };
+}
 function _fpNetPt(e){
   if (!e) return null;
   var tr = e.dirTrail;
@@ -8130,7 +8153,11 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
       + (e.recDir && e.recDir.length>2
           ? '<div style="font-size:10px;color:'+_rdc2+';margin-top:2px;font-weight:900;background:'+_rdc2+'18;border:1px solid '+_rdc2+';border-radius:6px;padding:2px 7px;display:inline-block">🎯 推荐方向·'+esc(e.recDir)+'</div>'
           : (b0.length ? '<div style="font-size:9px;color:'+_rdc2+';margin-top:2px;font-weight:800">🎯 '+esc(_recDirOld)+'</div>' : ''))
-      + '<div style="font-size:8.5px;color:#64748b;margin-top:1px">旧条目·无四量快照（当时未采）</div>';
+      + (function(){
+          var _er = _fpEra(e);
+          if (_er.k === 'v0') return '<div style="font-size:8.5px;color:'+_er.col+';margin-top:1px;font-weight:700">规则版本 v0 · 规则引擎（投票引擎上线前）· 无四量快照</div>';
+          return '<div style="font-size:8.5px;color:#64748b;margin-top:1px">旧条目·无四量快照（当时未采）</div>';
+        })();
   }
 
   // ===== 1) 档位徽章（与实时一致：必发级/正式过热/中热/常温/翻转） =====
@@ -8229,12 +8256,8 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
        （水位票方向反、还带独立 365 控赔票），现行 v2 从 8 号 23:45 起、9 号 25 场全 v2。
        不标版本就会把旧算法成绩当成现行算法业绩——此前所有 65.2% / 58.8% 读数皆属 v1。
        历史意见按铁律「开赛即冻结」不改写，只做版本标注。 */
-    var _rvTxt, _rvCol;
-    if (/实测偏受让|实测偏强/.test(e.recDir)) { _rvTxt = 'v2 · 现行（11-08 标定后）'; _rvCol = '#15803d'; }
-    else if (/365控赔\+1S|正常\+1S|上盘(低|高)水[0-9.]+\+1U/.test(e.recDir)) { _rvTxt = 'v1 · 旧口径（标定前）· 该场成绩不计入现行算法业绩'; _rvCol = '#b45309'; }
-    else if (/翻转/.test(e.recDir)) { _rvTxt = '观察·翻转（铁律不投票，无版本）'; _rvCol = '#7c3aed'; }
-    else { _rvTxt = '口径未识别'; _rvCol = '#64748b'; }
-    h += '<div style="font-size:8.5px;color:'+_rvCol+';margin-top:2px">规则版本 '+esc(_rvTxt)+'</div>';
+    var _era = _fpEra(e);
+    h += '<div style="font-size:8.5px;color:'+_era.col+';margin-top:2px">规则版本 '+esc(_era.txt)+'</div>';
     /* ★ 2026-11-08 文案自洽（用户箭头指「判定说只观察、推荐却买强队」打架）：
        资金未合流(吃水区)时，上方判定标签显示"只观察"，但投票引擎仍可能基于水位/控赔/盘级差
        独立给出方向 → 两套口径（资金过热 vs 多信号投票），加一行说明，避免读者误判为自相矛盾。
@@ -8372,6 +8395,17 @@ function fundplateHistoryHTML(){
     return (r.indexOf('买强队')===0 && e.result==='lose') || (r.indexOf('买受让')===0 && e.result==='win');
   }).length;
   const _recDirRate = _recDirRows.length ? Math.round(_recDirHit/_recDirRows.length*1000)/10 : null;
+  /* ★ 2026-11-09：上一条 KPI 是全代际混算（v0+v1+v2）。现行算法业绩只能看 v2，
+     否则就是拿旧算法成绩给新算法背书。这里按 _fpEra 唯一出口再拆一格。 */
+  const _recDirByEra = function(k){
+    const g = _recDirRows.filter(function(e){ return _fpEra(e).k === k; });
+    const h = g.filter(function(e){
+      const r = String(e.recDir||'');
+      return (r.indexOf('买强队')===0 && e.result==='lose') || (r.indexOf('买受让')===0 && e.result==='win');
+    }).length;
+    return { n:g.length, hit:h, rate:g.length ? Math.round(h/g.length*1000)/10 : null };
+  };
+  const _eraV2 = _recDirByEra('v2');
   /* ★ 2026-10-29 登记时机透明化（用户质疑"是本来就有，还是比赛开始后才加进去的"）：
      ts = 首次登记时刻（gen_index upsert 不再覆盖）；与开赛时间(day+kickoff)对比，
      晚于开赛 = ⚠赛后补登（多为数据中断/自清空 bug 修复后的重录），规则本身不看赛果。 */
@@ -8445,8 +8479,10 @@ function fundplateHistoryHTML(){
     + _kpi('赛前登记', nPre+' 场', '#16a34a')
     + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
     + _kpi('赛前已结算', (dec.length+nPush)+' 场（待结算 '+nPend+'）')
-    + _kpi('🎯 推荐方向·赛前', (_recDirRows.length ? (_recDirHit+'/'+_recDirRows.length+' 中 · '+_recDirRate+'%') : '—'),
+    + _kpi('🎯 推荐方向·赛前（全代际）', (_recDirRows.length ? (_recDirHit+'/'+_recDirRows.length+' 中 · '+_recDirRate+'%') : '—'),
            (_recDirRate!=null && _recDirRate>=50 ? '#16a34a' : '#dc2626'))
+    + _kpi('其中 · v2 现行算法', (_eraV2.n ? (_eraV2.hit+'/'+_eraV2.n+' 中 · '+_eraV2.rate+'%') : '无样本'),
+           (_eraV2.rate!=null && _eraV2.rate>=50 ? '#16a34a' : '#dc2626'))
     + (_isFiltered ? _filteredKpi
         : ((_preL ? _kpi('赛前·押受让方', (_preL.hit==null?'—':_preL.hit+'%')+' / '+_fpct(_preL.roi), (_preL.roi>0?'#16a34a':'#dc2626')) : '')
          + (_preU ? _kpi('赛前·押让球方', (_preU.hit==null?'—':_preU.hit+'%')+' / '+_fpct(_preU.roi), (_preU.roi>0?'#16a34a':'#dc2626')) : '')));
