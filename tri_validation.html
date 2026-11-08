@@ -189,6 +189,107 @@ footer{color:var(--mut);font-size:12px;text-align:center;margin-top:28px}
 11-09 / 11-10 完场后按同一套门限重验，避免单日污染。</div>
 </div>
 
+
+<div class="card" id="final-review">
+<h2>第六轮 · 11-08 补齐定稿 + day±1 修复 + 98 场两段验证（2026-11-09 00:45）</h2>
+<p class="sub">数据源：线上 CVM 权威账本（00:32 拉取，第四包后）+ D 盘留存逐帧三盘。
+本轮<strong>不改模型</strong>：投票权重、方向、破缺口定义一个字不动；只交付数据与结论。</p>
+
+<h3>① 第四包上线验收（拉线上真实数据，不只看终端输出）</h3>
+<table>
+<thead><tr><th>项</th><th>实测</th></tr></thead>
+<tbody>
+<tr><td>页面 / 版本</td><td>主看板 200 / gzip 404788B / 0.60s；动态页 194207B；验证页 18139B 且 SHA 与本地一致；version built 2026-11-09 00:32:02</td></tr>
+<tr><td>账本完整性</td><td>369→369 条 / 已结算 316 / recDir 改写 <b>0</b> / 票数改写 <b>0</b> / 丢失 <b>0</b>；dirTrail 43 条 265 帧、含三盘读数 85 帧</td></tr>
+<tr><td>数值修复生效</td><td>按部署时刻 00:31:55 切帧：<b>部署后 5 帧 over === netPt 全一致</b>（src=engine）、不一致 0；部署前 64 帧里 25 帧不一致是旧帧，按铁律不回改。终端「一致44 / 不一致25」= 39+5 / 25，对得上</td></tr>
+<tr><td>源码一致</td><td>本地 / 包内 / 线上 gen_index.py 均 <b>263348B</b>，没有出现「源码没进包」</td></tr>
+<tr><td>真机</td><td>主看板 UI_V v4、资金板 369 条、脚本错误 0；动态页 216 行、筛 11-08 得 88 行；验证页 9 表 49 行、脚本错误 0</td></tr>
+</tbody></table>
+
+<h3>② 11-08 补齐定稿：仍是 53.8%，「变 69.2%」是我算错了</h3>
+<p>已结算 59→70（86 场里仍有 <b>16 场未完场</b>，都是 21/22/23 点开赛）。第三包→第四包补的 9 条 result
+<b>全部是观察档</b>，13 注方向注一条没变。</p>
+<table>
+<thead><tr><th>日期</th><th>方向注</th><th>命中 / 负 / 走</th><th>命中率</th><th>ROI</th><th>±SE</th></tr></thead>
+<tbody>
+<tr><td>11-06</td><td>5</td><td>4 / 1 / 0</td><td>80.0%</td><td>+54.8%</td><td>44.7pt</td></tr>
+<tr><td>11-07</td><td>24</td><td>15 / 8 / 1</td><td>65.2%</td><td>+22.5%</td><td>20.4pt</td></tr>
+<tr><td>11-08</td><td>13</td><td>7 / 6 / 0</td><td><b>53.8%</b></td><td>+4.5%</td><td>27.7pt</td></tr>
+</tbody></table>
+<div class="note"><strong>口径红线：</strong>result 定义是 <code>win = 受让赢盘</code>、<code>lose = 强队赢盘</code>，
+所以<b>买强队的命中条件是 lose，不是 win</b>。本轮我临时写的统计把 win 一律算命中，把买强队输的 6 注错记成赢，
+误报 69.2%；已用项目同口径脚本重跑纠正，<b>该错数不进任何结论</b>。<br>
+三天 ±SE 全部跨 0、置信区间大幅重叠，统计上根本不构成「6/7 准 → 8 垮」。8 号的拖累全部来自买强队
+10 注只中 4（40% / −24.9%），且全部是 U=0 一边倒、票因同源叠加；买受让 3 注全中。</div>
+
+<h3>③ day±1 跨日回退：修掉一次「留出段 0 场」的假验证</h3>
+<p>新 xlsx 的「赛果」sheet 把 11-08 那批场次（代格福什、帕尔马、诺丁汉森林、奥萨苏纳…）的比赛日标成
+<b>20261107 / 20261109</b>（凌晨跨日），而「场次总览」标 <b>2026-11-08</b>。<code>find_tid</code> 只按当天查，
+导致 11-08 的 64 场 <b>tid 全空 → 留出段退化成 0 场</b>，差点产出「全否决」的假结论。</p>
+<table>
+<thead><tr><th>修复后</th><th>11-07</th><th>11-08</th></tr></thead>
+<tbody>
+<tr><td>逐帧库场次</td><td>64</td><td>64（合计 105→<b>128</b>）</td></tr>
+<tr><td>有 tid</td><td>61</td><td>0 → <b>57</b></td></tr>
+<tr><td>对齐 CVM 账本</td><td>49</td><td>0 → <b>51</b></td></tr>
+<tr><td>赛前登记且已结算</td><td>49</td><td>0 → <b>49</b></td></tr>
+<tr><td>动态页有综合意见的场次</td><td colspan="2">49 → <b>100</b></td></tr>
+</tbody></table>
+<div class="note">这正是项目铁律里记过的 <code>day±1 跨日回退</code> 坑（同 <code>_settle_hist.cjs</code>）。
+现在优先当天、再试 ±1，且按赛事 ID 去重，避免同名跨日误配。</div>
+
+<h3>④ 98 场两段验证：18 个动态信号仍然全部否决</h3>
+<p>训练 11-07 = 49 / 留出 11-08 = 49；结算用真实上盘水位；门限 = 两段同向为正、每段 n≥10、
+且必须跑赢同池「全押受让 / 纯冷门」基准（基准只在信号实际下注的场次上重算）。</p>
+<table>
+<thead><tr><th>信号</th><th>Δ超额 训练</th><th>Δ超额 留出</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>PPI0 开盘 PPI 侧</td><td class="bad">−18.2pt</td><td class="bad">−18.5pt</td><td class="bad">✗ 否决</td></tr>
+<tr><td>PPI_VS_HOT 开盘 PPI 对热方</td><td class="bad">−12.7pt</td><td class="bad">−0.1pt</td><td class="bad">✗ 否决</td></tr>
+<tr><td>NETPT_UP 净超买为正</td><td class="bad">−80.5pt</td><td class="bad">−74.1pt</td><td class="bad">✗ 否决</td></tr>
+<tr><td>HCAP_MOVE 盘级移动</td><td class="bad">−73.8pt</td><td class="bad">−1.6pt</td><td class="bad">✗ 否决</td></tr>
+<tr><td>JC_DEV 竞彩偏离</td><td class="bad">−62.5pt</td><td>+0.1pt</td><td class="bad">✗ 否决</td></tr>
+<tr><td colspan="4"><b>L1 通过信号：0 个</b>（18 个全否决，留出段 n 门限这次真过了，结论比 74 场时更硬）</td></tr>
+</tbody></table>
+<p>隐藏基准「无条件全押受让」：训练 +21.6% / 留出 <b>+2.5%</b>（74 场时留出的 +29.5% 是小样本）。
+任何 U 占比高的 PPI 信号都在搭便车。L2 反事实只有 8/5 注，不足以改权重。</p>
+<p>其余回放同步复核：R1/R2/R3 因 n&lt;10 否决、R4 开盘 PPI 票 ΔROI −1.6 / +4.4 两段反向否决；
+178 条全样本「修 over / 统一破缺口」结论不变（B/C/D 全否决、方向改写 0/178）。</p>
+
+<h3>⑤ 为什么「开盘 PPI 明明有边」却不进综合意见</h3>
+<table>
+<thead><tr><th>口径</th><th>训练 11-07</th><th>留出 11-08</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td><b>北单胜平负 SPF</b>：开盘 PPI 最高侧，用<b>开盘当时 SP</b> 结算（反前视）</td><td>+30.8%</td><td>+75.6%</td><td>两段同向为正</td></tr>
+<tr><td>纯冷门基准（SP 最高侧）</td><td>+13.2%</td><td>+31.9%</td><td>已跑赢</td></tr>
+<tr><td>不重合纯冷门的 50 场（PPI 净信息）</td><td>+27.6%</td><td>+43.0%</td><td>不是「押冷门」伪装（重合仅 27%）</td></tr>
+<tr><td><b>综合意见 S/U 亚盘让球</b>：同一信号映射后用真实上盘水位结算</td><td colspan="2">98 场验证 18 个信号全否决</td><td class="bad">无增量信息</td></tr>
+</tbody></table>
+<div class="note">两者不矛盾：<b>玩法口径不同</b>。SPF 是三项赔率、S/U 是让球盘 + 真实水位。
+不能把北单 SPF 的边直接搬进「综合意见」。<strong>按铁律：这里只报读数，不加票、不写死推荐。</strong></div>
+
+<h3>⑥ 五五开：仍是主动筛选，不降门槛</h3>
+<table>
+<thead><tr><th>池</th><th>训练 06+07</th><th>留出 08</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>五五开池受让赢盘率</td><td>23/38 = 60.5%</td><td>14/30 = 46.7%</td><td class="bad">两段反向 → 不能据此降门槛</td></tr>
+<tr><td>翻转池受让赢盘率</td><td>44.0%</td><td>32.0%</td><td>观察是对的</td></tr>
+<tr><td>观察档整体（8 号）</td><td colspan="2">22/55 = 40.0%</td><td>偏强队赢盘，不下注正确</td></tr>
+</tbody></table>
+<p>票数结构：平均总票数 2.67 → 2.07 → <b>1.59</b>；完全平票 41.7% → 47.6% → <b>57.0%</b>；
+全员弃权 25% → 28.6% → 38.4%。门槛写死「票差 ≥2 才给方向」，所以票凑不够就只能观察。
+42 注方向注全部 |差|≥2，无一例外。</p>
+
+<h3>⑦ 本轮交付与边界</h3>
+<ul>
+<li>第五包<strong>只更新 3 个静态文件</strong>：<code>tri_dynamics.html</code>（128 场）、<code>tri_frames.js</code>（128 场）、<code>tri_validation.html</code>（新增本章节）。
+不碰 <code>gen_index.py</code>、<code>ui.js</code>、账本、主看板；cron 重建不会覆盖这些静态页。</li>
+<li>11-08 仍有 <b>16 场未完场</b>（其中 4 注带方向），11-09 已登记 33 场、结算 0 场；
+等凌晨场完场后再做一次定稿读数，<b>仍不改模型</b>。</li>
+<li>唯一扛住样本外检验的边仍是「结构下盘里的平手盘」（旧铁律），本轮没有动它。</li>
+</ul>
+</div>
+
 <footer>口径红线：赛前登记(pre) 与赛后补登(post) 分开 · 命中率≠赚钱 · UI 展示集=统计集 · 任何业绩带 ±SE 并标注跨 0 · 无两段同向验证不得改模型</footer>
 </div>
 </body>
