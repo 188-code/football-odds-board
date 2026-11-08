@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>三盘逐帧动态票 · 训练/留出验证结论（2026-11-08）</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1a1d24;--mut:#6b7280;--line:#e5e7eb;--red:#c0392b;--green:#16794b;--blue:#1d4ed8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:23px;margin:0 0 6px}h2{font-size:17px;margin:0 0 14px;padding-left:10px;border-left:4px solid var(--blue)}
+.sub{color:var(--mut);font-size:13px;margin-bottom:20px}
+.nav{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.nav a{padding:7px 14px;background:#fff;border:1px solid var(--line);border-radius:8px;color:var(--blue);text-decoration:none;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.03)}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:12px 0}
+.kpi div{background:#f3f6fb;border-radius:8px;padding:12px 14px}
+.kpi b{display:block;font-size:20px;color:var(--blue)}
+.kpi span{font-size:12px;color:var(--mut)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{background:#f3f4f6;font-weight:600;color:#374151}
+tr:hover td{background:#fafbff}
+.pos{color:var(--green);font-weight:600}.neg{color:var(--red);font-weight:600}
+.tag{display:inline-block;padding:2px 8px;border-radius:5px;font-size:12px;margin-right:6px}
+.tag.no{background:#fdecea;color:var(--red)}.tag.ok{background:#e8f6ee;color:var(--green)}.tag.warn{background:#fff4e0;color:#a15c00}
+.note{background:#fff8e6;border-left:4px solid #e0a800;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;font-size:13px}
+.bad{background:#fdecea;border-left:4px solid var(--red);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;font-size:13px}
+code{background:#eef1f5;padding:1px 5px;border-radius:4px;font-size:12px}
+.mono{font-family:Consolas,Monaco,monospace;font-size:12px}
+footer{color:var(--mut);font-size:12px;text-align:center;margin-top:28px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>三盘逐帧动态票 · 训练 / 留出验证结论</h1>
+<div class="sub">生成 2026-11-08 23:4x · 数据源：D:\北单竞彩数据 逐帧留存 105 场 + 线上 CVM 权威账本 · 只取赛前登记且已结算、tid 可对齐的 74 场</div>
+<div class="nav">
+  <a href="/tri_dynamics.html">← 开盘→临盘逐帧轨迹（105 场）</a>
+  <a href="/">← 主看板</a>
+  <a href="/fundplate_hist.js">账本原始数据</a>
+</div>
+
+<div class="card">
+<h2>一句话结论</h2>
+<p><span class="tag no">本轮不加任何动态票</span>18 个候选信号全部未通过「训练 11-07 / 留出 11-08 两段同向 + 同池基准证伪」门限；真实的「开盘 PPI 票」反事实回放两段反向。按铁律，投票权重一个字不动。本轮上线的是<strong>记录层基础设施</strong>：让在线账本自己逐帧记三盘读数，并留痕算法口径错误。</p>
+<div class="kpi">
+  <div><b>74 场</b><span>逐帧三盘 ∩ 权威账本 ∩ 赛前登记 ∩ 已结算（07:49 / 08:25）</span></div>
+  <div><b>0 张</b><span>通过两段验证的动态票</span></div>
+  <div><b>+21.6% / +29.5%</b><span>「无条件全押受让」训练 / 留出 ROI —— 所有信号的隐藏基准</span></div>
+  <div><b>+42.3% → +14.3%</b><span>「纯押冷门」训练 → 留出，单日爆发不可外推</span></div>
+</div>
+</div>
+
+<div class="card">
+<h2>① 为什么 6/7 号显得准、8 号拖垮（上轮归因，保留口径）</h2>
+<table>
+<tr><th>日期</th><th>方向注</th><th>命中率</th><th>ROI</th><th>±SE</th><th>说明</th></tr>
+<tr><td>11-06</td><td>5</td><td>80.0%</td><td class="pos">+54.8%</td><td>±44.7pt</td><td>样本极小，不构成「准」</td></tr>
+<tr><td>11-07</td><td>24</td><td>65.2%</td><td class="pos">+22.5%</td><td>±20.4pt</td><td>置信区间大幅重叠</td></tr>
+<tr><td>11-08</td><td>13</td><td>53.8%</td><td class="pos">+4.5%</td><td>±27.7pt</td><td>86 场里 27 场未完场 = 半结算中途读数</td></tr>
+</table>
+<p>三天全在噪声里，SE 都跨 0。8 号拖垮的全部来自<strong>买强队 10 注只中 4</strong>，且 10 注清一色 <code>U=0</code> 一边倒、票因同源（常温 / 水位正常 / 365控赔），是拥挤陷阱。这 13 注登记时间<strong>全部早于 v4 上线 19:02</strong>，9 注带旧规则「365控赔」票，属历史冻结尾巴，不是新模型变差。</p>
+<div class="note"><strong>五五开为什么多：</strong>门槛写死票差 ≥2 才给方向；平均总票数 2.67 → 2.07 → <strong>1.59</strong>，全员弃权 25% → 28.6% → <strong>38.4%</strong>，触发率同步塌。观察档占 pre 44.4% → 71.4% → 78.0%，但 8 号 69 条观察里 <strong>32 条是「翻转·只观察不追高」</strong>，是铁律主动不下注。五五开池训练段受让赢盘 60.5%、留出 48.1%（两段反向），按铁律不得据此降门槛。</div>
+</div>
+
+<div class="card">
+<h2>② L1 独立信号检验（方向由逐帧三盘单独决定，不叠加现行票）</h2>
+<table>
+<tr><th>信号</th><th>训练 11-07 ROI</th><th>留出 11-08 ROI</th><th>U 占比</th><th>结论</th></tr>
+<tr><td>ALL_U 全押受让（基准）</td><td class="pos">+21.6%</td><td class="pos">+29.5%</td><td>100%</td><td>隐藏基准，不是信号</td></tr>
+<tr><td>ALL_S 全押强队（基准）</td><td class="neg">−27.9%</td><td class="neg">−30.2%</td><td>0%</td><td>稳定负</td></tr>
+<tr><td>COLD 纯押冷门（基准）</td><td class="pos">+42.3%</td><td class="pos">+14.3%</td><td>88%</td><td>留出衰减 28pt，单日污染</td></tr>
+<tr><td>PPI0 开盘 PPI 侧</td><td class="pos">+24.1%</td><td class="pos">+31.8%</td><td>72%</td><td>训练跑不赢同池冷门 −18.2pt</td></tr>
+<tr><td>PPIL 临盘 PPI 侧</td><td>+4.0%</td><td>+13.4%</td><td>74%</td><td>两段都弱</td></tr>
+<tr><td>HOTL 临盘资金热方</td><td class="neg">−47.8%</td><td>+1.2%</td><td>28%</td><td>追热无效，两段反向</td></tr>
+<tr><td>DEV0 开盘超买对面</td><td>+8.2%</td><td class="neg">−53.8%</td><td>41%</td><td>留出仅 9 注，剧烈反向</td></tr>
+<tr><td>PPI_VS_HOT 赔付压力≠资金热方</td><td class="pos">+35.9%</td><td class="pos">+35.0%</td><td>79%</td><td>看似最稳，但同池基准训练 −12.7 / 留出 +9.7 → 反向</td></tr>
+<tr><td>NETPT_UP 净超买加剧</td><td class="neg">−40.1%</td><td class="neg">−40.6%</td><td>26%</td><td>两段同向为负，可作为反向参考但不直接下注</td></tr>
+<tr><td>HCAP_MOVE 盘级移动</td><td class="neg">−24.2%</td><td class="neg">−15.4%</td><td>71%</td><td>留出 9 注，不足</td></tr>
+</table>
+<div class="bad"><strong>关键证伪：</strong>基准必须用<strong>同一批下注场次</strong>重算，拿全场基准比是不公平的。重算后，PPI0 / PPI_VS_HOT 在训练段都跑不赢同池纯冷门，留出段才有超额 —— 两段反向，按铁律全部否决。U 占比 72%~79% 的信号本质在搭「全押受让」的便车，不是庄家视角的增量信息。</div>
+</div>
+
+<div class="card">
+<h2>③ 真实反事实回放（纠正上轮空跑）</h2>
+<p>上轮 <code>_vote_ab.cjs</code> 的 R4「开盘 PPI 票」依赖的 <code>_tri_open.json</code> 并不存在，R4 数值与 R1 完全相同 = <strong>空跑</strong>；且判定行格式化串写坏导致误报「可上线」。本轮已从逐帧库导出真实的 51 场开盘 PPI 侧并注入重跑：</p>
+<table>
+<tr><th>规则</th><th>训练 注数</th><th>训练 ROI</th><th>训练 ΔROI</th><th>留出 注数</th><th>留出 ROI</th><th>留出 ΔROI</th><th>判定</th></tr>
+<tr><td>R0 现行</td><td>29</td><td>+28.1%</td><td>—</td><td>13</td><td>+4.5%</td><td>—</td><td>基准</td></tr>
+<tr><td>R1 撤 365控赔票（=v4）</td><td>22</td><td>+34.4%</td><td class="pos">+6.3pt</td><td>9</td><td>+10.9%</td><td class="pos">+6.4pt</td><td>两段同向，但留出 n=9&lt;10；v4 已上线，不重复改</td></tr>
+<tr><td>R2 买强队 U=0 改观察</td><td>16</td><td>+38.1%</td><td class="pos">+10.0pt</td><td>3</td><td>+102.3%</td><td class="pos">+97.9pt</td><td><span class="tag no">n=3 否决</span>小样本幻觉</td></tr>
+<tr><td>R4 撤365 + 开盘 PPI 票（真实）</td><td>25</td><td>+26.5%</td><td class="neg">−1.6pt</td><td>11</td><td>+15.3%</td><td class="pos">+4.4pt</td><td><span class="tag no">两段反向 否决</span></td></tr>
+</table>
+<p>L2 反事实在 74 场对齐样本里只有训练 8 注 / 留出 4 注（多数是观察档、无「投票S:U」票数格式），<strong>不足以支撑改投票权重</strong>，只作读数。</p>
+</div>
+
+<div class="card">
+<h2>④ 逐帧审计抓到的算法口径实锤（本轮留痕，未改方向）</h2>
+<p>引擎 <code>ygMin</code> 没保留 <code>netPt</code>，导致 <code>over</code> 走了 <code>maxFlow − heatGap</code> 的错误兜底（<code>maxFlow</code> 是「三盘流向最大侧」，不等于「强队被超买」）。模拟 4 场赛前条目生成轨迹帧，同帧同时记录引擎 over 与正确净超买：</p>
+<table>
+<tr><th>tid</th><th>引擎 over（错误兜底）</th><th>正确 netPt = excessPt − heatGap</th><th>偏差</th><th>当时综合意见</th></tr>
+<tr><td>2995382</td><td>−4.8</td><td>−9.5</td><td>4.7pt</td><td>观察·翻转</td></tr>
+<tr><td>3042404</td><td>−9.2</td><td>−9.2</td><td>0</td><td>观察·五五开</td></tr>
+<tr><td>3063498</td><td>+6.8</td><td>+6.8</td><td>0</td><td>观察·翻转</td></tr>
+<tr><td><strong>3088158</strong></td><td><strong>−0.8</strong></td><td><strong>−17.3</strong></td><td class="neg"><strong>16.5pt</strong></td><td><strong>买受让·客队（方向注）</strong></td></tr>
+</table>
+<p>这类偏差正是「破缺口 overGap」票二次扣缺口、以及样例「破缺口 +1U」与同帧 over 对不上的根因。<strong>本轮只把正确值写进轨迹帧并标 <code>netPtSrc=excessPt-heatGap</code>，不改意见生成</strong> —— 改 over 会改方向，属模型改动，须另做训练/留出两段验证后才能上线。</p>
+</div>
+
+<div class="card">
+<h2>⑤ 本轮实际上线内容</h2>
+<table>
+<tr><th>改动</th><th>位置</th><th>作用</th></tr>
+<tr><td>首屏补三盘原始读数</td><td><code>gen_index.py</code> 瘦身段（仅北单源）</td><td><code>bdPct</code> 北单真实占比 / <code>bdSp</code> SP / <code>euQ</code> 365公平概率 / <code>triP</code> / <code>jcOdds</code> 竞彩赔率 / <code>jcFair</code> / <code>euFair</code></td></tr>
+<tr><td>dirTrail 每帧记三盘</td><td><code>_dir_snap</code></td><td>再加 PPI 侧 / 资金热方 / 超买侧 / 净超买 pt，三盘读数变化也触发记帧（上限 16 帧，永久保留开盘首帧）</td></tr>
+<tr><td>netPt 正确值留痕</td><td><code>_dir_snap</code></td><td>同时存引擎 over 与正确 netPt，标注来源，供在线核对算法偏差</td></tr>
+<tr><td>投票权重 / UI / 账本结算口径</td><td>—</td><td><strong>一律未动</strong></td></tr>
+</table>
+<p>本地验证：<code>py_compile</code> 通过、重建成功、账本 367→367、已结算 297 条 <strong>recDir 0 改写 / 0 丢失</strong>；模拟 4 场赛前条目均生成含完整三盘读数的帧。</p>
+<div class="note"><strong>下一步（不攒数据、不等待）：</strong>① 用轨迹里同帧的 over / netPt 对照，做「修 over 兜底 + 统一 overGap 定义」的反事实验证，两段同向才改方向；② 在线轨迹攒出真实开盘帧后，用同一套门限重验动态票；③ 训练/留出样本扩到 11-09、11-10 完场，避免单日污染。</div>
+</div>
+
+<footer>口径红线：赛前登记(pre) 与赛后补登(post) 分开 · 命中率≠赚钱 · UI 展示集=统计集 · 任何业绩带 ±SE 并标注跨 0 · 无两段同向验证不得改模型</footer>
+</div>
+</body>
+</html>
