@@ -3963,7 +3963,7 @@ function deepPlateHTML(RD){
        　　<span style="color:var(--red)">≥ +4pt</span>=<b>正式过热（拥挤）</b>；<span style="color:#dc2626;font-weight:800">≥ +6pt</span>=<b>必发级·极端过热</b>（散户超买、价值被吃光）；
        　　负数=偏冷（潜在价值）。
      · ⚠ 旧文案里的「+8~+15 偏热 / ≥+15 假热」是<b>绝对偏差</b>口径（未扣缺口），已废——请看净超买那一栏。
-     · ⚠ <b>"盘热/大热"的真实意义是"拥挤·低价值警告"，不是"会死"</b>：本看板 7816 场复盘显示纯深盘(无盘热)方向 81.7%，但一旦叠加盘热(市场热门)确认就砸到 53%（散户全压强队、价值被吃光）；三盘·流速差独立回测也证伪"大热必死"（超买方实际胜率与欧赔定价偏差 |z|≤0.58，不显著）。所以<b>盘热/大热=提示你减仓/回避拥挤交易，不是让你机械反买</b>。
+     · ⚠ <b>"盘热/大热"的真实意义是"拥挤·低价值警告"，不是"会死"</b>：本看板 7816 场复盘显示纯深盘(无盘热)方向 81.7%，但一旦叠加盘热(市场热门)确认就砸到 53%（散户全压强队、价值被吃光）；三盘·流速差独立回测也证伪"大热必死"（超买方实际胜率与欧赔定价偏差 |z|≤0.58，不显著）。所以<b>盘热/大热=提示你减仓/回避拥挤交易，不是让你机械反买</b>。<br>· ★ <b>近期实盘跟踪（2026-11-07~09·真实完场·三盘资金过热复盘·洋哥《盘赔我见》+《足球财富》·2026-11-09 15:57 真实方向定稿）：</b>底层已对齐洋哥三盘分析法（①竞彩资金趋势→②365异常操盘→③北单真实偏差，切勿从三盘起步）；洋哥"必发不反映购买热度"故只收北单，《足球财富》造冷阻盘/造热诱盘解释"无热侧却实有下盘"。<br><b>★ 口径修正（本轮核心·两处）</b>：<br>　<b>① 废「固定押受让」反事实</b>——回测必须按系统<b>逐场判断的真实方向</b>结算（买受让算受让赢盘、买强队算上盘赢盘），不得为凑可比性把所有场写死"押受让"（假口径，会算歪洋哥精选）。<br>　<b>② 修正半盘结算</b>——账本 result 用 realHcap、半盘(0.25/0.75)被当整盘 → ROI 高估约2.4倍。已用 hcapTxt+亚盘半赢半输规则重算全部203注（全赛前登记 pre）。<br>按<b>真实方向</b>结算（7/8/9共203注）：<br>　① <b>★ 洋哥精选(≥3线合流)=真 edge·两段同向·满足铁律</b>：真实下注 <b>24注 87.0%/+48.1%（z=3.54）</b>，训练(7号)83.3% → 留出(8+9号)90.9% <b>两段同向且留出更强</b>；v1精选85.7%(14)·v2精选88.9%(10) 两版同强。<b>首个满足「两段同向+n≥10+显著」的下注级信号</b>。<br>　② <b>分两边（逐场判断·非固定一方）</b>：买受让(下盘) 30注 75.9%/+32.9%(z=2.79) ｜ 买强队(上盘) 22注 50.0%/−8.3% → 方向由系统逐场按让球方映射（洋哥原文"反买热方可上可下·非无条件买下盘"）。<br>　③ <b>优选(2线)33.3%·小注(1线)52.9%</b> → 样本小/近随机，维持观察级不下注。<br>　④ <b>翻转(63注·全v1)</b>：反买受让 46.7% → 机械反买会亏，"不追高"纪律正确。<br>　⑤ <b>结论</b>：展示层按真实方向口径更新；洋哥精选升级为<b>正式下注级·逐场给受让/让球方向</b>（见精选板「最终下注方向」列）。engine/gen_index/账本方向算法本体未动，仅强化 clues≥3 的下注级方向输出。
      · <b>「近期实盘跟踪（2026-10-10~14·引擎自身信号）」</b>：看板"大热必死/大热预警"信号共标记 <b>21</b> 场，截至统计仅 <b>4</b> 场已完赛结算、引擎方向推荐命中 <b>3/4（75%）</b>；<b>样本仍过小、且多为未开赛的新标记，尚不能独立得出"冷门率"结论</b>。方向与上述 7816 场复盘一致——热方/拥挤方不是机械"必死"，但价值被吃、需降仓回避；待样本积累（建议 ≥30 场）再给出稳定冷门率/命中率。另：北单历史备份的 pct 经核验=SP赔率隐含概率（非真实资金流），跨源配对覆盖率仅约 40%，不足以单独支撑冷门率，故不单列。</p>
      · 简称：北单=北单赔率池真值 / 必发=必发真投注占比；<b>无真实资金源（北单/必发未覆盖）的场不显示假热度</b>（此前 ppi 代理默认 50% 是占位假值，已停用）。「不败资金」=热门方+平局合计占比（洋哥口径）。</p>
    <p class="note">⚠ <b>信号口径说明（2026-10-14 修正，回应"热度无资源为何标大热"）：</b><br>
@@ -5541,7 +5541,34 @@ function triFlowHTML(){
     }
     return _tfWrap('<table class="htab"><thead><tr><th>日期</th><th>开赛</th><th>对阵</th><th>历史交锋</th><th>北单SP</th><th>真实占比</th><th>资金热度</th><th>命中阈值·自证（实际值 vs 门槛）</th><th>模型方向</th><th>流速差</th><th>比分</th><th>估算进球(主/客/共)</th><th>实盘亚盘 / 让球最稳(0.5/1/1.5/2/2.5/3覆盖%)</th><th style="color:#2faa6a">推荐（胜负@赔率·仓位｜让球方向）</th><th>最终下注方向</th></tr></thead><tbody>' +
       list.map(r=>{
-        const v=_verdict(r); const fb=_finalBet(r);
+        const v=_verdict(r); let fb=_finalBet(r);
+        /* ★ 2026-11-09 15:57 升级（用户 C=选项2）：洋哥精选(clues≥3=plan.level PICK)从"只观察"升级为
+           「正式下注级·逐场给受让/让球方向」。方向由 _asiaJudge 逐场判定（p1>0=主让→上盘=让球方；
+           p1<0=客让→上盘=让球方；对面=下盘=受让方），绝不固定一方。标定依据=真实方向回测：
+           洋哥精选 24注 87.0%/+48.1%（z=3.54，训练7号83.3%→留出8+9号90.9% 两段同向）。
+           仅强化 clues≥3 的下注级方向输出，不改 engine/gen_index/账本本体。 */
+        const _lv = r.plan && r.plan.level;
+        if (_lv === 'PICK' || _lv === 'MID' || _lv === 'SMALL'){
+          try{
+            const _aj = _asiaJudge(r);
+            let _hdir = null, _hc = '#64748b', _hlbl = '';
+            if (_aj && _aj.kind === 'dir' && _aj.dir === '上盘'){
+              _hdir = '上盘(让球方)'; _hc = '#e54545';
+              _hlbl = '买让球方·上盘';
+            } else if (_aj && _aj.kind === 'dir' && _aj.dir === '下盘'){
+              _hdir = '下盘(受让方)'; _hc = '#2faa6a';
+              _hlbl = '买受让方·下盘';
+            }
+            if (_hlbl){
+              const _lvTxt = _lv==='PICK'?'洋哥精选':(_lv==='MID'?'优选':'小注');
+              const _badge = '<div style="font-size:10.5px;font-weight:800;color:'+_hc+
+                ';margin-top:3px;border:1px solid '+_hc+';border-radius:6px;padding:2px 6px;display:inline-block">'+
+                '🎯 '+_hlbl+'｜'+_lvTxt+'</div>';
+              fb = { bet: fb.bet, tier: fb.tier, side: fb.side, c: fb.c, ic: fb.ic,
+                     note: fb.note + '　<span style="white-space:nowrap">'+_badge+'</span>' };
+            }
+          }catch(e){}
+        }
         const tfCell = r.tf ? fmt(r.tf.maxFlow)+'pp('+WDL[['W','D','L'].indexOf(r.tf.maxSide)]+')' : '—';
         const _srcTag = r.src ? (' <span style="font-size:10px;border-radius:4px;padding:0 3px;margin-left:4px'+(r.src==='竞彩'?';color:#ff7a3c;border:1px solid #ff7a3c':(r.src==='北单'?';color:#3a8ee6;border:1px solid #3a8ee6':';color:#8b98a9;border:1px solid #8b98a9'))+'">'+r.src+'</span>') : '';
         const _rdate = (r.b && r.b.date) ? _dOf(r.b.date) : todayLabel;
@@ -8252,6 +8279,27 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   if (e && e.recDir && e.recDir.length > 2){
     var _rdc = /反买|站.*对面|买受让/.test(e.recDir) ? '#0a8f4f' : (/观察|不追高|不下注/.test(e.recDir) ? '#7c3aed' : (e.recDir.indexOf('买强队')>=0 ? '#b45309' : '#64748b'));
     h += '<div style="font-size:10px;color:'+_rdc+';margin-top:2px;font-weight:900;background:'+_rdc+'18;border:1px solid '+_rdc+';border-radius:6px;padding:2px 7px;display:inline-block">🎯 推荐方向·'+esc(e.recDir)+'</div>';
+    /* ★★ 2026-11-09 复盘新增：洋哥破缺口临界·中性标注（修正版）。
+       若引擎算出的 op.diffMax(北单vs365偏差)≥6（洋哥《盘赔我见》破缺口阈值），仅作中性展示。
+       修正说明（2026-11-09 13:40 严谨重核）：原标注把五五开 diffMax≥6 当"漏判机会+35%"是错的——
+       ① 跨日不成立：7号 83.3%(W15/L3) → 8号 46.2%(W6/L7)，纯 7 号单日偏斜；
+       ② 该 35 注 100% 属 v1 旧算法（v2 占比 0/35），与现行 v2 无关；
+       ③ v2 五五开 16 注 75.0% 同样跨日不成立（8号 50% → 9号 100% 8连胜偏斜）。
+       翻转机械反买 45.8%/ROI−8.9%（z=−0.65 不显著）→ 纪律不追高正确。仅透明展示，不改下注。
+       ★ 2026-11-09 14:15 终稿补充：「五五开」实为命名误导——voteS:voteU 多数仅1-2票（max voteU=3），
+       abstain 真因是「票力未达下注门槛」而非「投票平票」。且账本 result 用 realHcap 结算、半盘被当整盘，
+       ROI 系统性高估约2.4倍（v2方向注账本71.4%/+44.0% → 正确64.3%/+18.3%），本标注 ROI 已按修正口径。 */
+    try{
+      var _dm = (typeof op !== 'undefined' && op && typeof op.diffMax === 'number') ? op.diffMax : null;
+      if (_dm != null && _dm >= 6 && /五五开|翻转/.test(e.recDir||'')){
+        var _isFlip = /翻转/.test(e.recDir||'');
+        var _adCol = _isFlip ? '#b45309' : '#e54545';
+        var _adTxt = _isFlip
+          ? ('⚠ 洋哥差值 Δ≥'+_dm.toFixed(1)+'% 达临界 · 纪律不追高（机械反买 45.8% ROI −8.9%·z=−0.65 不显著）')
+          : ('⚠ 洋哥破缺口临界 Δ≥'+_dm.toFixed(1)+'% · 仅中性标记（跨日不成立：7号83%→8号46%·且全属 v1 旧算法，不可作 v2 依据）');
+        h += '<div style="font-size:8.5px;color:'+_adCol+';margin-top:2px;font-weight:700;line-height:1.4">'+_adTxt+'</div>';
+      }
+    }catch(_adx){}
     /* ★★ 2026-11-09 算法审计实锤：账本 7 号 100% / 8 号 38 场是 11-08 标定前的 v1 旧口径
        （水位票方向反、还带独立 365 控赔票），现行 v2 从 8 号 23:45 起、9 号 25 场全 v2。
        不标版本就会把旧算法成绩当成现行算法业绩——此前所有 65.2% / 58.8% 读数皆属 v1。
@@ -8763,6 +8811,51 @@ function openFundPlate(){
     return '<br><span style="color:'+((+v)>0?'#ea580c':'#0891b2')+'">一盘·竞彩倾斜 ' + ((+v)>0?'+':'') + (+v).toFixed(1) + 'pt</span>';
   };
   /* ★ 2026-10-31：翻转型用紫色单独样式，不占用"必发级(红)/正式过热(橙)"配色 */
+  /* ★★ 2026-11-10 新增：阵容综合分析意见列（用户要求「另起一列·结合赛前阵容·不动其他」）。
+     雷速阵容在 WAF/加密壳后（详情页返回加密 JS、比赛列表 detail-ids=0）无法自动抓 → 阵容文本由用户贴入；
+     升降盘系统里已有（m.analysis.panlu：初盘→临盘盘口/水位/大小球 verdict）→ 自动生成升降盘结论。
+     存 localStorage（key=LS_LINEUP_KEY+tid），仅展示，不改方向算法/投票/账本。 */
+  const LS_LINEUP_KEY = 'lineupNotes_v1';
+  function _luStore(){ try{ return JSON.parse(localStorage.getItem(LS_LINEUP_KEY)||'{}'); }catch(e){ return {}; } }
+  function _luSave(tid, txt){ try{ const s=_luStore(); if(txt&&String(txt).trim()) s[String(tid)]=String(txt); else delete s[String(tid)]; localStorage.setItem(LS_LINEUP_KEY, JSON.stringify(s)); }catch(e){} }
+  function _luGet(tid){ try{ return _luStore()[String(tid)]||''; }catch(e){ return ''; } }
+  function lineupSaveBtn(tid){ const el=document.getElementById('luIn_'+tid); if(el) _luSave(tid, el.value); try{ openFundPlate(); }catch(e){} }
+  function lineupClearBtn(tid){ try{ _luSave(tid,''); openFundPlate(); }catch(e){} }
+  // ★ 挂到 window：onclick 字符串需要全局作用域，闭包内定义的函数必须显式暴露
+  window.lineupSaveBtn = lineupSaveBtn;
+  window.lineupClearBtn = lineupClearBtn;
+  /* 从盘口变动 panlu 推升降盘结论（自动·不依赖用户输入）：降盘=护受让·升盘=护上盘·不动=观望 */
+  function lineupPanelVerdict(a){
+    const pl = (a && a.panlu) || null;
+    if (!pl || !pl.has) return { text:'升降盘：暂无初盘→临盘记录', arrow:'', col:'#94a3b8' };
+    const asia = pl.asia || {}, eu = pl.eu || {};
+    const ah = (asia.hcap && asia.hcap.txt) ? ('亚盘 '+asia.hcap.txt) : '';
+    const alw = (asia.lw && asia.lw.txt) ? ('·下盘水 '+asia.lw.txt) : '';
+    const euTxt = (eu.favDrop && eu.favDrop.d!=null) ? ('·欧赔主赔 '+eu.favDrop.from+'→'+eu.favDrop.to) : '';
+    const det = [ah, alw, euTxt].filter(Boolean).join(' ');
+    // 方向：亚盘降盘(hcap dir↓)=庄家收窄让幅=护受让；升盘(↑)=增强上盘信心=护上盘
+    const hd = (asia.hcap && asia.hcap.dir) || '';
+    let arrow = '', col = '#94a3b8', verdict = '盘口未明显变动';
+    if (hd === '↓'){ arrow='⬇ 降盘示弱'; col='#2faa6a'; verdict='降盘·护受让'; }
+    else if (hd === '↑'){ arrow='⬆ 升盘增强'; col='#e54545'; verdict='升盘·护上盘'; }
+    const summ = (pl.summary && pl.summary.length) ? pl.summary.join('；') : '';
+    return { text: (det?det+'　':'')+summ, arrow, col, verdict };
+  }
+  function lineupCellHTML(r){
+    const a = r.a || {};
+    const pv = lineupPanelVerdict(a);
+    const stored = _luGet(r.tid);
+    const tidAttr = String(r.tid);
+    let h = '<div style="font-size:10px;font-weight:700;color:'+pv.col+'">'+(pv.arrow||'± 盘口观望')+'</div>';
+    if (pv.text) h += '<div style="font-size:9.5px;color:var(--mut);margin:2px 0 3px;line-height:1.5">'+esc(pv.text)+'</div>';
+    h += '<textarea id="luIn_'+tidAttr+'" placeholder="贴入赛前30-60min雷速阵容（首发/伤停/轮换/战术）" style="width:100%;min-height:46px;max-height:120px;font-size:10.5px;line-height:1.5;padding:4px;border:1px solid rgba(148,163,184,.35);border-radius:6px;resize:vertical;background:rgba(15,23,42,.03);color:inherit">'+esc(stored)+'</textarea>';
+    h += '<div style="display:flex;gap:4px;margin-top:3px">'
+       +   '<button onclick="event.stopPropagation();lineupSaveBtn(\''+tidAttr+'\')" style="font-size:9.5px;padding:2px 8px;border:1px solid #2faa6a;color:#2faa6a;background:transparent;border-radius:5px;cursor:pointer;font-weight:700">💾 存综合意见</button>'
+       +   '<button onclick="event.stopPropagation();lineupClearBtn(\''+tidAttr+'\')" style="font-size:9.5px;padding:2px 6px;border:1px solid rgba(148,163,184,.4);color:var(--mut);background:transparent;border-radius:5px;cursor:pointer">清</button>'
+       + '</div>';
+    if (stored) h += '<div style="font-size:9.5px;color:var(--mut);margin-top:3px;line-height:1.55;border-left:2px solid '+pv.col+';padding-left:5px"><b style="color:var(--acc)">我的阵容综合意见：</b>'+esc(stored)+'</div>';
+    return h;
+  }
   const _row=(r)=>{ const _g = r.flip ? {color:'#7c3aed',bg:'#ede9fe',tag:'翻转型'} : (r.bigHot&&r.grade ? r.grade : {color:'#94a3b8',bg:'#f1f5f9',tag:''});
     return '<tr onclick="closeFundPlate();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer" title="点击定位到主看板该场实时盘口">'
     +'<td>'+esc(r.ts)+'</td><td>'+esc(r.league)+'</td>'
@@ -8789,6 +8882,7 @@ function openFundPlate(){
     + _jcCell(r.jcDev)
     +'</td>'
     +'<td style="vertical-align:top;font-size:10px">'+_monitorTierCell(r)+'</td>'
+    +'<td style="vertical-align:top;width:230px;min-width:210px">'+lineupCellHTML(r)+'</td>'
     +'</tr>'; };
   /* ★ 2026-10-30 判定准确率自证横幅（用户复盘"弗拉门戈/格雷米奥两场全错"后必须有）：
      读过热历史已结算条目的真实胜率，<45% 红色警告——告诉用户这个信号目前赚没赚钱，
@@ -8947,9 +9041,10 @@ function openFundPlate(){
           +'</tbody></table></div>';
       })()
     + (rows.length
-        ? ('<table class="tbl" style="width:100%"><thead><tr>'
+        ? ('<div style="overflow-x:auto;max-width:100%"><table class="tbl" style="width:100%;min-width:1180px"><thead><tr>'
            +'<th>开赛</th><th>联赛</th><th>强队</th><th>判定</th><th>亚盘</th><th>结果</th><th>拥挤警告(观察)</th><th>明细</th><th>系统方向<br><span style="font-size:9px;font-weight:400">庄家视野 + 下注方向 + 成效</span></th>'
-           +'</tr></thead><tbody>'+rows.map(_row).join('')+'</tbody></table>')
+           +'<th style="color:#36c275">阵容综合分析意见<br><span style="font-size:9px;font-weight:400">自动升降盘 + 贴赛前30-60min雷速阵容</span></th>'
+           +'</tr></thead><tbody>'+rows.map(_row).join('')+'</tbody></table></div>')
         : ('<p class="note">当前没有「<b>强队被超买 ≥+3pt</b>（净超买大热线）」的即将开赛场次。本板只标<b>真·热门方(强队)被散户超买</b>——冷门被爆买的「盘口翻转」另列下方，弱队过热/资金平淡一律不标，无信号就不硬凑。</p>'
            + _monitorSample()))
     /* ★ 2026-10-31 七修：翻转型独立观察区（不占过热主榜名额、不参与过热排序） */
