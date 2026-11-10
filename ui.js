@@ -9305,19 +9305,15 @@ function _bfDyn(m){
   try{
     const a = m.analysis || {};
     const notes = [];
-    const trail = a.trail;
-    if (trail){
-      const p0 = trail.hcapOpen, p1 = trail.hcapLive;
-      if (p0 != null && p1 != null){
-        const d = (+p1) - (+p0);
-        if (d > 0.01) notes.push('升盘⬆+'+d.toFixed(2));
-        else if (d < -0.01) notes.push('降盘⬇'+d.toFixed(2));
-      }
-      if (trail.wuOpen != null && trail.wuLive != null){
-        const dw = (+trail.wuLive) - (+trail.wuOpen);
-        if (dw > 0.01) notes.push('上水↑+'+dw.toFixed(2));
-        else if (dw < -0.01) notes.push('上水↓'+dw.toFixed(2));
-      }
+    /* ★ 2026-11-10 修：an.trail 根本不存在——盘路轨迹要用 panluTrail(a)（从 a0/h0/p1/h1 现算），
+       旧写法导致动态列恒空。 */
+    const t = (typeof panluTrail==='function') ? panluTrail(a) : null;
+    if (t){
+      if (t.dp > 0.05) notes.push('升盘+'+t.dp.toFixed(2));
+      else if (t.dp < -0.05) notes.push('降盘'+t.dp.toFixed(2));
+      if (t.dh > 0.05) notes.push('上盘升水+'+t.dh.toFixed(2));
+      else if (t.dh < -0.05) notes.push('上盘降水'+t.dh.toFixed(2));
+      if (t.label && t.label!=='平盘平水') notes.push(t.label);
     }
     if (a.wash && a.wash.flag) notes.push('水位大幅拨动');
     if (a.ea && a.ea.tag) notes.push(a.ea.tag);   // 欧亚gap 诊断标签
@@ -9394,12 +9390,11 @@ function _bfPick(m){
       if (wtr>=1.0 || wtr<0.80){ if (favH) vH+=1; else vA+=1; why.push('水位'+wtr.toFixed(2)+'偏强+1'); }
       else { if (favH) vA+=1; else vH+=1; why.push('水位'+wtr.toFixed(2)+'偏受让+1'); }
     }
-    /* ④ 临盘动态（升盘挺主 / 降盘挺客，直接参与定比分方向） */
-    const tr = a.trail;
-    if (tr && tr.hcapOpen!=null && tr.hcapLive!=null){
-      const d = (+tr.hcapLive)-(+tr.hcapOpen);
-      if (d>0.1){ vH+=1; why.push('升盘+'+d.toFixed(2)+'挺主+1'); }
-      else if (d<-0.1){ vA+=1; why.push('降盘'+d.toFixed(2)+'挺客+1'); }
+    /* ④ 临盘动态（panluTrail 现算 a0/h0→p1/h1：升盘挺主 / 降盘挺客，直接参与定比分方向） */
+    const tr = (typeof panluTrail==='function') ? panluTrail(a) : null;
+    if (tr){
+      if (tr.dp>0.1){ vH+=1; why.push('升盘+'+tr.dp.toFixed(2)+'挺主+1'); }
+      else if (tr.dp<-0.1){ vA+=1; why.push('降盘'+tr.dp.toFixed(2)+'挺客+1'); }
     }
     /* 定方向：票差≥2 才出，否则五五开 */
     let dir='—';
@@ -9407,30 +9402,34 @@ function _bfPick(m){
     else if (vA>=vH+2 && vA>=vD+1) dir='A';
     else if (vD>0 && vD>=vH && vD>=vA) dir='D';
     const dirTxt = dir==='H'?'主胜比分':dir==='A'?'客胜比分':dir==='D'?'平局比分':'五五开·偏小比分';
-    /* 加权调整候选比分（模型概率 × 方向/深度/浅盘倾斜），候选池内重归一 */
+    /* 加权调整候选比分（模型概率 × 方向/深度/浅盘倾斜），候选池内重归一；每个比分记录命中的调整因子（分析依据） */
     const deep = hc!=null ? Math.abs(hc) : 0;
     for (const c of cands){
       const mm = c.score.split(':'); const hs=+mm[0], as=+mm[1];
-      if (!isFinite(hs)||!isFinite(as)){ c.adj = c.model; continue; }
+      if (!isFinite(hs)||!isFinite(as)){ c.adj = c.model; c.tags=[]; continue; }
       const o = hs>as?'H':(hs<as?'A':'D');
-      let mult = 1;
+      let mult = 1; const tags=[];
       if (dir==='H' || dir==='A'){
-        if (o===dir) mult *= 1.15; else if (o!=='D') mult *= 0.90;
-        if (deep>=1.25 && o===dir && Math.abs(hs-as)>=2) mult *= 1.12;   // 深盘强队方向 → 净胜≥2球
-        if (deep<0.5 && (o==='D' || Math.abs(hs-as)===1)) mult *= 1.06;   // 浅盘/平手 → 小比分差
+        if (o===dir){ mult *= 1.15; tags.push('方向同侧×1.15'); }
+        else if (o!=='D'){ mult *= 0.90; tags.push('方向反侧×0.90'); }
+        if (deep>=1.25 && o===dir && Math.abs(hs-as)>=2){ mult *= 1.12; tags.push('深盘净胜≥2×1.12'); }
+        if (deep<0.5 && (o==='D' || Math.abs(hs-as)===1)){ mult *= 1.06; tags.push('浅盘小比分×1.06'); }
       } else if (dir==='D'){
-        if (o==='D') mult *= 1.18; else if (Math.abs(hs-as)===1) mult *= 1.04;
+        if (o==='D'){ mult *= 1.18; tags.push('防平×1.18'); }
+        else if (Math.abs(hs-as)===1){ mult *= 1.04; tags.push('1球差×1.04'); }
       } else {
-        if (o==='D') mult *= 1.10; else if (Math.abs(hs-as)===1) mult *= 1.03;  // 五五开偏小比分
+        if (o==='D'){ mult *= 1.10; tags.push('五五开防平×1.10'); }
+        else if (Math.abs(hs-as)===1){ mult *= 1.03; tags.push('五五开1球差×1.03'); }
       }
-      c.adj = c.model * mult;
+      if (!tags.length) tags.push('模型原序');
+      c.adj = c.model * mult; c.tags = tags;
     }
     let sum=0; for (const c of cands) sum+=c.adj;
     if (sum>0) for (const c of cands) c.adj = c.adj/sum*100;
     const sorted = cands.slice().sort((x,y)=> y.adj-x.adj);
     const picks = sorted.slice(0,3).map((c,i)=>({
       score:c.score, adj:c.adj, model:c.model, imp:c.imp, odds:c.odds,
-      tier: i===0?'精选':'优选'
+      tags:c.tags||[], tier: i===0?'精选':'优选'
     }));
     return { dir, dirTxt, tally:'H'+vH+':A'+vA+':D'+vD, why, picks, hc };
   }catch(e){ return null; }
@@ -9520,6 +9519,14 @@ function openBifen(){
   const dirTxt2 = dirDone ? Math.round(dirHit/dirDone*100)+'%（'+dirHit+'/'+dirDone+'）' : '—';
   const nSel = rows.filter(r=>r.tier==='精选').length;
   const nYou = rows.filter(r=>r.tier==='优选').length;
+  const statsHTML =
+      '<span>本视图场次：<b>' + rows.length + '</b></span>'
+    + '<span>精选场：<b style="color:var(--red)">' + nSel + '</b> · 优选场：<b style="color:#f97316">' + nYou + '</b></span>'
+    + '<span>方向命中：<b style="color:var(--grn)">' + dirTxt2 + '</b></span>'
+    + '<span>精选波胆命中：<b style="color:var(--grn)">' + selTxt + '</b></span>'
+    + '<span>精选+优选3球覆盖：<b>' + covTxt + '</b></span>'
+    + '<span>模型前3命中：<b>' + rate3Txt + '</b></span>';
+  window._bifenLiveStats = statsHTML;
   const html =
     '<div class="modal show" id="bifenModal" style="display:flex;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:12px">'
     + '<div style="background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:12px;max-width:1320px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
@@ -9533,13 +9540,9 @@ function openBifen(){
     + '<b style="color:var(--red)">⚠ 诚实底线</b>：单场比分命中天花板本来就低——115 场账本校准：模型 Top3 覆盖 26.1%、Top10 覆盖 59.1%，故精选波胆是「调整后概率最高的一个」而非稳胆；竞彩与北单"最热比分"定价方向相反（竞彩 +12.6pt 低估 n=27 未定论 / 北单 −2.9pt 高估），旧「最热陷阱 −15.8pt」系混源伪影已作废。'
     + '<b>复盘口径</b>（仿三盘资金过热板）：赛前冻结的方向+精选/优选比分 vs 赛果，三口径（方向✓/精选✓/3球覆盖✓）。'
     + '<span style="color:var(--mut)">（投票与选择随 CVM 每 15 分钟一帧刷新，开赛定格后供复盘）</span></div>'
-    + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:var(--txt)">'
-    + '<span>本视图场次：<b>' + rows.length + '</b></span>'
-    + '<span>精选场：<b style="color:var(--red)">' + nSel + '</b> · 优选场：<b style="color:#f97316">' + nYou + '</b></span>'
-    + '<span>方向命中：<b style="color:var(--grn)">' + dirTxt2 + '</b></span>'
-    + '<span>精选波胆命中：<b style="color:var(--grn)">' + selTxt + '</b></span>'
-    + '<span>精选+优选3球覆盖：<b>' + covTxt + '</b></span>'
-    + '<span>模型前3命中：<b>' + rate3Txt + '</b></span>'
+    + '<div id="bifenStats" style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:var(--txt);align-items:center">'
+    + statsHTML
+    + '<span style="margin-left:auto;white-space:nowrap">📅 ' + bifenDaySel('live') + '</span>'
     + '</div>'
     + '<div class="htab-bar" style="margin-bottom:8px">'
     + '<button class="htab-btn on bftab" data-t="all" onclick="bifenTier(\'all\')">全部</button>'
@@ -9571,27 +9574,169 @@ function bifenTier(t){
     : '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">该档位当前无场次</td></tr>';
   try{ document.querySelectorAll('#bifenModal .bftab').forEach(b=> b.classList.toggle('on', b.getAttribute('data-t')===t)); }catch(e){}
 }
+/* ★ 2026-11-10 需求④·日期选择与历史复盘（账本式：赛前登记→完场自动结算→逐日可翻）。
+   数据源 window.__BIFEN_HIST__（gen_index 注入，CVM _bifen_hist.cjs 每 15 分钟登记/结算）。
+   铁律同三盘过热历史板：登记意见赛前冻结，结算只补 result 不改意见。 */
+function bifenDaySel(cur){
+  let days = [];
+  try{ days = Object.keys(window.__BIFEN_HIST__||{}).sort().reverse(); }catch(e){}
+  let o = '<option value="live"'+(cur==='live'?' selected':'')+'>今日（实时）</option>';
+  for (const d of days){
+    const es = Object.values((window.__BIFEN_HIST__||{})[d]||{});
+    const st = es.filter(e=>String(e.state)==='-1').length;
+    const lb = d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6);
+    o += '<option value="'+d+'"'+(cur===d?' selected':'')+'>'+lb+'（'+es.length+'场·已结'+st+'）</option>';
+  }
+  if (days.length) o += '<option value="__sum"'+(cur==='__sum'?' selected':'')+'>📊 全部历史汇总</option>';
+  return '<select onchange="bifenDay(this.value)" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:12px">'+o+'</select>';
+}
+function _bfHitBadge(v, labOk, labNo){
+  return v==='✓' ? '<span class="badge bW">'+labOk+'</span>' : (v==='✗' ? '<span class="badge bL">'+labNo+'</span>' : '');
+}
+function bifenHistStatsHTML(es){
+  const done = es.filter(e=>String(e.state)==='-1' && e.hs!=null && e.as!=null);
+  const pct = (h,n)=> n ? Math.round(h/n*100)+'%（'+h+'/'+n+'）' : '—';
+  const dirD = done.filter(e=>e.hitDir); const dirH = dirD.filter(e=>e.hitDir==='✓').length;
+  const selD = done.filter(e=>e.hitSel);  const selH = selD.filter(e=>e.hitSel==='✓').length;
+  const covH = selD.filter(e=>e.hitCov==='✓').length;
+  return '<span>当日登记：<b>'+es.length+'</b> 场</span>'
+    + '<span>已结算：<b>'+done.length+'</b></span>'
+    + '<span>方向命中：<b style="color:var(--grn)">'+pct(dirH,dirD.length)+'</b></span>'
+    + '<span>精选波胆命中：<b style="color:var(--grn)">'+pct(selH,selD.length)+'</b></span>'
+    + '<span>精选+优选3球覆盖：<b>'+pct(covH,selD.length)+'</b></span>'
+    + '<span style="color:var(--mut)">（赛前冻结意见 vs 赛果，仿三盘资金过热板复盘口径）</span>';
+}
+function bifenHistRowHTML(e){
+  /* 与 live 行同 9 列，字段全部来自冻结登记（不依赖当前 MATCHES） */
+  const picks = e.picks || [];
+  let selTxt = '<span style="color:var(--mut)">—</span>';
+  if (picks.length){
+    const p = picks[0];
+    selTxt = '<div style="font-weight:800;font-size:14px;color:var(--red)">'+p.score+'</div>'
+      + '<div style="font-size:9.5px;color:var(--txt)">调整后 '+(+p.adj).toFixed(1)+'%</div>'
+      + '<div style="font-size:9px;color:var(--mut)">模型'+(+p.model).toFixed(1)+'%'
+      + (p.imp!=null ? ' · 市场'+(+p.imp).toFixed(1)+'%·赔'+(+p.odds).toFixed(1) : '') + '</div>'
+      + ((p.tags&&p.tags.length) ? '<div style="font-size:8.5px;color:var(--acc);margin-top:1px">'+p.tags.join(' ')+'</div>' : '');
+  }
+  let youTxt = '<span style="color:var(--mut)">—</span>';
+  if (picks.length>1){
+    youTxt = picks.slice(1).map(p=>
+      '<div style="font-size:10.5px;margin-bottom:2px"><b style="color:#f97316">'+p.score+'</b> '
+      + '<span style="color:var(--txt)">'+(+p.adj).toFixed(1)+'%</span> '
+      + '<span style="font-size:9px;color:var(--mut)">模型'+(+p.model).toFixed(1)+'%'
+      + (p.imp!=null ? '·市场'+(+p.imp).toFixed(1)+'%' : '') + '</span>'
+      + ((p.tags&&p.tags.length) ? '<br><span style="font-size:8.5px;color:var(--acc)">'+p.tags.join(' ')+'</span>' : '')
+      + '</div>').join('');
+  }
+  const dCol = e.dir==='H'?'var(--red)':e.dir==='A'?'var(--blu)':e.dir==='D'?'var(--yel)':'var(--mut)';
+  const voteTxt = '<b style="color:'+dCol+'">'+(e.dirTxt||'—')+'</b> '
+    + '<span style="font-size:9.5px;color:var(--mut)">('+(e.tally||'')+')</span>'
+    + ((e.why&&e.why.length) ? '<div style="font-size:9px;color:var(--mut);margin-top:2px;line-height:1.5">'+e.why.join(' · ')+'</div>' : '');
+  let mktTxt = '<span style="color:var(--mut)">无市场</span>';
+  if (e.mktTop && e.mktTop.score){
+    mktTxt = '<span style="font-weight:700;color:var(--txt)">'+e.mktTop.score+'</span> '
+      + '<span style="font-size:9.5px;color:var(--mut)">隐含'+(+e.mktTop.imp).toFixed(1)+'% · 赔'+(+e.mktTop.odds).toFixed(2)+'</span>';
+  }
+  const tCol = {'精选':'#e54545','优选':'#f97316','小注':'#eab308','观察':'#5b6675'}[e.tier] || 'var(--mut)';
+  const advTxt = '<span class="badge bG" style="color:'+tCol+';font-weight:800">'+(e.tier||'观察')+'</span>'
+    + ((e.clues&&e.clues.length) ? ' <span style="font-size:9px;color:var(--mut)">'+e.clues.join(' / ')+'</span>' : '')
+    + '<div style="font-size:8.5px;color:var(--mut);margin-top:2px">登记 '+(e.firstSeen||'')+'</div>';
+  let resTxt;
+  if (String(e.state)==='-1' && e.hs!=null && e.as!=null){
+    resTxt = '<b style="color:var(--txt);font-size:12px">'+e.hs+':'+e.as+'</b><div style="margin-top:3px">'
+      + (e.hitDir ? _bfHitBadge(e.hitDir,'方向✓','方向✗') : '<span class="badge bG">方向·五五开</span>')
+      + _bfHitBadge(e.hitSel,'精选✓','精选✗')
+      + (e.hitCov==='✓' ? '<span class="badge bD">3球覆盖✓</span>' : (e.hitCov==='✗' ? '<span class="badge bG">3球✗</span>' : ''))
+      + '</div>';
+  } else {
+    resTxt = '<span style="color:var(--mut)">未结算</span>';
+  }
+  return '<tr>'
+    + '<td style="font-size:10.5px;white-space:nowrap">'+(e.time||'')+'</td>'
+    + '<td style="font-size:10.5px">'+(e.league||'')+'</td>'
+    + '<td style="font-size:10.5px">'+(e.home||'')+' <span style="color:var(--mut)">vs</span> '+(e.away||'')+'</td>'
+    + '<td style="font-size:10.5px">'+selTxt+'</td>'
+    + '<td style="font-size:10.5px;text-align:left">'+youTxt+'</td>'
+    + '<td style="font-size:10.5px;text-align:left">'+voteTxt+'</td>'
+    + '<td style="font-size:10.5px">'+mktTxt+'</td>'
+    + '<td style="font-size:10.5px;text-align:left">'+advTxt+'</td>'
+    + '<td style="font-size:10.5px">'+resTxt+'</td>'
+    + '</tr>';
+}
+function bifenSumHTML(){
+  const H = window.__BIFEN_HIST__||{};
+  const days = Object.keys(H).sort().reverse();
+  if (!days.length) return '<div style="padding:18px;text-align:center;color:var(--mut)">暂无历史（账本自 2026-11-10 起逐日沉淀）</div>';
+  const pct = (h,n)=> n ? Math.round(h/n*100)+'%（'+h+'/'+n+'）' : '—';
+  let trs = '', T={reg:0,done:0,dirD:0,dirH:0,selD:0,selH:0,covH:0};
+  for (const d of days){
+    const es = Object.values(H[d]||{});
+    const done = es.filter(e=>String(e.state)==='-1' && e.hs!=null && e.as!=null);
+    const dirD = done.filter(e=>e.hitDir); const dirH = dirD.filter(e=>e.hitDir==='✓').length;
+    const selD = done.filter(e=>e.hitSel);  const selH = selD.filter(e=>e.hitSel==='✓').length;
+    const covH = selD.filter(e=>e.hitCov==='✓').length;
+    T.reg+=es.length; T.done+=done.length; T.dirD+=dirD.length; T.dirH+=dirH; T.selD+=selD.length; T.selH+=selH; T.covH+=covH;
+    const lb = d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6);
+    trs += '<tr style="cursor:pointer" onclick="bifenDay(\''+d+'\')">'
+      + '<td><b style="color:var(--blu)">'+lb+'</b></td><td>'+es.length+'</td><td>'+done.length+'</td>'
+      + '<td>'+pct(dirH,dirD.length)+'</td><td>'+pct(selH,selD.length)+'</td><td>'+pct(covH,selD.length)+'</td></tr>';
+  }
+  return '<div style="padding:6px"><table style="min-width:720px"><thead><tr>'
+    + '<th>日期（点击进当日明细）</th><th>登记场</th><th>已结算</th><th>方向命中</th><th>精选波胆命中</th><th>3球覆盖</th>'
+    + '</tr></thead><tbody>' + trs
+    + '<tr style="font-weight:800;background:var(--card2)"><td>合计</td><td>'+T.reg+'</td><td>'+T.done+'</td>'
+    + '<td>'+pct(T.dirH,T.dirD)+'</td><td>'+pct(T.selH,T.selD)+'</td><td>'+pct(T.covH,T.selD)+'</td></tr>'
+    + '</tbody></table></div>';
+}
+function bifenDay(d){
+  window._bifenDay = d;
+  const tb = document.getElementById('bifenTbody');
+  const st = document.getElementById('bifenStats');
+  const sel = document.querySelector('#bifenStats select');
+  if (sel) sel.outerHTML = bifenDaySel(d);
+  if (d==='live'){
+    if (tb) tb.innerHTML = (window._bifenRows||[]).map(bifenRowHTML).join('')
+      || '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">当前无视图场次</td></tr>';
+    if (st){
+      st.innerHTML = (window._bifenLiveStats||'') + '<span style="margin-left:auto;white-space:nowrap">📅 ' + bifenDaySel('live') + '</span>';
+    }
+    return;
+  }
+  if (d==='__sum'){
+    if (tb) tb.innerHTML = '<tr><td colspan="9" style="padding:0;border:none">'+bifenSumHTML()+'</td></tr>';
+    if (st) st.innerHTML = '<span style="color:var(--mut)">全部历史：赛前登记→完场自动结算（跨日回退对账）</span>'
+      + '<span style="margin-left:auto;white-space:nowrap">📅 ' + bifenDaySel('__sum') + '</span>';
+    return;
+  }
+  const es = Object.values((window.__BIFEN_HIST__||{})[d]||{}).sort((x,y)=> String(x.time||'').localeCompare(String(y.time||'')));
+  if (tb) tb.innerHTML = es.length ? es.map(bifenHistRowHTML).join('')
+    : '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">该日无登记</td></tr>';
+  if (st) st.innerHTML = bifenHistStatsHTML(es) + '<span style="margin-left:auto;white-space:nowrap">📅 ' + bifenDaySel(d) + '</span>';
+}
 function bifenRowHTML(r){
   const v = r.v || {};
   const vd = v.verdict || {};
   const pk = v.pick || null;
-  /* 🎯 精选波胆（需求①：选择引擎第1名，三板块+动态加权调整后） */
+  /* 🎯 精选波胆（需求①：选择引擎第1名，三板块+动态加权调整后；附调整依据） */
   let selTxt = '<span style="color:var(--mut)">—</span>';
   if (pk && pk.picks && pk.picks.length){
     const p = pk.picks[0];
     selTxt = '<div style="font-weight:800;font-size:14px;color:var(--red)">'+p.score+'</div>'
       + '<div style="font-size:9.5px;color:var(--txt)">调整后 '+p.adj.toFixed(1)+'%</div>'
       + '<div style="font-size:9px;color:var(--mut)">模型'+p.model.toFixed(1)+'%'
-      + (p.imp!=null ? ' · 市场'+p.imp.toFixed(1)+'%·赔'+p.odds.toFixed(1) : '') + '</div>';
+      + (p.imp!=null ? ' · 市场'+p.imp.toFixed(1)+'%·赔'+p.odds.toFixed(1) : '') + '</div>'
+      + ((p.tags&&p.tags.length) ? '<div style="font-size:8.5px;color:var(--acc);margin-top:1px">'+p.tags.join(' ')+'</div>' : '');
   }
-  /* ⭐ 优选波胆（第2~3名） */
+  /* ⭐ 优选波胆（第2~3名，附调整依据） */
   let youTxt = '<span style="color:var(--mut)">—</span>';
   if (pk && pk.picks && pk.picks.length>1){
     youTxt = pk.picks.slice(1).map(p=>
       '<div style="font-size:10.5px;margin-bottom:2px"><b style="color:#f97316">'+p.score+'</b> '
       + '<span style="color:var(--txt)">'+p.adj.toFixed(1)+'%</span> '
       + '<span style="font-size:9px;color:var(--mut)">模型'+p.model.toFixed(1)+'%'
-      + (p.imp!=null ? '·市场'+p.imp.toFixed(1)+'%' : '') + '</span></div>').join('');
+      + (p.imp!=null ? '·市场'+p.imp.toFixed(1)+'%' : '') + '</span>'
+      + ((p.tags&&p.tags.length) ? '<br><span style="font-size:8.5px;color:var(--acc)">'+p.tags.join(' ')+'</span>' : '')
+      + '</div>').join('');
   }
   /* 方向投票列（仿三盘资金过热板综合意见格式：方向 + 票型 + 依据明细） */
   let voteTxt = '<span style="color:var(--mut)">—</span>';
