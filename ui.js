@@ -9404,6 +9404,14 @@ function _bfPick(m){
     const dirTxt = dir==='H'?'主胜比分':dir==='A'?'客胜比分':dir==='D'?'平局比分':'五五开·偏小比分';
     /* 加权调整候选比分（模型概率 × 方向/深度/浅盘倾斜），候选池内重归一；每个比分记录命中的调整因子（分析依据） */
     const deep = hc!=null ? Math.abs(hc) : 0;
+    /* ★ 2026-11-10 回测共识档位（D盘 308 场已结算实测）：前3合计隐含 25-30% 与 34-40% 两档
+       ROI +25.2% / +19.7% 为仅有的正 edge 档；30-34% 和 >40% 为负 ROI 档 → 前3 加权 1.15，
+       负档不加权（诚实：样本 308 场偏小，权重保守）。 */
+    const top3im = implied.slice(0,3);
+    const s3 = top3im.reduce((s,x)=> s + (x.imp||0), 0);
+    const consOk = (s3 >= 25 && s3 < 30) || (s3 >= 34 && s3 < 40);
+    const consTxt = s3 > 0 ? ('前3合计隐含'+s3.toFixed(0)+'%' + (consOk ? '·共识档✓×1.15' : '·负ROI档')) : '';
+    if (consTxt) why.push(consTxt);
     for (const c of cands){
       const mm = c.score.split(':'); const hs=+mm[0], as=+mm[1];
       if (!isFinite(hs)||!isFinite(as)){ c.adj = c.model; c.tags=[]; continue; }
@@ -9421,6 +9429,7 @@ function _bfPick(m){
         if (o==='D'){ mult *= 1.10; tags.push('五五开防平×1.10'); }
         else if (Math.abs(hs-as)===1){ mult *= 1.03; tags.push('五五开1球差×1.03'); }
       }
+      if (consOk && top3im.some(x=>x.score===c.score)){ mult *= 1.15; tags.push('共识档×1.15'); }
       if (!tags.length) tags.push('模型原序');
       c.adj = c.model * mult; c.tags = tags;
     }
@@ -9535,6 +9544,7 @@ function openBifen(){
     + '<div style="padding:12px 14px">'
     + '<div style="background:rgba(224,165,38,.10);border:1px solid rgba(224,165,38,.45);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.8;color:var(--txt)">'
     + '<b style="color:var(--yel)">⚠ 波胆选择引擎（对照·监测性质，非稳胆）</b>：基底=Dixon-Coles 模型比分概率，经<b>三板块+临盘动态投票</b>加权调整后排序出<b>精选波胆（第1）/优选波胆（第2~3）</b>：<br>'
+    + '<b style="color:var(--blu)">📈 想先看"波胆到底算不算得准"</b>：右上「📅 日期」选 <b>有赛果历史复盘（' + (((window.__BIFEN_REVIEW__||{}).all||{}).total||0) + ' 场）</b> —— 用 D盘全量复盘表的<b>真实波胆赔率 vs 真实赛果</b>逐场对账（市场最热命中/前3覆盖/押前3 ROI，按竞彩·北单分源）。<br>'
     + '<b>投票构成</b>：①优选精选板块模型方向 ±2（t1 终局再+1）②深让盘强队侧 +1（≥1.25 盘再倾斜净胜≥2球）③三盘资金过热 netPt≥4 顺过热方 +1（铁律：不机械反买）④上盘水位票（v2 标定口径）⑤临盘升盘挺主/降盘挺客 +1。票差≥2 才定方向，否则「五五开」倾斜平局/1球小比分。<br>'
     + '<b>市场</b>=北单 bf 优先、竞彩 crs 兜底（赔率归一隐含概率）作对照；<b>365</b>=365/欧赔临盘 1X2 隐含第三源参照。<b>档</b>=场次分级（破缺口/三盘过热/盘级差/深让盘四线索，≥3精选场、2优选场）。<br>'
     + '<b style="color:var(--red)">⚠ 诚实底线</b>：单场比分命中天花板本来就低——115 场账本校准：模型 Top3 覆盖 26.1%、Top10 覆盖 59.1%，故精选波胆是「调整后概率最高的一个」而非稳胆；竞彩与北单"最热比分"定价方向相反（竞彩 +12.6pt 低估 n=27 未定论 / 北单 −2.9pt 高估），旧「最热陷阱 −15.8pt」系混源伪影已作废。'
@@ -9581,6 +9591,11 @@ function bifenDaySel(cur){
   let days = [];
   try{ days = Object.keys(window.__BIFEN_HIST__||{}).sort().reverse(); }catch(e){}
   let o = '<option value="live"'+(cur==='live'?' selected':'')+'>今日（实时）</option>';
+  /* ★ 2026-11-10 需求：「有赛果的历史比赛复盘」放在最显眼位置——用 D盘全量复盘表已结算的
+     308 场（市场波胆赔率末帧 vs 真实赛果），逐场可翻，直接看「波胆怎么算、算得准不准」。 */
+  const rv = window.__BIFEN_REVIEW__||{};
+  const rvN = (rv.all && rv.all.total)||0;
+  if (rvN) o += '<option value="__review"'+(cur==='__review'?' selected':'')+'>📈 有赛果历史复盘（'+rvN+'场·市场vs赛果）</option>';
   for (const d of days){
     const es = Object.values((window.__BIFEN_HIST__||{})[d]||{});
     const st = es.filter(e=>String(e.state)==='-1').length;
@@ -9688,12 +9703,90 @@ function bifenSumHTML(){
     + '<td>'+pct(T.dirH,T.dirD)+'</td><td>'+pct(T.selH,T.selD)+'</td><td>'+pct(T.covH,T.selD)+'</td></tr>'
     + '</tbody></table></div>';
 }
+function bifenBtRowHTML(e){
+  /* 「有赛果历史复盘」行：9 列与 live 表头同构，字段来自 __BIFEN_REVIEW__（D盘全量复盘表·市场赔率末帧 vs 真实赛果） */
+  const t3 = (e.top3||[]).slice(1).map(s=>'<b style="color:#f97316">'+s+'</b>').join(' ')+'';
+  const selTxt = '<div style="font-weight:800;font-size:14px;color:var(--red)">'+e.top1+'</div>'
+    + '<div style="font-size:9px;color:var(--mut)">市场最热·赔'+e.top1_odds+' · 隐含'+e.top1_imp.toFixed(1)+'%</div>';
+  const youTxt = '<div style="font-size:10.5px;color:#f97316">'+(t3||'—')+'</div>';
+  const voteTxt = '<b style="color:var(--mut)">市场口径</b>'
+    + '<div style="font-size:9px;color:var(--mut);margin-top:2px">押前3各1元 ROI '+(e.roi>=0?'+':'')+e.roi.toFixed(1)+(e.roi>0?'<b style="color:var(--grn)">盈</b>':'')+'</div>';
+  const mktTxt = '<span style="color:var(--mut)">'+e.n_odds+' 项比分赔率</span>';
+  const advTxt = '<span class="badge bG" style="color:var(--mut)">源·'+e.src+'</span>'
+    + (e.lg ? ' <span style="font-size:9px;color:var(--mut)">'+e.lg+'</span>' : '')
+    + '<div style="font-size:8.5px;color:var(--mut);margin-top:2px">末帧采集 '+(e.t||'').slice(5,16)+'</div>';
+  const hit1 = e.hit_top1 ? '<span class="badge bW">最热✓</span>' : '<span class="badge bL">最热✗</span>';
+  const hit3 = e.hit_top3 ? '<span class="badge bD">前3✓</span>' : '<span class="badge bG">前3✗</span>';
+  const resTxt = '<b style="color:var(--txt);font-size:12px">'+e.real+'</b>'
+    + '<div style="margin-top:2px">'+hit1+' '+hit3+'</div>'
+    + (e.rsrc ? '<div style="font-size:8px;color:var(--mut)">'+e.rsrc+'</div>' : '');
+  return '<tr>'
+    + '<td style="font-size:10.5px;white-space:nowrap">'+e.ko+'</td>'
+    + '<td style="font-size:10.5px">'+(e.lg||'')+'</td>'
+    + '<td style="font-size:10.5px">'+e.h+' <span style="color:var(--mut)">vs</span> '+e.a+'</td>'
+    + '<td style="font-size:10.5px">'+selTxt+'</td>'
+    + '<td style="font-size:10.5px;text-align:left">'+youTxt+'</td>'
+    + '<td style="font-size:10.5px;text-align:left">'+voteTxt+'</td>'
+    + '<td style="font-size:10.5px">'+mktTxt+'</td>'
+    + '<td style="font-size:10.5px;text-align:left">'+advTxt+'</td>'
+    + '<td style="font-size:10.5px">'+resTxt+'</td>'
+    + '</tr>';
+}
+function bifenBtStatsHTML(rv){
+  const a = rv.all||{}; const tot=a.total||0;
+  const pct=(x,n)=> n ? Math.round(x/n*100)+'%（'+x+'/'+n+'）' : '—';
+  const srcParts = Object.entries(a.by_src||{}).map(([name,s])=>{
+    const c = name==='竞彩' ? 'var(--blu)' : 'var(--yel)';
+    return '<span style="color:'+c+'">'+name+'：'+s.n+'场 最热'+Math.round(s.h1/s.n*100)+'% 前3'+Math.round(s.h3/s.n*100)+'% ROI'+(s.roi/(s.n*3)*100).toFixed(1)+'%</span>';
+  }).join(' · ');
+  return '<span>已结算：<b>'+tot+'</b> 场</span>'
+    + '<span>市场最热命中：<b style="color:var(--grn)">'+pct(a.hit_top1,tot)+'</b></span>'
+    + '<span>前3覆盖：<b>'+pct(a.hit_top3,tot)+'</b></span>'
+    + '<span>ROI(押前3各1元)：<b style="color:'+(a.roi>=0?'var(--grn)':'var(--red)')+'">'+(a.roi>=0?'+':'')+(a.roi/(tot*3)*100).toFixed(1)+'%</b></span>'
+    + '<span style="font-size:11px">'+srcParts+'</span>';
+}
+function bifenBtHTML(rv){
+  const days = Object.keys(rv.days||{}).sort().reverse();
+  const all = rv.days['__all__'] || days.reduce((acc,d)=>{ for (const k in rv.days[d]) acc[k]=rv.days[d][k]; return acc; }, {});
+  const cur = window._bifenBtDay || '__all__';
+  const es = Object.values(cur==='__all__' ? all : (rv.days[cur]||{})).sort((x,y)=> String(x.ko||'').localeCompare(String(y.ko||'')));
+  const selOpts = '<select onchange="bifenBtDay(this.value)" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:12px">'
+    + '<option value="__all__"'+(cur==='__all__'?' selected':'')+'>全部（'+Object.keys(all).length+'场）</option>'
+    + days.map(d=>{ const lb=d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6);
+        return '<option value="'+d+'"'+(cur===d?' selected':'')+'>'+lb+'（'+Object.keys(rv.days[d]||{}).length+'场）</option>'; }).join('')
+    + '</select>';
+  return '<div style="padding:4px 0">'
+    + '<div style="font-size:12px;color:var(--txt);background:rgba(58,142,230,.10);border:1px solid rgba(58,142,230,.4);border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.7">'
+    + '<b style="color:var(--blu)">📈 有赛果历史复盘：市场波胆赔率（末帧） vs 真实赛果</b>——数据源 D盘《北单竞彩_全量复盘.xlsx》比分_BF + 赛果表，共 '+(rv.all&&rv.all.total||0)+' 场已结算。<br>'
+    + '<span style="color:var(--mut)">读法：「市场最热」=该场赔率最低的比分（庄家眼里最可能），看它命中多少；「前3」=赔率最低3个比分的覆盖；ROI=押前3各1元的净盈亏（正=该场押法赚钱）。整体：市场最热命中 '
+    + ((rv.all&&rv.all.total)? Math.round(rv.all.hit_top1/rv.all.total*100)+'%':'—')
+    + '、前3覆盖 '
+    + ((rv.all&&rv.all.total)? Math.round(rv.all.hit_top3/rv.all.total*100)+'%':'—')
+    + '；<b>分源看差异</b>：'+(Object.entries((rv.all||{}).by_src||{}).map(([nm,s])=>nm+' 最热'+Math.round(s.h1/s.n*100)+'%·前3'+Math.round(s.h3/s.n*100)+'%·ROI'+(s.roi/(s.n*3)*100).toFixed(1)+'%').join(' / '))
+    + '</span></div>'
+    + '<div style="margin-bottom:6px">'+selOpts+'</div>'
+    + '<div style="overflow:auto"><table><thead><tr>'
+    + '<th>开赛</th><th>联赛</th><th>对阵</th><th>市场最热（精选位）</th><th>市场2~3热（优选位）</th><th>押前3盈亏</th><th>赔率项数</th><th>源·采集帧</th><th>赛果 vs 预测</th>'
+    + '</tr></thead><tbody>'
+    + (es.length ? es.map(bifenBtRowHTML).join('') : '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">无数据</td></tr>')
+    + '</tbody></table></div></div>';
+}
+function bifenBtDay(d){ window._bifenBtDay = d; const c = document.getElementById('bifenBtWrap'); if (c) c.innerHTML = bifenBtHTML(window.__BIFEN_REVIEW__||{}); }
 function bifenDay(d){
   window._bifenDay = d;
   const tb = document.getElementById('bifenTbody');
   const st = document.getElementById('bifenStats');
   const sel = document.querySelector('#bifenStats select');
   if (sel) sel.outerHTML = bifenDaySel(d);
+  if (d==='__review'){
+    /* ★ 有赛果历史复盘（D盘 308 场已结算，市场赔率 vs 赛果） */
+    if (tb) tb.innerHTML = '<tr><td colspan="9" style="padding:0;border:none;background:transparent">'+bifenBtHTML(window.__BIFEN_REVIEW__||{})+'</td></tr>';
+    if (st){
+      const rv = window.__BIFEN_REVIEW__||{};
+      st.innerHTML = bifenBtStatsHTML(rv) + '<span style="margin-left:auto;white-space:nowrap">📅 ' + bifenDaySel(d) + '</span>';
+    }
+    return;
+  }
   if (d==='live'){
     if (tb) tb.innerHTML = (window._bifenRows||[]).map(bifenRowHTML).join('')
       || '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">当前无视图场次</td></tr>';
