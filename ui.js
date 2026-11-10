@@ -9549,7 +9549,9 @@ function openBifen(){
     + '<b>市场</b>=北单 bf 优先、竞彩 crs 兜底（赔率归一隐含概率）作对照；<b>365</b>=365/欧赔临盘 1X2 隐含第三源参照。<b>档</b>=场次分级（破缺口/三盘过热/盘级差/深让盘四线索，≥3精选场、2优选场）。<br>'
     + '<b style="color:var(--red)">⚠ 诚实底线</b>：单场比分命中天花板本来就低——115 场账本校准：模型 Top3 覆盖 26.1%、Top10 覆盖 59.1%，故精选波胆是「调整后概率最高的一个」而非稳胆；竞彩与北单"最热比分"定价方向相反（竞彩 +12.6pt 低估 n=27 未定论 / 北单 −2.9pt 高估），旧「最热陷阱 −15.8pt」系混源伪影已作废。'
     + '<b>复盘口径</b>（仿三盘资金过热板）：赛前冻结的方向+精选/优选比分 vs 赛果，三口径（方向✓/精选✓/3球覆盖✓）。'
-    + '<span style="color:var(--mut)">（投票与选择随 CVM 每 15 分钟一帧刷新，开赛定格后供复盘）</span></div>'
+    + '<span style="color:var(--mut)">（投票与选择随 CVM 每 15 分钟一帧刷新，开赛定格后供复盘）</span>'
+    + bifenCalibHTML()
+    + '</div>'
     + '<div id="bifenStats" style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:var(--txt);align-items:center">'
     + statsHTML
     + '<span style="margin-left:auto;white-space:nowrap">📅 ' + bifenDaySel('live') + '</span>'
@@ -9583,6 +9585,21 @@ function bifenTier(t){
   if (tb) tb.innerHTML = list.length ? list.map(bifenRowHTML).join('')
     : '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">该档位当前无场次</td></tr>';
   try{ document.querySelectorAll('#bifenModal .bftab').forEach(b=> b.classList.toggle('on', b.getAttribute('data-t')===t)); }catch(e){}
+}
+function bifenCalibHTML(){
+  try{
+    const c = window.__BIFEN_CALIB__ || null;
+    if (!c) return '';
+    const pct = x => (x!=null ? x.toFixed(1)+'%' : '—');
+    const rows = (c.buckets||[]).map(b=>'<span style="margin-right:10px;white-space:nowrap">模型首选'+b.label+'：Top1 '+pct(b.top1)+' · Top3 '+pct(b.top3)+'（n='+b.n+'）</span>').join('');
+    return '<div style="margin-top:6px;padding:8px 10px;background:rgba(54,194,117,.08);border:1px solid rgba(54,194,117,.35);border-radius:8px;font-size:11px;line-height:1.7;color:var(--txt)">'
+      + '<b style="color:var(--grn)">📊 波胆命中率基准线（诚实标注·别只看单一数字）</b><br>'
+      + '<span>模型 Dixon-Coles 比分分布（'+c.total+' 场完场·小联赛为主）：<b style="color:var(--grn)">Top1 '+pct(c.model.top1)+'</b> · <b style="color:var(--grn)">Top3 '+pct(c.model.top3)+'</b> · Top5 '+pct(c.model.top5)+'</span><br>'
+      + '<span>市场波胆赔率最热（'+(((window.__BIFEN_REVIEW__||{}).all||{}).total||0)+' 场·竞彩/北单主力）：<b style="color:var(--blu)">Top1 '+pct(c.market.top1)+'</b> · <b style="color:var(--blu)">Top3 '+pct(c.market.top3)+'</b></span>'
+      + '<div style="color:var(--mut);margin-top:3px">'+rows+'</div>'
+      + '<div style="color:var(--mut);margin-top:3px;font-size:10px">'+ (c.note||'') +'｜分源 ROI：'+Object.entries(c.by_src||{}).map(([k,v])=>k+' 前3'+Math.round(v.top3)+'%·ROI'+(v.roi>=0?'+':'')+v.roi+'%').join(' / ')+'</div>'
+      + '</div>';
+  }catch(e){ return ''; }
 }
 /* ★ 2026-11-10 需求④·日期选择与历史复盘（账本式：赛前登记→完场自动结算→逐日可翻）。
    数据源 window.__BIFEN_HIST__（gen_index 注入，CVM _bifen_hist.cjs 每 15 分钟登记/结算）。
