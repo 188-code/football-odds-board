@@ -8145,6 +8145,50 @@ function _fpNetPt(e){
   if (e.over != null && isFinite(+e.over)) return +e.over;
   return null;
 }
+/* ★ 2026-11-11 用户质疑「数据变动之后方向是不是死都不变」。
+   旧文案「赛前N帧·方向变M次」比较的是 recDir 整串文字：票数/依据一变就算"方向变"，
+   而读数变、票数变但档位没跨阈值时又显示"变0次" → 既虚高又误导。
+   现拆成三个独立量：档位(dirBucket) / 票数(S,U) / 三盘读数，并标清冻结与翻转档语义。 */
+function _fpDirBucket(s){
+  s = String(s || '');
+  if (/翻转/.test(s)) return '翻转·观察';
+  if (/五五开/.test(s)) return '五五开·观察';
+  if (/买强队|顺买/.test(s)) return '买强队';
+  if (/买受让|反买|站.*对面/.test(s)) return '买受让';
+  return s ? '其他' : '空';
+}
+function _fpTrailTxt(e, frozen){
+  var tr = (e && Array.isArray(e.dirTrail)) ? e.dirTrail : [];
+  if (!tr.length) return '';
+  var RK = ('wtr,hcap,bdPct,bdSp,euQ,netPt,ppi,hot,dev,over,gap').split(',');
+  var dc = 0, vc = 0, rc = 0;
+  for (var i = 1; i < tr.length; i++){
+    var a = tr[i-1] || {}, b = tr[i] || {};
+    if (_fpDirBucket(a.dir) !== _fpDirBucket(b.dir)) dc++;
+    if (String(a.s) !== String(b.s) || String(a.u) !== String(b.u)) vc++;
+    for (var j = 0; j < RK.length; j++){
+      if (JSON.stringify(a[RK[j]]) !== JSON.stringify(b[RK[j]])){ rc++; break; }
+    }
+  }
+  var s = '';
+  if (tr.length === 1){
+    s = frozen ? '仅采到 1 帧（登记时已开赛/事后补登）· 非赛前逐帧对照'
+               : '仅采到 1 帧（该场已退出实时池）· 不是「方向恒定」，是无后续帧可比';
+  } else {
+    s = '赛前 ' + tr.length + ' 帧 · 档位变 ' + dc + ' 次 · 读数变 ' + rc + ' 次 · 票数变 ' + vc + ' 次';
+    if (dc === 0 && rc > 0) s += '（数据一直动，档位未跨阈值）';
+    var last = tr[tr.length-1] || {};
+    var sN = Number(last.s), uN = Number(last.u);
+    if (isFinite(sN) && isFinite(uN)){
+      var gapV = Math.abs(sN - uN);
+      s += ' · 末帧 S' + sN + ':U' + uN
+         + (gapV >= 2 ? '（已过±2阈值·方向明确）' : '（距换向还差 ' + (2 - gapV) + ' 票）');
+    }
+  }
+  if (frozen) s += ' · 🔒开赛定格，赛果只补结果不改意见';
+  if (_fpDirBucket(e && e.recDir) === '翻转·观察') s += ' · 翻转档铁律不投票，方向文字按设计恒定';
+  return s;
+}
 function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   var op = (e && e.op) || {};
   var hasOp = op && Object.keys(op).length > 1;
@@ -8155,22 +8199,15 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
     if (e && e.opFrozen && e.opFrozenAt){
       var _d = new Date((+e.opFrozenAt) * 1000);
       var _p2 = function(n){ return String(n).padStart(2,'0'); };
-      var _tr2 = (Array.isArray(e.dirTrail) ? e.dirTrail : []);
-      var _trChg2 = 0;
-      for (var _tj = 1; _tj < _tr2.length; _tj++){ if (String(_tr2[_tj].dir||'') !== String(_tr2[_tj-1].dir||'')) _trChg2++; }
       _frozenTxt = '<div style="font-size:8.5px;color:#2faa6a;margin-top:2px;font-weight:700">🔒 开赛定格 '
         + _p2(_d.getMonth()+1) + '-' + _p2(_d.getDate()) + ' ' + _p2(_d.getHours()) + ':' + _p2(_d.getMinutes())
-        + (_tr2.length ? (' · 赛前' + _tr2.length + '帧·方向变' + _trChg2 + '次') : '') + '</div>';
+        + ' · ' + _fpTrailTxt(e, true) + '</div>';
     } else if (e && e.opAsOf){
       var _a = new Date((+e.opAsOf) * 1000);
       var _q2 = function(n){ return String(n).padStart(2,'0'); };
-      /* ★ 2026-11-09：用户质疑「意见是不是开盘到结束都一样」——把赛前轨迹帧数/方向变化次数亮出来。 */
-      var _tr = (Array.isArray(e.dirTrail) ? e.dirTrail : []);
-      var _trChg = 0;
-      for (var _ti = 1; _ti < _tr.length; _ti++){ if (String(_tr[_ti].dir||'') !== String(_tr[_ti-1].dir||'')) _trChg++; }
       _frozenTxt = '<div style="font-size:8.5px;color:#b45309;margin-top:2px">⏳ 赛前实时·更新于 '
-        + _q2(_a.getHours()) + ':' + _q2(_a.getMinutes()) + '（开赛即定格）'
-        + (_tr.length ? (' · 赛前' + _tr.length + '帧·方向变' + _trChg + '次') : '') + '</div>';
+        + _q2(_a.getHours()) + ':' + _q2(_a.getMinutes()) + '（开赛即定格） · '
+        + _fpTrailTxt(e, false) + '</div>';
     }
   }catch(_x){}
 
