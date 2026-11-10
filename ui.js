@@ -8792,6 +8792,70 @@ function showFundPlateAlert(){
     else badge.style.display='none';
   }
 }
+/* ★★ 2026-11-11 阵容情报结构化分析器（用户："赛前阵容已经出来了，怎么你还不分析"）
+   数据源：gen_index.py 注入 window.__LINEUP_INTEL__（lineup_intel.json）。
+   诚实边界：雷速详情页在 WAF/加密壳后无法自动抓 → 该库为「公开来源人工登记 + 结构化字段」，
+   每条带 asOf / source / confirmed；未登记的场次一律不编造、不参与投票。
+   本分析器只吃结构化字段，用可复算规则产出：
+     ① 阵容票（进 _bfPick 方向投票）② 小/大比分修正（进波胆加权）③ 中文综合意见（三盘阵容列 + 波胆意见列）。 */
+function _luIntelMap(){
+  try{ const x = window.__LINEUP_INTEL__; return (x && typeof x==='object' && x.items) ? x.items : {}; }catch(e){ return {}; }
+}
+function _luMeta(){
+  try{ const x = window.__LINEUP_INTEL__; return (x && typeof x==='object') ? x : {}; }catch(e){ return {}; }
+}
+function lineupIntel(tid){
+  const e = _luIntelMap()[String(tid)];
+  if (!e || typeof e !== 'object') return null;
+  try{
+    const num = (v,d)=> (v==null || !isFinite(+v)) ? d : +v;
+    const rotH=num(e.rotateH,1), rotA=num(e.rotateA,1);
+    const keyOutH=num(e.keyOutH,0), keyOutA=num(e.keyOutA,0);
+    const coreH=!!e.coreH, coreA=!!e.coreA, gkHotA=!!e.gkHotA, doublePivot=!!e.bothDoublePivot;
+    const motiveH=String(e.motiveH||'neutral'), motiveA=String(e.motiveA||'neutral');
+    const under=num(e.underStreak,0), awayDef=num(e.awayDef,0);
+    let vH=0, vA=0, vD=0; const why=[];
+    if (coreH){ vH+=1; why.push('主队主力框架在+1主'); }
+    else if (rotH>=2){ vA+=1; why.push('主队大幅轮换+1客'); }
+    if (motiveH==='mustWin'){ vH+=1; why.push('主队须90分钟取胜+1主'); }
+    if (motiveH==='lowPriority'){ vA+=1; why.push('主队杯赛优先级低+1客'); }
+    if (rotA>=2){ vH+=1; why.push('客队大幅轮换+1主'); }
+    if (keyOutA>=2){ vH+=1; why.push('客队关键缺阵'+keyOutA+'人+1主'); }
+    if (keyOutH>=2){ vA+=1; why.push('主队关键缺阵'+keyOutH+'人+1客'); }
+    if (motiveA==='needDraw'){ vD+=1; why.push('客队拿分即出线+1平'); }
+    if (gkHotA){ vD+=1; why.push('客队门将状态热+1平'); }
+    if (doublePivot){ vD+=1; why.push('双方双后腰中路密集+1平'); }
+    if (under>=4){ vD+=1; why.push('近'+under+'次交锋≤2.5球+1平'); }
+    /* 大小比分修正：阵容只做温和倾斜，封顶 ±12%，不覆盖 Dixon-Coles 基底 */
+    let lowBias = (doublePivot?0.04:0) + (under>=4?0.04:0) + (gkHotA?0.03:0) + (motiveA==='needDraw'?0.03:0);
+    let bigBias = -((doublePivot?0.05:0) + (under>=4?0.05:0) + (rotH>=2?0.04:0));
+    if (motiveH==='mustWin'){ lowBias-=0.02; bigBias+=0.04; }
+    if (awayDef>=2){ bigBias+=0.06; lowBias-=0.04; }      // 客队客场失球多 → 放开大比分
+    lowBias = Math.max(-0.08, Math.min(0.12, lowBias));
+    bigBias = Math.max(-0.14, Math.min(0.10, bigBias));
+    const goalLean = lowBias>=0.06 ? '偏小' : (bigBias>=0.03 ? '偏大' : '中性');
+    const votes = { H:vH, A:vA, D:vD };
+    const lines = [];
+    lines.push('<b>阵容/战意</b>：'+esc(String(e.formation||'—'))+' · 主队轮换'+rotH+'档 / 客队'+rotA+'档'
+      + ' · 主核心'+(coreH?'在':'缺')+' / 客核心'+(coreA?'在':'缺'));
+    if (e.xiSummary) lines.push('<b>首发</b>：'+esc(String(e.xiSummary)));
+    if (e.outSummary) lines.push('<b>缺阵</b>：'+esc(String(e.outSummary)));
+    if (e.motive) lines.push('<b>战意</b>：'+esc(String(e.motive)));
+    if (e.form) lines.push('<b>近况</b>：'+esc(String(e.form)));
+    if (e.notes) lines.push('<b>核对备注</b>：'+esc(String(e.notes)));
+    lines.push('<b>量化</b>：阵容票 H'+vH+':A'+vA+':D'+vD+' · 进球倾向'+goalLean
+      + '（≤2球×'+(1+lowBias).toFixed(2)+' / ≥4球×'+(1+bigBias).toFixed(2)+'）');
+    lines.push('<span style="opacity:.72">依据：'+esc(why.join('；')||'无')+'</span>');
+    const meta=_luMeta();
+    lines.push('<span style="opacity:.6;font-size:9px">来源：'+esc(String(e.source||meta.source||'公开赛前情报'))
+      +' · '+(e.confirmed?'已公布/已核实首发':'预计首发')+' · 登记 '+esc(String(e.asOf||meta.updated||'—'))
+      +'（人工登记，非自动抓取）</span>');
+    return { have:true, votes, lowBias, bigBias, goalLean, why,
+      text: why.join('；'), html: lines.join('<br>'),
+      brief:'阵容票 H'+vH+':A'+vA+':D'+vD+' · '+goalLean,
+      confirmed:!!e.confirmed, asOf:String(e.asOf||''), source:String(e.source||meta.source||'') };
+  }catch(err){ return null; }
+}
 function openFundPlate(){
   try{ _htAbort=false; resolvePredictions(); }catch(e){}
   const todo=MATCHES.filter(m=>!m.analysis && (hasPackOdds(m.tid)||jcHasOdds(m)||m.odds||t7HasOdds(m)));
@@ -8893,7 +8957,30 @@ function openFundPlate(){
     const pv = lineupPanelVerdict(a);
     const stored = _luGet(r.tid);
     const tidAttr = String(r.tid);
-    let h = '<div style="font-size:10px;font-weight:700;color:'+pv.col+'">'+(pv.arrow||'± 盘口观望')+'</div>';
+    /* ★★ 2026-11-11：不再是空白输入框——有结构化阵容情报就自动出「系统阵容综合意见」，
+       并把三盘读数与波胆精选联动到同一格（用户："赛前阵容已经出来了，怎么你还不分析"）。 */
+    const lu = lineupIntel(r.tid);
+    let auto = '';
+    if (lu && lu.have){
+      auto += '<div style="border:1px solid rgba(47,170,106,.5);border-radius:6px;padding:5px 6px;margin-bottom:5px;background:rgba(47,170,106,.07)">';
+      auto += '<div style="font-size:10px;font-weight:800;color:#2faa6a;margin-bottom:3px">📋 系统阵容综合意见'+(lu.confirmed?'（已公布首发）':'（预计首发）')+'</div>';
+      auto += '<div style="font-size:9.5px;line-height:1.55;color:var(--txt)">'+lu.html+'</div>';
+      const pt = (r.lvl!=null && isFinite(+r.lvl)) ? ((+r.lvl>0?'+':'')+(+r.lvl).toFixed(1)+'pt') : '—';
+      auto += '<div style="font-size:9.5px;line-height:1.55;margin-top:4px;border-top:1px dashed rgba(148,163,184,.4);padding-top:3px">'
+           +  '<b style="color:var(--acc)">三盘联动</b>：净超买 '+esc(pt)+' · 系统方向 '+esc(String(r.bet||'—'))
+           +  ' · '+esc(String(r.hcapTxt||''))+'</div>';
+      try{
+        const mm = (typeof MATCHES!=='undefined' && MATCHES) ? MATCHES.find(x=>String(x.tid)===String(r.tid)) : null;
+        const pk = mm ? _bfPick(mm) : null;
+        if (pk && pk.picks && pk.picks.length){
+          auto += '<div style="font-size:9.5px;line-height:1.55"><b style="color:var(--red)">波胆联动</b>：精选 '
+               +  esc(pk.picks[0].score)+' / 优选 '+esc(pk.picks.slice(1).map(p=>p.score).join('、'))
+               +  ' · '+esc(pk.dirTxt)+' ('+esc(pk.tally)+')</div>';
+        }
+      }catch(e){}
+      auto += '</div>';
+    }
+    let h = auto + '<div style="font-size:10px;font-weight:700;color:'+pv.col+'">'+(pv.arrow||'± 盘口观望')+'</div>';
     if (pv.text) h += '<div style="font-size:9.5px;color:var(--mut);margin:2px 0 3px;line-height:1.5">'+esc(pv.text)+'</div>';
     h += '<textarea id="luIn_'+tidAttr+'" placeholder="贴入赛前30-60min雷速阵容（首发/伤停/轮换/战术）" style="width:100%;min-height:46px;max-height:120px;font-size:10.5px;line-height:1.5;padding:4px;border:1px solid rgba(148,163,184,.35);border-radius:6px;resize:vertical;background:rgba(15,23,42,.03);color:inherit">'+esc(stored)+'</textarea>';
     h += '<div style="display:flex;gap:4px;margin-top:3px">'
@@ -9291,9 +9378,23 @@ function _bdBfForMatch(m){
       const hm1 = (bHome.startsWith(mHome)||mHome.startsWith(bHome)||mHome.indexOf(bHome)>=0||bHome.indexOf(mHome)>=0);
       const am1 = (bAway.startsWith(mAway)||mAway.startsWith(bAway)||mAway.indexOf(bAway)>=0||bAway.indexOf(mAway)>=0);
       if (hm1 && am1){
-        // 日期校验（跨日场次 day 可能不同，若 m 无 day 或日期匹配则接受）
-        if (!mDay || !b.date || mDay.replace(/-/g,'') === String(b.date).replace(/-/g,'') ||
-            String(b.date).replace(/-/g,'') === mDay) return b;
+        /* ★★ 2026-11-11 跨日配对修复：北单 b.date 是「销售/当地日」(11-10)，看板 m.day 是
+           北京日 (11-11)，深夜场永远差一天 → 旧严格相等让整场波胆赔率丢失。
+           实测牛津联 3012957：库里 25 项北单波胆齐全，页面却只显示模型、市场赔率列全空。
+           放宽到 ±1 天，但必须同时过「开赛 HHMM 相同」护栏（队名双侧已匹配，误配概率极低）。 */
+        const bDay = String(b.date || '').replace(/-/g, '');
+        const kk = (typeof heatKick === 'function') ? heatKick(m) : { day:mDay, time:'' };
+        const kDay = String(kk.day || mDay || '');
+        const bTime = String(b.time || '').slice(0,5);
+        const mTime = String(kk.time || '').slice(0,5);
+        if (bTime && mTime && bTime !== mTime) continue;      // 同队名但不同开赛时间 → 不是同一场
+        let dayOk = !mDay || !bDay;
+        if (!dayOk){
+          const t1 = Date.UTC(+kDay.slice(0,4), +kDay.slice(4,6)-1, +kDay.slice(6,8));
+          const t2 = Date.UTC(+bDay.slice(0,4), +bDay.slice(4,6)-1, +bDay.slice(6,8));
+          dayOk = (isFinite(t1) && isFinite(t2)) ? Math.abs(t1-t2) <= 86400000 : (kDay === bDay);
+        }
+        if (dayOk) return b;
       }
     }
     return null;
@@ -9443,6 +9544,13 @@ function _bfPick(m){
       if (tr.dp>0.1){ vH+=1; why.push('升盘+'+tr.dp.toFixed(2)+'挺主+1'); }
       else if (tr.dp<-0.1){ vA+=1; why.push('降盘'+tr.dp.toFixed(2)+'挺客+1'); }
     }
+    /* ⑤ 2026-11-11 阵容情报票：结构化首发/轮换/伤停/战意 → 方向票 + 大小比分修正。
+       只在 lineup_intel.json 有该场登记时生效；未登记场次完全不参与（不编造）。 */
+    const lu = lineupIntel(m.tid);
+    if (lu && lu.have){
+      vH += lu.votes.H; vA += lu.votes.A; vD += lu.votes.D;
+      why.push('阵容票 H'+lu.votes.H+':A'+lu.votes.A+':D'+lu.votes.D+'·'+lu.goalLean);
+    }
     /* 定方向：票差≥2 才出，否则五五开 */
     let dir='—';
     if (vH>=vA+2 && vH>=vD+1) dir='H';
@@ -9477,6 +9585,12 @@ function _bfPick(m){
         else if (Math.abs(hs-as)===1){ mult *= 1.03; tags.push('五五开1球差×1.03'); }
       }
       if (consOk && top3im.some(x=>x.score===c.score)){ mult *= 1.15; tags.push('共识档×1.15'); }
+      /* 阵容情报：≤2球小比分 / ≥4球大比分温和加权（幅度封顶，见 lineupIntel 规则） */
+      if (lu && lu.have){
+        const g = hs + as;
+        if (g<=2 && Math.abs(lu.lowBias)>=0.015){ mult *= (1+lu.lowBias); tags.push('阵容·≤2球×'+(1+lu.lowBias).toFixed(2)); }
+        if (g>=4 && Math.abs(lu.bigBias)>=0.015){ mult *= (1+lu.bigBias); tags.push('阵容·≥4球×'+(1+lu.bigBias).toFixed(2)); }
+      }
       if (!tags.length) tags.push('模型原序');
       c.adj = c.model * mult; c.tags = tags;
     }
@@ -9487,7 +9601,8 @@ function _bfPick(m){
       score:c.score, adj:c.adj, model:c.model, imp:c.imp, odds:c.odds,
       tags:c.tags||[], tier: i===0?'精选':'优选'
     }));
-    return { dir, dirTxt, tally:'H'+vH+':A'+vA+':D'+vD, why, picks, hc };
+    return { dir, dirTxt, tally:'H'+vH+':A'+vA+':D'+vD, why, picks, hc,
+      lineup: (lu && lu.have) ? { brief:lu.brief, why:lu.why, goalLean:lu.goalLean, confirmed:lu.confirmed } : null };
   }catch(e){ return null; }
 }
 /* ④ 综合意见 = 分级档 + 动态 + 365，仿三盘过热板"系统方向"列格式 */
@@ -9928,6 +10043,8 @@ function bifenRowHTML(r){
     + ((vd.clues&&vd.clues.length) ? ' <span style="font-size:9px;color:var(--mut)">'+vd.clues.join(' / ')+'</span>' : '') + '</div>';
   if (vd.dyn) advTxt += '<div style="color:var(--yel);font-size:10px">动态：'+vd.dyn+'</div>';
   if (vd.c365 && vd.c365.imp) advTxt += '<div style="color:var(--mut);font-size:9.5px;margin-top:2px">'+vd.c365.label+' 主'+vd.c365.imp.W.toFixed(0)+'% 平'+vd.c365.imp.D.toFixed(0)+'% 客'+vd.c365.imp.L.toFixed(0)+'%</div>';
+  const _luR = lineupIntel(r.tid);
+  if (_luR && _luR.have) advTxt += '<div style="color:var(--acc);font-size:9.5px;margin-top:2px;line-height:1.45">📋 '+(_luR.confirmed?'已公布阵容':'预计阵容')+'：'+esc(_luR.brief)+'</div>';
   if (!advTxt) advTxt = '<span style="color:var(--mut)">—</span>';
   /* 复盘列（需求④：赛前意见 vs 赛果，三口径——方向 / 精选波胆 / 精选+优选3球覆盖） */
   let resTxt;
