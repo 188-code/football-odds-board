@@ -1023,6 +1023,16 @@ function htftTendencyHTML(m){
 }
 function setupBake(){
   try{
+    /* ★ 2026-11-10 修（波胆全空真凶）：ui.js 是 <script defer>，内联脚本里的 loadBeidan(...) 立即执行，
+       那时 loadBeidan 还没定义 → ReferenceError 被 catch 吞 → globalThis.BD_ROWS 恒为空数组
+       → _bdBfForMatch 永远匹配不到北单波胆 → 精选/优选/方向投票三列全空（截图症状）。
+       现在 gen_index 把数据先存 window.__BD_RAW__，这里（engine 已就绪）再真正 loadBeidan。 */
+    try{
+      if (window.__BD_RAW__ && (!globalThis.BD_ROWS || !globalThis.BD_ROWS.length) && typeof loadBeidan==='function'){
+        loadBeidan(window.__BD_RAW__);
+        console.log('BD_ROWS late-load:', (globalThis.BD_ROWS||[]).length);
+      }
+    }catch(e){ console.warn('BD_ROWS late-load failed:', e); }
     const raw = (typeof window !== 'undefined') ? window.__BAKE_RAW__ : null;
     if (!raw || !raw.packs || !raw.matches) return false;
     OFFLINE_PACK = unpackPack(raw.packs);
@@ -9407,7 +9417,7 @@ function _bfPick(m){
     /* ★ 2026-11-10 回测共识档位（D盘 308 场已结算实测）：前3合计隐含 25-30% 与 34-40% 两档
        ROI +25.2% / +19.7% 为仅有的正 edge 档；30-34% 和 >40% 为负 ROI 档 → 前3 加权 1.15，
        负档不加权（诚实：样本 308 场偏小，权重保守）。 */
-    const top3im = implied.slice(0,3);
+    const top3im = (bf.implied || []).slice(0,3);
     const s3 = top3im.reduce((s,x)=> s + (x.imp||0), 0);
     const consOk = (s3 >= 25 && s3 < 30) || (s3 >= 34 && s3 < 40);
     const consTxt = s3 > 0 ? ('前3合计隐含'+s3.toFixed(0)+'%' + (consOk ? '·共识档✓×1.15' : '·负ROI档')) : '';
@@ -17498,4 +17508,16 @@ document.addEventListener('DOMContentLoaded', function(){
   // init 现在 async（等 gzip 快照解压），吞掉 Promise 异常的红色噪音
   Promise.resolve().then(init).catch(function(e){ console.error('init failed:', e && e.message || e); });
 });
+
+/* ★ 2026-11-10：北单波胆数据（gen_index 内联注入 window.__BD_RAW__）在此消费。
+   内联脚本在 ui.js（defer）之前执行，彼时 loadBeidan 未定义、被 catch 吞；
+   顶层脚本执行时 engine.js 已加载完，loadBeidan 已存在 → 现在才真正写入 BD_ROWS。
+   放在文件末尾顶层，不依赖 bake/__BAKE_RAW__ 是否就绪。 */
+(function(){
+  try{
+    if (window.__BD_RAW__ && (typeof loadBeidan==='function') && (!globalThis.BD_ROWS || !globalThis.BD_ROWS.length)){
+      loadBeidan(window.__BD_RAW__);
+    }
+  }catch(e){ /* BD_ROWS 缺失不影响主看板 */ }
+})();
 

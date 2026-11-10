@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>三盘逐帧动态票 · 训练/留出验证结论（2026-11-08）</title>
+<title>三盘逐帧动态票 · 训练/留出验证结论（更新 2026-11-09 02:45）</title>
 <style>
 :root{--bg:#f7f8fa;--card:#fff;--ink:#1a1d24;--mut:#6b7280;--line:#e5e7eb;--red:#c0392b;--green:#16794b;--blue:#1d4ed8}
 *{box-sizing:border-box}
@@ -35,9 +35,9 @@ footer{color:var(--mut);font-size:12px;text-align:center;margin-top:28px}
 <body>
 <div class="wrap">
 <h1>三盘逐帧动态票 · 训练 / 留出验证结论</h1>
-<div class="sub">生成 2026-11-08 23:4x · 数据源：D:\北单竞彩数据 逐帧留存 105 场 + 线上 CVM 权威账本 · 只取赛前登记且已结算、tid 可对齐的 74 场</div>
+<div class="sub">更新 2026-11-09 02:45 · 数据源：D:\北单竞彩数据 逐帧留存 + 线上 CVM 权威账本 369 条 / 已结算 336 · 第七轮逐帧库 158 场（11-09 新增 30 场）</div>
 <div class="nav">
-  <a href="/tri_dynamics.html">← 开盘→临盘逐帧轨迹（105 场）</a>
+  <a href="/tri_dynamics.html">← 开盘→临盘逐帧轨迹（158 场）</a>
   <a href="/">← 主看板</a>
   <a href="/fundplate_hist.js">账本原始数据</a>
 </div>
@@ -287,6 +287,65 @@ footer{color:var(--mut);font-size:12px;text-align:center;margin-top:28px}
 <li>11-08 仍有 <b>16 场未完场</b>（其中 4 注带方向），11-09 已登记 33 场、结算 0 场；
 等凌晨场完场后再做一次定稿读数，<b>仍不改模型</b>。</li>
 <li>唯一扛住样本外检验的边仍是「结构下盘里的平手盘」（旧铁律），本轮没有动它。</li>
+</ul>
+</div>
+
+
+<div class="card">
+<h2>第七轮 · 11-08 定稿 + 11-09 新完场，结合三盘逐帧复盘（2026-11-09 02:45）</h2>
+<div class="sub">线上账本 fundplate_hist.js 652389B / items 369 / 已结算 336 / pre 已结算 290；口径：赛前登记(ts&lt;ko)、方向注、真实盘口+真实水位结算、push 不计分母、ROI=总盈亏/注数</div>
+
+<h3>① 逐日定稿读数（11-08 方向注已全部结算完，读数不再变）</h3>
+<table>
+<thead><tr><th>比赛日</th><th>方向注</th><th>命中率</th><th>ROI</th><th>±SE</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>11-06</td><td>5</td><td>80.0%</td><td class="pos">+54.8%</td><td>44.7</td><td>n=5，SE 跨 0</td></tr>
+<tr><td>11-07</td><td>24</td><td>65.2%</td><td class="pos">+22.5%</td><td>20.4</td><td>84/84 完场</td></tr>
+<tr><td><b>11-08 定稿</b></td><td><b>17</b></td><td><b>58.8%</b></td><td class="pos"><b>+15.1%</b></td><td>24.3</td><td>82/86 完场，剩 4 场全是观察档 → <b>方向注 0 未结算，已定稿</b></td></tr>
+<tr><td>11-09（进行中）</td><td>3</td><td>33.3%</td><td class="neg">−34.3%</td><td>57.7</td><td>8/33 完场；n=3、SE 完全跨 0 → 不构成证据</td></tr>
+</tbody></table>
+<div class="note">「8 号拖垮」正式定性为<b>半结算样本错觉</b>：71 场时 13 注 7 中 53.8%/+4.5% → 81 场 16 注 10 中 62.5%/+22.3% → 82 场 17 注 10 中 58.8%/+15.1%。<b>按日命中率必须等当日方向注全部结算完才叫定稿</b>，半结算样本会来回摆，拿它调权重必然过拟合。8 号 ROI 与 7 号（+22.5%）基本持平，三组 SE 全跨 0。</div>
+
+<h3>② 11-09 已完场 8 场：意见 vs 三盘逐帧（北单 / 365 / 竞彩）</h3>
+<table>
+<thead><tr><th>tid</th><th>比分</th><th>盘/水</th><th>意见</th><th>北单资金%</th><th>365 公平%</th><th>netPt / devMax</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>2995393</td><td>1:1</td><td>−1 / 0.80</td><td>观察·翻转</td><td>39.8/25.7/34.5</td><td>18.6/23.3/58.1</td><td>+14.2 / 21.2</td><td>受让赢盘</td></tr>
+<tr><td>2995392</td><td>0:2</td><td>−0.25 / 0.78</td><td>观察·五五开 S1:U2</td><td>25.4/30.0/44.6</td><td>32.3/28.6/39.1</td><td>−1.5 / 5.5</td><td>强队赢盘</td></tr>
+<tr><td>2995391</td><td>2:0</td><td>−0.25 / 0.98</td><td>观察·五五开 S0:U1</td><td>30.7/27.0/42.3</td><td>30.0/25.8/44.2</td><td>−9.0 / 1.2</td><td>受让赢盘</td></tr>
+<tr><td>2995389</td><td>0:2</td><td>−0.5 / 0.95</td><td><b>买受让·主队 U2</b></td><td>18.7/24.7/56.6</td><td>25/25/50</td><td>−0.9 / 6.6</td><td class="neg">✗ 失手</td></tr>
+<tr><td>2912931</td><td>3:0</td><td>−0.25 / 0.93</td><td><b>买受让·主队 U3</b></td><td>31.8/19.7/48.5</td><td>31.7/24.5/43.8</td><td>−3.4 / 4.7</td><td class="pos">✓ 命中</td></tr>
+<tr><td>3040807</td><td>0:1</td><td>0.25 / 1.05</td><td>观察·五五开 S1:U0</td><td>44.3/29.4/26.2</td><td>37.1/29.3/33.6</td><td>−2.0 / 7.2</td><td>受让赢盘</td></tr>
+<tr><td>3010670</td><td>3:4</td><td>−0.5 / 0.83</td><td><b>买受让·主队 U2</b></td><td>29.9/25.7/44.4</td><td>28.4/24.3/47.3</td><td>−10.6 / 1.5</td><td class="neg">✗ 失手</td></tr>
+<tr><td>2912935</td><td>5:5</td><td>−0.75 / 0.90</td><td>观察·翻转</td><td>53.6/15.9/30.5</td><td>无 365 报价</td><td>— / —</td><td>受让赢盘</td></tr>
+</tbody></table>
+<div class="note">三注方向注<b>全是「买受让·主队 + 破缺口票」</b>。命中的汉坎 3:0 是 U3、北单客胜 48.5% 高于 365 公平 43.8%（devMax 4.7，客队确被北单超买）；两注失手都是 U2，其中 3010670 的北单客胜 44.4% <b>低于</b> 365 公平 47.3%（devMax 1.5）——三盘其实没有「客队被超买」，破缺口是赔率/返还率层面判据，不等于资金超买。<b>这是可解释差异，但 n=3 不能升格为规则。</b><br>三盘数据核对：账本逐帧北单占比/SP 与 D 盘留存逐场完全一致（昂热 18.7/24.7/56.6 + 5.33/4.04/1.76 = 北单322；布雷斯 30.7/27/42.3 = 北单323；汉坎 31.8/19.7/48.5 = 北单318）。多数欧洲凌晨场竞彩不开售，<code>jcOdds=null</code> 是数据属性，不是漏看。</div>
+
+<h3>③ 候选改动：训练 / 留出两段同向检验（铁律：两段同向且 n≥10 才可上线）</h3>
+<table>
+<thead><tr><th>候选</th><th>训练 ≤11-08（51 注）</th><th>留出 11-09（3 注）</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>只买 U≥3（提高票差门槛）</td><td>24 注 78.3% / +51.0%</td><td>1 注 100% / +97%</td><td class="neg">两段同向但训练剔除仅 2 注、留出 3 注 → <b>n 不足，否决</b>（登记待验证）</td></tr>
+<tr><td>剔除 U=2 买受让</td><td>U=2 共 2 注 50% / −5%</td><td>U=2 共 2 注 0% / −100%</td><td class="neg">同向改善，n 远不足 10 → 否决</td></tr>
+<tr><td>只买含破缺口票</td><td>18 注 15 中 83.3% / +56%</td><td>3 注 1 中 33.3% / −34.3%</td><td class="neg"><b>留出段反向</b> → 记录警示，暂不动（先前反事实撤票两段同向变差）</td></tr>
+<tr><td>按 diffMax 三盘合流强度分层</td><td>6~10 档 15 注 80.0% / +52.3%</td><td>2 注 50% / −1.5%</td><td class="neg">两段不同向 → 否决</td></tr>
+<tr><td>devMax / netPt / 北单占比单票</td><td>dirTrail 从 11-08 晚期才有，训练段 51 注无帧</td><td>3 注</td><td class="neg">训练段无法两段验证 → 否决</td></tr>
+</tbody></table>
+<div class="note">纠正上一版方法错误：训练段 51 注方向注的 <code>op.diffMax / R365 / overGap / diff3 / lvlDiffBd</code> 是 <b>100% 覆盖</b>，三盘合流数据一直都在；先前只用 <code>dirTrail</code> 取特征才误报「没数据」。改用 <code>op</code> 字段后分层可验，但结论仍是两段不同向。</div>
+
+<h3>④ 本轮真正修的 bug（零方向风险，改展示不改进模型）</h3>
+<table>
+<thead><tr><th>问题</th><th>实测</th><th>修法</th></tr></thead>
+<tbody>
+<tr><td>同一场净超买出现三个不同值：<code>e.over</code>（首帧旧口径 ex−gap）/ <code>op.over</code>（冻结快照）/ <code>dirTrail</code> 末帧 <code>netPt</code>（权威 excessPt−heatGap）</td><td>11-09 有帧 26 场里 <b>11 场差 &gt;3pt</b>、平均 4.3pt、最大 <b>34.5pt</b>（13.3 vs −21.2，符号相反）；历史卡片显示 op.over，判档 <code>_ptToLvl</code> 与计数却用 e.over → 同页自相矛盾</td><td class="pos"><code>ui.js</code> 新增唯一出口 <code>_fpNetPt(e)</code>：末帧 netPt &gt; e.netPt &gt; op.netPt &gt; op.over &gt; e.over；4 处（卡片数值 / 判档 / 计数 / 老条目）统一取它。老条目无前四者仍回落 e.over，历史不变</td></tr>
+<tr><td>方向判据是否被连带改动</td><td colspan="2"><code>overVote</code> / <code>op.overGap</code> / <code>_deriveRecDir</code> 一字未动；<code>gen_index.py</code> / <code>engine.js</code> / 账本 / 主看板全部不碰。<b>方向算法、投票权重、破缺口定义零改动。</b></td></tr>
+</tbody></table>
+
+<h3>⑤ 第七包交付与边界</h3>
+<ul>
+<li><code>ui.js</code>（唯一出口修复，1386603B）、<code>tri_dynamics.html</code>（158 场，含 11-09 30 场逐帧 + 逐帧三盘原始读数表）、<code>tri_frames.js</code>（158 场）、<code>tri_validation.html</code>（新增本章节）。</li>
+<li>11-09 还有 <b>25 场未完场</b>（22 场已在动态页展示赛前轨迹）、11-10 已登记 4 场；D 盘赛果库与线上账本按 tid 对账<b>无漏结算</b>，剩余是完场源还没到。</li>
+<li>唯一扛住样本外检验的边仍是「结构下盘里的平手盘」（旧铁律），本轮没有动它。等 11-09/11-10 完场后按同口径出下一轮定稿，仍不改模型。</li>
 </ul>
 </div>
 
