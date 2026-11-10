@@ -9284,30 +9284,98 @@ function _bifenRows(m){
   rows.sort((a,b)=> (b.model!=null?b.model:-1) - (a.model!=null?a.model:-1) || (b.imp||0)-(a.imp||0));
   return { rows, implied: impliedJc, model, s: (m.analysis && m.analysis.score) || null };
 }
-/* 单场波胆结论：市场最热（陷阱预警） + 模型首选（价值候选） */
+/* ★ 2026-11-10 需求扩展：分级 + 动态 + 365 结合（深色主题） */
+/* ① 分级信号强度（复刻优选精选"问题盘三线索"思路：破缺口/热度/盘级差/深盘，≥3精选 ≥2优选） */
+function _bfClues(m){
+  try{
+    const a = m.analysis || {};
+    const yg = a.yg || {};
+    const c = [];
+    if (a.op && a.op.overGap) c.push('破缺口');
+    if (yg.netPt != null && yg.heatUsable && +yg.netPt >= 4) c.push('三盘过热' + (Math.round(+yg.netPt)));
+    const lv = yg.lvlDiff && yg.lvlDiff.bd != null ? +yg.lvlDiff.bd : null;
+    if (lv != null && Math.abs(lv) >= 2) c.push('盘级差≥2');
+    const exph = a.exp_hcap != null ? Math.abs(+a.exp_hcap) : (m.hcap != null ? Math.abs(+m.hcap) : 0);
+    if (exph >= 0.8) c.push('深让盘' + exph.toFixed(1));
+    return c;
+  }catch(e){ return []; }
+}
+/* ② 临盘动态（参照三盘过热板：盘路演变 an.trail + 水位拨动 an.wash → 箭头指示哪侧比分被强化） */
+function _bfDyn(m){
+  try{
+    const a = m.analysis || {};
+    const notes = [];
+    const trail = a.trail;
+    if (trail){
+      const p0 = trail.hcapOpen, p1 = trail.hcapLive;
+      if (p0 != null && p1 != null){
+        const d = (+p1) - (+p0);
+        if (d > 0.01) notes.push('升盘⬆+'+d.toFixed(2));
+        else if (d < -0.01) notes.push('降盘⬇'+d.toFixed(2));
+      }
+      if (trail.wuOpen != null && trail.wuLive != null){
+        const dw = (+trail.wuLive) - (+trail.wuOpen);
+        if (dw > 0.01) notes.push('上水↑+'+dw.toFixed(2));
+        else if (dw < -0.01) notes.push('上水↓'+dw.toFixed(2));
+      }
+    }
+    if (a.wash && a.wash.flag) notes.push('水位大幅拨动');
+    if (a.ea && a.ea.tag) notes.push(a.ea.tag);   // 欧亚gap 诊断标签
+    return notes.length ? notes.join(' · ') : '';
+  }catch(e){ return ''; }
+}
+/* ③ 365 市场参照（无直接波胆赔率，用 365 欧赔1X2临盘 + 大小球线反推比分倾向） */
+function _bf365(m){
+  try{
+    const a = m.analysis || {};
+    const live = a.coLive || null;                     // [365,立博,威廉,英特] 实时欧赔（若加载）
+    const o1h = a.o1h, o1d = a.o1d, o1a = a.o1a;       // 临盘1X2
+    if (o1h == null && !live) return null;
+    const W = o1h != null ? o1h : (live && live[0]);
+    const U = a.bsOver != null ? a.bsOver : null;       // 大小球线上盘水（若有）
+    // 1X2 隐含（归一）
+    let imp = null;
+    if (W != null && o1d != null && o1a != null){
+      const s = 1/W + 1/o1d + 1/o1a;
+      if (s > 0) imp = { W: 1/W/s*100, D: 1/o1d/s*100, L: 1/o1a/s*100 };
+    }
+    return {
+      has365: !!live, label: live ? '365实时' : '欧赔临盘',
+      imp, over: U != null ? U : (a.pTotal ? null : null),
+      pTotal: a.pTotal || null
+    };
+  }catch(e){ return null; }
+}
+/* ④ 综合意见 = 分级档 + 动态 + 365，仿三盘过热板"系统方向"列格式 */
+function _bfVerdict(m){
+  const clues = _bfClues(m);
+  const dyn = _bfDyn(m);
+  const c365 = _bf365(m);
+  const tier = clues.length >= 3 ? '精选' : clues.length === 2 ? '优选' : clues.length === 1 ? '小注' : '观察';
+  const tierColor = {'精选':'#e54545','优选':'#f97316','小注':'#eab308','观察':'#5b6675'}[tier];
+  const parts = [];
+  parts.push('<b style="color:'+tierColor+'">'+tier+'</b>' + (clues.length ? '（'+clues.join('/')+'）' : ''));
+  if (dyn) parts.push('<span style="color:var(--yel)">动态：'+dyn+'</span>');
+  if (c365 && c365.imp) parts.push('<span style="color:var(--mut)">365 '+c365.label+'：主'+c365.imp.W.toFixed(0)+'% 平'+c365.imp.D.toFixed(0)+'% 客'+c365.imp.L.toFixed(0)+'%</span>');
+  return { tier, tierColor, clues, dyn, c365, html: parts.join('<br>') };
+}
+/* 单场波胆结论：市场最热 + 模型首选 + 分级档 + 动态 + 365 综合意见 */
 function _bifenVerdict(m){
   const bf = _bifenRows(m);
   if (!bf) return null;
   const { rows, implied } = bf;
   // 市场最热比分（赔率最低）
   const mktTop = implied.length ? implied[0] : null;
-  // 模型首选
+  // 模型首选 + 最大价值差
   let mdlTop = null, bestEdge = null;
   for (const r of rows){
     if (r.model == null) continue;
     if (!mdlTop) mdlTop = r;
     if (r.edge != null && (!bestEdge || r.edge > bestEdge.edge)) bestEdge = r;
   }
-  /* ★ 2026-11-10 22:00 重大口径修正（按源拆分校准）：
-     D盘 214 场竞彩/北单波胆按源拆开后，"最热比分"效应两源方向完全相反：
-       · 竞彩 n=27：最热比分隐含 10.5% → 实际 23.1%（+12.6pt 低估·正缺口）
-       · 北单 n=187：最热比分隐含 10.3% → 实际  7.4%（−2.9pt 高估）
-     我先前报的「最热档赔<6 缺口 −15.8pt」是两源混算伪影（−15.8 主要来自北单高赔样本，
-     竞彩实际正缺口）。且竞彩官方 crs 最低赔 6.25、永不 <6，旧「赔<6 陷阱」判定永不触发。
-     两源定价机制不同、不能合并结论；竞彩 27 场样本太小、方向未定论。
-     → 故本版降级为「纯模型 × 市场对照」：只给模型概率、市场隐含、价值差读数，
-        不下「陷阱/价值」结论，等扩样本后再标定。 */
-  return { mktTop, mdlTop, bestEdge, trap: null, value: null };
+  /* ⑤ 综合意见：结合优选精选(分级) + 深让盘(线索) + 三盘过热(netPt) + 临盘动态 + 365 */
+  const verdict = _bfVerdict(m);
+  return { mktTop, mdlTop, bestEdge, trap: null, value: null, verdict };
 }
 function openBifen(){
   const rows = [];
@@ -9317,53 +9385,67 @@ function openBifen(){
     if (!bf || !bf.rows.length) continue;
     const k = heatKick(m);
     const v = _bifenVerdict(m);
-    let resTxt = '', hitTop = '';
+    let resTxt = '', hitTop = '', hit3 = '';
     if (String(m.state)==='-1' && m.home_score!=null && m.away_score!=null){
       const real = m.home_score + ':' + m.away_score;
       resTxt = real;
-      if (v && v.mdlTop) hitTop = (v.mdlTop.score === real) ? '✓' : '✗';
+      try{
+        const top3 = (bf.rows||[]).filter(x=>x.model!=null).slice(0,3).map(x=>x.score);
+        if (v && v.mdlTop) hitTop = (v.mdlTop.score === real) ? '✓' : '✗';
+        hit3 = top3.indexOf(real) >= 0 ? '✓' : '✗';
+      }catch(e){}
     }
     rows.push({
       tid:m.tid, day:k.day, time:k.time, ts:kickTs(m), league:cleanLeague(m),
       home: displayTeam(m,'home'), away: displayTeam(m,'away'),
-      bf, v, resTxt, hitTop, state:String(m.state)
+      bf, v, resTxt, hitTop, hit3, state:String(m.state),
+      tier: (v && v.verdict) ? v.verdict.tier : '观察'
     });
   }
   rows.sort((x,y)=> String(x.ts||'').localeCompare(String(y.ts||'')));
   window._bifenRows = rows;
+  window._bifenTier = 'all';
   const body = rows.length ? rows.map(bifenRowHTML).join('')
-    : '<tr><td colspan="7" style="padding:18px;text-align:center;color:#94a3b8">当前视图内没有带波胆数据的场次（需竞彩在售场次含 crs 比分赔率，或已分析出模型比分分布）</td></tr>';
+    : '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">当前视图内没有带波胆数据的场次（需北单 BD_ROWS bf 或竞彩在售场次含 crs 比分赔率，或已分析出模型比分分布）</td></tr>';
   const done = rows.filter(r=>r.resTxt);
   const hit = done.filter(r=>r.hitTop==='✓').length;
-  const hit3done = done.filter(r=>{
-    try{ const top3=(r.v&&r.v.mdlTop)?r.bf.rows.slice(0,3).map(x=>x.score):[]; return top3.indexOf(r.resTxt)>=0; }catch(e){ return false; }
-  }).length;
+  const hit3done = done.filter(r=>r.hit3==='✓').length;
   const rateTxt = done.length ? Math.round(hit/done.length*100)+'%（'+hit+'/'+done.length+'）' : '—';
   const rate3Txt = done.length ? Math.round(hit3done/done.length*100)+'%（'+hit3done+'/'+done.length+'）' : '—';
+  const nSel = rows.filter(r=>r.tier==='精选').length;
+  const nYou = rows.filter(r=>r.tier==='优选').length;
   const html =
-    '<div class="modal show" id="bifenModal" style="display:flex;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:12px">'
-    + '<div style="background:#fff;border-radius:12px;max-width:1180px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
-    + '<div class="modal-h"><b>🎯 波胆（正确比分）· 模型 × 市场对照</b>'
-    + '<button class="x" onclick="closeBifen()">✕</button></div>'
-    + '<div class="modal-b">'
-    + '<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.8">'
-    + '<b style="color:#b45309">⚠ 本版是「对照·监测」板，非下注信号——竞彩样本太小，方向未定论</b><br>'
-    + '<b>模型</b>=Dixon-Coles 比分概率分布（λ主/μ客，非定点）；<b>市场</b>=竞彩官方 crs 赔率归一后的隐含概率；<b>价值差</b>=模型−市场（正=模型更看好）。<br>'
-    + '<b style="color:#b91c1c">⚠ 关键诚实标注</b>：本板用的是<b>竞彩 crs</b>，而竞彩与北单的"最热比分"定价机制<b>方向相反</b>——'
-    + 'D盘回测按源拆开：竞彩最热比分隐含 10.5%→实际 23.1%（<b style="color:#15803d">+12.6pt 低估</b>，但 n=27 样本太小未定论）；'
-    + '北单最热比分隐含 10.3%→实际 7.4%（<b style="color:#b91c1c">−2.9pt 高估</b>）。我先前报的「最热陷阱 −15.8pt」是两源混算伪影，<b>已作废</b>。'
-    + '竞彩 crs 最低赔 6.25、永不进&lt;6 档，故旧「赔&lt;6 陷阱」判定在竞彩上永不触发。'
-    + '<b>结论：竞彩波胆是否有可操作的 edge，目前证据不足，本板只做纯对照，不给买卖结论。</b><br>'
+    '<div class="modal show" id="bifenModal" style="display:flex;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:12px">'
+    + '<div style="background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:12px;max-width:1320px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)"><b>🎯 波胆（正确比分）· 分级 × 动态 × 三路对照</b>'
+    + '<button onclick="closeBifen()" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:2px 10px;cursor:pointer">✕</button></div>'
+    + '<div style="padding:12px 14px">'
+    + '<div style="background:rgba(224,165,38,.10);border:1px solid rgba(224,165,38,.45);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.8;color:var(--txt)">'
+    + '<b style="color:var(--yel)">⚠ 本版是「对照·监测」板，非下注信号——竞彩样本太小，方向未定论</b><br>'
+    + '<b>模型</b>=Dixon-Coles 比分概率分布（λ主/μ客，非定点）；<b>市场</b>=北单 bf 优先、竞彩 crs 兜底，赔率归一后的隐含概率；<b>价值差</b>=模型−市场（正=模型更看好）。'
+    + '<b>档</b>=复刻优选精选三线索（破缺口 / 三盘过热 netPt / 盘级差 / 深让盘），≥3 线索=精选、2=优选、1=小注、0=观察；<b>动态</b>=临盘盘路演变（升盘/降盘/水位拨动，随 CVM 每 15 分钟一帧刷新）；<b>365</b>=365/欧赔临盘 1X2 隐含作第三源参照。<br>'
+    + '<b style="color:var(--red)">⚠ 关键诚实标注</b>：竞彩与北单的"最热比分"定价机制<b>方向相反</b>——'
+    + 'D盘回测按源拆开：竞彩最热比分隐含 10.5%→实际 23.1%（<b style="color:var(--grn)">+12.6pt 低估</b>，但 n=27 样本太小未定论）；'
+    + '北单最热比分隐含 10.3%→实际 7.4%（<b style="color:var(--red)">−2.9pt 高估</b>）。旧「最热陷阱 −15.8pt」系两源混算伪影，<b>已作废</b>。'
+    + '竞彩 crs 最低赔 6.25、永不进&lt;6 档，旧「赔&lt;6 陷阱」判定在竞彩上永不触发。'
+    + '<b>结论：波胆是否有可操作的 edge 目前证据不足，本板只做纯对照，不给买卖结论。</b><br>'
     + '<b>模型校准</b>（115 场账本完场·健康）：模型给 5-10% 实际中 6.6% / 10-15% 中 8.3% / 15-20% 中 18.8%；Top3 覆盖 26.1%、Top10 覆盖 59.1%。'
-    + '<span style="color:#94a3b8">（竞彩 crs 需当日有在售场次；仅对照非建议）</span></div>'
-    + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:#334155">'
+    + '<span style="color:var(--mut)">（档位/动态为赛前快照，开赛定格后供复盘；仅对照非建议）</span></div>'
+    + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:var(--txt)">'
     + '<span>本视图场次：<b>' + rows.length + '</b></span>'
-    + '<span>模型首选命中：<b style="color:#15803d">' + rateTxt + '</b></span>'
+    + '<span>精选：<b style="color:var(--red)">' + nSel + '</b> · 优选：<b style="color:#f97316">' + nYou + '</b></span>'
+    + '<span>模型首选命中：<b style="color:var(--grn)">' + rateTxt + '</b></span>'
     + '<span>模型前3命中：<b>' + rate3Txt + '</b></span>'
     + '</div>'
-    + '<div class="tfx" style="overflow:auto"><table class="tbl" style="min-width:1080px"><thead><tr>'
-    + '<th>开赛</th><th>联赛</th><th>对阵</th><th>模型 Top3（概率）</th><th>市场最热（隐含/赔率）</th><th>模型↔市场分歧最大</th><th>赛果</th>'
-    + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+    + '<div class="htab-bar" style="margin-bottom:8px">'
+    + '<button class="htab-btn on bftab" data-t="all" onclick="bifenTier(\'all\')">全部</button>'
+    + '<button class="htab-btn bftab" data-t="good" onclick="bifenTier(\'good\')">精选+优选</button>'
+    + '<button class="htab-btn bftab" data-t="精选" onclick="bifenTier(\'精选\')">精选</button>'
+    + '<button class="htab-btn bftab" data-t="优选" onclick="bifenTier(\'优选\')">优选</button>'
+    + '</div>'
+    + '<div style="overflow:auto"><table style="min-width:1280px"><thead><tr>'
+    + '<th>开赛</th><th>联赛</th><th>对阵</th><th>档·线索</th><th>模型 Top3（概率）</th><th>市场最热（隐含/赔率）</th><th>模型↔市场分歧最大</th><th>综合意见（动态·365）</th><th>复盘</th>'
+    + '</tr></thead><tbody id="bifenTbody">' + body + '</tbody></table></div>'
     + '</div></div></div>';
   // 动态挂载（外壳未预置 bifenModal div，零改 index.html）
   let host = document.getElementById('bifenModal');
@@ -9375,50 +9457,80 @@ function openBifen(){
   if (_bm) _bm.addEventListener('click', e=>{ if (e.target.id === 'bifenModal') closeBifen(); });
 }
 function closeBifen(){ const m = document.getElementById('bifenModal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+/* 档位筛选（需求①：选择出精选/优选波胆） */
+function bifenTier(t){
+  window._bifenTier = t;
+  const all = window._bifenRows || [];
+  const list = t==='all' ? all : t==='good' ? all.filter(r=>r.tier==='精选'||r.tier==='优选') : all.filter(r=>r.tier===t);
+  const tb = document.getElementById('bifenTbody');
+  if (tb) tb.innerHTML = list.length ? list.map(bifenRowHTML).join('')
+    : '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">该档位当前无场次</td></tr>';
+  try{ document.querySelectorAll('#bifenModal .bftab').forEach(b=> b.classList.toggle('on', b.getAttribute('data-t')===t)); }catch(e){}
+}
 function bifenRowHTML(r){
   const v = r.v || {};
+  const vd = v.verdict || {};
   const models = (r.bf.rows||[]).filter(x=>x.model!=null).slice(0,3);
   const modelTxt = models.length
-    ? models.map((x,i)=>'<span style="display:inline-block;margin-right:6px;'+(i===0?'font-weight:800;color:#15803d':'color:#334155')+'">'+x.score+' <span style="font-size:9.5px;opacity:.8">'+x.model.toFixed(1)+'%</span></span>').join('')
-    : '<span style="color:#94a3b8">无模型</span>';
+    ? models.map((x,i)=>'<span style="display:inline-block;margin-right:6px;'+(i===0?'font-weight:800;color:var(--grn)':'color:var(--txt)')+'">'+x.score+' <span style="font-size:9.5px;opacity:.8">'+x.model.toFixed(1)+'%</span></span>').join('')
+    : '<span style="color:var(--mut)">无模型</span>';
+  // 档·线索列（需求①③⑤：破缺口/三盘过热/盘级差/深让盘 → 精选/优选/小注/观察）
+  let tierTxt = '<span style="color:var(--mut)">—</span>';
+  if (vd.tier){
+    tierTxt = '<span class="badge bG" style="color:'+(vd.tierColor||'var(--mut)')+';font-weight:800">'+vd.tier+'</span>'
+      + ((vd.clues&&vd.clues.length) ? '<div style="font-size:9px;color:var(--mut);margin-top:2px;line-height:1.4">'+vd.clues.join(' / ')+'</div>' : '');
+  }
   // 市场最热比分：与模型对该比分的概率对照（市场高估=红/低估=绿），仅读数非结论
   const mkt = v.mktTop;
-  let mktTxt = '<span style="color:#94a3b8">无竞彩</span>';
+  let mktTxt = '<span style="color:var(--mut)">无市场</span>';
   if (mkt){
-    let rel = '', relCls = '';
+    let rel = '';
     if (mkt.other){
-      const mk = (mkt.score==='胜其他'?'otherW':mkt.score==='平其他'?'otherD':'otherL');
-      rel = '<span style="font-size:9px;color:#94a3b8">(其他)</span>';
+      rel = '<span style="font-size:9px;color:var(--mut)">(其他)</span>';
     } else {
       const mrow = (r.bf.rows||[]).find(x=>x.score===mkt.score);
       if (mrow && mrow.model != null){
         const d = mrow.imp - mrow.model;                 // 正=市场比模型高（市场高估此比分）
-        if (d >= 3){ rel = '<span style="font-size:9px;color:#b91c1c;font-weight:700">市场高估 +'+d.toFixed(1)+'pt</span>'; }
-        else if (d <= -3){ rel = '<span style="font-size:9px;color:#15803d;font-weight:700">模型高估 '+d.toFixed(1)+'pt</span>'; }
+        if (d >= 3){ rel = '<span style="font-size:9px;color:var(--red);font-weight:700">市场高估 +'+d.toFixed(1)+'pt</span>'; }
+        else if (d <= -3){ rel = '<span style="font-size:9px;color:var(--grn);font-weight:700">模型高估 '+d.toFixed(1)+'pt</span>'; }
       }
     }
-    mktTxt = '<span style="font-weight:700;color:#334155">'+mkt.score+'</span> '
-      + '<span style="font-size:9.5px;color:#64748b">隐含'+mkt.imp.toFixed(1)+'% · 赔'+mkt.odds.toFixed(2)+'</span>'
+    mktTxt = '<span style="font-weight:700;color:var(--txt)">'+mkt.score+'</span> '
+      + '<span style="font-size:9.5px;color:var(--mut)">隐含'+mkt.imp.toFixed(1)+'% · 赔'+mkt.odds.toFixed(2)+'</span>'
       + (rel ? '<div style="margin-top:2px">'+rel+'</div>' : '');
   }
   // 模型↔市场分歧最大的比分（价值差绝对值最大）
-  let divTxt = '<span style="color:#94a3b8">—</span>';
+  let divTxt = '<span style="color:var(--mut)">—</span>';
   const be = v.bestEdge;
   if (be && be.edge != null){
-    divTxt = '<span style="font-weight:700;color:'+(be.edge>0?'#15803d':'#b91c1c')+'">'+be.score+'</span> '
-      + '<span style="font-size:9.5px;color:#64748b">模型'+be.model.toFixed(1)+'% · 市场'+(be.imp!=null?be.imp.toFixed(1):'—')+'%</span>'
-      + '<div style="font-size:9px;font-weight:700;color:'+(be.edge>0?'#15803d':'#b91c1c')+'">分歧 '+(be.edge>0?'+':'')+be.edge.toFixed(1)+'pt</div>';
+    divTxt = '<span style="font-weight:700;color:'+(be.edge>0?'var(--grn)':'var(--red)')+'">'+be.score+'</span> '
+      + '<span style="font-size:9.5px;color:var(--mut)">模型'+be.model.toFixed(1)+'% · 市场'+(be.imp!=null?be.imp.toFixed(1):'—')+'%</span>'
+      + '<div style="font-size:9px;font-weight:700;color:'+(be.edge>0?'var(--grn)':'var(--red)')+'">分歧 '+(be.edge>0?'+':'')+be.edge.toFixed(1)+'pt</div>';
   }
-  const resTxt = r.resTxt
-    ? '<b>'+r.resTxt+'</b> ' + (r.hitTop==='✓' ? '<span class="badge bW">模型✓</span>' : (r.hitTop==='✗' ? '<span class="badge bL">模型✗</span>' : ''))
-    : '<span style="color:#94a3b8">'+(String(r.state)==='0'?'未开赛':'—')+'</span>';
+  // 综合意见列（需求②③⑤：临盘动态 + 365 第三源参照，仿三盘过热板"系统方向"格式）
+  let advTxt = '';
+  if (vd.dyn) advTxt += '<div style="color:var(--yel);font-size:10px">动态：'+vd.dyn+'</div>';
+  if (vd.c365 && vd.c365.imp) advTxt += '<div style="color:var(--mut);font-size:9.5px;margin-top:2px">'+vd.c365.label+' 主'+vd.c365.imp.W.toFixed(0)+'% 平'+vd.c365.imp.D.toFixed(0)+'% 客'+vd.c365.imp.L.toFixed(0)+'%</div>';
+  if (!advTxt) advTxt = '<span style="color:var(--mut)">—</span>';
+  // 复盘列（需求④：赛果 + 模型首选/前3 命中，仿三盘过热板复盘口径）
+  let resTxt;
+  if (r.resTxt){
+    resTxt = '<b style="color:var(--txt)">'+r.resTxt+'</b><div style="margin-top:2px">'
+      + (r.hitTop==='✓' ? '<span class="badge bW">首选✓</span>' : (r.hitTop==='✗' ? '<span class="badge bL">首选✗</span>' : ''))
+      + (r.hit3==='✓' ? '<span class="badge bD">前3✓</span>' : (r.hit3==='✗' ? '<span class="badge bG">前3✗</span>' : ''))
+      + '</div>';
+  } else {
+    resTxt = '<span style="color:var(--mut)">'+(String(r.state)==='0'?'未开赛':'—')+'</span>';
+  }
   return '<tr>'
     + '<td style="font-size:10.5px;white-space:nowrap">'+r.time+'</td>'
     + '<td style="font-size:10.5px">'+r.league+'</td>'
-    + '<td style="font-size:10.5px">'+r.home+' <span style="color:#94a3b8">vs</span> '+r.away+'</td>'
+    + '<td style="font-size:10.5px">'+r.home+' <span style="color:var(--mut)">vs</span> '+r.away+'</td>'
+    + '<td style="font-size:10.5px">'+tierTxt+'</td>'
     + '<td style="font-size:10.5px">'+modelTxt+'</td>'
     + '<td style="font-size:10.5px">'+mktTxt+'</td>'
     + '<td style="font-size:10.5px">'+divTxt+'</td>'
+    + '<td style="font-size:10.5px;text-align:left">'+advTxt+'</td>'
     + '<td style="font-size:10.5px">'+resTxt+'</td>'
     + '</tr>';
 }
