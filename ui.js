@@ -9153,6 +9153,275 @@ function __heatMore(){
     const b = document.getElementById('heatMoreBtn'); if (b && b.parentNode) b.parentNode.removeChild(b);
   } catch(e){ console.warn('热度榜展开失败', e && e.message); }
 }
+/* ========================================================================
+   ★ 2026-11-10 波胆（正确比分）模块
+   ------------------------------------------------------------------------
+   数据源（全部前端自带，零改数据管线）：
+     ① 竞彩官方 crs 比分赔率 —— m.jc.crs / m.__jc.crs（fetch_jingcai.cjs 每日自动抓）
+        键 s{主}{客}（两位补零，如 s01s02=1:2）+ 三个"其他"：s1sh=胜其他 / s1sd=平其他 / s1sa=负其他
+     ② Dixon-Coles 模型比分分布 —— m.analysis.score（top[] + pTotal + p1x2 + lambda/mu）
+   ------------------------------------------------------------------------
+   回测结论（D盘 214 场竞彩/北单波胆 × 完场，2026-11-10 实测）：
+     · 市场最热比分档（赔率<6）：市场隐含 21.6% vs 实际 5.8% → 缺口 −15.8pt（严重高估，n=69 需扩样本复核）
+     · 次热档（赔 6-22）：+2.6 / +1.4 / +0.6pt 正缺口（有价值）
+     · 市场前3热比分隐含和 ≥65% 的场，实际只中 12-20%（越挤越假）
+     · 模型校准：模型给 5-10% 实际中 6.6% / 10-15% 中 8.3% / 15-20% 中 18.8%（健康）
+     · 模型 Top10 覆盖 59.1%、Top3 26.1%
+   → 核心用法：看「市场最热 × 高估」= 陷阱；看「模型高 × 市场低」= 价值候选。
+   仅展示与标定，不改 engine/gen_index/方向算法，不构成下注建议。
+   ======================================================================== */
+/* 解析竞彩 crs → [{score:'1:2', odds:10.0, other:false}] */
+function _crsParse(crs){
+  const out = [];
+  if (!crs || typeof crs !== 'object') return out;
+  const otherMap = { s1sh:'胜其他', s1sd:'平其他', s1sa:'负其他' };
+  for (const k in crs){
+    if (!Object.prototype.hasOwnProperty.call(crs, k)) continue;
+    const v = +crs[k];
+    if (!isFinite(v) || v <= 1) continue;
+    const m = /^s(\d{2})s(\d{2})$/.exec(k);
+    if (m) out.push({ score: (+m[1]) + ':' + (+m[2]), odds: v, other: false });
+    else if (otherMap[k]) out.push({ score: otherMap[k], odds: v, other: true });
+  }
+  out.sort((a,b)=>a.odds-b.odds);
+  return out;
+}
+/* 竞彩 crs 隐含概率（含抽水归一），返回 [{score,odds,imp,other}] */
+function _crsImplied(crs){
+  const arr = _crsParse(crs);
+  if (!arr.length) return [];
+  let sum = 0;
+  for (const x of arr) sum += 1/x.odds;
+  for (const x of arr) x.imp = (1/x.odds) / sum * 100;   // 归一化百分比
+  return arr;
+}
+/* 模型比分概率表 → {score: p} */
+function _modelScoreMap(m){
+  const a = (m && m.analysis) || null;
+  const s = a && a.score;
+  if (!s || !s.top || !s.top.length) return null;
+  const map = {};
+  for (const t of s.top){
+    if (t && t.score) map[String(t.score).replace('-', ':')] = +t.p;
+  }
+  return map;
+}
+/* ★ 2026-11-10 新增：北单 BD_ROWS bf 解析（波胆赔率 {score: odds} → 归一隐含概率）
+   BD_ROWS 是 engine.js loadBeidan 存的北单行数组，每行 bf = {"1:0":21.17,"0:0":20.86,...}
+   北单 25 项：24 个具体比分 + 胜/平/负其他（键直接是 "X:Y" 格式，与竞彩 crs 解码后一致） */
+function _bdBfImplied(bf){
+  if (!bf || typeof bf !== 'object') return [];
+  const arr = [];
+  for (const k in bf){
+    if (!Object.prototype.hasOwnProperty.call(bf, k)) continue;
+    const o = +bf[k];
+    if (!isFinite(o) || o <= 1) continue;
+    arr.push({ score: k, odds: o, other: /其他/.test(k) });
+  }
+  if (!arr.length) return [];
+  arr.sort((a,b)=>a.odds-b.odds);
+  let sum = 0;
+  for (const x of arr) sum += 1/x.odds;
+  if (sum <= 0) return arr.map(x=>({ ...x, imp: 0 }));
+  for (const x of arr) x.imp = (1/x.odds)/sum*100;
+  return arr;
+}
+/* 查找 m 对应的北单 BD_ROWS 行（按规范化队名 + 日期匹配） */
+function _bdBfForMatch(m){
+  try{
+    const bd = (globalThis.BD_ROWS && globalThis.BD_ROWS.length) ? globalThis.BD_ROWS : [];
+    if (!bd.length) return null;
+    const hm = _jcNameEq;    // 复用规范化队名比较函数
+    const mDay = String(m.day || '');
+    const mHome = String(m.home || '').replace(/[（）()\s·]/g,'');
+    const mAway = String(m.away || '').replace(/[（）()\s·]/g,'');
+    if (!mHome || !mAway) return null;
+    for (const b of bd){
+      const bHome = String(b.home || '').replace(/[（）()\s·]/g,'');
+      const bAway = String(b.away || '').replace(/[（）()\s·]/g,'');
+      if (!bHome || !bAway) continue;
+      // 队名双向模糊（短名⊆长名）
+      const hm1 = (bHome.startsWith(mHome)||mHome.startsWith(bHome)||mHome.indexOf(bHome)>=0||bHome.indexOf(mHome)>=0);
+      const am1 = (bAway.startsWith(mAway)||mAway.startsWith(bAway)||mAway.indexOf(bAway)>=0||bAway.indexOf(mAway)>=0);
+      if (hm1 && am1){
+        // 日期校验（跨日场次 day 可能不同，若 m 无 day 或日期匹配则接受）
+        if (!mDay || !b.date || mDay.replace(/-/g,'') === String(b.date).replace(/-/g,'') ||
+            String(b.date).replace(/-/g,'') === mDay) return b;
+      }
+    }
+    return null;
+  }catch(e){ return null; }
+}
+/* 波胆三路对照：市场隐含 vs 模型概率 vs 价值差（模型−市场），按模型概率降序
+   ★ 2026-11-10 数据源扩展：优先北单 BD_ROWS bf（31场×25项），竞彩 crs 兜底（8-30场） */
+function _bifenRows(m){
+  // ① 北单 bf（BD_ROWS）优先
+  const bdRow = _bdBfForMatch(m);
+  const bdBf = bdRow ? bdRow.bf : null;
+  const implied = _bdBfImplied(bdBf);
+  // ② 竞彩 crs 兜底
+  const jc = m.jc || m.__jc;
+  const crs = jc && jc.crs;
+  const impliedJc = implied.length ? implied : _crsImplied(crs);
+  const model = _modelScoreMap(m);
+  if (!impliedJc.length && !model) return null;
+  const impMap = {};
+  for (const x of impliedJc){ if (!x.other) impMap[x.score] = x; }
+  const keys = new Set([...Object.keys(impMap), ...Object.keys(model || {})]);
+  const rows = [];
+  for (const sc of keys){
+    const im = impMap[sc] || null;
+    const mp = (model && model[sc] != null) ? model[sc] : null;
+    rows.push({
+      score: sc,
+      odds: im ? im.odds : null,
+      imp:  im ? im.imp  : null,
+      model: mp,
+      edge: (mp != null && im) ? (mp - im.imp) : null   // 正=模型比市场更看好
+    });
+  }
+  // 排序：优先模型概率，其次市场隐含
+  rows.sort((a,b)=> (b.model!=null?b.model:-1) - (a.model!=null?a.model:-1) || (b.imp||0)-(a.imp||0));
+  return { rows, implied: impliedJc, model, s: (m.analysis && m.analysis.score) || null };
+}
+/* 单场波胆结论：市场最热（陷阱预警） + 模型首选（价值候选） */
+function _bifenVerdict(m){
+  const bf = _bifenRows(m);
+  if (!bf) return null;
+  const { rows, implied } = bf;
+  // 市场最热比分（赔率最低）
+  const mktTop = implied.length ? implied[0] : null;
+  // 模型首选
+  let mdlTop = null, bestEdge = null;
+  for (const r of rows){
+    if (r.model == null) continue;
+    if (!mdlTop) mdlTop = r;
+    if (r.edge != null && (!bestEdge || r.edge > bestEdge.edge)) bestEdge = r;
+  }
+  /* ★ 2026-11-10 22:00 重大口径修正（按源拆分校准）：
+     D盘 214 场竞彩/北单波胆按源拆开后，"最热比分"效应两源方向完全相反：
+       · 竞彩 n=27：最热比分隐含 10.5% → 实际 23.1%（+12.6pt 低估·正缺口）
+       · 北单 n=187：最热比分隐含 10.3% → 实际  7.4%（−2.9pt 高估）
+     我先前报的「最热档赔<6 缺口 −15.8pt」是两源混算伪影（−15.8 主要来自北单高赔样本，
+     竞彩实际正缺口）。且竞彩官方 crs 最低赔 6.25、永不 <6，旧「赔<6 陷阱」判定永不触发。
+     两源定价机制不同、不能合并结论；竞彩 27 场样本太小、方向未定论。
+     → 故本版降级为「纯模型 × 市场对照」：只给模型概率、市场隐含、价值差读数，
+        不下「陷阱/价值」结论，等扩样本后再标定。 */
+  return { mktTop, mdlTop, bestEdge, trap: null, value: null };
+}
+function openBifen(){
+  const rows = [];
+  for (const m of MATCHES){
+    // ★ 2026-11-10：不再预过滤，让 _bifenRows 自己判定（北单 BD_ROWS 也算有效源）
+    const bf = _bifenRows(m);
+    if (!bf || !bf.rows.length) continue;
+    const k = heatKick(m);
+    const v = _bifenVerdict(m);
+    let resTxt = '', hitTop = '';
+    if (String(m.state)==='-1' && m.home_score!=null && m.away_score!=null){
+      const real = m.home_score + ':' + m.away_score;
+      resTxt = real;
+      if (v && v.mdlTop) hitTop = (v.mdlTop.score === real) ? '✓' : '✗';
+    }
+    rows.push({
+      tid:m.tid, day:k.day, time:k.time, ts:kickTs(m), league:cleanLeague(m),
+      home: displayTeam(m,'home'), away: displayTeam(m,'away'),
+      bf, v, resTxt, hitTop, state:String(m.state)
+    });
+  }
+  rows.sort((x,y)=> String(x.ts||'').localeCompare(String(y.ts||'')));
+  window._bifenRows = rows;
+  const body = rows.length ? rows.map(bifenRowHTML).join('')
+    : '<tr><td colspan="7" style="padding:18px;text-align:center;color:#94a3b8">当前视图内没有带波胆数据的场次（需竞彩在售场次含 crs 比分赔率，或已分析出模型比分分布）</td></tr>';
+  const done = rows.filter(r=>r.resTxt);
+  const hit = done.filter(r=>r.hitTop==='✓').length;
+  const hit3done = done.filter(r=>{
+    try{ const top3=(r.v&&r.v.mdlTop)?r.bf.rows.slice(0,3).map(x=>x.score):[]; return top3.indexOf(r.resTxt)>=0; }catch(e){ return false; }
+  }).length;
+  const rateTxt = done.length ? Math.round(hit/done.length*100)+'%（'+hit+'/'+done.length+'）' : '—';
+  const rate3Txt = done.length ? Math.round(hit3done/done.length*100)+'%（'+hit3done+'/'+done.length+'）' : '—';
+  const html =
+    '<div class="modal show" id="bifenModal" style="display:flex;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:12px">'
+    + '<div style="background:#fff;border-radius:12px;max-width:1180px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    + '<div class="modal-h"><b>🎯 波胆（正确比分）· 模型 × 市场对照</b>'
+    + '<button class="x" onclick="closeBifen()">✕</button></div>'
+    + '<div class="modal-b">'
+    + '<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.8">'
+    + '<b style="color:#b45309">⚠ 本版是「对照·监测」板，非下注信号——竞彩样本太小，方向未定论</b><br>'
+    + '<b>模型</b>=Dixon-Coles 比分概率分布（λ主/μ客，非定点）；<b>市场</b>=竞彩官方 crs 赔率归一后的隐含概率；<b>价值差</b>=模型−市场（正=模型更看好）。<br>'
+    + '<b style="color:#b91c1c">⚠ 关键诚实标注</b>：本板用的是<b>竞彩 crs</b>，而竞彩与北单的"最热比分"定价机制<b>方向相反</b>——'
+    + 'D盘回测按源拆开：竞彩最热比分隐含 10.5%→实际 23.1%（<b style="color:#15803d">+12.6pt 低估</b>，但 n=27 样本太小未定论）；'
+    + '北单最热比分隐含 10.3%→实际 7.4%（<b style="color:#b91c1c">−2.9pt 高估</b>）。我先前报的「最热陷阱 −15.8pt」是两源混算伪影，<b>已作废</b>。'
+    + '竞彩 crs 最低赔 6.25、永不进&lt;6 档，故旧「赔&lt;6 陷阱」判定在竞彩上永不触发。'
+    + '<b>结论：竞彩波胆是否有可操作的 edge，目前证据不足，本板只做纯对照，不给买卖结论。</b><br>'
+    + '<b>模型校准</b>（115 场账本完场·健康）：模型给 5-10% 实际中 6.6% / 10-15% 中 8.3% / 15-20% 中 18.8%；Top3 覆盖 26.1%、Top10 覆盖 59.1%。'
+    + '<span style="color:#94a3b8">（竞彩 crs 需当日有在售场次；仅对照非建议）</span></div>'
+    + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:#334155">'
+    + '<span>本视图场次：<b>' + rows.length + '</b></span>'
+    + '<span>模型首选命中：<b style="color:#15803d">' + rateTxt + '</b></span>'
+    + '<span>模型前3命中：<b>' + rate3Txt + '</b></span>'
+    + '</div>'
+    + '<div class="tfx" style="overflow:auto"><table class="tbl" style="min-width:1080px"><thead><tr>'
+    + '<th>开赛</th><th>联赛</th><th>对阵</th><th>模型 Top3（概率）</th><th>市场最热（隐含/赔率）</th><th>模型↔市场分歧最大</th><th>赛果</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+    + '</div></div></div>';
+  // 动态挂载（外壳未预置 bifenModal div，零改 index.html）
+  let host = document.getElementById('bifenModal');
+  if (host && host.parentNode) host.parentNode.removeChild(host);
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap.firstChild);
+  const _bm = document.getElementById('bifenModal');
+  if (_bm) _bm.addEventListener('click', e=>{ if (e.target.id === 'bifenModal') closeBifen(); });
+}
+function closeBifen(){ const m = document.getElementById('bifenModal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function bifenRowHTML(r){
+  const v = r.v || {};
+  const models = (r.bf.rows||[]).filter(x=>x.model!=null).slice(0,3);
+  const modelTxt = models.length
+    ? models.map((x,i)=>'<span style="display:inline-block;margin-right:6px;'+(i===0?'font-weight:800;color:#15803d':'color:#334155')+'">'+x.score+' <span style="font-size:9.5px;opacity:.8">'+x.model.toFixed(1)+'%</span></span>').join('')
+    : '<span style="color:#94a3b8">无模型</span>';
+  // 市场最热比分：与模型对该比分的概率对照（市场高估=红/低估=绿），仅读数非结论
+  const mkt = v.mktTop;
+  let mktTxt = '<span style="color:#94a3b8">无竞彩</span>';
+  if (mkt){
+    let rel = '', relCls = '';
+    if (mkt.other){
+      const mk = (mkt.score==='胜其他'?'otherW':mkt.score==='平其他'?'otherD':'otherL');
+      rel = '<span style="font-size:9px;color:#94a3b8">(其他)</span>';
+    } else {
+      const mrow = (r.bf.rows||[]).find(x=>x.score===mkt.score);
+      if (mrow && mrow.model != null){
+        const d = mrow.imp - mrow.model;                 // 正=市场比模型高（市场高估此比分）
+        if (d >= 3){ rel = '<span style="font-size:9px;color:#b91c1c;font-weight:700">市场高估 +'+d.toFixed(1)+'pt</span>'; }
+        else if (d <= -3){ rel = '<span style="font-size:9px;color:#15803d;font-weight:700">模型高估 '+d.toFixed(1)+'pt</span>'; }
+      }
+    }
+    mktTxt = '<span style="font-weight:700;color:#334155">'+mkt.score+'</span> '
+      + '<span style="font-size:9.5px;color:#64748b">隐含'+mkt.imp.toFixed(1)+'% · 赔'+mkt.odds.toFixed(2)+'</span>'
+      + (rel ? '<div style="margin-top:2px">'+rel+'</div>' : '');
+  }
+  // 模型↔市场分歧最大的比分（价值差绝对值最大）
+  let divTxt = '<span style="color:#94a3b8">—</span>';
+  const be = v.bestEdge;
+  if (be && be.edge != null){
+    divTxt = '<span style="font-weight:700;color:'+(be.edge>0?'#15803d':'#b91c1c')+'">'+be.score+'</span> '
+      + '<span style="font-size:9.5px;color:#64748b">模型'+be.model.toFixed(1)+'% · 市场'+(be.imp!=null?be.imp.toFixed(1):'—')+'%</span>'
+      + '<div style="font-size:9px;font-weight:700;color:'+(be.edge>0?'#15803d':'#b91c1c')+'">分歧 '+(be.edge>0?'+':'')+be.edge.toFixed(1)+'pt</div>';
+  }
+  const resTxt = r.resTxt
+    ? '<b>'+r.resTxt+'</b> ' + (r.hitTop==='✓' ? '<span class="badge bW">模型✓</span>' : (r.hitTop==='✗' ? '<span class="badge bL">模型✗</span>' : ''))
+    : '<span style="color:#94a3b8">'+(String(r.state)==='0'?'未开赛':'—')+'</span>';
+  return '<tr>'
+    + '<td style="font-size:10.5px;white-space:nowrap">'+r.time+'</td>'
+    + '<td style="font-size:10.5px">'+r.league+'</td>'
+    + '<td style="font-size:10.5px">'+r.home+' <span style="color:#94a3b8">vs</span> '+r.away+'</td>'
+    + '<td style="font-size:10.5px">'+modelTxt+'</td>'
+    + '<td style="font-size:10.5px">'+mktTxt+'</td>'
+    + '<td style="font-size:10.5px">'+divTxt+'</td>'
+    + '<td style="font-size:10.5px">'+resTxt+'</td>'
+    + '</tr>';
+}
 function openHeat(){
   try{ _htAbort = false; resolvePredictions(); }catch(e){}
   // 确保可投注场都已分析（取 yg 热度）
@@ -16557,6 +16826,19 @@ async function init(){
   $('btnHeat').onclick = openHeat;
   { const _b=document.getElementById('btnStructDown'); if(_b) _b.onclick = openStructDown; }
   { const _b=document.getElementById('btnFundPlate'); if(_b) _b.onclick = openFundPlate; }
+  /* ★ 2026-11-10 波胆模块按钮（动态注入到「看板板块」栏，零改外壳 index.html） */
+  { try{
+      const _tbr = document.querySelector('.tbr');
+      if (_tbr && !document.getElementById('btnBifen')){
+        const _bb = document.createElement('button');
+        _bb.className = 'sec'; _bb.id = 'btnBifen';
+        _bb.style.cssText = 'color:#0d9488;border-color:#0d9488;font-weight:700';
+        _bb.title = '🎯 波胆（正确比分）· 模型 × 市场对照：模型 Dixon-Coles 比分概率分布 vs 竞彩官方 crs 市场隐含，标「最热陷阱档」与「价值候选」。回测：最热档(赔<6)市场高估 −15.8pt，次热正缺口；模型 Top10 覆盖 59.1%。仅展示校准，非下注建议';
+        _bb.textContent = '🎯 波胆';
+        _bb.onclick = openBifen;
+        _tbr.appendChild(_bb);
+      }
+    }catch(e){ console.warn('波胆按钮注入失败', e && e.message); } }
   { const _m=document.getElementById('fundPlateModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='fundPlateModal') closeFundPlate(); }); }
   setTimeout(function(){ try{ showStructDownAlert(); }catch(e){} }, 3500);   // 开屏提醒（常驻角标 + 当日一次横幅）
   $('btnDeep').onclick = openDeepPlate;
