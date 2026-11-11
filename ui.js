@@ -18024,32 +18024,43 @@ function _dgDrift(m){
   let ix=0; for(let i=1;i<3;i++) if(Math.abs(d[i])>Math.abs(d[ix])) ix=i;
   return {d, max:d[ix], side:['主胜','平局','客胜'][ix], ix};
 }
-/* ---- 真逐帧（2026-11-11 三轮校读）：接 CVM 现成的 odds_timeline + jc_history。
-   ★ 上轮误判：说「官方 SP 没有历史帧、要新建 dg_history」。实际两处现成真值：
-     __DG_FRAMES__.f[tid] = 外围逐帧 [MM-DD HH:MM,h,d,a,亚盘,水位]，
-                            gen_index 每 15min 仅在盘口/水位/欧赔变化时追加，开赛 frozen 定格；
-     __DG_FRAMES__.j[主vs客] = 竞彩官方 had 逐帧（collect_jc_history.cjs 累积，覆盖稀疏、多数仅 1 帧）。
-   两端按时间对齐（官方取 ≤ 外围帧时刻的最近一帧），算每帧 Δ 与逐项偏差轨迹。
-   ★ 边界：跨时点判读是本模块扩展，文档只给静态截面，绝不代入 6pt 门、不直接判档。 ---- */
+/* ---- 真逐帧（2026-11-11 三轮校读）：三处现成真值，任一端有帧就建轨迹。
+   f[tid]     外围逐帧 [MM-DD HH:MM,h,d,a,亚盘,水位]；odds_timeline 每 15min 有变化才记、开赛定格。
+   j[主vs客]  官方 SP 逐帧 [MM-DD HH:MM,h,d,a]；来源标在 js[主vs客]：
+              竞彩 had（jc_history 持续累积）/ 北单 SP（D 盘快照流水回流 dg_history，每轮续记）。
+   ★ 同源铁律：竞彩官方 +4~5pt、北单 −8~−9pt，差约 12pt，一个序列里绝不混源。
+   ★ 时间轴取两端并集；Δ 与逐项偏差只在两端齐的帧算，缺端明写「—」。
+   ★ 跨时点判读是本模块扩展，文档只给静态截面，绝不代入 6pt 门、不直接判档。 ---- */
 function _dgTrail(m){
   const D=window.__DG_FRAMES__;
-  const o={n:0,frames:[],dual:0,persist:null,first:'',last:'',note:''};
+  const o={n:0,frames:[],dual:0,persist:null,offPersist:null,first:'',last:'',
+           note:'',outN:0,offN:0,src:''};
   if(!D){ o.note='本轮未注入逐帧真值'; return o; }
-  const arr=(D.f||{})[String(m.tid||'')];
-  const hk=_dgName(m,'home'), ak=_dgName(m,'away');
-  const J=((D.j||{})[hk+'vs'+ak]||[]).slice().sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+  const arr=(D.f||{})[String(m.tid||'')]||[];
+  const key=_dgName(m,'home')+'vs'+_dgName(m,'away');
+  const J=((D.j||{})[key]||[]).slice().sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+  o.src=(D.js||{})[key]||'';
+  const times=[], seen=new Set();
+  for(const f of arr){ const t=String(f[0]); if(!seen.has(t)){seen.add(t);times.push(t);} }
+  for(const f of J){ const t=String(f[0]); if(!seen.has(t)){seen.add(t);times.push(t);} }
+  times.sort();
   const frames=[];
-  if(Array.isArray(arr)) for(const f of arr){
-    const O=_dgOver([+f[1],+f[2],+f[3]]); if(!O) continue;
-    let cur=null; for(const q of J){ if(String(q[0])<=String(f[0])) cur=q; else break; }
-    let A=null,delta=null,per=null;
-    if(cur){ A=_dgOver([+cur[1],+cur[2],+cur[3]]);
-      if(A){ delta=A.over-O.over; per=A.p.map((p,i)=>(p-O.p[i])*100); } }
-    frames.push({t:String(f[0]),out:O,off:A,delta:delta,per:per,p:_dgNum(f[4]),h:_dgNum(f[5])});
+  for(const t of times){
+    const F=arr.find(f=>String(f[0])===t);
+    let cur=null; for(const q of J){ if(String(q[0])<=t) cur=q; else break; }
+    const O=F?_dgOver([+F[1],+F[2],+F[3]]):null;
+    const A=cur?_dgOver([+cur[1],+cur[2],+cur[3]]):null;
+    let delta=null,per=null;
+    if(O&&A){ delta=A.over-O.over; per=A.p.map((p,i)=>(p-O.p[i])*100); }
+    frames.push({t:t,out:O,off:A,delta:delta,per:per,
+                 p:F?_dgNum(F[4]):null,h:F?_dgNum(F[5]):null,offT:cur?String(cur[0]):null});
   }
-  o.frames=frames; o.n=frames.length; o.dual=frames.filter(f=>f.per).length;
+  o.frames=frames; o.n=frames.length;
+  o.outN=frames.filter(f=>f.out).length;
+  o.offN=frames.filter(f=>f.off&&f.offT===f.t).length;
+  o.dual=frames.filter(f=>f.per).length;
   if(frames.length){ o.first=frames[0].t; o.last=frames[frames.length-1].t; }
-  // 「官方端被持续推高」：最近 ≥3 个双端帧，某侧逐项偏差整体上行、末帧越过文档 6pt
+  // 相对口径（文档原义「官方端更热」）：≥3 个双端帧、某侧单调上行、末帧越 6pt
   const dual=frames.filter(f=>f.per).slice(-8);
   if(dual.length>=3){
     let best=null;
@@ -18061,13 +18072,25 @@ function _dgTrail(m){
     }
     o.persist=best;
   }
-  o.note='外围逐帧 '+o.n+' 帧（odds_timeline，CVM 每 15 分钟、有变化才记，开赛定格）'
-    +'；官方 had 逐帧 '+J.length+' 帧，可对齐双端 '+o.dual+' 帧'
-    +(o.dual<3?' → 官方端帧不足，「是否被持续推高」判不了':'');
+  // 绝对口径（本模块扩展）：官方 SP 自身逐帧隐含某侧连续上行 ≥3pt（不依赖外围帧）
+  const offs=frames.filter(f=>f.off&&f.offT===f.t).slice(-10);
+  if(offs.length>=3){
+    let best=null;
+    for(let i=0;i<3;i++){
+      const v=offs.map(f=>f.off.p[i]*100), rise=v[v.length-1]-v[0];
+      let up=0; for(let k=1;k<v.length;k++) if(v[k]>=v[k-1]-0.4) up++;
+      if(rise>=3&&up>=v.length-2&&(!best||rise>best.rise))
+        best={side:['主胜','平局','客胜'][i],rise:rise,last:v[v.length-1],n:offs.length};
+    }
+    o.offPersist=best;
+  }
+  o.note='外围 '+o.outN+'/'+arr.length+' 帧（odds_timeline，CVM 15min/有变化才记、开赛定格）'
+    +'｜官方 '+o.offN+'/'+J.length+' 帧（'+(o.src||'jc_history 竞彩 had')+'）'
+    +'｜双端 '+o.dual+' 帧'+(o.dual<3?' → 相对口径判不了':'');
   return o;
 }
 function _dgSpark(frames){
-  const vs=frames.map(f=>f.delta!=null?f.delta:f.out.over);
+  const vs=frames.map(f=>f.delta!=null?f.delta:(f.off?f.off.over:(f.out?f.out.over:0)));
   if(vs.length<2) return '';
   const mn=Math.min.apply(null,vs), mx=Math.max.apply(null,vs), rg=(mx-mn)||1;
   const pts=vs.map((v,i)=>((i/(vs.length-1)*64).toFixed(1))+','+((16-(v-mn)/rg*13).toFixed(1))).join(' ');
@@ -18157,8 +18180,9 @@ function _dgVerdict(m, opt){
   const T=live.trail;
   if(T&&T.n>=2){
     why.push('📈 <b>真逐帧轨迹</b>（CVM odds_timeline，'+T.n+' 帧 '+_dgEsc(T.first)+' → '+_dgEsc(T.last)+'）'+_dgSpark(T.frames)
-      +'<br><span style="color:var(--mut);font-size:9.5px">折线='+(T.dual>=2?'逐帧 Δ（官方抽水−外围抽水）':'外围抽水，官方端帧不足')+'</span>'
-      +(T.persist?('<br><b style="color:var(--red)">官方端「'+T.persist.side+'」被持续推高</b>：近 '+T.persist.n+' 个双端帧逐项偏差 '
+      +'<br><span style="color:var(--mut);font-size:9.5px">折线='+(T.dual>=2?'有双端帧处 Δ（官方抽水−外围抽水）、其余取可得端抽水':'仅可得端抽水')+'</span>'
+      +(T.offPersist?('<br><b style="color:#f59e0b">官方 SP 自身被推高</b>（绝对口径·本模块扩展，非文档相对门）：'+T.offPersist.side+' 近 '+T.offPersist.n+' 帧隐含 +'+T.offPersist.rise.toFixed(1)+'pt'):'')
+      +(T.persist?('<br><b style="color:var(--red)">官方端「'+T.persist.side+'」被持续推高</b>（相对外围·文档口径）：近 '+T.persist.n+' 个双端帧逐项偏差 '
         +((T.persist.last-T.persist.rise)>=0?'+':'')+(T.persist.last-T.persist.rise).toFixed(1)+' → +'+T.persist.last.toFixed(1)
         +'pt（上升 '+T.persist.rise.toFixed(1)+'pt，末帧越过文档 6pt）')
        :'<br><span style="color:var(--mut)">未见「官方端被持续推高」的单调轨迹</span>')
@@ -18280,9 +18304,11 @@ function _dgLiveCell(v){
     return '<b style="color:'+(T.persist?'var(--red)':'inherit')+'">'+T.n+' 帧逐帧</b>'
       +'<br><span style="color:var(--mut);font-size:9px">'+_dgEsc(T.first)+' → '+_dgEsc(T.last)+'</span>'
       +_dgSpark(T.frames)
+      +'<br><span style="color:var(--mut);font-size:9px">外 '+T.outN+' / 官 '+T.offN+' 帧'+(T.src?'（'+_dgEsc(T.src)+'）':'')+'</span>'
       +(T.persist?('<br><span style="color:var(--red);font-size:9px">'+T.persist.side+'官方端持续推高 +'+T.persist.rise.toFixed(1)+'pt</span>')
-        :(T.dual>=3?'<br><span style="color:var(--mut);font-size:9px">未见持续推高</span>'
-                   :'<br><span style="color:var(--mut);font-size:9px">官方端仅 '+T.dual+' 帧 · 判不了</span>'));
+        :(T.offPersist?('<br><span style="color:#f59e0b;font-size:9px">官方自身 '+T.offPersist.side+' +'+T.offPersist.rise.toFixed(1)+'pt</span>')
+          :(T.dual>=3?'<br><span style="color:var(--mut);font-size:9px">未见持续推高</span>'
+                     :'<br><span style="color:var(--mut);font-size:9px">双端仅 '+T.dual+' 帧 · 相对口径判不了</span>')));
   }
   if(!L||!L.dyn) return '<span style="color:var(--mut);font-size:9.5px">无逐帧</span>';
   const d=L.dyn;
@@ -18339,14 +18365,17 @@ function _dgDetailHTML(r){
     x+='<div style="margin:4px 0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:9.5px">'
       +'<tr style="color:var(--mut)"><th style="text-align:left">帧时刻</th><th>外围抽水</th><th>官方抽水</th><th>Δ</th><th>主/平/客 官方−外围</th></tr>';
     for(const f of tail){
-      x+='<tr style="border-top:1px solid var(--line)"><td>'+_dgEsc(f.t)+'</td><td>'+f.out.over.toFixed(2)+'%</td>'
+      x+='<tr style="border-top:1px solid var(--line)"><td>'+_dgEsc(f.t)+'</td><td>'+(f.out?f.out.over.toFixed(2)+'%':'—')+'</td>'
         +'<td>'+(f.off?f.off.over.toFixed(2)+'%':'—')+'</td>'
         +'<td style="color:'+(f.delta!=null&&Math.abs(f.delta)>6?'var(--red)':'inherit')+'">'+(f.delta!=null?(f.delta>=0?'+':'')+f.delta.toFixed(1)+'pt':'—')+'</td>'
         +'<td>'+(f.per?f.per.map(p=>(p>=0?'+':'')+p.toFixed(1)).join(' / '):'—')+'</td></tr>';
     }
     x+='</table></div>';
-    x+=li('Δ 轨迹', _dgSpark(T.frames)+' <span style="color:var(--mut)">（'+(T.dual>=2?'官方抽水−外围抽水':'外围抽水；官方端帧不足')+'，末点橙）</span>');
-    x+=li('官方端是否持续推高', T.persist
+    x+=li('Δ 轨迹', _dgSpark(T.frames)+' <span style="color:var(--mut)">（'+(T.dual>=2?'双端帧处官方−外围，其余取可得端抽水':'仅可得端抽水')+'，末点橙）</span>');
+    x+=li('官方 SP 自身推高（绝对口径·扩展）', T.offPersist
+      ? ('<b style="color:#f59e0b">'+T.offPersist.side+'：近 '+T.offPersist.n+' 帧隐含 +'+T.offPersist.rise.toFixed(1)+'pt，末 '+(T.offPersist.last).toFixed(1)+'%</b>')
+      : '<span style="color:var(--mut)">未见官方端自身单调推高（或官方帧 &lt;3）</span>');
+    x+=li('官方端是否持续推高（相对口径·文档）', T.persist
       ? ('<b style="color:var(--red)">'+T.persist.side+'：近 '+T.persist.n+' 个双端帧上升 '+T.persist.rise.toFixed(1)+'pt，末帧 +'+T.persist.last.toFixed(1)+'pt</b>')
       : (T.dual>=3?'未见单调推高轨迹':'<span style="color:var(--mut)">双端仅 '+T.dual+' 帧（&lt;3），官方端判不了</span>'));
   } else x+=li('逐帧', _dgEsc(T?T.note:'本轮无逐帧数据'));
@@ -18550,7 +18579,7 @@ function openDg(){
   +  '<b>原文只有两块</b>——五步模拟盘 + 返还抽水换算，外加「如分析数据有异常，则建议放弃」。「竞彩北单 / 野鸡区」<b>分区是按用户要求加的，原文没有</b>；野鸡区的「外围多公司抽水离散 + 初→临漂移」、两道防脏数据闸、逐项热门方向符号、0.5/1.0 球门、去基差判档，<b>均为本模块自研/校准，不是原文公式</b>。原文的 6pt 门是拿<b>竞彩 vs 一家外围</b>（截图为「独赢」一家 4.48/4.15/1.71）标定的，本模块外围优先 Bet365、其次欧赔汇总（口径已变），套到<b>北单 SP 属外推</b>，虽按官方源分组去基差缓解，仍未经样本外验证。'
   +  '</div></details>'
   +  '<b style="color:var(--red)">两道防脏数据闸</b>：官方与外围热门侧不一致 / 单侧偏差≥20pt / 抽水差≥15pt → 判「<b>数据错配·不判</b>」，不拿跨场或让球行混入的配对出结论；野鸡区模拟盘与外围盘的偏离<b>只作对照、不单独触发判档</b>（无官方盘可校验）。<br>'
-  +  '<b style="color:#0d9488">📈 实时动态（真逐帧，已接 CVM 现成源）</b>：弹窗打开期间<b>每 60 秒自动重算</b>；数据本体随 CVM <b>每 15 分钟</b>刷新。<b>外围端</b>取 <code>odds_timeline.json</code>（每场最多 48 帧、盘口/水位/四家欧赔有变化才记、开赛 frozen 定格），<b>官方端</b>取 <code>jc_history.json</code>（竞彩 had 初→临快照）；两端按时间对齐，逐帧重算抽水、Δ 与逐项偏差，明细卡列出每帧数值与 Δ 折线。「官方端是否被持续推高」需 <b>≥3 个双端帧且某侧单调上行、末帧越 6pt</b> 才报，否则明写「判不了」。<b style="color:var(--red)">诚实边界</b>：官方 had 逐帧覆盖稀疏（多数场仅 1 帧），这类场只有外围端轨迹可看；跨时点判读是<b>本模块扩展</b>，文档只给静态截面公式，<b>不代入 6pt 门、不直接判档</b>。<br>'
+  +  '<b style="color:#0d9488">📈 实时动态（真逐帧）</b>：弹窗每 60 秒重算，数据本体随 CVM <b>每 15 分钟</b>刷新。<b>外围端</b> <code>odds_timeline.json</code>（每场≤48 帧、盘口/水位/欧赔有变化才记、开赛定格）；<b>官方端</b> <code>jc_history.json</code>（竞彩 had 持续累积）+ <b>D 盘「快照流水」回流</b> <code>dg_history.json</code>（竞彩 had / 北单 SP，逐 5 分钟一帧，每轮由官方七玩法续记）。<b>任一端有帧即建轨迹</b>，时间轴取并集，Δ 与逐项偏差只在两端齐的帧算、缺端显示「—」。<b style="color:var(--red)">同源铁律</b>：竞彩官方 +4~5pt、北单 −8~−9pt 差约 12pt，一个序列绝不混源，来源标在明细卡。「官方端持续推高」分两口径：<b>相对</b>（文档原义，需 ≥3 双端帧、单调上行、末帧越 6pt）与<b>绝对</b>（本模块扩展，官方 SP 自身隐含上行 ≥3pt）；不足 3 帧明写「判不了」。跨时点判读<b>不代入 6pt 门、不直接判档</b>（文档只给静态截面公式）。<br>'
   +  '<span style="color:var(--mut)">数据源：竞彩官方 had · 北京体彩网七玩法 XML · 澳客北单 SP · Bet365/欧赔 · 7m 交锋+近期真值库 · odds_timeline 逐帧 · jc_history 逐帧。每 15 分钟随 CVM 刷新；点「五步算式」逐项核对每一步原始数据。</span>'
   +  _dgDataStatusHTML(built)
   +  '<div id="dgMed" style="margin-top:4px;color:var(--mut);font-size:10px"></div>'
