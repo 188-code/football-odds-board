@@ -17959,8 +17959,14 @@ function _dgSim(m){
   //   「非近10场」也含「近」字 → 724 场全部被当成真值、异常门错用 0.5 球（本应 1.0）。
   //   改为显式布尔，任何字符串都不再参与口径判断。
   const formRecent = !!(fh&&fa&&fh.recent&&fa.recent);
+  // ★ 2026-11-11 三轮盲测：文档五步是「(①+②)/2」「(③+④)/2」的**完整**算式。
+  //   真实竞彩北单区 11 场交锋样本全为 0~1 场 → ①③ 全缺，旧版拿 ②/④ 单步硬顶出
+  //   「模拟盘」，产出 4.5 球大小球、主让 5.25 球这类不存在的盘口，还拿去比实盘、
+  //   参与「放弃/谨慎」判档。缺步的 ou/hc 只作参考值展示，绝不参与判档与复盘。
+  const simComplete = (s1!=null&&s2!=null&&s3!=null&&s4!=null);
+  const simWhy = simComplete ? '' : ('缺 '+[s1==null?'①交锋造球':'',s2==null?'②近期造球':'',s3==null?'③交锋盘口':'',s4==null?'④近期盘口':''].filter(Boolean).join('/')+' → 按文档五步不成立，不建模拟盘');
   return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ou!=null?_dgQ(ou):null,
-          hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc,formRecent};
+          hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc,formRecent,simComplete,simWhy};
 }
 
 /* ---- 乙：官方 SP / 外围 SP ---- */
@@ -18031,8 +18037,9 @@ function _dgVerdict(m, opt){
   // 真实盘：让球优先 grade_hcap_a（真实盘口，非模型 exp_hcap），大小球临→初→模型拟合线兜底
   const realOU=_dgFirstNum(an.ou&&an.ou.c_line, an.ou&&an.ou.o_line, an.score&&an.score.line);
   const realHc=_dgFirstNum(an.grade_hcap_a, an.a0, an.p1);
-  const ouGap=(sim.ouLine!=null&&realOU!=null)?realOU-sim.ouLine:null;
-  const hcGap=(sim.hcLine!=null&&realHc!=null)?realHc-sim.hcLine:null;
+  // 五步不齐（真实批次常见于缺 ①③ 交锋真值）→ 模拟盘不成立，禁止拿它比实盘、禁止参与判档
+  const ouGap=(sim.simComplete&&sim.ouLine!=null&&realOU!=null)?realOU-sim.ouLine:null;
+  const hcGap=(sim.simComplete&&sim.hcLine!=null&&realHc!=null)?realHc-sim.hcLine:null;
   // 门随数据口径走：真近10场 0.5 球 / 回退「全历史场均」口径粗放宽 1.0 球。
   // ★ 这两个数值是本模块自定，原文只说「分析数据有异常则建议放弃」，从未给阈值；页面已标注。
   const gate=sim.formRecent?0.5:1.0;
@@ -18108,6 +18115,7 @@ function _dgVerdict(m, opt){
     else if(warn){ tier='⚠ 谨慎'; col='#f59e0b'; act='盘口有异动，只观察不出手'; }
     else { tier='◦ 仅观察'; col='var(--mut)'; act='无官方盘对照，本区默认不出手'; }
   }
+  if(!sim.simComplete) why.push('<b style="color:var(--yel)">甲·模拟盘不成立</b>：'+_dgEsc(sim.simWhy)+'；本场 <b>不拿模拟线比实盘、不参与判档</b>（参考值 '+(sim.ouLine!=null?sim.ouLine:'—')+' / '+(sim.hcLine!=null?sim.hcLine:'—')+' 仅展示，单步外推可能是不存在的盘口）');
   if(sim.conf<2) why.push('<span style="color:var(--mut)">模拟盘置信偏低：交锋 '+ (sim.hhAll?sim.hhAll.n:0) +' 场 / 近期主 '+(sim.fh?sim.fh.n:0)+'·客 '+(sim.fa?sim.fa.n:0)+' 场</span>');
   why.push('<span style="color:var(--mut)">近期数据源：'+_dgEsc(sim.formSrc)+'；异常门 |Δ|≥'+gate+' 球</span>');
   return {m,zone,sim,off,out,A,B,delta,dev,med,medSrc:opt.medSrc||'',medN:opt.medN||0,medFallback:!!opt.medFallback,
@@ -18174,7 +18182,9 @@ function _dgBuildRows(){
 }
 
 function _dgFmtO(o){ return o?o.map(x=>(+x).toFixed(2)).join(' / '):'—'; }
-function _dgCellLine(label, simV, realV, gap, unit){
+function _dgCellLine(label, simV, realV, gap, unit, incomplete){
+  if(incomplete) return '<span style="color:var(--mut);font-size:9.5px" title="按文档五步不成立（缺交锋/近期真值），不建模拟盘、不判档">模拟盘不成立</span>'
+    + (simV!=null?'<br><span style="color:var(--mut);font-size:9px">参考 '+simV.toFixed(2)+'（仅展示）</span>':'');
   if(simV==null) return '<span style="color:var(--mut)">缺数据</span>';
   const g=gap!=null?(' <span style="color:'+(Math.abs(gap)>=0.5?'var(--red)':'var(--mut)')+';font-size:9.5px">Δ'+(gap>=0?'+':'')+gap.toFixed(2)+'</span>'):'';
   return '<b>'+simV.toFixed(2)+'</b><span style="opacity:.5"> → </span>'+(realV!=null?('<b>'+realV+(unit||'')+'</b>'):'<span style="color:var(--mut)">实盘缺</span>')+g;
@@ -18184,13 +18194,18 @@ function _dgDetailHTML(r){
   const li=(a,b)=>'<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px dashed var(--line)"><span style="min-width:150px;color:var(--mut)">'+a+'</span><span>'+b+'</span></div>';
   let x='<div style="background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:10.5px;line-height:1.7;color:var(--txt)">';
   x+='<div style="font-weight:800;margin-bottom:5px">📐 甲 · 模拟盘五步（原文算式，逐项可核对）</div>';
+  x+=li('建盘状态', s.simComplete
+    ? '<b style="color:var(--grn)">五步齐全，按 (①+②)/2、(③+④)/2 成立</b>'
+    : '<b style="color:var(--red)">不成立</b>：'+_dgEsc(s.simWhy)+'。下面 ②④ 的单步数值只是参考，<b>不代入第五步、不与实盘比较、不参与判档</b>');
   x+=li('① 交锋场均造球', s.hh?('近 '+s.hh.n+' 场交锋，双方总进球均值 <b>'+s.s1.toFixed(3)+'</b> 球/场（'+s.hh.games.slice(0,4).map(g=>g.g1+':'+g.g2).join('、')+(s.hh.n>4?' …':'')+'）'+(s.hh.n<10?'<span style="color:var(--mut)">（文档用 10 场，7m 库仅 '+s.hh.n+' 场，置信偏低）</span>':'')+'）'):('<span style="color:var(--mut)">'+(s.hhAll?('仅 '+s.hhAll.n+' 场交锋（&lt;2 场不进公式，防单场极端值带偏）'):'7m 真值库无此对阵交锋，本步跳过')+'</span>'));
   x+=li('② 近期主/客造球', (s.fh&&s.fa)?('主 '+s.fh.gf.toFixed(2)+'进/'+s.fh.ga.toFixed(2)+'丢 = '+s.fh.ball.toFixed(3)+'（n='+s.fh.n+'）；客 '+s.fa.gf.toFixed(2)+'/'+s.fa.ga.toFixed(2)+' = '+s.fa.ball.toFixed(3)+'（n='+s.fa.n+'）→ 主客均值 <b>'+s.s2.toFixed(3)+'</b><br><span style="color:var(--mut)">口径：'+_dgEsc(s.formSrc)+'</span>'):'<span style="color:var(--mut)">缺近期战绩</span>');
   x+=li('大小球均值', s.ou!=null?(s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → 取 0.25 档 <b>'+s.ouLine+'</b> 球'):'不可算');
   x+=li('③ 交锋净胜差', s.hh?('统一到当前主队视角，均值 <b>'+(s.s3>=0?'+':'')+s.s3.toFixed(3)+'</b> 球（正=主队占优）'):'—');
   x+=li('④ 近期净胜差之差', (s.fh&&s.fa)?('主净胜 '+(s.fh.diff>=0?'+':'')+s.fh.diff.toFixed(3)+' − 客净胜 '+(s.fa.diff>=0?'+':'')+s.fa.diff.toFixed(3)+' = <b>'+(s.s4>=0?'+':'')+s.s4.toFixed(3)+'</b>'):'—');
   x+=li('盘口均值', s.hc!=null?(s.hcHow+' = <b>'+(s.hc>=0?'+':'')+s.hc.toFixed(3)+'</b> → 取 0.25 档 <b>'+(s.hcLine>0?'主让 '+s.hcLine:(s.hcLine<0?'客让 '+Math.abs(s.hcLine):'平手'))+'</b>'):'不可算');
-  x+=li('⑤ 与实盘对照', '大小球 '+(v.realOU!=null?v.realOU:'—')+' vs '+s.ouLine+'；让球 '+(v.realHc!=null?v.realHc:'—')+' vs '+s.hcLine+' → '+(v.abnN?('<b style="color:var(--red)">'+v.abnN+' 项异常（|Δ|≥0.5）</b>'):'未见异常'));
+  x+=li('⑤ 与实盘对照', !s.simComplete
+    ? '<span style="color:var(--mut)">模拟盘不成立 → 本步跳过（实盘大小球 '+(v.realOU!=null?v.realOU:'—')+' / 让球 '+(v.realHc!=null?v.realHc:'—')+' 仅列出，不作异常判据）</span>'
+    : ('大小球 '+(v.realOU!=null?v.realOU:'—')+' vs '+s.ouLine+'；让球 '+(v.realHc!=null?v.realHc:'—')+' vs '+s.hcLine+' → '+(v.abnN?('<b style="color:var(--red)">'+v.abnN+' 项异常（|Δ|≥0.5）</b>'):'未见异常')));
   x+='<div style="font-weight:800;margin:8px 0 5px">💰 乙 · 返还抽水换算（官方 vs 外围）</div>';
   if(v.zone==='jc'&&v.A&&v.B){
     x+=li('官方 '+_dgEsc(v.off.src), _dgFmtO(v.off.o)+' → 倒数和 '+(v.A.sum*100).toFixed(1)+'%，抽水 <b>'+v.A.over.toFixed(2)+'%</b>');
@@ -18234,8 +18249,8 @@ function _dgRowHTML(r){
     + '<td style="padding:5px 6px;min-width:150px">'+zoneBadge+' <span style="color:var(--mut);font-size:9.5px">'+_dgEsc(r.league)+'</span><br><b>'+_dgEsc(r.home)+'</b> <span style="opacity:.5">vs</span> <b>'+_dgEsc(r.away)+'</b>'
       +(r.score?'<br><span style="font-size:9.5px;color:var(--grn)">完场 '+_dgEsc(r.score)+'</span>':'')+'</td>'
     + money
-    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('大小球',s.ouLine,v.realOU,v.ouGap,'')+'</td>'
-    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'')+'</td>'
+    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('大小球',s.ouLine,v.realOU,v.ouGap,'',!s.simComplete)+'</td>'
+    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'',!s.simComplete)+'</td>'
     + '<td style="white-space:nowrap"><b style="color:'+v.col+'">'+v.tier+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
     + '<td style="font-size:9.5px;color:var(--mut);max-width:180px">'+(v.acts.length?_dgEsc(v.acts.slice(0,2).join('；')):'—')+'</td>'
     + '<td style="white-space:nowrap"><a onclick="_dgToggle(\''+_dgEsc(r.tid)+'\');return false" style="cursor:pointer;color:var(--acc);font-size:10px">五步算式 ▾</a></td>'
@@ -18311,7 +18326,8 @@ function _dgReviewHTML(st){
   let nOU=0,nBoth=0,sumSim=0,sumSimBoth=0,sumReal=0,sumGap=0,simWin=0;
   for(const r of done){
     const q=String(r.score).split(':').map(Number), tg=q[0]+q[1];
-    const sl=r.v.sim&&r.v.sim.ouLine, rl=r.v.realOU;
+    if(!r.v.sim||!r.v.sim.simComplete) continue;   // 五步不齐 → 模拟盘不成立，不进误差复盘
+    const sl=r.v.sim.ouLine, rl=r.v.realOU;
     if(sl==null) continue;
     nOU++; const eS=Math.abs(tg-sl); sumSim+=eS;
     if(rl!=null){ nBoth++; const eR=Math.abs(tg-rl);
@@ -18348,7 +18364,7 @@ function _dgReviewHTML(st){
   return '<details style="margin-top:9px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--card2)">'
     +'<summary style="cursor:pointer;font-size:11px;font-weight:700">📅 历史回测 · 综合意见（已完场 '+done.length+' 场｜模拟盘第⑤步 + 判档对照）</summary>'
     +'<div style="font-size:10.5px;line-height:1.8;color:var(--txt);margin-top:5px">'
-    +'<b>甲 · 模拟盘第⑤步</b>：可算模拟大小球线的完场 '+nOU+' 场，模拟线对真实总进球平均绝对误差 <b>'+(nOU?(sumSim/nOU).toFixed(2):'—')+'</b> 球；'
+    +'<b>甲 · 模拟盘第⑤步</b>：<b>只统计五步齐全、模拟盘真正成立的完场场</b>（缺 ①③ 交锋真值的场次已排除，不拿单步外推值凑样本）。可算完场 '+nOU+' 场，模拟线对真实总进球平均绝对误差 <b>'+(nOU?(sumSim/nOU).toFixed(2):'—')+'</b> 球；'
     +'其中同时有真实大小球盘的 '+nBoth+' 场（同一子集）：模拟线 <b>'+(simE!=null?simE.toFixed(2):'—')+'</b> 球 vs 真实盘线 <b>'+(realE!=null?realE.toFixed(2):'—')+'</b> 球，'
     +'两线平均相距 <b>'+(nBoth?(sumGap/nBoth).toFixed(2):'—')+'</b> 球，模拟线更贴近赛果 '+pct(simWin,nBoth)+'。→ <b>'+verdict+'</b>。<br>'
     +'<b>乙 · 判档 vs 外围热门侧是否打出</b>（教程断言「诱盘场热门难打出」）：'
@@ -18367,12 +18383,14 @@ function _dgDataStatusHTML(b){
   const rows=b.rows||[], nRecent=rows.filter(r=>r.v.formRecent).length;
   const nH2H=rows.filter(r=>r.v.sim.hhAll&&r.v.sim.hhAll.n>=2).length;
   const nH2HAny=rows.filter(r=>r.v.sim.hhAll&&r.v.sim.hhAll.n>=1).length;
+  const nSim=rows.filter(r=>r.v.sim.simComplete).length;
   const ok=!!R&&nR>0, col=ok?'var(--grn)':'var(--red)';
   return '<div style="margin-top:6px;padding:6px 9px;border:1px solid '+(ok?'var(--line)':'var(--red)')+';border-radius:6px;background:var(--card2);font-size:10.5px;color:var(--txt)">'
    + '<b style="color:'+col+'">真值表：'+(ok?'已加载 ✔':'未加载 ✘（已回退，结论降级）')+'</b>'
    + ' · 近10场 <b>'+nR+'</b> 队（'+(meta.span?meta.span.join(' ~ '):'—')+'，满 10 场 '+(meta.full10||0)+' 队）'
    + ' · 本表 '+rows.length+' 场里 <b>'+nRecent+'</b> 场用真近10场口径（n≥5）、'+(rows.length-nRecent)+' 场按回退口径（异常门 1.0 球）'
    + ' · 交锋库 '+(nH||0)+' 对，本表命中 '+nH2HAny+' 场（其中 ≥2 场可进公式 <b>'+nH2H+'</b> 场）'
+   + '<br><b style="color:'+(nSim?'var(--grn)':'var(--yel)')+'">甲·模拟盘五步齐全 <b>'+nSim+'</b> / '+rows.length+' 场</b>：其余场缺 ①③ 交锋真值，按文档五步不成立 → <b>不建盘、不比实盘、不参与判档</b>（表中显示「模拟盘不成立」，参考值仅展示）'
    + (ok?'':'<br><span style="color:var(--red)">⚠ 真值表缺失时模拟盘第②步口径变粗，判档仅可作背景对照，不可当最终结论。</span>')
    + '</div>';
 }
@@ -18387,7 +18405,7 @@ function openDg(){
   +   '<button onclick="closeDg()" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:2px 10px;cursor:pointer">✕</button></div>'
   + '<div style="padding:11px 14px">'
   + '<div style="background:rgba(13,148,136,.09);border:1px solid rgba(13,148,136,.4);border-radius:8px;padding:9px 11px;margin-bottom:9px;font-size:11px;line-height:1.75;color:var(--txt)">'
-  +  '<b style="color:#0d9488">甲 · 模拟盘（原文算式）</b>：交锋场均造球 ① 与 近期主客造球 ② 折半 → 大小球线；交锋净胜差 ③ 与 近期净胜差之差 ④ 折半 → 让球盘（正=主让）。原文例题复算：2.6 / 2.6 → <b>2.5</b>；+0.2 / −0.6 → <b>客让 0.25</b>。<b style="color:var(--yel)">异常门 |Δ|≥0.5 / 1.0 球是本模块自定，原文只说「数据异常则放弃」、从未给数值门</b>；取 0.25 档与真实开盘对照亦属实现选择。<br>'
+  +  '<b style="color:#0d9488">甲 · 模拟盘（原文算式）</b>：交锋场均造球 ① 与 近期主客造球 ② 折半 → 大小球线；交锋净胜差 ③ 与 近期净胜差之差 ④ 折半 → 让球盘（正=主让）。原文例题复算：2.6 / 2.6 → <b>2.5</b>；+0.2 / −0.6 → <b>客让 0.25</b>。<b style="color:var(--yel)">异常门 |Δ|≥0.5 / 1.0 球是本模块自定，原文只说「数据异常则放弃」、从未给数值门</b>；取 0.25 档与真实开盘对照亦属实现选择。<b style="color:var(--yel)">★ 五步必须齐全才建盘</b>：真实批次常缺 ①③ 历史交锋真值，此时按文档「(①+②)/2、(③+④)/2」根本不成立，模块<b>不建模拟盘、不比实盘、不参与判档</b>（此前拿 ②④ 单步外推硬凑，曾产出 4.5 球大小球、主让 5.25 球这类不存在的盘口并拿去判档，已修）。<br>'
   +  '<b style="color:#0d9488">乙 · 返还抽水换算（原文算式）</b>：Σ(1/官方SP) − Σ(1/外围SP) 的百分点差，原文「<b>≤6pt 正常、&gt;6pt</b> 大热/诱盘/假盘」——<b>只定义正向 Δ</b>；本模块对称化为 |Δ|&gt;6pt，属扩展，原始单侧结论同时展示。逐项按「<b>官方隐含 − 外围隐含 ≥ +6pt</b>」判该侧官方端更热、难正常打出（负向=官方更冷，<b>不判热门</b>）。教程原例：竞彩 112% vs 外围 104%（差 8pt），客胜 65% vs 58%（+7pt）→ 小心客胜。原文逐项先取整再加总，本模块用未取整倒数，差 ≤0.5pt。<br>'
   +  '<b style="color:var(--yel)">★ 去基差（灵活应用）</b>：实测本批官方 SP 抽水<b>系统性低于外围约 6~7pt</b>（北单/竞彩返还口径不同），直接套原始 6pt 门会把一半场次误判成诱盘。故<b>判档用「Δ − 同官方源组的本批中位」的偏离套 6pt 门</b>（竞彩官方 / 北单官方七玩法 / 澳客北单 SP 分组，单组 n&lt;4 退回全局并逐场标注），原始 Δ 与文档门结论同时逐场展示、不隐藏；中位数与样本数见本框底部。中位仅为本批横截面统计，未做样本外验证，不宣称任何命中率。<br>'
   +  '<details style="margin:4px 0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--card2)"><summary style="cursor:pointer;font-size:10.5px;font-weight:700;color:var(--red)">⚖ 原文三处需留意（符号笔误 / 相加相减矛盾 / 2.5 锚点）· 点开逐项核对</summary><div style="font-size:10.5px;line-height:1.7;margin-top:5px;color:var(--txt)">'
