@@ -867,7 +867,10 @@ function _fireBakeWaiters(ok){
     }
   })();
 })();
-let _cloudFusedStarted = false;    // 幂等闸：setupBake 可能被调两次（同步+解压完成），定时器只能起一次
+var _cloudFusedStarted = false;    // ★ 2026-11-11 真机抓到 TDZ：setupBake() 会在本脚本 let 初始化前被前置脚本调用
+                                   //   （ReferenceError: Cannot access '_cloudFusedStarted' before initialization），
+                                   //   导致 loadCloudFused/startCloudFusedTimer 被 try/catch 静默吞掉。
+                                   //   改 var（提升且初值 undefined，!undefined 仍为 true），幂等语义不变。
 
 /* ★ 2026-10-08 明细懒加载：panlu/htft/breakGoal/score/yg/odds/fused 已拆到 bake_detail.js（不占首屏）。
    点开比赛/赔率面板（offlineAnalyze / onAnalyze）时才拉，合并回 OFFLINE_PACK[tid] 后原读取点全部照常工作。 */
@@ -17827,12 +17830,49 @@ function _dgAn(m){
   return o;
 }
 
-/* ---- 甲·第一步：历史交锋（7m 真值库 window.H2H_MAP，键「主|客」或「客|主」） ---- */
+/* ---- 甲·第一步：历史交锋（7m 真值库 window.H2H_MAP，键「主|客」） ----
+   ★ 2026-11-11 真机验收：原实现只拼 h+'|'+a / a+'|'+h 精确查，780 场里仅命中 4 场
+     （7m 队名与看板 displayTeam 常有简繁/后缀差异）。改「首字倒排 + 精确优先 + 包含模糊」，
+     两端候选取交集才认同一对阵，杜绝跨场错配；索引只建一次，避免 780×8 万次全表扫描。 */
+let _dgH2HIdx = null;
+const _dgH2HKeyCache = new Map();
+function _dgH2HIndex(){
+  const M = window.H2H_MAP || {}, n = Object.keys(M).length;
+  if (_dgH2HIdx && _dgH2HIdx.built === n) return _dgH2HIdx;
+  _dgH2HKeyCache.clear();                       // H2H_MAP 延迟加载完成后自动重建
+  const exact = new Map(), byFirst = new Map();
+  for (const k in M){
+    for (const nm of k.split('|')){
+      const c = _dgClean(nm); if (!c) continue;
+      if (!exact.has(c)) exact.set(c, new Set()); exact.get(c).add(k);
+      const f = c.charAt(0);
+      if (!byFirst.has(f)) byFirst.set(f, []);
+      byFirst.get(f).push([c, k]);
+    }
+  }
+  _dgH2HIdx = {exact, byFirst, built:n};
+  return _dgH2HIdx;
+}
+function _dgH2HKeys(name){
+  if (_dgH2HKeyCache.has(name)) return _dgH2HKeyCache.get(name);
+  const ix = _dgH2HIndex(), out = new Set();
+  if (ix.exact.has(name)) { for (const k of ix.exact.get(name)) out.add(k); }
+  else {
+    const cands = (ix.byFirst.get(name.charAt(0)) || [])
+      .filter(([c]) => c.indexOf(name)>=0 || name.indexOf(c)>=0);
+    cands.sort((x,y)=>Math.abs(x[0].length-name.length)-Math.abs(y[0].length-name.length));
+    for (const [,k] of cands) out.add(k);
+  }
+  const arr=[...out]; _dgH2HKeyCache.set(name, arr); return arr;
+}
 function _dgH2H(h, a){
   const M = window.H2H_MAP;
   if (!M || !h || !a) return null;
+  const kb = new Set(_dgH2HKeys(a)), keys = new Set();
+  for (const k of [h+'|'+a, a+'|'+h]) if (M[k]) keys.add(k);
+  for (const k of _dgH2HKeys(h)) if (kb.has(k)) keys.add(k);   // 必须同时命中主客两端
   const rows = [];
-  for (const k of [h+'|'+a, a+'|'+h]){
+  for (const k of keys){
     const v = M[k];
     if (!Array.isArray(v)) continue;
     for (const r of v){
@@ -17872,13 +17912,13 @@ function _dgForm(name, isHome){
   const r = fuzzy(R, 'r|'+name);
   if (r){
     const gf=_dgNum(r.gf), ga=_dgNum(r.ga);
-    if (gf!=null&&ga!=null) return {gf,ga,ball:gf+ga,diff:gf-ga,n:+r.n||0,src:'7m 真实近'+(+r.n||0)+'场',last:r.last||''};
+    if (gf!=null&&ga!=null) return {gf,ga,ball:gf+ga,diff:gf-ga,n:+r.n||0,src:'7m 真实近'+(+r.n||0)+'场',last:r.last||'',recent:true};
   }
   const v = fuzzy(F, 'f|'+name);
   if (!v) return null;
   const gf = _dgNum(isHome ? v.hgf : v.agf), ga = _dgNum(isHome ? v.hga : v.aga);
   if (gf==null || ga==null) return null;
-  return { gf, ga, ball:gf+ga, diff:gf-ga, n:+((isHome?v.hn:v.an)||0), src:'全历史主/客场场均（非近10场）' };
+  return { gf, ga, ball:gf+ga, diff:gf-ga, n:+((isHome?v.hn:v.an)||0), src:'全历史主/客场场均（回退口径）', recent:false };
 }
 function _dgQ(x){ return Math.round(x*4)/4; }   // 落到 0.25 球标准盘档
 function _dgSim(m){
@@ -17902,8 +17942,12 @@ function _dgSim(m){
   else if(s3!=null){ hc=s3; hcHow='仅③'; }
   const conf = (hh&&hh.n>=4?1:0) + (fh&&fa&&fh.n>=6&&fa.n>=6?1:0);
   const formSrc = (fh&&fa&&fh.src===fa.src) ? fh.src : ((fh&&fh.src)||(fa&&fa.src)||'—');
+  // ★ 2026-11-11 修：原判档用 formSrc.indexOf('近') 判「是否真近10场」，但回退文本里
+  //   「非近10场」也含「近」字 → 724 场全部被当成真值、异常门错用 0.5 球（本应 1.0）。
+  //   改为显式布尔，任何字符串都不再参与口径判断。
+  const formRecent = !!(fh&&fa&&fh.recent&&fa.recent);
   return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ou!=null?_dgQ(ou):null,
-          hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc};
+          hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc,formRecent};
 }
 
 /* ---- 乙：官方 SP / 外围 SP ---- */
@@ -17977,7 +18021,7 @@ function _dgVerdict(m, opt){
   const ouGap=(sim.ouLine!=null&&realOU!=null)?realOU-sim.ouLine:null;
   const hcGap=(sim.hcLine!=null&&realHc!=null)?realHc-sim.hcLine:null;
   // 门随数据口径走：真近10场用文档 0.5 球；回退「全历史场均」口径粗，放宽到 1.0 球
-  const gate=(sim.formSrc&&sim.formSrc.indexOf('近')>=0)?0.5:1.0;
+  const gate=sim.formRecent?0.5:1.0;
   const ouAbn=(ouGap!=null&&Math.abs(ouGap)>=gate), hcAbn=(hcGap!=null&&Math.abs(hcGap)>=gate);
   const abnN=(ouAbn?1:0)+(hcAbn?1:0);
   let A=null,B=null,delta=null,per=null,hotSide=null,maxPer=null;
@@ -18015,7 +18059,7 @@ function _dgVerdict(m, opt){
     else {
       if(delta!=null){
         why.push('官方抽水 '+A.over.toFixed(1)+'% − 外围 '+B.over.toFixed(1)+'% = <b>Δ '+(delta>=0?'+':'')+delta.toFixed(1)+'pt</b>（文档原始门 ±6pt → '+(rawGate?'异常':'正常')+'）'
-          +(dev!=null?('；本批中位 '+med.toFixed(1)+'pt → <b>去基差偏离 '+(dev>=0?'+':'')+dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(overGate?'异常':'正常')+'）'):''));
+          +(dev!=null?('；「'+_dgEsc(opt.medSrc||'同组')+'」本批中位 '+med.toFixed(1)+'pt（n='+(opt.medN||0)+(opt.medFallback?'，样本不足已退回全局':'')+'）→ <b>去基差偏离 '+(dev>=0?'+':'')+dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(overGate?'异常':'正常')+'）'):''));
         if(overGate) acts.push('去基差抽水差超 6pt');
       }
       if(maxPer){ why.push('逐项最大偏差：<b>'+maxPer.side+' '+(maxPer.v>=0?'+':'')+maxPer.v.toFixed(1)+'pt</b>（官方 '+ (A.p[maxPer.ix]*100).toFixed(0) +'% vs 外围 '+(B.p[maxPer.ix]*100).toFixed(0)+'%）');
@@ -18042,7 +18086,8 @@ function _dgVerdict(m, opt){
   }
   if(sim.conf<2) why.push('<span style="color:var(--mut)">模拟盘置信偏低：交锋 '+ (sim.hhAll?sim.hhAll.n:0) +' 场 / 近期主 '+(sim.fh?sim.fh.n:0)+'·客 '+(sim.fa?sim.fa.n:0)+' 场</span>');
   why.push('<span style="color:var(--mut)">近期数据源：'+_dgEsc(sim.formSrc)+'；异常门 |Δ|≥'+gate+' 球</span>');
-  return {m,zone,sim,off,out,A,B,delta,dev,med,rawGate,overGate,per,maxPer,hotSide,spread,drift,
+  return {m,zone,sim,off,out,A,B,delta,dev,med,medSrc:opt.medSrc||'',medN:opt.medN||0,medFallback:!!opt.medFallback,
+          rawGate,overGate,per,maxPer,hotSide,spread,drift,formRecent:sim.formRecent,
           realOU,realHc,ouGap,hcGap,ouAbn,hcAbn,abnN,gate,tier,col,act,why,acts};
 }
 
@@ -18081,18 +18126,27 @@ function _dgBuildRows(){
     if(!old||c._full>old._full) byKey.set(key,c);
   }
   const uniq=[...byKey.values()];
-  const ds=[];
+  // ★ 2026-11-11 修：竞彩官方 had / 北单官方七玩法 / 澳客北单 SP 的返还口径不同，
+  //   把三类中位混成一个会把「源级基差」当成「诱盘」。按官方源分组去基差；
+  //   单组样本 <4 场不可靠 → 退回全局中位并逐场标注，绝不拿 2 场的中位套 6pt 门。
+  const ds=[], bySrc={};
+  const srcKey=s=>{const t=String(s||'');return t.indexOf('竞彩')>=0?'竞彩官方':(t.indexOf('七玩法')>=0?'北单官方':'北单(澳客)');};
   for(const c of uniq){
-    if(c.off&&c.out){ const A=_dgOver(c.off.o), B=_dgOver(c.out.o); if(A&&B) ds.push(A.over-B.over); }
+    if(c.off&&c.out){ const A=_dgOver(c.off.o), B=_dgOver(c.out.o);
+      if(A&&B){ const d=A.over-B.over; ds.push(d); const k=srcKey(c.off.src); (bySrc[k]=bySrc[k]||[]).push(d); } }
   }
-  ds.sort((a,b)=>a-b);
-  const med=ds.length?(ds.length%2?ds[(ds.length-1)/2]:(ds[ds.length/2-1]+ds[ds.length/2])/2):null;
+  const median=a=>{ if(!a||!a.length)return null; const b=a.slice().sort((x,y)=>x-y);
+    return b.length%2?b[(b.length-1)/2]:(b[b.length/2-1]+b[b.length/2])/2; };
+  const med=median(ds), medBy={};
+  for(const k in bySrc){ const g={med:median(bySrc[k]),n:bySrc[k].length,fallback:bySrc[k].length<4};
+    if(g.fallback) g.med=med; medBy[k]=g; }
   const rows=uniq.map(c=>{
-    const v=_dgVerdict(c.m,{med:med,off:c.off,out:c.out,sim:c.sim});
+    const sk=srcKey(c.off&&c.off.src), g=medBy[sk]||{med:med,n:ds.length,fallback:true};
+    const v=_dgVerdict(c.m,{med:g.med,medN:g.n,medSrc:sk,medFallback:g.fallback,off:c.off,out:c.out,sim:c.sim});
     return {v, tid:c.m.tid, day:c.day, time:c.time, ts:c.ts, league:c.league,
       home:c.home, away:c.away, state:c.state, score:c.score, dev:v.dev};
   });
-  return {rows, med, nDelta:ds.length};
+  return {rows, med, nDelta:ds.length, medBy};
 }
 
 function _dgFmtO(o){ return o?o.map(x=>(+x).toFixed(2)).join(' / '):'—'; }
@@ -18117,7 +18171,7 @@ function _dgDetailHTML(r){
   if(v.zone==='jc'&&v.A&&v.B){
     x+=li('官方 '+_dgEsc(v.off.src), _dgFmtO(v.off.o)+' → 倒数和 '+(v.A.sum*100).toFixed(1)+'%，抽水 <b>'+v.A.over.toFixed(2)+'%</b>');
     x+=li('外围 '+_dgEsc(v.out.src), _dgFmtO(v.out.o)+' → 倒数和 '+(v.B.sum*100).toFixed(1)+'%，抽水 <b>'+v.B.over.toFixed(2)+'%</b>');
-    x+=li('抽水差 Δ', '<b style="color:'+(v.rawGate?'var(--red)':'var(--grn)')+'">'+(v.delta>=0?'+':'')+v.delta.toFixed(2)+'pt</b>（文档原始门 ±6pt → '+(v.rawGate?'异常':'正常')+'，<b>仅展示</b>）'+(r.dev!=null?('；本批中位 '+(_dgMed()||0).toFixed(1)+'pt → <b style="color:'+(v.overGate?'var(--red)':'var(--grn)')+'">去基差偏离 '+(r.dev>=0?'+':'')+r.dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(v.overGate?'异常':'正常')+'）'):''));
+    x+=li('抽水差 Δ', '<b style="color:'+(v.rawGate?'var(--red)':'var(--grn)')+'">'+(v.delta>=0?'+':'')+v.delta.toFixed(2)+'pt</b>（文档原始门 ±6pt → '+(v.rawGate?'异常':'正常')+'，<b>仅展示</b>）'+(r.dev!=null?('；「'+_dgEsc(v.medSrc||'同组')+'」中位 '+(v.med!=null?v.med.toFixed(1):'—')+'pt（n='+(v.medN||0)+(v.medFallback?'，样本不足→全局':'')+'）→ <b style="color:'+(v.overGate?'var(--red)':'var(--grn)')+'">去基差偏离 '+(r.dev>=0?'+':'')+r.dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(v.overGate?'异常':'正常')+'）'):''));
     x+=li('逐项隐含偏差', ['主胜','平局','客胜'].map((n,i)=>n+' '+(v.per[i]>=0?'+':'')+v.per[i].toFixed(1)).join(' · ')+' pt');
   } else x+=li('不适用','无官方 SP（野鸡区），缺官方端，不虚构抽水差');
   if(v.zone==='wild'){
@@ -18207,7 +18261,10 @@ function _dgRender(){
     cnt.innerHTML='本区 <b>'+list.length+'</b> 场（显示 '+capped.length+'）· 放弃 <b style="color:var(--red)">'+nAbn+'</b> · 谨慎 <b style="color:#f59e0b">'+nWarn+'</b>'; }
   try{ document.querySelectorAll('#dgModal .dgtab').forEach(b=>b.classList.toggle('on',b.getAttribute('data-z')===zone)); }catch(e){}
   const md=document.getElementById('dgMed');
-  if(md&&st.med!=null) md.textContent='本批竞彩北单区抽水差中位 '+st.med.toFixed(1)+'pt（n='+st.nDelta+'）：官方源与外围存在结构性基差，判档用「Δ − 中位」的偏离套 6pt 门，文档原始 Δ 仅作展示对照。';
+  if(md){
+    const mb=st.medBy||{}, parts=Object.keys(mb).map(k=>k+' '+(mb[k].med!=null?mb[k].med.toFixed(1):'—')+'pt (n='+mb[k].n+(mb[k].fallback?'，样本不足→全局':'')+')');
+    md.textContent='去基差中位（按官方源分组）：'+(parts.join(' ｜ ')||'—')+'；全局 '+(st.med!=null?st.med.toFixed(1):'—')+'pt (n='+st.nDelta+')。官方与外围存在源级结构性基差，判档用「Δ − 同组中位」的偏离套 6pt 门，文档原始 Δ 与 ±6pt 结论同时展示。中位仅为本批横截面统计，未做样本外验证，不宣称命中率。';
+  }
 }
 function _dgZone(z){ window._dgState.zone=z; _dgRender(); }
 function _dgReadFilters(){
@@ -18234,9 +18291,25 @@ function _dgReviewHTML(st){
     +'判「放弃/谨慎」场外围热门侧打出：<b>'+pct(trapHit,trapN)+'</b>　｜　判正常盘场：<b>'+pct(normHit,normN)+'</b><br>'
     +'<span style="color:var(--mut)">⚠ 这是<b>历史回测</b>，不是赛前登记业绩：判档用的是完场后仍可见的赔率，无赛前冻结样本，不能当命中率/ROI 宣传；样本 n 小、±SE≈100/√n，跨 0 属噪声。</span></div></details>';
 }
+/* 真值表状态条：把「本批到底有多少场用了真近10场」摆到明面上，杜绝数据缺席却口径照写 */
+function _dgDataStatusHTML(b){
+  const R=window.TEAM_RECENT10, meta=window.__TEAM_RECENT10_META__||{}, H=window.H2H_MAP;
+  const nR=R?Object.keys(R).length:0, nH=H?Object.keys(H).length:0;
+  const rows=b.rows||[], nRecent=rows.filter(r=>r.v.formRecent).length;
+  const nH2H=rows.filter(r=>r.v.sim.hhAll&&r.v.sim.hhAll.n>=2).length;
+  const nH2HAny=rows.filter(r=>r.v.sim.hhAll&&r.v.sim.hhAll.n>=1).length;
+  const ok=!!R&&nR>0, col=ok?'var(--grn)':'var(--red)';
+  return '<div style="margin-top:6px;padding:6px 9px;border:1px solid '+(ok?'var(--line)':'var(--red)')+';border-radius:6px;background:var(--card2);font-size:10.5px;color:var(--txt)">'
+   + '<b style="color:'+col+'">真值表：'+(ok?'已加载 ✔':'未加载 ✘（已回退，结论降级）')+'</b>'
+   + ' · 近10场 <b>'+nR+'</b> 队（'+(meta.span?meta.span.join(' ~ '):'—')+'，满 10 场 '+(meta.full10||0)+' 队）'
+   + ' · 本表 '+rows.length+' 场里 <b>'+nRecent+'</b> 场用真近10场、'+(rows.length-nRecent)+' 场回退全历史场均（异常门自动 1.0 球）'
+   + ' · 交锋库 '+(nH||0)+' 对，本表命中 '+nH2HAny+' 场（其中 ≥2 场可进公式 <b>'+nH2H+'</b> 场）'
+   + (ok?'':'<br><span style="color:var(--red)">⚠ 真值表缺失时模拟盘第②步口径变粗，判档仅可作背景对照，不可当最终结论。</span>')
+   + '</div>';
+}
 function openDg(){
   const built=_dgBuildRows();
-  window._dgState={rows:built.rows,med:built.med,nDelta:built.nDelta,zone:'jc',day:'all',state:'live',sort:'risk'};
+  window._dgState={rows:built.rows,med:built.med,medBy:built.medBy,nDelta:built.nDelta,zone:'jc',day:'all',state:'live',sort:'risk'};
   const html=
     '<div class="modal show" id="dgModal" style="display:flex;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:12px">'
   + '<div style="background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:12px;max-width:1440px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
@@ -18247,12 +18320,13 @@ function openDg(){
   + '<div style="background:rgba(13,148,136,.09);border:1px solid rgba(13,148,136,.4);border-radius:8px;padding:9px 11px;margin-bottom:9px;font-size:11px;line-height:1.75;color:var(--txt)">'
   +  '<b style="color:#0d9488">甲 · 模拟盘</b>：交锋场均造球 ① 与 近期主客造球 ② 折半 → 大小球线；交锋净胜差 ③ 与 近期净胜差之差 ④ 折半 → 让球盘（正=主让）。两者取 0.25 档后与真实开盘对照，|Δ|≥0.5 球记异常。<br>'
   +  '<b style="color:#0d9488">乙 · 返还抽水换算</b>：Σ(1/官方SP) − Σ(1/外围SP) 的百分点差，<b>±6pt</b> 为正常盘门；逐项隐含偏差 <b>≥6pt</b> 判该侧「形成热门、难正常打出」。教程原例：竞彩 112% vs 外围 104%（差 8pt），客胜 65% vs 58%（差 7pt）→ 小心客胜。<br>'
-  +  '<b style="color:var(--yel)">★ 去基差（灵活应用）</b>：实测本批官方 SP 抽水<b>系统性低于外围约 6~7pt</b>（北单/竞彩返还口径不同），直接套原始 6pt 门会把一半场次误判成诱盘。故<b>判档用「Δ − 本批中位」的偏离套 6pt 门</b>，原始 Δ 与文档门结论同时逐场展示、不隐藏；中位数与样本数见本框底部。中位仅为本批横截面统计，未做样本外验证，不宣称任何命中率。<br>'
+  +  '<b style="color:var(--yel)">★ 去基差（灵活应用）</b>：实测本批官方 SP 抽水<b>系统性低于外围约 6~7pt</b>（北单/竞彩返还口径不同），直接套原始 6pt 门会把一半场次误判成诱盘。故<b>判档用「Δ − 同官方源组的本批中位」的偏离套 6pt 门</b>（竞彩官方 / 北单官方七玩法 / 澳客北单 SP 分组，单组 n&lt;4 退回全局并逐场标注），原始 Δ 与文档门结论同时逐场展示、不隐藏；中位数与样本数见本框底部。中位仅为本批横截面统计，未做样本外验证，不宣称任何命中率。<br>'
   +  '<b style="color:var(--red)">原文笔误已修正</b>：第三步 1.4−1.2 应为 <b>+0.2</b>（原文记 −0.2），只有按 (+0.2 − 0.6)/2 = −0.2 才能得出它自己的结论「客让 0.25」；第五步「−0.2+−0.6=0.4÷2」同样不成立。本模块用正确代入式，明细卡逐步摊开原始数据。<br>'
   +  '<b>分区</b>：<b>竞彩北单区</b>=有竞彩 had / 北单官方七玩法 SP，甲乙全跑；<b style="color:#8b98a9">非竞彩北单区（野鸡区）</b>=无官方 SP，乙缺官方端<b>明确不适用</b>，改跑甲 + 外围多公司抽水离散 + 初→临漂移，只给观察/谨慎，不冒充可下注结论。<br>'
-  +  '<b style="color:#0d9488">数据口径（重要）</b>：第②步用 <b>7m 逐场真实赛果算的每队最近 10 场</b>（'+(function(){const q=window.__TEAM_RECENT10_META__||{};return q.span?q.span.join(' ~ '):'加载中'})()+'，非滚动更新），队名查不到才回退「全历史主/客场场均」并把异常门从 0.5 放宽到 1.0 球；交锋 <b>&lt;3 场不进公式</b>（防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
+  +  '<b style="color:#0d9488">数据口径（重要）</b>：第②步用 <b>7m 逐场真实赛果算的每队最近 10 场</b>（'+(function(){const q=window.__TEAM_RECENT10_META__||{};return q.span?q.span.join(' ~ '):'加载中'})()+'，非滚动更新），队名查不到才回退「全历史主/客场场均」并把异常门从 0.5 放宽到 1.0 球；交锋 <b>&lt;2 场不进公式</b>（原文取 10 场，7m 库多数对阵只有 1~2 场，n=1 只作展示、n≥2 才进公式且置信另记，防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
   +  '<b style="color:var(--red)">两道防脏数据闸</b>：官方与外围热门侧不一致 / 单侧偏差≥20pt / 抽水差≥15pt → 判「<b>数据错配·不判</b>」，不拿跨场或让球行混入的配对出结论；野鸡区模拟盘与外围盘的偏离<b>只作对照、不单独触发判档</b>（无官方盘可校验）。<br>'
   +  '<span style="color:var(--mut)">数据源：竞彩官方 had · 北京体彩网七玩法 XML · 澳客北单 SP · Bet365/欧赔 · 7m 交锋+近期真值库。每 15 分钟随 CVM 刷新；点「五步算式」逐项核对每一步原始数据。</span>'
+  +  _dgDataStatusHTML(built)
   +  '<div id="dgMed" style="margin-top:4px;color:var(--mut);font-size:10px"></div>'
   + '</div>'
   + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;margin-bottom:8px;color:var(--txt)">'
