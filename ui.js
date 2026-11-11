@@ -17912,7 +17912,12 @@ function _dgForm(name, isHome){
   const r = fuzzy(R, 'r|'+name);
   if (r){
     const gf=_dgNum(r.gf), ga=_dgNum(r.ga);
-    if (gf!=null&&ga!=null) return {gf,ga,ball:gf+ga,diff:gf-ga,n:+r.n||0,src:'7m 真实近'+(+r.n||0)+'场',last:r.last||'',recent:true};
+    if (gf!=null&&ga!=null){
+      // 原文第②步是「最近 10 场」。7m 库里满 10 场的队只有 4304/12957，
+      // n<5 的零散样本同样会被单场大比分带飞 → 不算真值口径，异常门按回退放宽到 1.0 球。
+      const n=+r.n||0, ok=n>=5;
+      return {gf,ga,ball:gf+ga,diff:gf-ga,n:n,src:'7m 真实近'+n+'场'+(ok?'':'（样本<5，按回退口径）'),last:r.last||'',recent:ok};
+    }
   }
   const v = fuzzy(F, 'f|'+name);
   if (!v) return null;
@@ -18258,7 +18263,7 @@ function _dgRender(){
     :'<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--mut)">该筛选下没有可分析场次（竞彩北单区需官方 SP；野鸡区需外围赔率 + 近期战绩/真实盘）</td></tr>';
   const cnt=document.getElementById('dgCount');
   if(cnt){ const nAbn=list.filter(r=>r.v.tier.indexOf('放弃')>=0).length, nWarn=list.filter(r=>r.v.tier.indexOf('谨慎')>=0).length;
-    cnt.innerHTML='本区 <b>'+list.length+'</b> 场（显示 '+capped.length+'）· 放弃 <b style="color:var(--red)">'+nAbn+'</b> · 谨慎 <b style="color:#f59e0b">'+nWarn+'</b>'; }
+    cnt.innerHTML='本区 <b>'+list.length+'</b> 场（显示 '+capped.length+(list.length>capped.length?'，请用日期筛选缩小范围':'')+'）· 放弃 <b style="color:var(--red)">'+nAbn+'</b> · 谨慎 <b style="color:#f59e0b">'+nWarn+'</b>'; }
   try{ document.querySelectorAll('#dgModal .dgtab').forEach(b=>b.classList.toggle('on',b.getAttribute('data-z')===zone)); }catch(e){}
   const md=document.getElementById('dgMed');
   if(md){
@@ -18274,22 +18279,63 @@ function _dgReadFilters(){
 }
 function _dgReRender(){ _dgReadFilters(); _dgRender(); }
 function _dgReviewHTML(st){
-  const done=st.rows.filter(r=>r.state==='-1'&&r.score&&r.v.zone==='jc'&&r.v.out);
-  if(done.length<5) return '<div style="font-size:10.5px;color:var(--mut);margin-top:8px">历史回测：当前数据里可核对的已完场竞彩北单场不足 5 场，不报比率。</div>';
-  const hit=(r)=>{ const [h,a]=r.score.split(':').map(Number); const side=h>a?0:(h===a?1:2); return side; };
-  let trapN=0,trapHit=0,normN=0,normHit=0;
-  for(const r of done){
-    const A=r.v.A,B=r.v.B,side=hit(r);
-    const fav=B?B.p.indexOf(Math.max.apply(null,B.p)):1;
-    const ok=(side===fav);
-    if(r.v.tier.indexOf('放弃')>=0){trapN++;if(ok)trapHit++;} else {normN++;if(ok)normHit++;}
-  }
+  const rows=st.rows||[];
+  const done=rows.filter(r=>r.state==='-1'&&/^\d+\s*:\s*\d+$/.test(String(r.score||'')));
   const pct=(a,b)=>b?(a/b*100).toFixed(1)+'% ('+a+'/'+b+')':'—';
+  const se=n=>n?(100/Math.sqrt(n)).toFixed(1):'—';
+  const esc=_dgEsc;
+  /* 甲 · 模拟盘第⑤步：模拟大小球线 / 真实盘线，对真实总进球的误差（同一子集比较） */
+  let nOU=0,nBoth=0,sumSim=0,sumSimBoth=0,sumReal=0,sumGap=0,simWin=0;
+  for(const r of done){
+    const q=String(r.score).split(':').map(Number), tg=q[0]+q[1];
+    const sl=r.v.sim&&r.v.sim.ouLine, rl=r.v.realOU;
+    if(sl==null) continue;
+    nOU++; const eS=Math.abs(tg-sl); sumSim+=eS;
+    if(rl!=null){ nBoth++; const eR=Math.abs(tg-rl);
+      sumSimBoth+=eS; sumReal+=eR; sumGap+=Math.abs(sl-rl); if(eS<=eR) simWin++; }
+  }
+  const simE=nBoth?sumSimBoth/nBoth:null, realE=nBoth?sumReal/nBoth:null;
+  /* 乙 · 判档 vs 外围热门侧是否打出：两区判据不同，必须分开设表，不许合并报「总命中率」 */
+  const stat=list=>{
+    let n=0,hit=0;
+    for(const r of list){
+      const q=String(r.score).split(':').map(Number), B=r.v.B;
+      if(!B||!Array.isArray(B.p)) continue;
+      const side=q[0]>q[1]?0:(q[0]===q[1]?1:2);
+      const fav=B.p.indexOf(Math.max.apply(null,B.p));
+      n++; if(side===fav) hit++;
+    }
+    return {n:n,txt:n>=5?pct(hit,n):'样本 n='+n+' &lt;5，不报比率',se:n>=5?('±'+se(n)+'pt'):'—'};
+  };
+  const grp=[
+    {name:'竞彩北单区（抽水换算判档）',list:done.filter(r=>r.v.zone==='jc')},
+    {name:'野鸡区（公司离散/漂移判档）',list:done.filter(r=>r.v.zone==='wild')}
+  ];
+  let tb='';
+  for(const g of grp){
+    const a=stat(g.list.filter(r=>/放弃|谨慎/.test(r.v.tier))), b=stat(g.list.filter(r=>!/放弃|谨慎/.test(r.v.tier)));
+    tb+='<tr style="border-top:1px solid var(--line)"><td style="padding:3px 6px">'+esc(g.name)+'</td>'
+      +'<td style="padding:3px 6px"><b>'+a.txt+'</b> <span style="color:var(--mut)">'+a.se+'</span></td>'
+      +'<td style="padding:3px 6px"><b>'+b.txt+'</b> <span style="color:var(--mut)">'+b.se+'</span></td>'
+      +'<td style="padding:3px 6px;color:var(--mut)">'+g.list.length+' 场</td></tr>';
+  }
+  const verdict=nBoth<5?'样本不足，不下结论'
+    :(simE<=realE?'本批模拟线略贴近赛果，但未做样本外检验，不构成 alpha，不加仓'
+                 :'本批模拟线未优于真实盘线，只作背景对照，不据此下注');
   return '<details style="margin-top:9px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--card2)">'
-    +'<summary style="cursor:pointer;font-size:11px;font-weight:700">📅 历史回测（已完场 '+done.length+' 场，检验「外围热门侧是否打出」）</summary>'
+    +'<summary style="cursor:pointer;font-size:11px;font-weight:700">📅 历史回测 · 综合意见（已完场 '+done.length+' 场｜模拟盘第⑤步 + 判档对照）</summary>'
     +'<div style="font-size:10.5px;line-height:1.8;color:var(--txt);margin-top:5px">'
-    +'判「放弃/谨慎」场外围热门侧打出：<b>'+pct(trapHit,trapN)+'</b>　｜　判正常盘场：<b>'+pct(normHit,normN)+'</b><br>'
-    +'<span style="color:var(--mut)">⚠ 这是<b>历史回测</b>，不是赛前登记业绩：判档用的是完场后仍可见的赔率，无赛前冻结样本，不能当命中率/ROI 宣传；样本 n 小、±SE≈100/√n，跨 0 属噪声。</span></div></details>';
+    +'<b>甲 · 模拟盘第⑤步</b>：可算模拟大小球线的完场 '+nOU+' 场，模拟线对真实总进球平均绝对误差 <b>'+(nOU?(sumSim/nOU).toFixed(2):'—')+'</b> 球；'
+    +'其中同时有真实大小球盘的 '+nBoth+' 场（同一子集）：模拟线 <b>'+(simE!=null?simE.toFixed(2):'—')+'</b> 球 vs 真实盘线 <b>'+(realE!=null?realE.toFixed(2):'—')+'</b> 球，'
+    +'两线平均相距 <b>'+(nBoth?(sumGap/nBoth).toFixed(2):'—')+'</b> 球，模拟线更贴近赛果 '+pct(simWin,nBoth)+'。→ <b>'+verdict+'</b>。<br>'
+    +'<b>乙 · 判档 vs 外围热门侧是否打出</b>（教程断言「诱盘场热门难打出」）：'
+    +'<table style="width:100%;border-collapse:collapse;font-size:10.5px;margin:4px 0"><thead><tr style="background:var(--card2)">'
+    +'<th style="text-align:left;padding:3px 6px">区 / 判据</th><th style="text-align:left;padding:3px 6px">判「放弃/谨慎」热门侧打出</th>'
+    +'<th style="text-align:left;padding:3px 6px">其余判档</th><th style="text-align:left;padding:3px 6px">完场样本</th></tr></thead><tbody>'+tb+'</tbody></table>'
+    +'<span style="color:var(--mut)">⚠ 口径三条：① 这是<b>历史回测</b>，判档用的是完场后仍可见的赔率，<b>没有赛前冻结登记样本</b>，不能叫命中率/ROI 业绩；'
+    +'② ±SE 按账本口径 100/√n pt，任一档 n&lt;5 只报读数不报率，两组差异跨 0 一律视为噪声；'
+    +'③ 野鸡区无官方 SP、判据与竞彩北单区不同，<b>分开设表</b>，不合并成一个「总命中率」。</span>'
+    +'</div></details>';
 }
 /* 真值表状态条：把「本批到底有多少场用了真近10场」摆到明面上，杜绝数据缺席却口径照写 */
 function _dgDataStatusHTML(b){
@@ -18302,7 +18348,7 @@ function _dgDataStatusHTML(b){
   return '<div style="margin-top:6px;padding:6px 9px;border:1px solid '+(ok?'var(--line)':'var(--red)')+';border-radius:6px;background:var(--card2);font-size:10.5px;color:var(--txt)">'
    + '<b style="color:'+col+'">真值表：'+(ok?'已加载 ✔':'未加载 ✘（已回退，结论降级）')+'</b>'
    + ' · 近10场 <b>'+nR+'</b> 队（'+(meta.span?meta.span.join(' ~ '):'—')+'，满 10 场 '+(meta.full10||0)+' 队）'
-   + ' · 本表 '+rows.length+' 场里 <b>'+nRecent+'</b> 场用真近10场、'+(rows.length-nRecent)+' 场回退全历史场均（异常门自动 1.0 球）'
+   + ' · 本表 '+rows.length+' 场里 <b>'+nRecent+'</b> 场用真近10场口径（n≥5）、'+(rows.length-nRecent)+' 场按回退口径（异常门 1.0 球）'
    + ' · 交锋库 '+(nH||0)+' 对，本表命中 '+nH2HAny+' 场（其中 ≥2 场可进公式 <b>'+nH2H+'</b> 场）'
    + (ok?'':'<br><span style="color:var(--red)">⚠ 真值表缺失时模拟盘第②步口径变粗，判档仅可作背景对照，不可当最终结论。</span>')
    + '</div>';
@@ -18323,7 +18369,7 @@ function openDg(){
   +  '<b style="color:var(--yel)">★ 去基差（灵活应用）</b>：实测本批官方 SP 抽水<b>系统性低于外围约 6~7pt</b>（北单/竞彩返还口径不同），直接套原始 6pt 门会把一半场次误判成诱盘。故<b>判档用「Δ − 同官方源组的本批中位」的偏离套 6pt 门</b>（竞彩官方 / 北单官方七玩法 / 澳客北单 SP 分组，单组 n&lt;4 退回全局并逐场标注），原始 Δ 与文档门结论同时逐场展示、不隐藏；中位数与样本数见本框底部。中位仅为本批横截面统计，未做样本外验证，不宣称任何命中率。<br>'
   +  '<b style="color:var(--red)">原文笔误已修正</b>：第三步 1.4−1.2 应为 <b>+0.2</b>（原文记 −0.2），只有按 (+0.2 − 0.6)/2 = −0.2 才能得出它自己的结论「客让 0.25」；第五步「−0.2+−0.6=0.4÷2」同样不成立。本模块用正确代入式，明细卡逐步摊开原始数据。<br>'
   +  '<b>分区</b>：<b>竞彩北单区</b>=有竞彩 had / 北单官方七玩法 SP，甲乙全跑；<b style="color:#8b98a9">非竞彩北单区（野鸡区）</b>=无官方 SP，乙缺官方端<b>明确不适用</b>，改跑甲 + 外围多公司抽水离散 + 初→临漂移，只给观察/谨慎，不冒充可下注结论。<br>'
-  +  '<b style="color:#0d9488">数据口径（重要）</b>：第②步用 <b>7m 逐场真实赛果算的每队最近 10 场</b>（'+(function(){const q=window.__TEAM_RECENT10_META__||{};return q.span?q.span.join(' ~ '):'加载中'})()+'，非滚动更新），队名查不到才回退「全历史主/客场场均」并把异常门从 0.5 放宽到 1.0 球；交锋 <b>&lt;2 场不进公式</b>（原文取 10 场，7m 库多数对阵只有 1~2 场，n=1 只作展示、n≥2 才进公式且置信另记，防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
+  +  '<b style="color:#0d9488">数据口径（重要）</b>：第②步用 <b>7m 逐场真实赛果算的每队最近 10 场</b>（'+(function(){const q=window.__TEAM_RECENT10_META__||{};return q.span?q.span.join(' ~ '):'加载中'})()+'，非滚动更新），队名查不到、或该队 7m 近况不足 5 场，才按回退口径并把异常门从 0.5 放宽到 1.0 球；交锋 <b>&lt;2 场不进公式</b>（原文取 10 场，7m 库多数对阵只有 1~2 场，n=1 只作展示、n≥2 才进公式且置信另记，防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
   +  '<b style="color:var(--red)">两道防脏数据闸</b>：官方与外围热门侧不一致 / 单侧偏差≥20pt / 抽水差≥15pt → 判「<b>数据错配·不判</b>」，不拿跨场或让球行混入的配对出结论；野鸡区模拟盘与外围盘的偏离<b>只作对照、不单独触发判档</b>（无官方盘可校验）。<br>'
   +  '<span style="color:var(--mut)">数据源：竞彩官方 had · 北京体彩网七玩法 XML · 澳客北单 SP · Bet365/欧赔 · 7m 交锋+近期真值库。每 15 分钟随 CVM 刷新；点「五步算式」逐项核对每一步原始数据。</span>'
   +  _dgDataStatusHTML(built)
