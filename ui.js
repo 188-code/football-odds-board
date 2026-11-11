@@ -18024,6 +18024,24 @@ function _dgDrift(m){
   let ix=0; for(let i=1;i<3;i++) if(Math.abs(d[i])>Math.abs(d[ix])) ix=i;
   return {d, max:d[ix], side:['主胜','平局','客胜'][ix], ix};
 }
+/* ---- 动态轴（2026-11-11）：开盘→临盘两点，官方端当前帧 + 外围端两帧。
+   ★ 诚实边界：这是「两点」不是「逐帧」；文档只给静态截面公式，跨时点判读属本模块扩展。
+     真正逐帧轨迹需 CVM 端每轮刷新登记 dg_history（三盘板 fundplate_history 的做法），尚未做。 ---- */
+function _dgLive(m){
+  const an=_dgAn(m); if(!an) return {frames:[],cur:null,dyn:null,note:'无分析数据'};
+  const A0=_dgOver([+an.o0h,+an.o0d,+an.o0a]), A1=_dgOver([+an.o1h,+an.o1d,+an.o1a]);
+  const frames=(A0&&A1)?[{t:'开盘',p:A0.p,over:A0.over},{t:'临盘',p:A1.p,over:A1.over}]:[];
+  const off=_dgOfficial(m), cur=off?_dgOver(off.o):null;
+  let dyn=null;
+  if(frames.length===2){
+    const per=frames[1].p.map((p,i)=>(p-frames[0].p[i])*100);
+    let ix=0; for(let i=1;i<3;i++) if(Math.abs(per[i])>Math.abs(per[ix])) ix=i;
+    dyn={per:per,max:{v:per[ix],side:['主胜','平局','客胜'][ix],ix:ix},
+         overChg:frames[1].over-frames[0].over,warming:per[ix]>0};
+  }
+  return {frames:frames,cur:cur,dyn:dyn,companies:Object.keys(an.coLive||{}).length,
+          note:'外围 1X2 开盘→临盘两点；官方端仅当前帧（无官方 SP 历史帧）'};
+}
 
 /* ---- 单场综合判档（opt: {med, off, out, sim} 为构建期预计算，避免两遍重算） ---- */
 function _dgVerdict(m, opt){
@@ -18062,10 +18080,14 @@ function _dgVerdict(m, opt){
   // ★ 去结构性基差：官方 SP 与外围 SP 的 overround 往往存在稳定的源级差（实测本批约 -6.7pt），
   //   直接套文档「>6pt=异常」会把一半场次误判为诱盘。判档用「Δ − 本批中位」的偏离，
   //   文档原始 Δ 与其「>6pt 判异常」的单侧结论同时展示，绝不藏起来。
-  const dev=(med!=null&&delta!=null)?(delta-med):null;
+  // ★ 2026-11-11 四轮盲测：本批只剩 2 场有外围赔率时，分组中位 n=1、全局 nDelta=2，
+  //   「Δ − 那个 n=1 的中位」把 Δ+2.9pt（文档判正常）洗成 +7.0pt 并翻成「放弃」。
+  //   中位样本 <4 一律禁用去基差判档，回退文档原义单侧门。
+  const medUsable=(med!=null)&&((opt.medN||0)>=4||(opt.globalN||0)>=4);
+  const dev=(medUsable&&delta!=null)?(delta-med):null;
   const rawGate=(delta!=null&&delta>6);                    // 文档原义：单侧 Δ>6 判异常
   const rawGateSym=(delta!=null&&Math.abs(delta)>6);       // 本模块对称化，仅作展示对照
-  const overGate=(dev!=null?Math.abs(dev):Math.abs(delta||0))>6;
+  const overGate=medUsable?(Math.abs(dev)>6):rawGate;
   // 数据源错配闸门：两端热门侧不一致 / 单侧偏差≥20pt / 去基差后抽水差≥15pt → 「不判」
   let mismatch=false;
   if(A&&B&&maxPer){
@@ -18077,7 +18099,13 @@ function _dgVerdict(m, opt){
   }
   const spread=(zone==='wild')?_dgCompanySpread(m):null;
   const drift=(zone==='wild')?_dgDrift(m):null;
+  const live=_dgLive(m);                 // 两区都跑（此前竞彩北单区完全没有动态）
   const why=[], acts=[];
+  if(live.dyn) why.push('📈 <b>开盘→临盘动态</b>（外围 1X2 两点）：抽水 '+live.frames[0].over.toFixed(1)+'% → '+live.frames[1].over.toFixed(1)+'%（'+(live.dyn.overChg>=0?'+':'')+live.dyn.overChg.toFixed(1)+'pt）；逐项漂移 '
+      +['主胜','平局','客胜'].map((n,i)=>n+' '+(live.dyn.per[i]>=0?'+':'')+live.dyn.per[i].toFixed(1)).join(' · ')+' pt，最大 <b>'+live.dyn.max.side+' '+(live.dyn.max.v>=0?'+':'')+live.dyn.max.v.toFixed(1)+'pt</b>（'+(live.dyn.warming?'该侧被推高':'该侧被压低')+'）'
+      +'<br><span style="color:var(--mut);font-size:9.5px">'+_dgEsc(live.note)+'；±6pt 是文档静态截面门，<b>跨时点漂移不直接判档</b>（文档未定义），仅作方向参考。</span>');
+  else why.push('<span style="color:var(--mut)">📈 动态：本场缺开盘/临盘两帧 1X2，无动态可判（逐帧轨迹需 CVM 端登记，尚未做）</span>');
+  if(off&&out&&!medUsable) why.push('<b style="color:var(--yel)">去基差判档已禁用</b>：本批可比双端样本 '+(opt.globalN||0)+' 场 / 本组 '+(opt.medN||0)+' 场（&lt;4），横截面中位不可靠 → 回退<b>文档原义单侧 Δ&gt;6pt</b> 门，不拿 n=1 的统计量翻转结论');
   let tier='正常盘', col='var(--grn)', act='照常观察';
   if(zone==='jc'){
     if(!out){ tier='数据不足'; col='var(--mut)'; act='缺外围赔率，不判';
@@ -18119,7 +18147,7 @@ function _dgVerdict(m, opt){
   if(sim.conf<2) why.push('<span style="color:var(--mut)">模拟盘置信偏低：交锋 '+ (sim.hhAll?sim.hhAll.n:0) +' 场 / 近期主 '+(sim.fh?sim.fh.n:0)+'·客 '+(sim.fa?sim.fa.n:0)+' 场</span>');
   why.push('<span style="color:var(--mut)">近期数据源：'+_dgEsc(sim.formSrc)+'；异常门 |Δ|≥'+gate+' 球</span>');
   return {m,zone,sim,off,out,A,B,delta,dev,med,medSrc:opt.medSrc||'',medN:opt.medN||0,medFallback:!!opt.medFallback,
-          rawGate,rawGateSym,overGate,per,maxPer,hotPer,favPer,hotSide,spread,drift,formRecent:sim.formRecent,
+          rawGate,rawGateSym,overGate,medUsable,medGlobalN:opt.globalN||0,per,maxPer,hotPer,favPer,hotSide,spread,drift,live,formRecent:sim.formRecent,
           realOU,realHc,ouGap,hcGap,ouAbn,hcAbn,abnN,gate,tier,col,act,why,acts};
 }
 
@@ -18174,7 +18202,7 @@ function _dgBuildRows(){
     if(g.fallback) g.med=med; medBy[k]=g; }
   const rows=uniq.map(c=>{
     const sk=srcKey(c.off&&c.off.src), g=medBy[sk]||{med:med,n:ds.length,fallback:true};
-    const v=_dgVerdict(c.m,{med:g.med,medN:g.n,medSrc:sk,medFallback:g.fallback,off:c.off,out:c.out,sim:c.sim});
+    const v=_dgVerdict(c.m,{med:g.med,medN:g.n,medSrc:sk,medFallback:g.fallback,globalN:ds.length,off:c.off,out:c.out,sim:c.sim});
     return {v, tid:c.m.tid, day:c.day, time:c.time, ts:c.ts, league:c.league,
       home:c.home, away:c.away, state:c.state, score:c.score, dev:v.dev};
   });
@@ -18182,6 +18210,13 @@ function _dgBuildRows(){
 }
 
 function _dgFmtO(o){ return o?o.map(x=>(+x).toFixed(2)).join(' / '):'—'; }
+function _dgLiveCell(v){
+  const L=v.live;
+  if(!L||!L.dyn) return '<span style="color:var(--mut);font-size:9.5px">无两帧</span>';
+  const d=L.dyn;
+  return '<b style="color:'+(Math.abs(d.max.v)>=6?(d.warming?'var(--red)':'var(--grn)'):'inherit')+'">'+d.max.side+' '+(d.max.v>=0?'+':'')+d.max.v.toFixed(1)+'pt</b>'
+    +'<br><span style="color:var(--mut);font-size:9px">抽水 '+(d.overChg>=0?'+':'')+d.overChg.toFixed(1)+'pt · 开→临</span>';
+}
 function _dgCellLine(label, simV, realV, gap, unit, incomplete){
   if(incomplete) return '<span style="color:var(--mut);font-size:9.5px" title="按文档五步不成立（缺交锋/近期真值），不建模拟盘、不判档">模拟盘不成立</span>'
     + (simV!=null?'<br><span style="color:var(--mut);font-size:9px">参考 '+simV.toFixed(2)+'（仅展示）</span>':'');
@@ -18219,6 +18254,14 @@ function _dgDetailHTML(r){
     x+=li('外围公司抽水离散', v.spread?(v.spread.n+' 家：'+v.spread.list.map(c=>_dgEsc(c.k)+' '+c.over.toFixed(1)+'%').join('、')+' → 极差 <b>'+v.spread.spread.toFixed(1)+'pt</b>'):'公司不足 2 家');
     x+=li('初→临隐含漂移', v.drift?(v.drift.d.map((d,i)=>['主','平','客'][i]+' '+(d>=0?'+':'')+d.toFixed(1)).join(' · ')+' pt（最大 '+v.drift.side+'）'):'缺初盘或临盘欧赔');
   }
+  const L=v.live;
+  x+='<div style="font-weight:800;margin:8px 0 5px">📈 动态轴 · 开盘 → 临盘（两点，非逐帧）</div>';
+  if(L&&L.dyn){
+    x+=li('外围 1X2 抽水', L.frames.map(f=>f.t+' '+f.over.toFixed(2)+'%').join(' → ')+'（'+(L.dyn.overChg>=0?'+':'')+L.dyn.overChg.toFixed(2)+'pt）');
+    x+=li('逐项隐含漂移', ['主胜','平局','客胜'].map((n,i)=>n+' '+(L.dyn.per[i]>=0?'+':'')+L.dyn.per[i].toFixed(1)).join(' · ')+' pt → 最大 <b>'+L.dyn.max.side+' '+(L.dyn.max.v>=0?'+':'')+L.dyn.max.v.toFixed(1)+'pt</b>（'+(L.dyn.warming?'被推高':'被压低')+'）');
+    x+=li('官方端', L.cur?('当前帧倒数和 '+(L.cur.sum*100).toFixed(1)+'%，抽水 '+L.cur.over.toFixed(2)+'%'):'缺官方 SP');
+  } else x+=li('动态','缺开盘/临盘两帧 1X2，无动态可判');
+  x+='<div style="font-size:9.5px;color:var(--mut);margin-top:3px">⚠ '+_dgEsc(L?L.note:'—')+'。文档只给静态截面公式，<b>跨时点漂移不代入 6pt 门、不直接判档</b>；真正的逐帧轨迹要像三盘资金过热板那样由 CVM 每轮刷新登记历史帧（fundplate_history 的做法），<b>目前尚未做</b>。</div>';
   x+='<div style="font-weight:800;margin:8px 0 5px">🧾 判档依据</div>';
   x+=v.why.map(w=>'<div style="padding:1px 0">· '+w+'</div>').join('');
   if(v.acts.length) x+='<div style="margin-top:4px;color:#f59e0b">触发：'+v.acts.map(_dgEsc).join('；')+'</div>';
@@ -18249,13 +18292,14 @@ function _dgRowHTML(r){
     + '<td style="padding:5px 6px;min-width:150px">'+zoneBadge+' <span style="color:var(--mut);font-size:9.5px">'+_dgEsc(r.league)+'</span><br><b>'+_dgEsc(r.home)+'</b> <span style="opacity:.5">vs</span> <b>'+_dgEsc(r.away)+'</b>'
       +(r.score?'<br><span style="font-size:9.5px;color:var(--grn)">完场 '+_dgEsc(r.score)+'</span>':'')+'</td>'
     + money
+    + '<td style="white-space:nowrap;font-size:10.5px" title="外围 1X2 开盘→临盘两点漂移；两点非逐帧，逐帧轨迹需 CVM 端登记">'+_dgLiveCell(v)+'</td>'
     + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('大小球',s.ouLine,v.realOU,v.ouGap,'',!s.simComplete)+'</td>'
     + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'',!s.simComplete)+'</td>'
     + '<td style="white-space:nowrap"><b style="color:'+v.col+'">'+v.tier+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
     + '<td style="font-size:9.5px;color:var(--mut);max-width:180px">'+(v.acts.length?_dgEsc(v.acts.slice(0,2).join('；')):'—')+'</td>'
     + '<td style="white-space:nowrap"><a onclick="_dgToggle(\''+_dgEsc(r.tid)+'\');return false" style="cursor:pointer;color:var(--acc);font-size:10px">五步算式 ▾</a></td>'
     + '</tr>'
-    + '<tr id="dgd_'+_dgEsc(r.tid)+'" style="display:none"><td colspan="11" style="padding:6px 10px"></td></tr>';
+    + '<tr id="dgd_'+_dgEsc(r.tid)+'" style="display:none"><td colspan="12" style="padding:6px 10px"></td></tr>';
 }
 /* 明细按需生成：首屏不渲染几百段隐藏 HTML */
 function _dgToggle(tid){
@@ -18298,7 +18342,7 @@ function _dgRender(){
   const capped=list.slice(0,200);
   const tb=document.getElementById('dgTbody');
   if(tb) tb.innerHTML=capped.length?capped.map(_dgRowHTML).join('')
-    :'<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--mut)">该筛选下没有可分析场次（竞彩北单区需官方 SP；野鸡区需外围赔率 + 近期战绩/真实盘）</td></tr>';
+    :'<tr><td colspan="12" style="padding:20px;text-align:center;color:var(--mut)">该筛选下没有可分析场次（竞彩北单区需官方 SP；野鸡区需外围赔率 + 近期战绩/真实盘）</td></tr>';
   const cnt=document.getElementById('dgCount');
   if(cnt){ const nAbn=list.filter(r=>r.v.tier.indexOf('放弃')>=0).length, nWarn=list.filter(r=>r.v.tier.indexOf('谨慎')>=0).length;
     cnt.innerHTML='本区 <b>'+list.length+'</b> 场（显示 '+capped.length+(list.length>capped.length?'，请用日期筛选缩小范围':'')+'）· 放弃 <b style="color:var(--red)">'+nAbn+'</b> · 谨慎 <b style="color:#f59e0b">'+nWarn+'</b>'; }
@@ -18306,7 +18350,7 @@ function _dgRender(){
   const md=document.getElementById('dgMed');
   if(md){
     const mb=st.medBy||{}, parts=Object.keys(mb).map(k=>k+' '+(mb[k].med!=null?mb[k].med.toFixed(1):'—')+'pt (n='+mb[k].n+(mb[k].fallback?'，样本不足→全局':'')+')');
-    md.textContent='去基差中位（按官方源分组）：'+(parts.join(' ｜ ')||'—')+'；全局 '+(st.med!=null?st.med.toFixed(1):'—')+'pt (n='+st.nDelta+')。官方与外围存在源级结构性基差，判档用「Δ − 同组中位」的偏离套 6pt 门（本模块校准，非原文），文档原始 Δ 与单侧 >6pt 结论同时展示。中位仅为本批横截面统计，未做样本外验证，不宣称命中率。';
+    md.textContent='去基差中位（按官方源分组）：'+(parts.join(' ｜ ')||'—')+'；全局 '+(st.med!=null?st.med.toFixed(1):'—')+'pt (n='+st.nDelta+')。官方与外围存在源级结构性基差，判档用「Δ − 同组中位」的偏离套 6pt 门（本模块校准，非原文），文档原始 Δ 与单侧 >6pt 结论同时展示。中位仅为本批横截面统计，未做样本外验证，不宣称命中率。本批可比双端样本 n='+st.nDelta+'，n&lt;4 时自动禁用去基差判档、逐场标注并回退文档原义单侧 Δ&gt;6pt 门。';
   }
 }
 function _dgZone(z){ window._dgState.zone=z; _dgRender(); }
@@ -18417,6 +18461,7 @@ function openDg(){
   +  '<b>原文只有两块</b>——五步模拟盘 + 返还抽水换算，外加「如分析数据有异常，则建议放弃」。「竞彩北单 / 野鸡区」<b>分区是按用户要求加的，原文没有</b>；野鸡区的「外围多公司抽水离散 + 初→临漂移」、两道防脏数据闸、逐项热门方向符号、0.5/1.0 球门、去基差判档，<b>均为本模块自研/校准，不是原文公式</b>。原文的 6pt 门是拿<b>竞彩 vs 一家外围</b>（截图为「独赢」一家 4.48/4.15/1.71）标定的，本模块外围优先 Bet365、其次欧赔汇总（口径已变），套到<b>北单 SP 属外推</b>，虽按官方源分组去基差缓解，仍未经样本外验证。'
   +  '</div></details>'
   +  '<b style="color:var(--red)">两道防脏数据闸</b>：官方与外围热门侧不一致 / 单侧偏差≥20pt / 抽水差≥15pt → 判「<b>数据错配·不判</b>」，不拿跨场或让球行混入的配对出结论；野鸡区模拟盘与外围盘的偏离<b>只作对照、不单独触发判档</b>（无官方盘可校验）。<br>'
+  +  '<b style="color:#0d9488">📈 实时动态（当前做到哪一步，不夸大）</b>：弹窗打开期间<b>每 60 秒自动重算</b>一次（四角显示「本帧」时刻），数据本体随页面云端融合刷新（CVM 15 分钟一轮）；两区都新增「开盘→临盘动态」列与明细卡，用外围 1X2 初盘/临盘两点重算抽水与逐项隐含漂移。<b style="color:var(--red)">但这只是两点，不是逐帧</b>：文档只给静态截面公式，跨时点漂移<b>不代入 6pt 门、不直接判档</b>；真正的逐帧轨迹要像三盘资金过热板那样由 CVM 每轮刷新登记历史帧（fundplate_history / dirTrail 的做法），<b>本模块尚未接入</b>，官方 SP 也没有历史帧，所以「官方端热度是否被持续推高」目前判不了。<br>'
   +  '<span style="color:var(--mut)">数据源：竞彩官方 had · 北京体彩网七玩法 XML · 澳客北单 SP · Bet365/欧赔 · 7m 交锋+近期真值库。每 15 分钟随 CVM 刷新；点「五步算式」逐项核对每一步原始数据。</span>'
   +  _dgDataStatusHTML(built)
   +  '<div id="dgMed" style="margin-top:4px;color:var(--mut);font-size:10px"></div>'
@@ -18427,10 +18472,11 @@ function openDg(){
   +     '<button class="htab-btn dgtab" data-z="wild" onclick="_dgZone(\'wild\')">🦆 非竞彩北单 · 野鸡区</button>'
   +   '</div>'
   +   '<span id="dgCount" style="margin-left:4px"></span>'
+  +   '<span id="dgLiveTs" style="margin-left:6px;color:var(--mut);font-size:9.5px" title="弹窗打开期间每 60 秒自动重算一次；数据本体由页面云端融合刷新（CVM 15 分钟一轮）">本帧 '+new Date().toLocaleTimeString('zh-CN',{hour12:false})+'</span>'
   +   '<span style="margin-left:auto;white-space:nowrap">📅 '+_dgDayOpts()+' '+_dgSelects()+'</span>'
   + '</div>'
   + '<div style="overflow:auto"><table style="min-width:1520px;font-size:11px;color:var(--txt)"><thead><tr style="background:var(--card2)">'
-  +  '<th>开赛</th><th>联赛 · 对阵</th><th>官方 SP 胜/平/负</th><th>外围 胜/平/负</th><th>抽水差 Δ</th><th>逐项 / 公司离散</th><th>模拟大小球 → 实盘</th><th>模拟让球 → 实盘</th><th>判档</th><th>触发项</th><th>明细</th>'
+  +  '<th>开赛</th><th>联赛 · 对阵</th><th>官方 SP 胜/平/负</th><th>外围 胜/平/负</th><th>抽水差 Δ</th><th>逐项 / 公司离散</th><th>开盘→临盘动态</th><th>模拟大小球 → 实盘</th><th>模拟让球 → 实盘</th><th>判档</th><th>触发项</th><th>明细</th>'
   + '</tr></thead><tbody id="dgTbody"></tbody></table></div>'
   + _dgReviewHTML(window._dgState)
   + '</div></div></div>';
@@ -18439,8 +18485,19 @@ function openDg(){
   const el=document.getElementById('dgModal');
   if(el) el.addEventListener('click',e=>{ if(e.target.id==='dgModal') closeDg(); });
   _dgRender();
+  // 实时动态：弹窗打开期间每 60s 重算一次（页面云端融合刷新 MATCHES 后判档会跟着变）
+  try{ clearInterval(window._dgTimer); }catch(e){}
+  window._dgTimer=setInterval(function(){
+    if(!document.getElementById('dgModal')){ clearInterval(window._dgTimer); return; }
+    try{
+      const b=_dgBuildRows(), st=window._dgState||{};
+      st.rows=b.rows; st.med=b.med; st.medBy=b.medBy; st.nDelta=b.nDelta; window._dgState=st;
+      _dgRender();
+      const ts=document.getElementById('dgLiveTs'); if(ts) ts.textContent='本帧 '+new Date().toLocaleTimeString('zh-CN',{hour12:false});
+    }catch(e){}
+  },60000);
 }
-function closeDg(){ const m=document.getElementById('dgModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
+function closeDg(){ try{ clearInterval(window._dgTimer); }catch(e){} const m=document.getElementById('dgModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
 /* 按钮：动态挂到「看板板块」栏，零改外壳 index.html */
 function _dgMountBtn(n){
   try{
