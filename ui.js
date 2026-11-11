@@ -17769,3 +17769,528 @@ document.addEventListener('DOMContentLoaded', function(){
   }catch(e){ /* BD_ROWS 缺失不影响主看板 */ }
 })();
 
+
+/* ============================================================================
+ * 🧭 解说帝哥模块  (2026-11-11 新建)
+ * 知识源：D:\足彩赔率分析教程\解说帝哥.docx —— 全文两块知识点，均已转成可核对计算：
+ *
+ * 【甲】大小球 + 盘口「模拟盘」建立公式（以主场为准），原五步：
+ *   ① 历史交锋：总进球/总丢球 → 场均造球数         e.g. (14+12)/10 = 2.6
+ *   ② 近10场：主队造球 2.8、客队造球 2.4 → 主客均值 2.6
+ *      大小球均值 = (①+②)/2 = 2.6 ≈ 2.5（取 0.25 档）
+ *   ③ 交锋盘口相差值 = 主队场均进球 − 主队场均丢球  e.g. 1.4−1.2 = +0.2
+ *   ④ 近期盘口值 = 主队净胜差 − 客队净胜差          e.g. 0 − 0.6 = −0.6
+ *      盘口均值 = (③+④)/2 = −0.2 → 客让 0.25
+ *   ⑤ 与真实开盘（大小球线 / 亚盘让球）对照，异常则放弃。
+ *   ★ 原文笔误已按数学修正：③ 写成「-0.2」、⑤ 写成「-0.2+-0.6=0.4÷2=0.2」，
+ *     但只有 ③=+0.2、(③+④)/2=−0.2 才能得到它自己的结论「客让 -0.25」。
+ *     本模块一律用正确代入式，并在明细卡里把每一步的原始数据摊开供核对。
+ *
+ * 【乙】返还抽水换算法：
+ *   官方（竞彩/北单）1X2 赔率倒数求和 − 1 = 官方抽水值；外围（365/欧赔）同理。
+ *   两者差 ≤ 6pt = 正常盘口；> 6pt = 大热 / 诱盘 / 假盘可能。
+ *   逐项再比：某侧「官方隐含 − 外围隐含」≥ 6pt（原例客胜 65% vs 58% 差 7pt）
+ *   → 该侧形成热门、难以正常打出。结合模拟盘，异常则建议放弃。
+ *   ★ 灵活应用：官方 SP 与外围的 overround 存在结构性基差（本批中位数见页头），
+ *     故另外给「相对本批中位数的偏离」作为**展示对照**，不参与判档（未经样本外验证）。
+ *
+ * 【分区】竞彩北单区 = 有官方 SP（竞彩 had / 北单官方七玩法），可完整跑【甲】+【乙】；
+ *         非竞彩北单区（野鸡区）= 无官方 SP，只有外围盘 →【乙】不适用（明确标注），
+ *         改跑【甲】+ 外围多公司离散 + 初盘→临盘漂移，只给观察/谨慎，不冒充可下注结论。
+ *
+ * 数据全部取自页面已有注入：MATCHES / TEAM_FORM / H2H_MAP / BD_ROWS / __BD_OFFICIAL__；
+ * 无新增后端。H2H_MAP 为 load 后延迟注入，监听 h2h-ready 自动重渲。
+ * ========================================================================== */
+
+function _dgEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _dgName(m, side){
+  let v = '';
+  try{ v = (typeof displayTeam==='function') ? displayTeam(m, side) : (m[side]||''); }catch(e){ v = m[side]||''; }
+  return String(v||'').replace(/<[^>]+>/g,'').replace(/&#x[eE][0-9a-fA-F]+;/g,'').replace(/\s/g,'');
+}
+function _dgClean(s){ return String(s||'').replace(/<[^>]+>/g,'').replace(/&#x[eE][0-9a-fA-F]+;/g,'').replace(/\s/g,''); }
+function _dgNum(x){ if(x==null||x==='') return null; const v=+x; return isFinite(v)?v:null; }
+function _dgFirstNum(){ for(const x of arguments){ const v=_dgNum(x); if(v!=null) return v; } return null; }
+/* 行内 m.analysis 有时是「只带 1X2 的精简帧」，缺 ou/score/真实盘 → 用烘焙包 an 补缺（不覆盖已有值） */
+function _dgAn(m){
+  let an=(m&&m.analysis)||{};
+  const ouOk=an.ou&&(an.ou.c_line!=null||an.ou.o_line!=null);
+  const hcOk=an.grade_hcap_a!=null||an.a0!=null;
+  if(ouOk&&hcOk) return an;
+  let p=null;
+  try{ p=(typeof packAnalysis==='function')?packAnalysis(m.tid):((typeof OFFLINE_PACK!=='undefined'&&OFFLINE_PACK[m.tid])?OFFLINE_PACK[m.tid].an:null); }catch(e){}
+  if(!p) return an;
+  const o=Object.assign({},an);
+  for(const k in p) if(o[k]==null) o[k]=p[k];
+  if(!ouOk&&p.ou) o.ou=p.ou;
+  if(!an.score&&p.score) o.score=p.score;
+  return o;
+}
+
+/* ---- 甲·第一步：历史交锋（7m 真值库 window.H2H_MAP，键「主|客」或「客|主」） ---- */
+function _dgH2H(h, a){
+  const M = window.H2H_MAP;
+  if (!M || !h || !a) return null;
+  const rows = [];
+  for (const k of [h+'|'+a, a+'|'+h]){
+    const v = M[k];
+    if (!Array.isArray(v)) continue;
+    for (const r of v){
+      if (!Array.isArray(r) || r.length < 5) continue;
+      const g1 = _dgNum(r[3]), g2 = _dgNum(r[4]);
+      if (g1==null || g2==null) continue;
+      const n1 = String(r[1]||'');
+      const sg = (n1===h || (h && n1.indexOf(h)>=0) || (n1 && h.indexOf(n1)>=0)) ? 1 : -1;
+      rows.push({ ts:+r[0]||0, ball:g1+g2, diff:sg*(g1-g2), g1, g2, n1, n2:String(r[2]||'') });
+    }
+  }
+  if (!rows.length) return null;
+  rows.sort((x,y)=>y.ts-x.ts);
+  const seen = new Set(), u = [];
+  for (const r of rows){ const key=r.ts+'|'+r.g1+'|'+r.g2; if(seen.has(key))continue; seen.add(key); u.push(r); if(u.length>=10)break; }
+  const n=u.length; if(!n) return null;
+  return { n, ball:u.reduce((s,r)=>s+r.ball,0)/n, diff:u.reduce((s,r)=>s+r.diff,0)/n, games:u };
+}
+/* ---- 甲·第二步：近期战绩（TEAM_FORM：hgf/hga 主场、agf/aga 客场，hn/an 样本数） ---- */
+const _dgFormCache = new Map();
+function _dgForm(name, isHome){
+  // ★ 优先真·近10场（7m 逐场赛果，window.TEAM_RECENT10）；没有才回退 TEAM_FORM 全历史主客场均并标注
+  const R = window.TEAM_RECENT10, F = window.TEAM_FORM;
+  if (!name) return null;
+  const fuzzy = (map, ck) => {
+    if (!map) return null;
+    if (map[name]) return map[name];
+    if (_dgFormCache.has(ck)) return _dgFormCache.get(ck);
+    let hit = null;
+    if (name.length>=3){
+      const ks = Object.keys(map).filter(k => k===name || k.indexOf(name)>=0 || name.indexOf(k)>=0);
+      if (ks.length===1) hit = map[ks[0]];
+    }
+    _dgFormCache.set(ck, hit);           // 1.3 万队名模糊扫描只做一次，避免 2700 场逐场重扫
+    return hit;
+  };
+  const r = fuzzy(R, 'r|'+name);
+  if (r){
+    const gf=_dgNum(r.gf), ga=_dgNum(r.ga);
+    if (gf!=null&&ga!=null) return {gf,ga,ball:gf+ga,diff:gf-ga,n:+r.n||0,src:'7m 真实近'+(+r.n||0)+'场',last:r.last||''};
+  }
+  const v = fuzzy(F, 'f|'+name);
+  if (!v) return null;
+  const gf = _dgNum(isHome ? v.hgf : v.agf), ga = _dgNum(isHome ? v.hga : v.aga);
+  if (gf==null || ga==null) return null;
+  return { gf, ga, ball:gf+ga, diff:gf-ga, n:+((isHome?v.hn:v.an)||0), src:'全历史主/客场场均（非近10场）' };
+}
+function _dgQ(x){ return Math.round(x*4)/4; }   // 落到 0.25 球标准盘档
+function _dgSim(m){
+  const h=_dgName(m,'home'), a=_dgName(m,'away');
+  const hhAll=_dgH2H(h,a);
+  // 交锋门 n>=2（与引擎 applyInfoPrior 同门）：7m 库只覆盖 7/24~10/13，98% 对阵只有 1~2 场，
+  // 单场 7:0 会把大小球线带飞，故 n=1 跳过并在明细标注；n>=2 可用但置信另记。
+  const hh=(hhAll&&hhAll.n>=2)?hhAll:null;
+  const fh=_dgForm(h,true), fa=_dgForm(a,false);
+  const s1=hh?hh.ball:null;                                   // ① 交锋场均造球
+  const s2=(fh&&fa)?(fh.ball+fa.ball)/2:null;                // ② 主客近期造球均值
+  const s3=hh?hh.diff:null;                                  // ③ 交锋净胜差（统一到当前主队视角）
+  const s4=(fh&&fa)?(fh.diff-fa.diff):null;                  // ④ 近期净胜差之差
+  let ou=null, ouHow='';
+  if(s1!=null&&s2!=null){ ou=(s1+s2)/2; ouHow='(①+②)/2'; }
+  else if(s2!=null){ ou=s2; ouHow='仅②（无交锋真值，未按原式折半）'; }
+  else if(s1!=null){ ou=s1; ouHow='仅①（无近期战绩，未按原式折半）'; }
+  let hc=null, hcHow='';
+  if(s3!=null&&s4!=null){ hc=(s3+s4)/2; hcHow='(③+④)/2'; }
+  else if(s4!=null){ hc=s4; hcHow='仅④'; }
+  else if(s3!=null){ hc=s3; hcHow='仅③'; }
+  const conf = (hh&&hh.n>=4?1:0) + (fh&&fa&&fh.n>=6&&fa.n>=6?1:0);
+  const formSrc = (fh&&fa&&fh.src===fa.src) ? fh.src : ((fh&&fh.src)||(fa&&fa.src)||'—');
+  return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ou!=null?_dgQ(ou):null,
+          hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc};
+}
+
+/* ---- 乙：官方 SP / 外围 SP ---- */
+function _dgOver(o){
+  if(!Array.isArray(o)||o.length!==3||o.some(x=>!(+x>1))) return null;
+  const p=o.map(x=>1/+x), sum=p.reduce((s,x)=>s+x,0);
+  return {p, sum, over:(sum-1)*100};
+}
+function _dgBdRow(m){
+  const bd=(globalThis.BD_ROWS||[]);
+  if(!bd.length) return null;
+  const h=_dgName(m,'home'), a=_dgName(m,'away');
+  for(const r of bd){
+    const rh=_dgClean(r.home), ra=_dgClean(r.away);
+    if(rh&&ra&&h&&a&&((h.indexOf(rh)>=0||rh.indexOf(h)>=0)&&(a.indexOf(ra)>=0||ra.indexOf(a)>=0))) return r;
+  }
+  return null;
+}
+function _dgOfficial(m){
+  const jc = m && m.jc;
+  if (jc && jc.had){ const x=jc.had; const o=[+x.h,+x.d,+x.a]; if(_dgOver(o)) return {src:'竞彩官方 had',o:o,no:jc.no||''}; }
+  let ob=null; try{ ob=(typeof _bdOfficialForMatch==='function')?_bdOfficialForMatch(m):null; }catch(e){}
+  if(ob && ob.pools && ob.pools.bdSpf){
+    const x=ob.pools.bdSpf, o=[+x['3'],+x['1'],+x['0']];
+    if(_dgOver(o)) return {src:'北单官方 七玩法XML',o:o,no:ob.no||'',state:ob.state||''};
+  }
+  const b=_dgBdRow(m);
+  if(b && Array.isArray(b.sp) && _dgOver(b.sp)) return {src:'北单(澳客) SP',o:b.sp.map(Number),no:b.no||''};
+  return null;
+}
+function _dgOuter(m){
+  const an=_dgAn(m); if(!an) return null;
+  const cl=an.coLive||{}; const b=cl.Bet365||cl['365']||cl.bet365||null;
+  const c=b&&(b.c||b.o);
+  if(c){ const o=[+c.h,+c.d,+c.a]; if(_dgOver(o)) return {src:'Bet365 '+(b.c?'临盘':'初盘'),o:o}; }
+  const o1=[+an.o1h,+an.o1d,+an.o1a]; if(_dgOver(o1)) return {src:'欧赔临盘(汇总)',o:o1};
+  const o0=[+an.o0h,+an.o0d,+an.o0a]; if(_dgOver(o0)) return {src:'欧赔初盘(汇总)',o:o0};
+  return null;
+}
+/* 外围多家公司抽水离散（野鸡区替代判据，属扩展应用、非原文） */
+function _dgCompanySpread(m){
+  const cl=(_dgAn(m).coLive)||{}; const arr=[];
+  for(const k in cl){ const c=cl[k]&&(cl[k].c||cl[k].o); if(!c)continue;
+    const O=_dgOver([+c.h,+c.d,+c.a]); if(O) arr.push({k,over:O.over}); }
+  if(arr.length<2) return null;
+  const ovs=arr.map(x=>x.over);
+  return {n:arr.length,min:Math.min.apply(null,ovs),max:Math.max.apply(null,ovs),
+          spread:Math.max.apply(null,ovs)-Math.min.apply(null,ovs),list:arr};
+}
+function _dgDrift(m){
+  const an=_dgAn(m);
+  const A=_dgOver([+an.o0h,+an.o0d,+an.o0a]), B=_dgOver([+an.o1h,+an.o1d,+an.o1a]);
+  if(!A||!B) return null;
+  const d=B.p.map((p,i)=>(p-A.p[i])*100);
+  let ix=0; for(let i=1;i<3;i++) if(Math.abs(d[i])>Math.abs(d[ix])) ix=i;
+  return {d, max:d[ix], side:['主胜','平局','客胜'][ix], ix};
+}
+
+/* ---- 单场综合判档（opt: {med, off, out, sim} 为构建期预计算，避免两遍重算） ---- */
+function _dgVerdict(m, opt){
+  opt=opt||{};
+  const an=_dgAn(m);
+  const sim=opt.sim||_dgSim(m);
+  const off=(opt.off!==undefined)?opt.off:_dgOfficial(m);
+  const out=(opt.out!==undefined)?opt.out:_dgOuter(m);
+  const med=(opt.med!=null)?opt.med:null;
+  const zone=off?'jc':'wild';
+  // 真实盘：让球优先 grade_hcap_a（真实盘口，非模型 exp_hcap），大小球临→初→模型拟合线兜底
+  const realOU=_dgFirstNum(an.ou&&an.ou.c_line, an.ou&&an.ou.o_line, an.score&&an.score.line);
+  const realHc=_dgFirstNum(an.grade_hcap_a, an.a0, an.p1);
+  const ouGap=(sim.ouLine!=null&&realOU!=null)?realOU-sim.ouLine:null;
+  const hcGap=(sim.hcLine!=null&&realHc!=null)?realHc-sim.hcLine:null;
+  // 门随数据口径走：真近10场用文档 0.5 球；回退「全历史场均」口径粗，放宽到 1.0 球
+  const gate=(sim.formSrc&&sim.formSrc.indexOf('近')>=0)?0.5:1.0;
+  const ouAbn=(ouGap!=null&&Math.abs(ouGap)>=gate), hcAbn=(hcGap!=null&&Math.abs(hcGap)>=gate);
+  const abnN=(ouAbn?1:0)+(hcAbn?1:0);
+  let A=null,B=null,delta=null,per=null,hotSide=null,maxPer=null;
+  if(off&&out){ A=_dgOver(off.o); B=_dgOver(out.o);
+    if(A&&B){ delta=A.over-B.over; per=A.p.map((p,i)=>(p-B.p[i])*100);
+      let ix=0; for(let i=1;i<3;i++) if(Math.abs(per[i])>Math.abs(per[ix])) ix=i;
+      maxPer={v:per[ix],side:['主胜','平局','客胜'][ix],ix};
+      if(Math.abs(per[ix])>=6) hotSide=maxPer.side; } }
+  // ★ 去结构性基差：官方 SP 与外围 SP 的 overround 往往存在稳定的源级差（实测本批约 -6.7pt），
+  //   直接套文档「>6pt=异常」会把一半场次误判为诱盘。判档用「Δ − 本批中位」的偏离，
+  //   文档原始 Δ 与其 ±6pt 结论同时展示，绝不藏起来。
+  const dev=(med!=null&&delta!=null)?(delta-med):null;
+  const rawGate=(delta!=null&&Math.abs(delta)>6);
+  const overGate=(dev!=null?Math.abs(dev):Math.abs(delta||0))>6;
+  // 数据源错配闸门：两端热门侧不一致 / 单侧偏差≥20pt / 去基差后抽水差≥15pt → 「不判」
+  let mismatch=false;
+  if(A&&B&&maxPer){
+    const fa=A.p.indexOf(Math.max.apply(null,A.p)), fb=B.p.indexOf(Math.max.apply(null,B.p));
+    const big=(dev!=null?Math.abs(dev):Math.abs(delta||0))>=15;
+    const sortedA=A.p.slice().sort((x,y)=>y-x), sortedB=B.p.slice().sort((x,y)=>y-x);
+    const fuzzy=(sortedA[0]-sortedA[1])<0.01 || (sortedB[0]-sortedB[1])<0.01;  // 平手/胜负极接近的模糊盘
+    mismatch=(fa!==fb&&!fuzzy)||Math.abs(maxPer.v)>=20||big;
+  }
+  const spread=(zone==='wild')?_dgCompanySpread(m):null;
+  const drift=(zone==='wild')?_dgDrift(m):null;
+  const why=[], acts=[];
+  let tier='正常盘', col='var(--grn)', act='照常观察';
+  if(zone==='jc'){
+    if(!out){ tier='数据不足'; col='var(--mut)'; act='缺外围赔率，不判';
+      why.push('官方 SP 已有，但本场没有 365/欧赔 1X2，返还抽水换算法无法双端对照'); }
+    else if(mismatch){
+      tier='⚠ 数据错配·不判'; col='var(--mut)'; act='两端盘口疑似不同源，禁止据此下结论';
+      why.push('<b style="color:var(--red)">热门侧不一致 / 逐项偏差≥20pt / 去基差抽水差≥15pt</b>：可能是让球行混入、跨场配对或初盘临盘混用，本场抽水差结论作废（不判「放弃」也不判「正常」）');
+    }
+    else {
+      if(delta!=null){
+        why.push('官方抽水 '+A.over.toFixed(1)+'% − 外围 '+B.over.toFixed(1)+'% = <b>Δ '+(delta>=0?'+':'')+delta.toFixed(1)+'pt</b>（文档原始门 ±6pt → '+(rawGate?'异常':'正常')+'）'
+          +(dev!=null?('；本批中位 '+med.toFixed(1)+'pt → <b>去基差偏离 '+(dev>=0?'+':'')+dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(overGate?'异常':'正常')+'）'):''));
+        if(overGate) acts.push('去基差抽水差超 6pt');
+      }
+      if(maxPer){ why.push('逐项最大偏差：<b>'+maxPer.side+' '+(maxPer.v>=0?'+':'')+maxPer.v.toFixed(1)+'pt</b>（官方 '+ (A.p[maxPer.ix]*100).toFixed(0) +'% vs 外围 '+(B.p[maxPer.ix]*100).toFixed(0)+'%）');
+        if(Math.abs(maxPer.v)>=6) acts.push(maxPer.side+'形成热门、恐难正常打出'); }
+      if(ouAbn) acts.push('大小球实盘 '+realOU+' vs 模拟 '+sim.ouLine+'（差 '+(ouGap>=0?'+':'')+ouGap.toFixed(2)+'）');
+      if(hcAbn) acts.push('让球实盘 '+realHc+' vs 模拟 '+sim.hcLine+'（差 '+(hcGap>=0?'+':'')+hcGap.toFixed(2)+'）');
+      const trap=overGate&&hotSide;
+      if(trap||abnN>=2){ tier='⚠ 放弃'; col='var(--red)'; act='按教程：分析数据异常 → 放弃本场'; }
+      else if(overGate||hotSide||abnN===1){ tier='⚠ 谨慎'; col='#f59e0b'; act='异常项未叠加，降仓/只观察'; }
+      else { tier='✔ 正常盘'; act='按教程口径可继续跟踪'; }
+    }
+  } else {
+    why.push('<b>无竞彩/北单官方 SP → 返还抽水换算法不适用</b>（缺官方端，不能拿外围一家自比自）');
+    if(spread) why.push('外围 '+spread.n+' 家公司抽水 '+spread.min.toFixed(1)+'%~'+spread.max.toFixed(1)+'%，离散 <b>'+spread.spread.toFixed(1)+'pt</b>');
+    else why.push('外围公司不足 2 家，公司一致性无法核验');
+    if(drift) why.push('初盘→临盘隐含漂移最大：<b>'+drift.side+' '+(drift.max>=0?'+':'')+drift.max.toFixed(1)+'pt</b>');
+    // 野鸡区无官方盘可校验，模拟盘偏离只作背景对照，不单独触发异常（否则全表都是「放弃」）
+    if(ouAbn||hcAbn) why.push('模拟盘与外围实盘偏离：大小球 '+(ouGap!=null?ouGap.toFixed(2):'—')+' 球 / 让球 '+(hcGap!=null?hcGap.toFixed(2):'—')+' 球（<b>仅对照</b>，无官方盘校验，不单独判档）');
+    const bad=(spread&&spread.spread>=4&&abnN>=1)||(abnN>=2&&drift&&Math.abs(drift.max)>=8);
+    const warn=(spread&&spread.spread>=2.5)||(drift&&Math.abs(drift.max)>=8);
+    if(bad){ tier='⚠ 放弃'; col='var(--red)'; act='公司分歧/盘口异常，野鸡场不碰'; }
+    else if(warn){ tier='⚠ 谨慎'; col='#f59e0b'; act='盘口有异动，只观察不出手'; }
+    else { tier='◦ 仅观察'; col='var(--mut)'; act='无官方盘对照，本区默认不出手'; }
+  }
+  if(sim.conf<2) why.push('<span style="color:var(--mut)">模拟盘置信偏低：交锋 '+ (sim.hhAll?sim.hhAll.n:0) +' 场 / 近期主 '+(sim.fh?sim.fh.n:0)+'·客 '+(sim.fa?sim.fa.n:0)+' 场</span>');
+  why.push('<span style="color:var(--mut)">近期数据源：'+_dgEsc(sim.formSrc)+'；异常门 |Δ|≥'+gate+' 球</span>');
+  return {m,zone,sim,off,out,A,B,delta,dev,med,rawGate,overGate,per,maxPer,hotSide,spread,drift,
+          realOU,realHc,ouGap,hcGap,ouAbn,hcAbn,abnN,gate,tier,col,act,why,acts};
+}
+
+/* ---- 组装行（两遍：先算本批抽水差中位数，再去基差判档） ---- */
+function _dgBuildRows(){
+  const arr=(typeof MATCHES!=='undefined'&&Array.isArray(MATCHES))?MATCHES:Object.values(window.MATCHES||{});
+  const cand=[];
+  for(const m of arr){
+    if(!m || !m.tid) continue;
+    const an=_dgAn(m);
+    const hasOuter=!!(an.coLive&&Object.keys(an.coLive).length) || (+an.o1h>1) || (+an.o0h>1);
+    const off=_dgOfficial(m);
+    // 野鸡区只收有外围赔率 + 有真实盘/近期战绩的场，避免几千场噪声
+    if(!off && !hasOuter) continue;
+    const sim=_dgSim(m);
+    if(!off && !(sim.ouLine!=null || sim.hcLine!=null || (an.ou&&an.ou.c_line!=null))) continue;
+    const out=_dgOuter(m);
+    const k=(typeof heatKick==='function')?heatKick(m):{day:m.day||'',time:m.kickoff||''};
+    let ts=''; try{ ts=(typeof kickTs==='function')?kickTs(m):''; }catch(e){}
+    cand.push({m,off,out,sim,ts,
+      day:String(k.day||m.day||''), time:String(k.time||m.kickoff||''),
+      league:(typeof cleanLeague==='function')?cleanLeague(m):(m.league||''),
+      home:_dgName(m,'home'), away:_dgName(m,'away'), state:String(m.state||'0'),
+      score:(String(m.state)==='-1'&&m.home_score!=null)?(m.home_score+':'+m.away_score):''});
+  }
+  // 同一场可能在 MATCHES 里有多行（竞彩行 / 北单行 / 快照行），分析完整度不一。
+  // 按 日期+时间+主客队名 去重，保留 analysis 最全的一行，避免「官方 SP 有、实盘却显示缺」。
+  const byKey=new Map();
+  for(const c of cand){
+    const an=_dgAn(c.m);
+    c._full=(an.ou&&(an.ou.c_line!=null||an.ou.o_line!=null)?2:0)
+           +(an.grade_hcap_a!=null?2:0)+(an.score?1:0)+(c.off?1:0)
+           +(an.coLive&&Object.keys(an.coLive).length?1:0);
+    const key=c.day+'|'+c.home+'|'+c.away;   // 不含 time：同场两种时间格式也能合并，保 analysis 最全的那行
+    const old=byKey.get(key);
+    if(!old||c._full>old._full) byKey.set(key,c);
+  }
+  const uniq=[...byKey.values()];
+  const ds=[];
+  for(const c of uniq){
+    if(c.off&&c.out){ const A=_dgOver(c.off.o), B=_dgOver(c.out.o); if(A&&B) ds.push(A.over-B.over); }
+  }
+  ds.sort((a,b)=>a-b);
+  const med=ds.length?(ds.length%2?ds[(ds.length-1)/2]:(ds[ds.length/2-1]+ds[ds.length/2])/2):null;
+  const rows=uniq.map(c=>{
+    const v=_dgVerdict(c.m,{med:med,off:c.off,out:c.out,sim:c.sim});
+    return {v, tid:c.m.tid, day:c.day, time:c.time, ts:c.ts, league:c.league,
+      home:c.home, away:c.away, state:c.state, score:c.score, dev:v.dev};
+  });
+  return {rows, med, nDelta:ds.length};
+}
+
+function _dgFmtO(o){ return o?o.map(x=>(+x).toFixed(2)).join(' / '):'—'; }
+function _dgCellLine(label, simV, realV, gap, unit){
+  if(simV==null) return '<span style="color:var(--mut)">缺数据</span>';
+  const g=gap!=null?(' <span style="color:'+(Math.abs(gap)>=0.5?'var(--red)':'var(--mut)')+';font-size:9.5px">Δ'+(gap>=0?'+':'')+gap.toFixed(2)+'</span>'):'';
+  return '<b>'+simV.toFixed(2)+'</b><span style="opacity:.5"> → </span>'+(realV!=null?('<b>'+realV+(unit||'')+'</b>'):'<span style="color:var(--mut)">实盘缺</span>')+g;
+}
+function _dgDetailHTML(r){
+  const v=r.v, s=v.sim;
+  const li=(a,b)=>'<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px dashed var(--line)"><span style="min-width:150px;color:var(--mut)">'+a+'</span><span>'+b+'</span></div>';
+  let x='<div style="background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:10.5px;line-height:1.7;color:var(--txt)">';
+  x+='<div style="font-weight:800;margin-bottom:5px">📐 甲 · 模拟盘五步（原文算式，逐项可核对）</div>';
+  x+=li('① 交锋场均造球', s.hh?('近 '+s.hh.n+' 场交锋，双方总进球均值 <b>'+s.s1.toFixed(3)+'</b> 球/场（'+s.hh.games.slice(0,4).map(g=>g.g1+':'+g.g2).join('、')+(s.hh.n>4?' …':'')+'）'+(s.hh.n<10?'<span style="color:var(--mut)">（文档用 10 场，7m 库仅 '+s.hh.n+' 场，置信偏低）</span>':'')+'）'):('<span style="color:var(--mut)">'+(s.hhAll?('仅 '+s.hhAll.n+' 场交锋（&lt;2 场不进公式，防单场极端值带偏）'):'7m 真值库无此对阵交锋，本步跳过')+'</span>'));
+  x+=li('② 近期主/客造球', (s.fh&&s.fa)?('主 '+s.fh.gf.toFixed(2)+'进/'+s.fh.ga.toFixed(2)+'丢 = '+s.fh.ball.toFixed(3)+'（n='+s.fh.n+'）；客 '+s.fa.gf.toFixed(2)+'/'+s.fa.ga.toFixed(2)+' = '+s.fa.ball.toFixed(3)+'（n='+s.fa.n+'）→ 主客均值 <b>'+s.s2.toFixed(3)+'</b><br><span style="color:var(--mut)">口径：'+_dgEsc(s.formSrc)+'</span>'):'<span style="color:var(--mut)">缺近期战绩</span>');
+  x+=li('大小球均值', s.ou!=null?(s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → 取 0.25 档 <b>'+s.ouLine+'</b> 球'):'不可算');
+  x+=li('③ 交锋净胜差', s.hh?('统一到当前主队视角，均值 <b>'+(s.s3>=0?'+':'')+s.s3.toFixed(3)+'</b> 球（正=主队占优）'):'—');
+  x+=li('④ 近期净胜差之差', (s.fh&&s.fa)?('主净胜 '+(s.fh.diff>=0?'+':'')+s.fh.diff.toFixed(3)+' − 客净胜 '+(s.fa.diff>=0?'+':'')+s.fa.diff.toFixed(3)+' = <b>'+(s.s4>=0?'+':'')+s.s4.toFixed(3)+'</b>'):'—');
+  x+=li('盘口均值', s.hc!=null?(s.hcHow+' = <b>'+(s.hc>=0?'+':'')+s.hc.toFixed(3)+'</b> → 取 0.25 档 <b>'+(s.hcLine>0?'主让 '+s.hcLine:(s.hcLine<0?'客让 '+Math.abs(s.hcLine):'平手'))+'</b>'):'不可算');
+  x+=li('⑤ 与实盘对照', '大小球 '+(v.realOU!=null?v.realOU:'—')+' vs '+s.ouLine+'；让球 '+(v.realHc!=null?v.realHc:'—')+' vs '+s.hcLine+' → '+(v.abnN?('<b style="color:var(--red)">'+v.abnN+' 项异常（|Δ|≥0.5）</b>'):'未见异常'));
+  x+='<div style="font-weight:800;margin:8px 0 5px">💰 乙 · 返还抽水换算（官方 vs 外围）</div>';
+  if(v.zone==='jc'&&v.A&&v.B){
+    x+=li('官方 '+_dgEsc(v.off.src), _dgFmtO(v.off.o)+' → 倒数和 '+(v.A.sum*100).toFixed(1)+'%，抽水 <b>'+v.A.over.toFixed(2)+'%</b>');
+    x+=li('外围 '+_dgEsc(v.out.src), _dgFmtO(v.out.o)+' → 倒数和 '+(v.B.sum*100).toFixed(1)+'%，抽水 <b>'+v.B.over.toFixed(2)+'%</b>');
+    x+=li('抽水差 Δ', '<b style="color:'+(v.rawGate?'var(--red)':'var(--grn)')+'">'+(v.delta>=0?'+':'')+v.delta.toFixed(2)+'pt</b>（文档原始门 ±6pt → '+(v.rawGate?'异常':'正常')+'，<b>仅展示</b>）'+(r.dev!=null?('；本批中位 '+(_dgMed()||0).toFixed(1)+'pt → <b style="color:'+(v.overGate?'var(--red)':'var(--grn)')+'">去基差偏离 '+(r.dev>=0?'+':'')+r.dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(v.overGate?'异常':'正常')+'）'):''));
+    x+=li('逐项隐含偏差', ['主胜','平局','客胜'].map((n,i)=>n+' '+(v.per[i]>=0?'+':'')+v.per[i].toFixed(1)).join(' · ')+' pt');
+  } else x+=li('不适用','无官方 SP（野鸡区），缺官方端，不虚构抽水差');
+  if(v.zone==='wild'){
+    x+='<div style="font-weight:800;margin:8px 0 5px">🔍 野鸡区替代判据（扩展应用，非原文）</div>';
+    x+=li('外围公司抽水离散', v.spread?(v.spread.n+' 家：'+v.spread.list.map(c=>_dgEsc(c.k)+' '+c.over.toFixed(1)+'%').join('、')+' → 极差 <b>'+v.spread.spread.toFixed(1)+'pt</b>'):'公司不足 2 家');
+    x+=li('初→临隐含漂移', v.drift?(v.drift.d.map((d,i)=>['主','平','客'][i]+' '+(d>=0?'+':'')+d.toFixed(1)).join(' · ')+' pt（最大 '+v.drift.side+'）'):'缺初盘或临盘欧赔');
+  }
+  x+='<div style="font-weight:800;margin:8px 0 5px">🧾 判档依据</div>';
+  x+=v.why.map(w=>'<div style="padding:1px 0">· '+w+'</div>').join('');
+  if(v.acts.length) x+='<div style="margin-top:4px;color:#f59e0b">触发：'+v.acts.map(_dgEsc).join('；')+'</div>';
+  x+='<div style="margin-top:5px"><b style="color:'+v.col+'">'+v.tier+'</b> · '+_dgEsc(v.act)+'</div>';
+  x+='</div>';
+  return x;
+}
+function _dgMed(){ return (window._dgState||{}).med; }
+function _dgRowHTML(r){
+  const v=r.v, s=v.sim;
+  const zoneBadge = v.zone==='jc'
+    ? '<span style="font-size:9px;color:#0d9488;border:1px solid #0d9488;border-radius:3px;padding:0 3px">'+(v.off.src.indexOf('竞彩')>=0?'竞彩':'北单')+'</span>'
+    : '<span style="font-size:9px;color:#8b98a9;border:1px solid #8b98a9;border-radius:3px;padding:0 3px">野鸡</span>';
+  let money = v.zone==='jc'
+    ? ('<td style="white-space:nowrap;font-size:10.5px">'+_dgFmtO(v.off&&v.off.o)+'<br><span style="color:var(--mut);font-size:9px">'+_dgEsc(v.off&&v.off.src)+'</span></td>'
+      +'<td style="white-space:nowrap;font-size:10.5px">'+_dgFmtO(v.out&&v.out.o)+'<br><span style="color:var(--mut);font-size:9px">'+_dgEsc(v.out&&v.out.src)+'</span></td>'
+      +'<td style="white-space:nowrap"><b style="color:'+(v.overGate?'var(--red)':'var(--grn)')+'">'+(v.delta!=null?(v.delta>=0?'+':'')+v.delta.toFixed(1)+'pt':'—')+'</b>'+(r.dev!=null?'<br><span style="font-size:9px;color:var(--mut)">判档偏离 '+(r.dev>=0?'+':'')+r.dev.toFixed(1)+'</span>':'')+'</td>'
+      +'<td style="white-space:nowrap;font-size:10.5px">'+(v.maxPer?('<b style="color:'+(Math.abs(v.maxPer.v)>=6?'var(--red)':'inherit')+'">'+v.maxPer.side+' '+(v.maxPer.v>=0?'+':'')+v.maxPer.v.toFixed(1)+'pt</b>'):'—')+'</td>')
+    : ('<td style="white-space:nowrap;font-size:10.5px">'+_dgFmtO(v.out&&v.out.o)+'<br><span style="color:var(--mut);font-size:9px">'+_dgEsc(v.out&&v.out.src)+'</span></td>'
+      +'<td style="white-space:nowrap;font-size:10.5px">'+(v.spread?('<b style="color:'+(v.spread.spread>=4?'var(--red)':'inherit')+'">'+v.spread.spread.toFixed(1)+'pt</b><br><span style="color:var(--mut);font-size:9px">'+v.spread.n+' 家</span>'):'—')+'</td>'
+      +'<td style="white-space:nowrap;font-size:10.5px">'+(v.drift?(v.drift.side+' '+(v.drift.max>=0?'+':'')+v.drift.max.toFixed(1)+'pt'):'—')+'</td>'
+      +'<td style="font-size:9.5px;color:var(--mut)">模拟盘置信<br>'+(s.conf>=2?'高':'偏低')+'</td>');
+  return '<tr style="border-top:1px solid var(--line)">'
+    + '<td style="padding:5px 6px;white-space:nowrap;font-size:10.5px">'+_dgEsc(r.day)+'<br>'+_dgEsc(r.time)+'</td>'
+    + '<td style="padding:5px 6px;min-width:150px">'+zoneBadge+' <span style="color:var(--mut);font-size:9.5px">'+_dgEsc(r.league)+'</span><br><b>'+_dgEsc(r.home)+'</b> <span style="opacity:.5">vs</span> <b>'+_dgEsc(r.away)+'</b>'
+      +(r.score?'<br><span style="font-size:9.5px;color:var(--grn)">完场 '+_dgEsc(r.score)+'</span>':'')+'</td>'
+    + money
+    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('大小球',s.ouLine,v.realOU,v.ouGap,'')+'</td>'
+    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'')+'</td>'
+    + '<td style="white-space:nowrap"><b style="color:'+v.col+'">'+v.tier+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
+    + '<td style="font-size:9.5px;color:var(--mut);max-width:180px">'+(v.acts.length?_dgEsc(v.acts.slice(0,2).join('；')):'—')+'</td>'
+    + '<td style="white-space:nowrap"><a onclick="_dgToggle(\''+_dgEsc(r.tid)+'\');return false" style="cursor:pointer;color:var(--acc);font-size:10px">五步算式 ▾</a></td>'
+    + '</tr>'
+    + '<tr id="dgd_'+_dgEsc(r.tid)+'" style="display:none"><td colspan="11" style="padding:6px 10px"></td></tr>';
+}
+/* 明细按需生成：首屏不渲染几百段隐藏 HTML */
+function _dgToggle(tid){
+  const el=document.getElementById('dgd_'+tid);
+  if(!el) return;
+  if(el.style.display==='none'){
+    if(!el.dataset.filled){
+      const r=(window._dgState.rows||[]).find(x=>String(x.tid)===String(tid));
+      el.firstElementChild.innerHTML = r ? _dgDetailHTML(r) : '<span style="color:var(--mut)">未找到该场</span>';
+      el.dataset.filled='1';
+    }
+    el.style.display='table-row';
+  } else el.style.display='none';
+}
+function _dgDayOpts(){
+  const st=window._dgState||{}; const days=[...new Set((st.rows||[]).map(r=>r.day).filter(Boolean))].sort();
+  let h='<select id="dgDay" onchange="_dgReRender()" style="font-size:11px;padding:2px 5px;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:5px">';
+  h+='<option value="all"'+(st.day==='all'?' selected':'')+'>全部日期</option>';
+  for(const d of days) h+='<option value="'+_dgEsc(d)+'"'+(st.day===d?' selected':'')+'>'+_dgEsc(d)+'</option>';
+  return h+'</select>';
+}
+function _dgSelects(){
+  const st=window._dgState||{};
+  const sel=(id,val,opts)=>'<select id="'+id+'" onchange="_dgReRender()" style="font-size:11px;padding:2px 5px;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:5px">'
+    +opts.map(o=>'<option value="'+o[0]+'"'+(val===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';
+  return sel('dgState',st.state||'live',[['live','未开赛'],['done','已完场'],['all','全部状态']])
+    +' '+sel('dgSort',st.sort||'risk',[['risk','按风险'],['time','按开赛'],['delta','按|抽水差|']]);
+}
+function _dgRender(){
+  const st=window._dgState||{}; if(!st.rows) return;
+  const zone=st.zone||'jc';
+  let list=st.rows.filter(r=>r.v.zone===zone);
+  if(st.day&&st.day!=='all') list=list.filter(r=>r.day===st.day);
+  if((st.state||'live')==='live') list=list.filter(r=>r.state!=='-1');
+  else if(st.state==='done') list=list.filter(r=>r.state==='-1');
+  if(st.sort==='delta') list.sort((a,b)=>Math.abs(b.v.dev!=null?b.v.dev:(b.v.delta||0))-Math.abs(a.v.dev!=null?a.v.dev:(a.v.delta||0)));
+  else if(st.sort==='time') list.sort((a,b)=>String(a.ts||a.day+a.time).localeCompare(String(b.ts||b.day+b.time)));
+  else { const rank=t=>t.indexOf('放弃')>=0?0:t.indexOf('谨慎')>=0?1:t.indexOf('仅观察')>=0?2:t.indexOf('不足')>=0?3:4;
+    list.sort((a,b)=>rank(a.v.tier)-rank(b.v.tier)||String(a.ts||'').localeCompare(String(b.ts||''))); }
+  const capped=list.slice(0,200);
+  const tb=document.getElementById('dgTbody');
+  if(tb) tb.innerHTML=capped.length?capped.map(_dgRowHTML).join('')
+    :'<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--mut)">该筛选下没有可分析场次（竞彩北单区需官方 SP；野鸡区需外围赔率 + 近期战绩/真实盘）</td></tr>';
+  const cnt=document.getElementById('dgCount');
+  if(cnt){ const nAbn=list.filter(r=>r.v.tier.indexOf('放弃')>=0).length, nWarn=list.filter(r=>r.v.tier.indexOf('谨慎')>=0).length;
+    cnt.innerHTML='本区 <b>'+list.length+'</b> 场（显示 '+capped.length+'）· 放弃 <b style="color:var(--red)">'+nAbn+'</b> · 谨慎 <b style="color:#f59e0b">'+nWarn+'</b>'; }
+  try{ document.querySelectorAll('#dgModal .dgtab').forEach(b=>b.classList.toggle('on',b.getAttribute('data-z')===zone)); }catch(e){}
+  const md=document.getElementById('dgMed');
+  if(md&&st.med!=null) md.textContent='本批竞彩北单区抽水差中位 '+st.med.toFixed(1)+'pt（n='+st.nDelta+'）：官方源与外围存在结构性基差，判档用「Δ − 中位」的偏离套 6pt 门，文档原始 Δ 仅作展示对照。';
+}
+function _dgZone(z){ window._dgState.zone=z; _dgRender(); }
+function _dgReadFilters(){
+  const st=window._dgState||{};
+  const g=id=>{const e=document.getElementById(id);return e?e.value:null;};
+  st.day=g('dgDay')||'all'; st.state=g('dgState')||'live'; st.sort=g('dgSort')||'risk';
+}
+function _dgReRender(){ _dgReadFilters(); _dgRender(); }
+function _dgReviewHTML(st){
+  const done=st.rows.filter(r=>r.state==='-1'&&r.score&&r.v.zone==='jc'&&r.v.out);
+  if(done.length<5) return '<div style="font-size:10.5px;color:var(--mut);margin-top:8px">历史回测：当前数据里可核对的已完场竞彩北单场不足 5 场，不报比率。</div>';
+  const hit=(r)=>{ const [h,a]=r.score.split(':').map(Number); const side=h>a?0:(h===a?1:2); return side; };
+  let trapN=0,trapHit=0,normN=0,normHit=0;
+  for(const r of done){
+    const A=r.v.A,B=r.v.B,side=hit(r);
+    const fav=B?B.p.indexOf(Math.max.apply(null,B.p)):1;
+    const ok=(side===fav);
+    if(r.v.tier.indexOf('放弃')>=0){trapN++;if(ok)trapHit++;} else {normN++;if(ok)normHit++;}
+  }
+  const pct=(a,b)=>b?(a/b*100).toFixed(1)+'% ('+a+'/'+b+')':'—';
+  return '<details style="margin-top:9px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--card2)">'
+    +'<summary style="cursor:pointer;font-size:11px;font-weight:700">📅 历史回测（已完场 '+done.length+' 场，检验「外围热门侧是否打出」）</summary>'
+    +'<div style="font-size:10.5px;line-height:1.8;color:var(--txt);margin-top:5px">'
+    +'判「放弃/谨慎」场外围热门侧打出：<b>'+pct(trapHit,trapN)+'</b>　｜　判正常盘场：<b>'+pct(normHit,normN)+'</b><br>'
+    +'<span style="color:var(--mut)">⚠ 这是<b>历史回测</b>，不是赛前登记业绩：判档用的是完场后仍可见的赔率，无赛前冻结样本，不能当命中率/ROI 宣传；样本 n 小、±SE≈100/√n，跨 0 属噪声。</span></div></details>';
+}
+function openDg(){
+  const built=_dgBuildRows();
+  window._dgState={rows:built.rows,med:built.med,nDelta:built.nDelta,zone:'jc',day:'all',state:'live',sort:'risk'};
+  const html=
+    '<div class="modal show" id="dgModal" style="display:flex;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:12px">'
+  + '<div style="background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:12px;max-width:1440px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+  + '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line)">'
+  +   '<b>🧭 解说帝哥 · 模拟盘 × 返还抽水换算（竞彩北单 / 野鸡区）</b>'
+  +   '<button onclick="closeDg()" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:2px 10px;cursor:pointer">✕</button></div>'
+  + '<div style="padding:11px 14px">'
+  + '<div style="background:rgba(13,148,136,.09);border:1px solid rgba(13,148,136,.4);border-radius:8px;padding:9px 11px;margin-bottom:9px;font-size:11px;line-height:1.75;color:var(--txt)">'
+  +  '<b style="color:#0d9488">甲 · 模拟盘</b>：交锋场均造球 ① 与 近期主客造球 ② 折半 → 大小球线；交锋净胜差 ③ 与 近期净胜差之差 ④ 折半 → 让球盘（正=主让）。两者取 0.25 档后与真实开盘对照，|Δ|≥0.5 球记异常。<br>'
+  +  '<b style="color:#0d9488">乙 · 返还抽水换算</b>：Σ(1/官方SP) − Σ(1/外围SP) 的百分点差，<b>±6pt</b> 为正常盘门；逐项隐含偏差 <b>≥6pt</b> 判该侧「形成热门、难正常打出」。教程原例：竞彩 112% vs 外围 104%（差 8pt），客胜 65% vs 58%（差 7pt）→ 小心客胜。<br>'
+  +  '<b style="color:var(--yel)">★ 去基差（灵活应用）</b>：实测本批官方 SP 抽水<b>系统性低于外围约 6~7pt</b>（北单/竞彩返还口径不同），直接套原始 6pt 门会把一半场次误判成诱盘。故<b>判档用「Δ − 本批中位」的偏离套 6pt 门</b>，原始 Δ 与文档门结论同时逐场展示、不隐藏；中位数与样本数见本框底部。中位仅为本批横截面统计，未做样本外验证，不宣称任何命中率。<br>'
+  +  '<b style="color:var(--red)">原文笔误已修正</b>：第三步 1.4−1.2 应为 <b>+0.2</b>（原文记 −0.2），只有按 (+0.2 − 0.6)/2 = −0.2 才能得出它自己的结论「客让 0.25」；第五步「−0.2+−0.6=0.4÷2」同样不成立。本模块用正确代入式，明细卡逐步摊开原始数据。<br>'
+  +  '<b>分区</b>：<b>竞彩北单区</b>=有竞彩 had / 北单官方七玩法 SP，甲乙全跑；<b style="color:#8b98a9">非竞彩北单区（野鸡区）</b>=无官方 SP，乙缺官方端<b>明确不适用</b>，改跑甲 + 外围多公司抽水离散 + 初→临漂移，只给观察/谨慎，不冒充可下注结论。<br>'
+  +  '<b style="color:#0d9488">数据口径（重要）</b>：第②步用 <b>7m 逐场真实赛果算的每队最近 10 场</b>（'+(function(){const q=window.__TEAM_RECENT10_META__||{};return q.span?q.span.join(' ~ '):'加载中'})()+'，非滚动更新），队名查不到才回退「全历史主/客场场均」并把异常门从 0.5 放宽到 1.0 球；交锋 <b>&lt;3 场不进公式</b>（防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
+  +  '<b style="color:var(--red)">两道防脏数据闸</b>：官方与外围热门侧不一致 / 单侧偏差≥20pt / 抽水差≥15pt → 判「<b>数据错配·不判</b>」，不拿跨场或让球行混入的配对出结论；野鸡区模拟盘与外围盘的偏离<b>只作对照、不单独触发判档</b>（无官方盘可校验）。<br>'
+  +  '<span style="color:var(--mut)">数据源：竞彩官方 had · 北京体彩网七玩法 XML · 澳客北单 SP · Bet365/欧赔 · 7m 交锋+近期真值库。每 15 分钟随 CVM 刷新；点「五步算式」逐项核对每一步原始数据。</span>'
+  +  '<div id="dgMed" style="margin-top:4px;color:var(--mut);font-size:10px"></div>'
+  + '</div>'
+  + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;margin-bottom:8px;color:var(--txt)">'
+  +   '<div class="htab-bar" style="margin:0">'
+  +     '<button class="htab-btn on dgtab" data-z="jc" onclick="_dgZone(\'jc\')">🏛 竞彩北单区</button>'
+  +     '<button class="htab-btn dgtab" data-z="wild" onclick="_dgZone(\'wild\')">🦆 非竞彩北单 · 野鸡区</button>'
+  +   '</div>'
+  +   '<span id="dgCount" style="margin-left:4px"></span>'
+  +   '<span style="margin-left:auto;white-space:nowrap">📅 '+_dgDayOpts()+' '+_dgSelects()+'</span>'
+  + '</div>'
+  + '<div style="overflow:auto"><table style="min-width:1520px;font-size:11px;color:var(--txt)"><thead><tr style="background:var(--card2)">'
+  +  '<th>开赛</th><th>联赛 · 对阵</th><th>官方 SP 胜/平/负</th><th>外围 胜/平/负</th><th>抽水差 Δ</th><th>逐项 / 公司离散</th><th>模拟大小球 → 实盘</th><th>模拟让球 → 实盘</th><th>判档</th><th>触发项</th><th>明细</th>'
+  + '</tr></thead><tbody id="dgTbody"></tbody></table></div>'
+  + _dgReviewHTML(window._dgState)
+  + '</div></div></div>';
+  let host=document.getElementById('dgModal'); if(host&&host.parentNode) host.parentNode.removeChild(host);
+  const wrap=document.createElement('div'); wrap.innerHTML=html; document.body.appendChild(wrap.firstChild);
+  const el=document.getElementById('dgModal');
+  if(el) el.addEventListener('click',e=>{ if(e.target.id==='dgModal') closeDg(); });
+  _dgRender();
+}
+function closeDg(){ const m=document.getElementById('dgModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
+/* 按钮：动态挂到「看板板块」栏，零改外壳 index.html */
+function _dgMountBtn(n){
+  try{
+    const tbr=document.querySelector('.tbr');
+    if(!tbr){ if((n||0)<25) setTimeout(()=>_dgMountBtn((n||0)+1),400); return; }
+    if(document.getElementById('btnDg')) return;
+    const b=document.createElement('button'); b.className='sec'; b.id='btnDg';
+    b.style.cssText='color:#0d9488;border-color:#0d9488;font-weight:700';
+    b.title='🧭 解说帝哥：模拟盘（交锋+近10场造球/净胜 → 大小球线·让球盘）与返还抽水换算（官方SP vs 外围，6pt 门 + 单侧过热）。分「竞彩北单区」与「非竞彩北单·野鸡区」，后者无官方盘、只观察。';
+    b.textContent='🧭 解说帝哥'; b.onclick=openDg; tbr.appendChild(b);
+  }catch(e){ console.warn('解说帝哥按钮注入失败',e&&e.message); }
+}
+document.addEventListener('DOMContentLoaded',function(){ setTimeout(()=>_dgMountBtn(0),1400); });
+/* H2H_MAP / TEAM_RECENT10 延迟注入完成后，若模块开着则按真值重算 */
+function _dgOnDataReady(){
+  try{ const m=document.getElementById('dgModal'); if(m&&m.classList.contains('show')) openDg(); }catch(e){}
+}
+window.addEventListener('h2h-ready',_dgOnDataReady);
+window.addEventListener('recent10-ready',_dgOnDataReady);
