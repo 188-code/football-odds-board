@@ -17785,17 +17785,25 @@ document.addEventListener('DOMContentLoaded', function(){
  *   ④ 近期盘口值 = 主队净胜差 − 客队净胜差          e.g. 0 − 0.6 = −0.6
  *      盘口均值 = (③+④)/2 = −0.2 → 客让 0.25
  *   ⑤ 与真实开盘（大小球线 / 亚盘让球）对照，异常则放弃。
- *   ★ 原文笔误已按数学修正：③ 写成「-0.2」、⑤ 写成「-0.2+-0.6=0.4÷2=0.2」，
- *     但只有 ③=+0.2、(③+④)/2=−0.2 才能得到它自己的结论「客让 -0.25」。
- *     本模块一律用正确代入式，并在明细卡里把每一步的原始数据摊开供核对。
+ *   ★ 原文两处符号抄写问题（2026-11-11 二轮校读更正）：表2 ③ 格「1.4−1.2 | -0.2」
+ *     应为 +0.2；「历史+近期÷2」那格写成「-0.2+-0.6=0.4÷2=0.2」，符号丢失。
+ *     但同一行结果栏写的是「负-0.2」、第五步结论「客让 -0.25」都自洽：
+ *     ③=+0.2 时 (+0.2−0.6)/2 = −0.2，落 0.25 档即 −0.25。
+ *     → 是中间算式抄错，不是结论错（旧注释误称「⑤ 不成立」，已改）。
+ *   ★ 表1 定义行④写「两项相加」，表2 例题写「两项相减」并算出 −0.6：文档自相矛盾，
+ *     本模块按能复现结论的「相减」实现，页面已标注。
+ *   ★ 表2 第五步「2.5（开盘不能低于2.5、也不能高于2.5）」把模拟大小球锚定 2.5；
+ *     本模块保留连续量化值（0.25 档）以便与实盘比较，属有意偏离，页面已标注。
  *
  * 【乙】返还抽水换算法：
  *   官方（竞彩/北单）1X2 赔率倒数求和 − 1 = 官方抽水值；外围（365/欧赔）同理。
- *   两者差 ≤ 6pt = 正常盘口；> 6pt = 大热 / 诱盘 / 假盘可能。
+ *   两者差 ≤ 6pt = 正常盘口；> 6pt = 大热 / 诱盘 / 假盘可能（原文只定义正向 Δ）。
  *   逐项再比：某侧「官方隐含 − 外围隐含」≥ 6pt（原例客胜 65% vs 58% 差 7pt）
- *   → 该侧形成热门、难以正常打出。结合模拟盘，异常则建议放弃。
- *   ★ 灵活应用：官方 SP 与外围的 overround 存在结构性基差（本批中位数见页头），
- *     故另外给「相对本批中位数的偏离」作为**展示对照**，不参与判档（未经样本外验证）。
+ *   → 官方端更热的该侧难以正常打出；负向（官方更冷）原文未定义，不判热门。
+ *   结合模拟盘，异常则建议放弃（原文未给「模拟线 vs 实盘差多少算异常」的数值门）。
+ *   ★ 灵活应用（偏离原文，页面标出）：官方 SP 与外围 overround 存在源级结构性基差，
+ *     判档改用「Δ − 同官方源组本批中位」的偏离套 6pt 门，原始 Δ 与文档门结论只作展示。
+ *   ★ 6pt 门原文只对「竞彩 vs 一家外围」标定；套到北单 SP 属外推（已按源分组去基差）。
  *
  * 【分区】竞彩北单区 = 有官方 SP（竞彩 had / 北单官方七玩法），可完整跑【甲】+【乙】；
  *         非竞彩北单区（野鸡区）= 无官方 SP，只有外围盘 →【乙】不适用（明确标注），
@@ -18025,21 +18033,31 @@ function _dgVerdict(m, opt){
   const realHc=_dgFirstNum(an.grade_hcap_a, an.a0, an.p1);
   const ouGap=(sim.ouLine!=null&&realOU!=null)?realOU-sim.ouLine:null;
   const hcGap=(sim.hcLine!=null&&realHc!=null)?realHc-sim.hcLine:null;
-  // 门随数据口径走：真近10场用文档 0.5 球；回退「全历史场均」口径粗，放宽到 1.0 球
+  // 门随数据口径走：真近10场 0.5 球 / 回退「全历史场均」口径粗放宽 1.0 球。
+  // ★ 这两个数值是本模块自定，原文只说「分析数据有异常则建议放弃」，从未给阈值；页面已标注。
   const gate=sim.formRecent?0.5:1.0;
   const ouAbn=(ouGap!=null&&Math.abs(ouGap)>=gate), hcAbn=(hcGap!=null&&Math.abs(hcGap)>=gate);
   const abnN=(ouAbn?1:0)+(hcAbn?1:0);
-  let A=null,B=null,delta=null,per=null,hotSide=null,maxPer=null;
+  let A=null,B=null,delta=null,per=null,hotSide=null,maxPer=null,hotPer=null,favPer=null;
   if(off&&out){ A=_dgOver(off.o); B=_dgOver(out.o);
     if(A&&B){ delta=A.over-B.over; per=A.p.map((p,i)=>(p-B.p[i])*100);
       let ix=0; for(let i=1;i<3;i++) if(Math.abs(per[i])>Math.abs(per[ix])) ix=i;
-      maxPer={v:per[ix],side:['主胜','平局','客胜'][ix],ix};
-      if(Math.abs(per[ix])>=6) hotSide=maxPer.side; } }
+      maxPer={v:per[ix],side:['主胜','平局','客胜'][ix],ix};   // 绝对最大：只用于「数据错配」检测，不判热门
+      // ★ 2026-11-11 二轮校读修正：文档原义是「官方端更热」的一侧才叫形成热门
+      //   （竞彩客胜 65% > 外围 58% = +7pt）。旧版用 Math.abs，官方比外围更冷 7pt
+      //   也会误报「该侧形成热门」，方向反了。逐项判热门只认正向偏差。
+      let hx=-1; for(let i=0;i<3;i++) if(per[i]>0 && (hx<0||per[i]>per[hx])) hx=i;
+      if(hx>=0){ hotPer={v:per[hx],side:['主胜','平局','客胜'][hx],ix:hx}; if(per[hx]>=6) hotSide=hotPer.side; }
+      // 外围最热侧在官方端被推高多少（文档例题：客胜 58% → 65%，+7pt）
+      const fi=B.p.indexOf(Math.max.apply(null,B.p));
+      favPer={v:per[fi],side:['主胜','平局','客胜'][fi],ix:fi};
+    } }
   // ★ 去结构性基差：官方 SP 与外围 SP 的 overround 往往存在稳定的源级差（实测本批约 -6.7pt），
   //   直接套文档「>6pt=异常」会把一半场次误判为诱盘。判档用「Δ − 本批中位」的偏离，
-  //   文档原始 Δ 与其 ±6pt 结论同时展示，绝不藏起来。
+  //   文档原始 Δ 与其「>6pt 判异常」的单侧结论同时展示，绝不藏起来。
   const dev=(med!=null&&delta!=null)?(delta-med):null;
-  const rawGate=(delta!=null&&Math.abs(delta)>6);
+  const rawGate=(delta!=null&&delta>6);                    // 文档原义：单侧 Δ>6 判异常
+  const rawGateSym=(delta!=null&&Math.abs(delta)>6);       // 本模块对称化，仅作展示对照
   const overGate=(dev!=null?Math.abs(dev):Math.abs(delta||0))>6;
   // 数据源错配闸门：两端热门侧不一致 / 单侧偏差≥20pt / 去基差后抽水差≥15pt → 「不判」
   let mismatch=false;
@@ -18063,12 +18081,13 @@ function _dgVerdict(m, opt){
     }
     else {
       if(delta!=null){
-        why.push('官方抽水 '+A.over.toFixed(1)+'% − 外围 '+B.over.toFixed(1)+'% = <b>Δ '+(delta>=0?'+':'')+delta.toFixed(1)+'pt</b>（文档原始门 ±6pt → '+(rawGate?'异常':'正常')+'）'
+        why.push('官方抽水 '+A.over.toFixed(1)+'% − 外围 '+B.over.toFixed(1)+'% = <b>Δ '+(delta>=0?'+':'')+delta.toFixed(1)+'pt</b>（原文单侧门 Δ&gt;6pt → '+(rawGate?'异常':'正常')+'；本模块对称 |Δ|&gt;6pt → '+(rawGateSym?'异常':'正常')+'，仅展示）'
           +(dev!=null?('；「'+_dgEsc(opt.medSrc||'同组')+'」本批中位 '+med.toFixed(1)+'pt（n='+(opt.medN||0)+(opt.medFallback?'，样本不足已退回全局':'')+'）→ <b>去基差偏离 '+(dev>=0?'+':'')+dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(overGate?'异常':'正常')+'）'):''));
         if(overGate) acts.push('去基差抽水差超 6pt');
       }
-      if(maxPer){ why.push('逐项最大偏差：<b>'+maxPer.side+' '+(maxPer.v>=0?'+':'')+maxPer.v.toFixed(1)+'pt</b>（官方 '+ (A.p[maxPer.ix]*100).toFixed(0) +'% vs 外围 '+(B.p[maxPer.ix]*100).toFixed(0)+'%）');
-        if(Math.abs(maxPer.v)>=6) acts.push(maxPer.side+'形成热门、恐难正常打出'); }
+      if(favPer) why.push('外围最热侧对照：<b>'+favPer.side+' '+(favPer.v>=0?'+':'')+favPer.v.toFixed(1)+'pt</b>（官方 '+(A.p[favPer.ix]*100).toFixed(0)+'% vs 外围 '+(B.p[favPer.ix]*100).toFixed(0)+'%；文档例题即客胜 65% vs 58% = +7pt）');
+      if(maxPer) why.push('逐项绝对最大偏差：<b>'+maxPer.side+' '+(maxPer.v>=0?'+':'')+maxPer.v.toFixed(1)+'pt</b>（仅作数据错配检测，负向=官方端更冷，<b>不判形成热门</b>）');
+      if(hotPer&&hotPer.v>=6) acts.push(hotPer.side+'官方端更热 +'+hotPer.v.toFixed(1)+'pt，恐难正常打出');
       if(ouAbn) acts.push('大小球实盘 '+realOU+' vs 模拟 '+sim.ouLine+'（差 '+(ouGap>=0?'+':'')+ouGap.toFixed(2)+'）');
       if(hcAbn) acts.push('让球实盘 '+realHc+' vs 模拟 '+sim.hcLine+'（差 '+(hcGap>=0?'+':'')+hcGap.toFixed(2)+'）');
       const trap=overGate&&hotSide;
@@ -18092,7 +18111,7 @@ function _dgVerdict(m, opt){
   if(sim.conf<2) why.push('<span style="color:var(--mut)">模拟盘置信偏低：交锋 '+ (sim.hhAll?sim.hhAll.n:0) +' 场 / 近期主 '+(sim.fh?sim.fh.n:0)+'·客 '+(sim.fa?sim.fa.n:0)+' 场</span>');
   why.push('<span style="color:var(--mut)">近期数据源：'+_dgEsc(sim.formSrc)+'；异常门 |Δ|≥'+gate+' 球</span>');
   return {m,zone,sim,off,out,A,B,delta,dev,med,medSrc:opt.medSrc||'',medN:opt.medN||0,medFallback:!!opt.medFallback,
-          rawGate,overGate,per,maxPer,hotSide,spread,drift,formRecent:sim.formRecent,
+          rawGate,rawGateSym,overGate,per,maxPer,hotPer,favPer,hotSide,spread,drift,formRecent:sim.formRecent,
           realOU,realHc,ouGap,hcGap,ouAbn,hcAbn,abnN,gate,tier,col,act,why,acts};
 }
 
@@ -18176,8 +18195,9 @@ function _dgDetailHTML(r){
   if(v.zone==='jc'&&v.A&&v.B){
     x+=li('官方 '+_dgEsc(v.off.src), _dgFmtO(v.off.o)+' → 倒数和 '+(v.A.sum*100).toFixed(1)+'%，抽水 <b>'+v.A.over.toFixed(2)+'%</b>');
     x+=li('外围 '+_dgEsc(v.out.src), _dgFmtO(v.out.o)+' → 倒数和 '+(v.B.sum*100).toFixed(1)+'%，抽水 <b>'+v.B.over.toFixed(2)+'%</b>');
-    x+=li('抽水差 Δ', '<b style="color:'+(v.rawGate?'var(--red)':'var(--grn)')+'">'+(v.delta>=0?'+':'')+v.delta.toFixed(2)+'pt</b>（文档原始门 ±6pt → '+(v.rawGate?'异常':'正常')+'，<b>仅展示</b>）'+(r.dev!=null?('；「'+_dgEsc(v.medSrc||'同组')+'」中位 '+(v.med!=null?v.med.toFixed(1):'—')+'pt（n='+(v.medN||0)+(v.medFallback?'，样本不足→全局':'')+'）→ <b style="color:'+(v.overGate?'var(--red)':'var(--grn)')+'">去基差偏离 '+(r.dev>=0?'+':'')+r.dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(v.overGate?'异常':'正常')+'）'):''));
-    x+=li('逐项隐含偏差', ['主胜','平局','客胜'].map((n,i)=>n+' '+(v.per[i]>=0?'+':'')+v.per[i].toFixed(1)).join(' · ')+' pt');
+    x+=li('抽水差 Δ', '<b style="color:'+(v.rawGate?'var(--red)':'var(--grn)')+'">'+(v.delta>=0?'+':'')+v.delta.toFixed(2)+'pt</b>（原文单侧门 Δ&gt;6pt → '+(v.rawGate?'异常':'正常')+'；本模块对称 |Δ|&gt;6pt → '+(v.rawGateSym?'异常':'正常')+'，<b>均仅展示</b>）'+(r.dev!=null?('；「'+_dgEsc(v.medSrc||'同组')+'」中位 '+(v.med!=null?v.med.toFixed(1):'—')+'pt（n='+(v.medN||0)+(v.medFallback?'，样本不足→全局':'')+'）→ <b style="color:'+(v.overGate?'var(--red)':'var(--grn)')+'">去基差偏离 '+(r.dev>=0?'+':'')+r.dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(v.overGate?'异常':'正常')+'）'):''));
+    x+=li('逐项隐含偏差（官方−外围）', ['主胜','平局','客胜'].map((n,i)=>n+' '+(v.per[i]>=0?'+':'')+v.per[i].toFixed(1)).join(' · ')+' pt'
+      +'<br><span style="color:var(--mut);font-size:9.5px">原文只把<b>正向 ≥+6pt</b>（官方端更热）判「形成热门、难打出」；负向=官方更冷，不判热门。外围最热侧：'+(v.favPer?_dgEsc(v.favPer.side)+' '+(v.favPer.v>=0?'+':'')+v.favPer.v.toFixed(1)+'pt':'—')+'</span>');
   } else x+=li('不适用','无官方 SP（野鸡区），缺官方端，不虚构抽水差');
   if(v.zone==='wild'){
     x+='<div style="font-weight:800;margin:8px 0 5px">🔍 野鸡区替代判据（扩展应用，非原文）</div>';
@@ -18201,7 +18221,10 @@ function _dgRowHTML(r){
     ? ('<td style="white-space:nowrap;font-size:10.5px">'+_dgFmtO(v.off&&v.off.o)+'<br><span style="color:var(--mut);font-size:9px">'+_dgEsc(v.off&&v.off.src)+'</span></td>'
       +'<td style="white-space:nowrap;font-size:10.5px">'+_dgFmtO(v.out&&v.out.o)+'<br><span style="color:var(--mut);font-size:9px">'+_dgEsc(v.out&&v.out.src)+'</span></td>'
       +'<td style="white-space:nowrap"><b style="color:'+(v.overGate?'var(--red)':'var(--grn)')+'">'+(v.delta!=null?(v.delta>=0?'+':'')+v.delta.toFixed(1)+'pt':'—')+'</b>'+(r.dev!=null?'<br><span style="font-size:9px;color:var(--mut)">判档偏离 '+(r.dev>=0?'+':'')+r.dev.toFixed(1)+'</span>':'')+'</td>'
-      +'<td style="white-space:nowrap;font-size:10.5px">'+(v.maxPer?('<b style="color:'+(Math.abs(v.maxPer.v)>=6?'var(--red)':'inherit')+'">'+v.maxPer.side+' '+(v.maxPer.v>=0?'+':'')+v.maxPer.v.toFixed(1)+'pt</b>'):'—')+'</td>')
+      +'<td style="white-space:nowrap;font-size:10.5px">'+(v.hotPer
+          ?('<b style="color:'+(v.hotPer.v>=6?'var(--red)':'inherit')+'">官方更热 '+v.hotPer.side+' +'+v.hotPer.v.toFixed(1)+'pt</b>'
+            +(v.maxPer&&v.maxPer.v<0?'<br><span style="color:var(--mut);font-size:9px">另有更冷侧 '+v.maxPer.v.toFixed(1)+'pt（不判热门）</span>':''))
+          :(v.maxPer?('<span style="color:var(--mut)">官方未推高任何侧<br>最大 '+v.maxPer.v.toFixed(1)+'pt</span>'):'—'))+'</td>')
     : ('<td style="white-space:nowrap;font-size:10.5px">'+_dgFmtO(v.out&&v.out.o)+'<br><span style="color:var(--mut);font-size:9px">'+_dgEsc(v.out&&v.out.src)+'</span></td>'
       +'<td style="white-space:nowrap;font-size:10.5px">'+(v.spread?('<b style="color:'+(v.spread.spread>=4?'var(--red)':'inherit')+'">'+v.spread.spread.toFixed(1)+'pt</b><br><span style="color:var(--mut);font-size:9px">'+v.spread.n+' 家</span>'):'—')+'</td>'
       +'<td style="white-space:nowrap;font-size:10.5px">'+(v.drift?(v.drift.side+' '+(v.drift.max>=0?'+':'')+v.drift.max.toFixed(1)+'pt'):'—')+'</td>'
@@ -18268,7 +18291,7 @@ function _dgRender(){
   const md=document.getElementById('dgMed');
   if(md){
     const mb=st.medBy||{}, parts=Object.keys(mb).map(k=>k+' '+(mb[k].med!=null?mb[k].med.toFixed(1):'—')+'pt (n='+mb[k].n+(mb[k].fallback?'，样本不足→全局':'')+')');
-    md.textContent='去基差中位（按官方源分组）：'+(parts.join(' ｜ ')||'—')+'；全局 '+(st.med!=null?st.med.toFixed(1):'—')+'pt (n='+st.nDelta+')。官方与外围存在源级结构性基差，判档用「Δ − 同组中位」的偏离套 6pt 门，文档原始 Δ 与 ±6pt 结论同时展示。中位仅为本批横截面统计，未做样本外验证，不宣称命中率。';
+    md.textContent='去基差中位（按官方源分组）：'+(parts.join(' ｜ ')||'—')+'；全局 '+(st.med!=null?st.med.toFixed(1):'—')+'pt (n='+st.nDelta+')。官方与外围存在源级结构性基差，判档用「Δ − 同组中位」的偏离套 6pt 门（本模块校准，非原文），文档原始 Δ 与单侧 >6pt 结论同时展示。中位仅为本批横截面统计，未做样本外验证，不宣称命中率。';
   }
 }
 function _dgZone(z){ window._dgState.zone=z; _dgRender(); }
@@ -18364,12 +18387,13 @@ function openDg(){
   +   '<button onclick="closeDg()" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:2px 10px;cursor:pointer">✕</button></div>'
   + '<div style="padding:11px 14px">'
   + '<div style="background:rgba(13,148,136,.09);border:1px solid rgba(13,148,136,.4);border-radius:8px;padding:9px 11px;margin-bottom:9px;font-size:11px;line-height:1.75;color:var(--txt)">'
-  +  '<b style="color:#0d9488">甲 · 模拟盘</b>：交锋场均造球 ① 与 近期主客造球 ② 折半 → 大小球线；交锋净胜差 ③ 与 近期净胜差之差 ④ 折半 → 让球盘（正=主让）。两者取 0.25 档后与真实开盘对照，|Δ|≥0.5 球记异常。<br>'
-  +  '<b style="color:#0d9488">乙 · 返还抽水换算</b>：Σ(1/官方SP) − Σ(1/外围SP) 的百分点差，<b>±6pt</b> 为正常盘门；逐项隐含偏差 <b>≥6pt</b> 判该侧「形成热门、难正常打出」。教程原例：竞彩 112% vs 外围 104%（差 8pt），客胜 65% vs 58%（差 7pt）→ 小心客胜。<br>'
+  +  '<b style="color:#0d9488">甲 · 模拟盘（原文算式）</b>：交锋场均造球 ① 与 近期主客造球 ② 折半 → 大小球线；交锋净胜差 ③ 与 近期净胜差之差 ④ 折半 → 让球盘（正=主让）。原文例题复算：2.6 / 2.6 → <b>2.5</b>；+0.2 / −0.6 → <b>客让 0.25</b>。<b style="color:var(--yel)">异常门 |Δ|≥0.5 / 1.0 球是本模块自定，原文只说「数据异常则放弃」、从未给数值门</b>；取 0.25 档与真实开盘对照亦属实现选择。<br>'
+  +  '<b style="color:#0d9488">乙 · 返还抽水换算（原文算式）</b>：Σ(1/官方SP) − Σ(1/外围SP) 的百分点差，原文「<b>≤6pt 正常、&gt;6pt</b> 大热/诱盘/假盘」——<b>只定义正向 Δ</b>；本模块对称化为 |Δ|&gt;6pt，属扩展，原始单侧结论同时展示。逐项按「<b>官方隐含 − 外围隐含 ≥ +6pt</b>」判该侧官方端更热、难正常打出（负向=官方更冷，<b>不判热门</b>）。教程原例：竞彩 112% vs 外围 104%（差 8pt），客胜 65% vs 58%（+7pt）→ 小心客胜。原文逐项先取整再加总，本模块用未取整倒数，差 ≤0.5pt。<br>'
   +  '<b style="color:var(--yel)">★ 去基差（灵活应用）</b>：实测本批官方 SP 抽水<b>系统性低于外围约 6~7pt</b>（北单/竞彩返还口径不同），直接套原始 6pt 门会把一半场次误判成诱盘。故<b>判档用「Δ − 同官方源组的本批中位」的偏离套 6pt 门</b>（竞彩官方 / 北单官方七玩法 / 澳客北单 SP 分组，单组 n&lt;4 退回全局并逐场标注），原始 Δ 与文档门结论同时逐场展示、不隐藏；中位数与样本数见本框底部。中位仅为本批横截面统计，未做样本外验证，不宣称任何命中率。<br>'
-  +  '<b style="color:var(--red)">原文笔误已修正</b>：第三步 1.4−1.2 应为 <b>+0.2</b>（原文记 −0.2），只有按 (+0.2 − 0.6)/2 = −0.2 才能得出它自己的结论「客让 0.25」；第五步「−0.2+−0.6=0.4÷2」同样不成立。本模块用正确代入式，明细卡逐步摊开原始数据。<br>'
+  +  '<b style="color:var(--red)">原文三处需留意（二轮逐字校读）</b>：① 表2 第三步「1.4−1.2 | −0.2」符号错，应为 <b>+0.2</b>；② 「历史盘口值+近期盘口值÷2」那格写成「−0.2+−0.6=0.4÷2=0.2」符号丢失，<b>但同一行结果栏「负-0.2」与第五步结论「客让 0.25」是自洽的</b>（(+0.2−0.6)/2=−0.2 → 落档 −0.25），错的是中间算式、不是结论（此前本页写「第五步不成立」措辞过头，已更正）；③ 表1 定义行第四步写「两项<b>相加</b>」、表2 例题写「两项<b>相减</b>」并算出 −0.6，<b>原文自相矛盾</b>，本模块按能复现结论的「相减」实现。另：原文第五步「2.5（开盘不能低于2.5、也不能高于2.5）」把模拟大小球<b>锚定 2.5</b>，本模块保留连续 0.25 档量化值以便与实盘比较，属有意偏离。<br>'
   +  '<b>分区</b>：<b>竞彩北单区</b>=有竞彩 had / 北单官方七玩法 SP，甲乙全跑；<b style="color:#8b98a9">非竞彩北单区（野鸡区）</b>=无官方 SP，乙缺官方端<b>明确不适用</b>，改跑甲 + 外围多公司抽水离散 + 初→临漂移，只给观察/谨慎，不冒充可下注结论。<br>'
-  +  '<b style="color:#0d9488">数据口径（重要）</b>：第②步用 <b>7m 逐场真实赛果算的每队最近 10 场</b>（'+(function(){const q=window.__TEAM_RECENT10_META__||{};return q.span?q.span.join(' ~ '):'加载中'})()+'，非滚动更新），队名查不到、或该队 7m 近况不足 5 场，才按回退口径并把异常门从 0.5 放宽到 1.0 球；交锋 <b>&lt;2 场不进公式</b>（原文取 10 场，7m 库多数对阵只有 1~2 场，n=1 只作展示、n≥2 才进公式且置信另记，防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
+  +  '<b style="color:#0d9488">数据口径（重要）</b>：第②步用 <b>7m 逐场真实赛果算的每队最近 10 场</b>（'+(function(){const q=window.__TEAM_RECENT10_META__||{};return q.span?q.span.join(' ~ '):'加载中'})()+'，非滚动更新），队名查不到、或该队 7m 近况不足 5 场，才按回退口径并把<b>自定</b>异常门从 0.5 放宽到 1.0 球；交锋 <b>&lt;2 场不进公式</b>（原文取 10 场，7m 库多数对阵只有 1~2 场，n=1 只作展示、n≥2 才进公式且置信另记，防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
+  +  '<b style="color:var(--yel)">哪些是原文、哪些不是（不混为一谈）</b>：<b>原文只有两块</b>——五步模拟盘 + 返还抽水换算，外加「如分析数据有异常，则建议放弃」。「竞彩北单 / 野鸡区」<b>分区是按用户要求加的，原文没有</b>；野鸡区的「外围多公司抽水离散 + 初→临漂移」、两道防脏数据闸、逐项热门方向符号、0.5/1.0 球门、去基差判档，<b>均为本模块自研/校准，不是原文公式</b>。原文的 6pt 门是拿<b>竞彩 vs 一家外围</b>（截图为「独赢」一家 4.48/4.15/1.71）标定的，本模块外围优先 Bet365、其次欧赔汇总（口径已变），套到<b>北单 SP 属外推</b>，虽按官方源分组去基差缓解，仍未经样本外验证。<br>'
   +  '<b style="color:var(--red)">两道防脏数据闸</b>：官方与外围热门侧不一致 / 单侧偏差≥20pt / 抽水差≥15pt → 判「<b>数据错配·不判</b>」，不拿跨场或让球行混入的配对出结论；野鸡区模拟盘与外围盘的偏离<b>只作对照、不单独触发判档</b>（无官方盘可校验）。<br>'
   +  '<span style="color:var(--mut)">数据源：竞彩官方 had · 北京体彩网七玩法 XML · 澳客北单 SP · Bet365/欧赔 · 7m 交锋+近期真值库。每 15 分钟随 CVM 刷新；点「五步算式」逐项核对每一步原始数据。</span>'
   +  _dgDataStatusHTML(built)
