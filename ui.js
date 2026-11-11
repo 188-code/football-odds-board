@@ -9551,6 +9551,21 @@ function _bfPick(m){
       vH += lu.votes.H; vA += lu.votes.A; vD += lu.votes.D;
       why.push('阵容票 H'+lu.votes.H+':A'+lu.votes.A+':D'+lu.votes.D+'·'+lu.goalLean);
     }
+    /* ⑥ 2026-11-11 北京体彩网官方七玩法交叉票（总进球/半全场/上下单双/胜负过关/比分/下半场比分）。
+       数据每轮随 CVM 刷新；未匹配到北单场次的比赛完全不参与，不编造。 */
+    const bo = _bdOfficialForMatch(m);
+    let offBf=null, offJqs=null, pOver=null;
+    if (bo && bo.pools){
+      offBf = _bdOffNorm(bo.pools.bf);
+      offJqs = _bdOffNorm(bo.pools.jqs);
+      const sx = _bdOffNorm(bo.pools.sxp);
+      if (Object.keys(sx).length) pOver = (sx['上单']||0) + (sx['上双']||0);
+      const sp = _bdOffNorm(bo.pools.bdSpf);
+      const w = sp['3']||0, l = sp['0']||0;
+      if (w - l >= 18){ vH+=1; why.push('官方胜平负隐含主优'+(w-l).toFixed(0)+'pt+1'); }
+      else if (l - w >= 18){ vA+=1; why.push('官方胜平负隐含客优'+(l-w).toFixed(0)+'pt+1'); }
+      else why.push('官方七玩法·奖期'+(bo.draw||'—')+'（七玩法已接入，胜平负无方向票）');
+    }
     /* 定方向：票差≥2 才出，否则五五开 */
     let dir='—';
     if (vH>=vA+2 && vH>=vD+1) dir='H';
@@ -9585,6 +9600,17 @@ function _bfPick(m){
         else if (Math.abs(hs-as)===1){ mult *= 1.03; tags.push('五五开1球差×1.03'); }
       }
       if (consOk && top3im.some(x=>x.score===c.score)){ mult *= 1.15; tags.push('共识档×1.15'); }
+      /* 官方七玩法交叉：官方波胆隐含、上下盘（≥3球）、总进球分项，温和不叠加过度 */
+      if (offBf && offBf[c.score] >= 9){ mult *= 1.10; tags.push('官方波胆'+offBf[c.score].toFixed(0)+'%×1.10'); }
+      if (pOver != null){
+        const g = hs + as;
+        if (g >= 3 && pOver >= 58){ mult *= 1.06; tags.push('官方上盘'+pOver.toFixed(0)+'%×1.06'); }
+        else if (g <= 2 && pOver <= 42){ mult *= 1.06; tags.push('官方下盘'+(100-pOver).toFixed(0)+'%×1.06'); }
+      }
+      if (offJqs){
+        const g = hs + as, key = g >= 7 ? '7+' : String(g), pj = offJqs[key] || 0;
+        if (pj >= 26){ mult *= 1.08; tags.push('官方总进球'+key+' '+pj.toFixed(0)+'%×1.08'); }
+      }
       /* 阵容情报：≤2球小比分 / ≥4球大比分温和加权（幅度封顶，见 lineupIntel 规则） */
       if (lu && lu.have){
         const g = hs + as;
@@ -9602,6 +9628,8 @@ function _bfPick(m){
       tags:c.tags||[], tier: i===0?'精选':'优选'
     }));
     return { dir, dirTxt, tally:'H'+vH+':A'+vA+':D'+vD, why, picks, hc,
+      official: bo ? { draw:bo.draw, no:bo.no, state:bo.state, pOver:pOver,
+                       topBf: _bdTop(bo.pools && bo.pools.bf, 3) } : null,
       lineup: (lu && lu.have) ? { brief:lu.brief, why:lu.why, goalLean:lu.goalLean, confirmed:lu.confirmed } : null };
   }catch(e){ return null; }
 }
@@ -9707,12 +9735,13 @@ function openBifen(){
     + '<div style="background:rgba(224,165,38,.10);border:1px solid rgba(224,165,38,.45);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.8;color:var(--txt)">'
     + '<b style="color:var(--yel)">⚠ 波胆选择引擎（对照·监测性质，非稳胆）</b>：基底=Dixon-Coles 模型比分概率，经<b>三板块+临盘动态投票</b>加权调整后排序出<b>精选波胆（第1）/优选波胆（第2~3）</b>：<br>'
     + '<b style="color:var(--blu)">📈 想先看"波胆到底算不算得准"</b>：右上「📅 日期」选 <b>有赛果历史复盘（' + (((window.__BIFEN_REVIEW__||{}).all||{}).total||0) + ' 场）</b> —— 用 D盘全量复盘表的<b>真实波胆赔率 vs 真实赛果</b>逐场对账（市场最热命中/前3覆盖/押前3 ROI，按竞彩·北单分源）。<br>'
-    + '<b>投票构成</b>：①优选精选板块模型方向 ±2（t1 终局再+1）②深让盘强队侧 +1（≥1.25 盘再倾斜净胜≥2球）③三盘资金过热 netPt≥4 顺过热方 +1（铁律：不机械反买）④上盘水位票（v2 标定口径）⑤临盘升盘挺主/降盘挺客 +1。票差≥2 才定方向，否则「五五开」倾斜平局/1球小比分。<br>'
+    + '<b>投票构成</b>：①优选精选板块模型方向 ±2（t1 终局再+1）②深让盘强队侧 +1（≥1.25 盘再倾斜净胜≥2球）③三盘资金过热 netPt≥4 顺过热方 +1（铁律：不机械反买）④上盘水位票（v2 标定口径）⑤临盘升盘挺主/降盘挺客 +1⑥<b style="color:var(--blu)">北京体彩网官方七玩法</b>（胜平负隐含主客差≥18pt 投 1 票；官方波胆≥9%、上下盘≥58%/≤42%、总进球≥26% 温和加权）。票差≥2 才定方向，否则「五五开」倾斜平局/1球小比分。<br>'
     + '<b>市场</b>=北单 bf 优先、竞彩 crs 兜底（赔率归一隐含概率）作对照；<b>365</b>=365/欧赔临盘 1X2 隐含第三源参照。<b>档</b>=场次分级（破缺口/三盘过热/盘级差/深让盘四线索，≥3精选场、2优选场）。<br>'
     + '<b style="color:var(--red)">⚠ 诚实底线</b>：单场比分命中天花板本来就低——115 场账本校准：模型 Top3 覆盖 26.1%、Top10 覆盖 59.1%，故精选波胆是「调整后概率最高的一个」而非稳胆；竞彩与北单"最热比分"定价方向相反（竞彩 +12.6pt 低估 n=27 未定论 / 北单 −2.9pt 高估），旧「最热陷阱 −15.8pt」系混源伪影已作废。'
     + '<b>复盘口径</b>（仿三盘资金过热板）：赛前冻结的方向+精选/优选比分 vs 赛果，三口径（方向✓/精选✓/3球覆盖✓）。'
     + '<span style="color:var(--mut)">（投票与选择随 CVM 每 15 分钟一帧刷新，开赛定格后供复盘）</span>'
     + bifenCalibHTML()
+    + bifenOfficialHTML()
     + '</div>'
     + '<div id="bifenStats" style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:var(--txt);align-items:center">'
     + statsHTML
@@ -9747,6 +9776,71 @@ function bifenTier(t){
   if (tb) tb.innerHTML = list.length ? list.map(bifenRowHTML).join('')
     : '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">该档位当前无场次</td></tr>';
   try{ document.querySelectorAll('#bifenModal .bftab').forEach(b=> b.classList.toggle('on', b.getAttribute('data-t')===t)); }catch(e){}
+}
+/* ★ 2026-11-11 北京体彩网官方「北单七大玩法」即时SP（每轮随 CVM 刷新）。
+   此前云端只接了澳客的胜平负 + 25 项比分，总进球/半全场/上下单双/胜负过关/
+   下半场比分五个玩法完全没有；这里把官方七个 tab 的 XML 全量注入并展示。 */
+function _bdOffNorm(o){
+  const p = {}, arr = []; let s = 0;
+  if (!o) return p;
+  for (const k in o){ const v = +o[k]; if (isFinite(v) && v > 1){ arr.push([k, v]); s += 1 / v; } }
+  if (s > 0) for (const [k, v] of arr) p[k] = (1 / v) / s * 100;
+  return p;
+}
+function _bdTop(o, n){
+  const p = _bdOffNorm(o);
+  return Object.entries(p).sort((a, b) => b[1] - a[1]).slice(0, n || 3)
+    .map(([k, v]) => k + ' <b>' + v.toFixed(0) + '%</b>').join(' · ') || '<span style="color:var(--mut)">—</span>';
+}
+function _bdSp(o, keys){
+  if (!o) return '<span style="color:var(--mut)">—</span>';
+  return keys.map(k => (o[k] != null && isFinite(+o[k]) && +o[k] > 0) ? (+o[k]).toFixed(2) : '—').join(' / ');
+}
+function _bdOfficialForMatch(m){
+  const ob = window.__BD_OFFICIAL__;
+  if (!ob || !ob.matches) return null;
+  let b = null;
+  try { b = (typeof _bdBfForMatch === 'function') ? _bdBfForMatch(m) : null; } catch(e){}
+  if (b && b.no != null){ const r = ob.matches[String(b.no)]; if (r) return r; }
+  try {
+    const h = String((m.home && (m.home.zh || m.home.name)) || m.home || '').replace(/\s/g, '');
+    const a = String((m.away && (m.away.zh || m.away.name)) || m.away || '').replace(/\s/g, '');
+    if (h && a) for (const k in ob.matches){
+      const r = ob.matches[k];
+      const H = String(r.host || ''), A = String(r.guest || '');
+      if (H && A && (H.indexOf(h) >= 0 || h.indexOf(H) >= 0) && (A.indexOf(a) >= 0 || a.indexOf(A) >= 0)) return r;
+    }
+  } catch(e){}
+  return null;
+}
+function bifenOfficialHTML(){
+  const ob = window.__BD_OFFICIAL__;
+  if (!ob || !ob.matches) return '';
+  const nos = Object.keys(ob.matches).sort((a, b) => (+a) - (+b));
+  let tr = '';
+  for (const no of nos){
+    const r = ob.matches[no], p = r.pools || {};
+    const xb = p.xbf ? _bdTop(p.xbf, 3) : '<span style="color:var(--mut)">未开售</span>';
+    tr += '<tr style="border-top:1px solid var(--line)">'
+      + '<td style="padding:4px 6px;white-space:nowrap">' + no + '</td>'
+      + '<td style="padding:4px 6px;white-space:nowrap">' + (r.league || '') + '<br>' + (r.host || '') + ' vs ' + (r.guest || '') + '</td>'
+      + '<td style="padding:4px 6px;white-space:nowrap">' + (r.state || '') + '</td>'
+      + '<td style="padding:4px 6px">' + _bdSp(p.bdSpf, ['3', '1', '0']) + '</td>'
+      + '<td style="padding:4px 6px">' + _bdTop(p.jqs, 3) + '</td>'
+      + '<td style="padding:4px 6px">' + _bdTop(p.bqc, 3) + '</td>'
+      + '<td style="padding:4px 6px">' + _bdSp(p.sxp, ['上单', '上双', '下单', '下双']) + '</td>'
+      + '<td style="padding:4px 6px">' + _bdSp(p.sfgg, ['胜', '负']) + (p.sfgg && p.sfgg.handicap != null ? '<br><span style="color:var(--mut)">让' + p.sfgg.handicap + '</span>' : '') + '</td>'
+      + '<td style="padding:4px 6px">' + _bdTop(p.bf, 3) + '</td>'
+      + '<td style="padding:4px 6px">' + xb + '</td>'
+      + '</tr>';
+  }
+  return '<details open style="margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--card2)">'
+    + '<summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--txt)">🏛 北京体彩网官方 · 北单七大玩法即时SP（奖期 ' + (ob.draw || '—') + ' · 足球 ' + nos.length + ' 场 · 源 ' + (ob.source || '') + '）</summary>'
+    + '<div style="font-size:10.5px;color:var(--mut);margin:6px 0;line-height:1.6">七个 tab 全采：胜平负 / 单场比分 / 总进球数 / 半全场胜平负 / 上下盘单双数 / 胜负过关 / 下半场比分。'
+    + '胜平负·上下单双·胜负过关列显示<b>即时SP原始值</b>；总进球·半全场·比分列显示<b>归一隐含概率 Top3</b>。下半场比分只在官方开售场次有值（本期 ' + (ob.stat && ob.stat.xbf || 0) + ' 场）。</div>'
+    + '<div style="max-height:300px;overflow:auto"><table style="min-width:1180px;font-size:10.5px;color:var(--txt)"><thead><tr style="background:var(--card)">'
+    + '<th>编号</th><th>对阵</th><th>状态</th><th>胜平负 3/1/0 SP</th><th>总进球 Top3</th><th>半全场 Top3</th><th>上单/上双/下单/下双 SP</th><th>过关 胜/负 SP</th><th>单场比分 Top3</th><th>下半场比分 Top3</th>'
+    + '</tr></thead><tbody>' + tr + '</tbody></table></div></details>';
 }
 function bifenCalibHTML(){
   try{
