@@ -18453,6 +18453,33 @@ function _dgDetailHTML(r){
   return x;
 }
 function _dgMed(){ return (window._dgState||{}).med; }
+function _dgOpinion(r){
+  const v=r.v, s=v.sim, esc=_dgEsc;
+  const abbr=t=>{ if(/放弃/.test(t)) return '放弃'; if(/谨慎/.test(t)) return '谨慎'; if(/错配/.test(t)) return '不判'; if(/观察/.test(t)) return '观察'; if(/正常/.test(t)) return '正常'; if(/不足/.test(t)) return '数据不足'; return t.replace(/^[⚠✔◦]\s*/,''); };
+  const segs=[];
+  const a=v.acts||[];
+  const reason=a.length?a.map(esc).join('；'):(v.act&&v.act!=='—'?esc(v.act):'各项未见异常');
+  segs.push('<b style="color:'+v.col+'">'+abbr(v.tier)+'</b>：'+reason);
+  if(s){
+    if(s.simComplete){
+      const seg=[];
+      if(s.ouLine!=null) seg.push('大小球'+s.ouLine+'→实盘'+(v.realOU!=null?v.realOU:'?'));
+      if(s.hcLine!=null) seg.push('让球'+(s.hcLine>0?'主让'+s.hcLine:(s.hcLine<0?'客让'+Math.abs(s.hcLine):'平手'))+'→实盘'+(v.realHc!=null?v.realHc:'?'));
+      segs.push((seg.join('、')||'缺模拟线')+(v.abnN?('，'+v.abnN+'项异常'):'，吻合'));
+    } else segs.push('模拟盘不成立（'+(s.simWhy?esc(s.simWhy):'缺步')+'）');
+  }
+  if(r.score && /^\d+\s*:\s*\d+$/.test(String(r.score))){
+    const q=String(r.score).split(':').map(Number), B=v.B;
+    let cons='';
+    if(/放弃|谨慎/.test(v.tier) && B && Array.isArray(B.p)){
+      const fav=B.p.indexOf(Math.max.apply(null,B.p));
+      const side=q[0]>q[1]?0:(q[0]===q[1]?1:2);
+      cons=(side===fav)?' <span style="color:var(--red)">（热门侧打出·诱盘未成立）</span>':' <span style="color:var(--grn)">（热门侧未打出·与判档一致）</span>';
+    }
+    segs.push('完场 <b>'+esc(r.score)+'</b>'+cons);
+  }
+  return segs.join(' ｜ ');
+}
 function _dgRowHTML(r){
   const v=r.v, s=v.sim;
   const zoneBadge = v.zone==='jc'
@@ -18480,9 +18507,10 @@ function _dgRowHTML(r){
     + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'',!s.simComplete)+'</td>'
     + '<td style="white-space:nowrap"><b style="color:'+v.col+'">'+v.tier+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
     + '<td style="font-size:9.5px;color:var(--mut);max-width:180px">'+(v.acts.length?_dgEsc(v.acts.slice(0,2).join('；')):'—')+'</td>'
+    + '<td style="font-size:10px;line-height:1.5;max-width:320px;color:var(--txt)">'+_dgOpinion(r)+'</td>'
     + '<td style="white-space:nowrap"><a onclick="_dgToggle(\''+_dgEsc(r.tid)+'\');return false" style="cursor:pointer;color:var(--acc);font-size:10px">五步算式 ▾</a></td>'
     + '</tr>'
-    + '<tr id="dgd_'+_dgEsc(r.tid)+'" style="display:none"><td colspan="12" style="padding:6px 10px"></td></tr>';
+    + '<tr id="dgd_'+_dgEsc(r.tid)+'" style="display:none"><td colspan="13" style="padding:6px 10px"></td></tr>';
 }
 /* 明细按需生成：首屏不渲染几百段隐藏 HTML */
 function _dgToggle(tid){
@@ -18525,7 +18553,7 @@ function _dgRender(){
   const capped=list.slice(0,200);
   const tb=document.getElementById('dgTbody');
   if(tb) tb.innerHTML=capped.length?capped.map(_dgRowHTML).join('')
-    :'<tr><td colspan="12" style="padding:20px;text-align:center;color:var(--mut)">该筛选下没有可分析场次（竞彩北单区需官方 SP；野鸡区需外围赔率 + 近期战绩/真实盘）</td></tr>';
+    :'<tr><td colspan="13" style="padding:20px;text-align:center;color:var(--mut)">该筛选下没有可分析场次（竞彩北单区需官方 SP；野鸡区需外围赔率 + 近期战绩/真实盘）</td></tr>';
   const cnt=document.getElementById('dgCount');
   if(cnt){ const nAbn=list.filter(r=>r.v.tier.indexOf('放弃')>=0).length, nWarn=list.filter(r=>r.v.tier.indexOf('谨慎')>=0).length;
     cnt.innerHTML='本区 <b>'+list.length+'</b> 场（显示 '+capped.length+(list.length>capped.length?'，请用日期筛选缩小范围':'')+'）· 放弃 <b style="color:var(--red)">'+nAbn+'</b> · 谨慎 <b style="color:#f59e0b">'+nWarn+'</b>'; }
@@ -18545,12 +18573,19 @@ function _dgReadFilters(){
 function _dgReRender(){ _dgReadFilters(); _dgRender(); }
 function _dgReviewHTML(st){
   const rows=st.rows||[];
+  const esc=_dgEsc;
   const done=rows.filter(r=>r.state==='-1'&&/^\d+\s*:\s*\d+$/.test(String(r.score||'')));
   const pct=(a,b)=>b?(a/b*100).toFixed(1)+'% ('+a+'/'+b+')':'—';
   const se=n=>n?(100/Math.sqrt(n)).toFixed(1):'—';
-  const esc=_dgEsc;
-  /* 甲 · 模拟盘第⑤步：模拟大小球线 / 真实盘线，对真实总进球的误差（同一子集比较） */
-  let nOU=0,nBoth=0,sumSim=0,sumSimBoth=0,sumReal=0,sumGap=0,simWin=0;
+  /* 判档吻合率：放弃/谨慎档＝外围热门侧未打出率；非警示档未触发警示即算吻合（仅作背景） */
+  const favAvoid=g=>{ let n=0,favN=0,hit=0;
+    for(const r of g){ const q=String(r.score).split(':').map(Number), B=r.v.B; n++;
+      if(/放弃|谨慎/.test(r.v.tier)){ if(B&&Array.isArray(B.p)){ favN++;
+        const fav=B.p.indexOf(Math.max.apply(null,B.p)); const side=q[0]>q[1]?0:(q[0]===q[1]?1:2); if(side!==fav) hit++; } }
+      else hit++; }
+    return {n,favN,hit,rate:favN?hit/favN*100:null}; };
+  /* 甲 · 模拟盘第⑤步 MAE（仅五步齐全） */
+  let nOU=0,sumSim=0,nBoth=0,sumSimBoth=0,sumReal=0,sumGap=0,simWin=0;
   for(const r of done){
     const q=String(r.score).split(':').map(Number), tg=q[0]+q[1];
     if(!r.v.sim||!r.v.sim.simComplete) continue;   // 五步不齐 → 模拟盘不成立，不进误差复盘
@@ -18561,47 +18596,87 @@ function _dgReviewHTML(st){
       sumSimBoth+=eS; sumReal+=eR; sumGap+=Math.abs(sl-rl); if(eS<=eR) simWin++; }
   }
   const simE=nBoth?sumSimBoth/nBoth:null, realE=nBoth?sumReal/nBoth:null;
-  /* 乙 · 判档 vs 外围热门侧是否打出：两区判据不同，必须分开设表，不许合并报「总命中率」 */
-  const stat=list=>{
-    let n=0,hit=0;
-    for(const r of list){
-      const q=String(r.score).split(':').map(Number), B=r.v.B;
-      if(!B||!Array.isArray(B.p)) continue;
-      const side=q[0]>q[1]?0:(q[0]===q[1]?1:2);
-      const fav=B.p.indexOf(Math.max.apply(null,B.p));
-      n++; if(side===fav) hit++;
-    }
-    return {n:n,txt:n>=5?pct(hit,n):'样本 n='+n+' &lt;5，不报比率',se:n>=5?('±'+se(n)+'pt'):'—'};
-  };
-  const grp=[
-    {name:'竞彩北单区（抽水换算判档）',list:done.filter(r=>r.v.zone==='jc')},
-    {name:'野鸡区（公司离散/漂移判档）',list:done.filter(r=>r.v.zone==='wild')}
+  const jc=done.filter(r=>r.v.zone==='jc'), wild=done.filter(r=>r.v.zone==='wild');
+  /* 全样本判档分布 */
+  const dist={}; for(const r of rows){ const t=r.v.tier; dist[t]=(dist[t]||0)+1; }
+  const distStr=Object.keys(dist).map(t=>esc(t)+' '+dist[t]).join(' · ');
+  const Tiers=[
+    {re:/放弃/,label:'⚠ 放弃',col:'var(--red)',note:'分析数据异常 → 放弃'},
+    {re:/谨慎/,label:'⚠ 谨慎',col:'#f59e0b',note:'异常项未叠加 → 降仓/只观察'},
+    {re:/错配/,label:'⚠ 数据错配·不判',col:'var(--mut)',note:'两端盘口不同源，禁止下结论'},
+    {re:/正常/,label:'✔ 正常盘',col:'var(--grn)',note:'可继续跟踪'},
+    {re:/观察/,label:'◦ 仅观察',col:'var(--mut)',note:'野鸡区无官方判据'},
+    {re:/不足/,label:'数据不足',col:'var(--mut)',note:'缺外围赔率'}
   ];
-  let tb='';
-  for(const g of grp){
-    const a=stat(g.list.filter(r=>/放弃|谨慎/.test(r.v.tier))), b=stat(g.list.filter(r=>!/放弃|谨慎/.test(r.v.tier)));
-    tb+='<tr style="border-top:1px solid var(--line)"><td style="padding:3px 6px">'+esc(g.name)+'</td>'
-      +'<td style="padding:3px 6px"><b>'+a.txt+'</b> <span style="color:var(--mut)">'+a.se+'</span></td>'
-      +'<td style="padding:3px 6px"><b>'+b.txt+'</b> <span style="color:var(--mut)">'+b.se+'</span></td>'
-      +'<td style="padding:3px 6px;color:var(--mut)">'+g.list.length+' 场</td></tr>';
+  let html='<details style="margin-top:9px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--card2)">'
+    +'<summary style="cursor:pointer;font-size:11px;font-weight:700">📅 历史回测 · 综合意见（已完场 '+done.length+' 场｜竞彩北单区 '+jc.length+' · 野鸡区 '+wild.length+'）</summary>'
+    +'<div style="font-size:10.5px;line-height:1.8;color:var(--txt);margin-top:5px">';
+  /* 一 · 总览 */
+  html+='<div style="font-weight:800;margin:6px 0 3px">一 · 总览</div>';
+  html+='已完场 <b>'+done.length+'</b> 场（竞彩北单区 '+jc.length+' · 野鸡区 '+wild.length+'）。全样本判档分布：'+distStr+'。<br>';
+  html+='甲·模拟盘第⑤步：仅统计五步齐全、模拟盘真正成立的完场场（缺 ①③ 交锋真值已排除，不拿单步外推凑样本）。可算 '+nOU+' 场，模拟大小球线对真实总进球 MAE <b>'+(nOU?(sumSim/nOU).toFixed(2):'—')+'</b> 球；'
+    +'同时有真实大小球盘的 '+nBoth+' 场，模拟线 <b>'+(simE!=null?simE.toFixed(2):'—')+'</b> vs 真实盘线 <b>'+(realE!=null?realE.toFixed(2):'—')+'</b> 球，'
+    +'两线均距 <b>'+(nBoth?(sumGap/nBoth).toFixed(2):'—')+'</b> 球，模拟线更贴近赛果 '+pct(simWin,nBoth)+'。<br>';
+  html+='<span style="color:var(--mut)">⚠ 参照「三盘资金过热复盘」格式：本模块是<b>观察/判档</b>而非下注系统，故「命中率/ROI」以<b>判档吻合率</b>对应（放弃/谨慎档＝外围热门侧未打出率）。这是<b>历史回测</b>，判档用完场后仍可见赔率，<b>无赛前冻结登记样本</b>，不称业绩；任一档 n&lt;5 只报读数不报率，差异跨 0 视为噪声。</span>';
+  /* 二 · 按判档方向复盘表 */
+  html+='<div style="font-weight:800;margin:9px 0 3px">二 · 按判档方向复盘（对应三盘过热「方向 / 下注 / 命中 / ROI / SE / 结论」）</div>';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:10.5px;margin:3px 0"><thead><tr style="background:var(--card2)">'
+    +'<th style="text-align:left;padding:3px 6px">判档方向</th><th style="text-align:left;padding:3px 6px">完场</th><th style="text-align:left;padding:3px 6px">判档吻合率(命中)</th><th style="text-align:left;padding:3px 6px">SE</th><th style="text-align:left;padding:3px 6px">结论</th></tr></thead><tbody>';
+  for(const T of Tiers){
+    const g=done.filter(r=>T.re.test(r.v.tier)); if(!g.length) continue;
+    const fa=favAvoid(g); let rate,seTxt,conc;
+    if(/放弃|谨慎/.test(T.label)){
+      if(fa.favN>0){ rate='<b>'+pct(fa.hit,fa.favN)+'</b>'; seTxt='±'+se(fa.favN)+'pt';
+        conc = fa.hit/fa.favN>=0.6 ? '<b style="color:var(--grn)">警示有效</b>：多数场次热门侧未打出'
+             : (fa.hit/fa.favN<=0.4 ? '<b style="color:var(--red)">警示未应验</b>：热门侧多打出' : '警示部分应验'); }
+      else { rate='无外围SP对照'; seTxt='—'; conc='本档无可用外围热门侧，无法核验'; }
+    } else { rate='—（非警示档）'; seTxt='—';
+      if(/错配/.test(T.label)) conc='不判档，无方向结论';
+      else if(/观察/.test(T.label)) conc='野鸡区默认观察，无官方判据';
+      else conc='本档无异常项，跟踪即可'; }
+    html+='<tr style="border-top:1px solid var(--line)"><td style="padding:3px 6px;color:'+T.col+'"><b>'+esc(T.label)+'</b><br><span style="color:var(--mut);font-size:9px">'+esc(T.note)+'</span></td>'
+      +'<td style="padding:3px 6px">'+g.length+'</td>'
+      +'<td style="padding:3px 6px">'+rate+'</td>'
+      +'<td style="padding:3px 6px;color:var(--mut)">'+seTxt+'</td>'
+      +'<td style="padding:3px 6px;color:var(--mut)">'+conc+'</td></tr>';
   }
-  const verdict=nBoth<5?'样本不足，不下结论'
-    :(simE<=realE?'本批模拟线略贴近赛果，但未做样本外检验，不构成 alpha，不加仓'
-                 :'本批模拟线未优于真实盘线，只作背景对照，不据此下注');
-  return '<details style="margin-top:9px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--card2)">'
-    +'<summary style="cursor:pointer;font-size:11px;font-weight:700">📅 历史回测 · 综合意见（已完场 '+done.length+' 场｜模拟盘第⑤步 + 判档对照）</summary>'
-    +'<div style="font-size:10.5px;line-height:1.8;color:var(--txt);margin-top:5px">'
-    +'<b>甲 · 模拟盘第⑤步</b>：<b>只统计五步齐全、模拟盘真正成立的完场场</b>（缺 ①③ 交锋真值的场次已排除，不拿单步外推值凑样本）。可算完场 '+nOU+' 场，模拟线对真实总进球平均绝对误差 <b>'+(nOU?(sumSim/nOU).toFixed(2):'—')+'</b> 球；'
-    +'其中同时有真实大小球盘的 '+nBoth+' 场（同一子集）：模拟线 <b>'+(simE!=null?simE.toFixed(2):'—')+'</b> 球 vs 真实盘线 <b>'+(realE!=null?realE.toFixed(2):'—')+'</b> 球，'
-    +'两线平均相距 <b>'+(nBoth?(sumGap/nBoth).toFixed(2):'—')+'</b> 球，模拟线更贴近赛果 '+pct(simWin,nBoth)+'。→ <b>'+verdict+'</b>。<br>'
-    +'<b>乙 · 判档 vs 外围热门侧是否打出</b>（教程断言「诱盘场热门难打出」）：'
-    +'<table style="width:100%;border-collapse:collapse;font-size:10.5px;margin:4px 0"><thead><tr style="background:var(--card2)">'
-    +'<th style="text-align:left;padding:3px 6px">区 / 判据</th><th style="text-align:left;padding:3px 6px">判「放弃/谨慎」热门侧打出</th>'
-    +'<th style="text-align:left;padding:3px 6px">其余判档</th><th style="text-align:left;padding:3px 6px">完场样本</th></tr></thead><tbody>'+tb+'</tbody></table>'
-    +'<span style="color:var(--mut)">⚠ 口径三条：① 这是<b>历史回测</b>，判档用的是完场后仍可见的赔率，<b>没有赛前冻结登记样本</b>，不能叫命中率/ROI 业绩；'
-    +'② ±SE 按账本口径 100/√n pt，任一档 n&lt;5 只报读数不报率，两组差异跨 0 一律视为噪声；'
-    +'③ 野鸡区无官方 SP、判据与竞彩北单区不同，<b>分开设表</b>，不合并成一个「总命中率」。</span>'
-    +'</div></details>';
+  html+='</tbody></table>';
+  /* 三 · 关键结论 */
+  html+='<div style="font-weight:800;margin:9px 0 3px">三 · 关键结论</div>';
+  const ab=done.filter(r=>/放弃/.test(r.v.tier)), wa=done.filter(r=>/谨慎/.test(r.v.tier));
+  const abF=favAvoid(ab), waF=favAvoid(wa);
+  html+='<ul style="margin:2px 0 2px 16px;padding:0;line-height:1.7">';
+  html+='<li>模拟盘第⑤步：'+(nBoth?('模拟线 MAE '+simE.toFixed(2)+' 球、真实盘线 '+realE.toFixed(2)+' 球，'+(simE<=realE?'模拟线略贴近赛果，但仅作背景对照，未做样本外检验，不构成 alpha':'模拟线未优于真实盘线，只作背景')):'缺真实盘对照样本')+'。</li>';
+  if(ab.length) html+='<li>⚠ 放弃 '+ab.length+' 场：外围热门侧未打出 '+pct(abF.hit,abF.favN)+(abF.favN?('（±'+se(abF.favN)+'pt）'):'')+'。'+(abF.favN&&abF.hit/abF.favN>=0.6?'警示有效。':'警示需更多样本验证。')+'</li>';
+  if(wa.length) html+='<li>⚠ 谨慎 '+wa.length+' 场：外围热门侧未打出 '+pct(waF.hit,waF.favN)+(waF.favN?('（±'+se(waF.favN)+'pt）'):'')+'。</li>';
+  html+='<li>口径三条不变：① 历史回测非赛前业绩；② 任一档 n&lt;5 只报读数；③ 野鸡区无官方 SP、判据与竞彩北单区不同，分开设表不合并。</li>';
+  html+='</ul>';
+  /* 四 · 逐场最终比分 */
+  html+='<div style="font-weight:800;margin:9px 0 3px">四 · 逐场最终比分（'+done.length+' 场完场）</div>';
+  if(!done.length) html+='<span style="color:var(--mut)">本批暂无已完场场次。</span>';
+  else {
+    html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;margin:3px 0"><thead><tr style="background:var(--card2)">'
+      +'<th style="text-align:left;padding:2px 5px">开赛</th><th style="text-align:left;padding:2px 5px">联赛</th><th style="text-align:left;padding:2px 5px">对阵</th><th style="text-align:left;padding:2px 5px">判档</th><th style="text-align:left;padding:2px 5px">完场比分</th><th style="text-align:left;padding:2px 5px">对照</th></tr></thead><tbody>';
+    for(const r of done.slice().sort((a,b)=>String(a.day+a.time).localeCompare(String(b.day+b.time)))){
+      const q=String(r.score).split(':').map(Number), B=r.v.B; let cons='';
+      if(/放弃|谨慎/.test(r.v.tier) && B && Array.isArray(B.p)){ const fav=B.p.indexOf(Math.max.apply(null,B.p));
+        const side=q[0]>q[1]?0:(q[0]===q[1]?1:2); cons = (side===fav)?'<span style="color:var(--red)">热门侧打出·诱盘未成立</span>':'<span style="color:var(--grn)">热门侧未打出·一致</span>'; }
+      else cons='<span style="color:var(--mut)">非警示档</span>';
+      html+='<tr style="border-top:1px solid var(--line)">'
+        +'<td style="padding:2px 5px;white-space:nowrap">'+esc(r.day)+' '+esc(r.time)+'</td>'
+        +'<td style="padding:2px 5px">'+esc(r.league)+'</td>'
+        +'<td style="padding:2px 5px"><b>'+esc(r.home)+'</b> vs <b>'+esc(r.away)+'</b></td>'
+        +'<td style="padding:2px 5px;color:'+r.v.col+'">'+esc(r.v.tier)+'</td>'
+        +'<td style="padding:2px 5px"><b style="color:var(--grn)">'+esc(r.score)+'</b></td>'
+        +'<td style="padding:2px 5px;font-size:9.5px">'+cons+'</td></tr>';
+    }
+    html+='</tbody></table></div>';
+  }
+  /* 五 · 方向口径对照 */
+  html+='<div style="font-weight:800;margin:9px 0 3px">五 · 方向口径对照</div>';
+  html+='<span style="color:var(--mut)">判档方向以「异常项计数」定：去基差抽水差超 6pt + 逐项官方端更热≥6pt + 模拟盘与实盘偏离≥0.5/1.0 球，叠加 ≥2 项 → 放弃，1 项 → 谨慎，0 项 → 正常。野鸡区改用「外围公司离散≥4pt 且模拟偏离≥1 项 / 初临漂移≥8pt」判放弃·谨慎。ROI 本模块无下注口径，以判档吻合率代替；SE 按账本口径 100/√n pt（n 为该判档方向的完场样本数）。</span>';
+  html+='</div></details>';
+  return html;
 }
 /* 真值表状态条：把「本批到底有多少场用了真近10场」摆到明面上，杜绝数据缺席却口径照写 */
 function _dgBattleN(){
@@ -18665,7 +18740,7 @@ function openDg(){
   +   '<span style="margin-left:auto;white-space:nowrap">📅 '+_dgDayOpts()+' '+_dgSelects()+'</span>'
   + '</div>'
   + '<div style="overflow:auto"><table style="min-width:1520px;font-size:11px;color:var(--txt)"><thead><tr style="background:var(--card2)">'
-  +  '<th>开赛</th><th>联赛 · 对阵</th><th>官方 SP 胜/平/负</th><th>外围 胜/平/负</th><th>抽水差 Δ</th><th>逐项 / 公司离散</th><th>真逐帧动态</th><th>模拟大小球 → 实盘</th><th>模拟让球 → 实盘</th><th>判档</th><th>触发项</th><th>明细</th>'
+  +  '<th>开赛</th><th>联赛 · 对阵</th><th>官方 SP 胜/平/负</th><th>外围 胜/平/负</th><th>抽水差 Δ</th><th>逐项 / 公司离散</th><th>真逐帧动态</th><th>模拟大小球 → 实盘</th><th>模拟让球 → 实盘</th><th>判档</th><th>触发项</th><th>综合意见</th><th>明细</th>'
   + '</tr></thead><tbody id="dgTbody"></tbody></table></div>'
   + _dgReviewHTML(window._dgState)
   + '</div></div></div>';
