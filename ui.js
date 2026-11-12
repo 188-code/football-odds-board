@@ -18706,13 +18706,14 @@ function openDg(){
   const built=_dgBuildRows();
   window._dgState={rows:built.rows,med:built.med,medBy:built.medBy,nDelta:built.nDelta,zone:'jc',day:'all',state:'live',sort:'risk'};
   const html=
-    '<div class="modal show" id="dgModal" style="display:flex;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:12px">'
+    '<style>#dgModal>div{scrollbar-width:thin;scrollbar-color:rgba(13,148,136,.6) rgba(255,255,255,.05)}#dgModal>div::-webkit-scrollbar{width:13px;height:13px}#dgModal>div::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:7px}#dgModal>div::-webkit-scrollbar-thumb{background:rgba(13,148,136,.6);border-radius:7px;border:3px solid transparent;background-clip:content-box}#dgModal>div::-webkit-scrollbar-thumb:hover{background:rgba(13,148,136,.9);background-clip:content-box}#dgModal *::-webkit-scrollbar{width:11px;height:11px}#dgModal *::-webkit-scrollbar-thumb{background:rgba(255,255,255,.28);border-radius:6px}#dgModal *::-webkit-scrollbar-track{background:rgba(255,255,255,.04)}</style>'
+  + '<div class="modal show" id="dgModal" style="display:flex;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:12px">'
   + '<div style="background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:12px;max-width:1440px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
   + '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line)">'
   +   '<b>🧭 解说帝哥 · 模拟盘 × 返还抽水换算（竞彩北单 / 野鸡区）</b>'
   +   '<button onclick="closeDg()" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:2px 10px;cursor:pointer">✕</button></div>'
   + '<div style="padding:11px 14px">'
-  + '<div style="background:rgba(13,148,136,.09);border:1px solid rgba(13,148,136,.4);border-radius:8px;padding:9px 11px;margin-bottom:9px;font-size:11px;line-height:1.75;color:var(--txt)">'
+  + '<details style="background:rgba(13,148,136,.09);border:1px solid rgba(13,148,136,.4);border-radius:8px;margin-bottom:9px;font-size:11px;line-height:1.75;color:var(--txt)"><summary style="cursor:pointer;padding:9px 11px;font-weight:700;color:#0d9488">📖 判据依据与口径说明（点开）· 甲·模拟盘(五步齐全才建盘) ｜ 乙·返还抽水(Δ&gt;6pt 判热门) ｜ 野鸡区只观察</summary><div style="padding:0 11px 9px">'
   +  '<b style="color:#0d9488">甲 · 模拟盘（原文算式）</b>：交锋场均造球 ① 与 近期主客造球 ② 折半 → 大小球线；交锋净胜差 ③ 与 近期净胜差之差 ④ 折半 → 让球盘（正=主让）。原文例题复算：2.6 / 2.6 → <b>2.5</b>；+0.2 / −0.6 → <b>客让 0.25</b>。<b style="color:var(--yel)">异常门 |Δ|≥0.5 / 1.0 球是本模块自定，原文只说「数据异常则放弃」、从未给数值门</b>；取 0.25 档与真实开盘对照亦属实现选择。<b style="color:var(--yel)">★ 五步必须齐全才建盘</b>：真实批次常缺 ①③ 历史交锋真值，此时按文档「(①+②)/2、(③+④)/2」根本不成立，模块<b>不建模拟盘、不比实盘、不参与判档</b>（此前拿 ②④ 单步外推硬凑，曾产出 4.5 球大小球、主让 5.25 球这类不存在的盘口并拿去判档，已修）。<br>'
   +  '<b style="color:#0d9488">乙 · 返还抽水换算（原文算式）</b>：Σ(1/官方SP) − Σ(1/外围SP) 的百分点差，原文「<b>≤6pt 正常、&gt;6pt</b> 大热/诱盘/假盘」——<b>只定义正向 Δ</b>；本模块对称化为 |Δ|&gt;6pt，属扩展，原始单侧结论同时展示。逐项按「<b>官方隐含 − 外围隐含 ≥ +6pt</b>」判该侧官方端更热、难正常打出（负向=官方更冷，<b>不判热门</b>）。教程原例：竞彩 112% vs 外围 104%（差 8pt），客胜 65% vs 58%（+7pt）→ 小心客胜。原文逐项先取整再加总，本模块用未取整倒数，差 ≤0.5pt。<br>'
   +  '<b style="color:var(--yel)">★ 去基差（灵活应用）</b>：实测本批官方 SP 抽水<b>系统性低于外围约 6~7pt</b>（北单/竞彩返还口径不同），直接套原始 6pt 门会把一半场次误判成诱盘。故<b>判档用「Δ − 同官方源组的本批中位」的偏离套 6pt 门</b>（竞彩官方 / 北单官方七玩法 / 澳客北单 SP 分组，单组 n&lt;4 退回全局并逐场标注），原始 Δ 与文档门结论同时逐场展示、不隐藏；中位数与样本数见本框底部。中位仅为本批横截面统计，未做样本外验证，不宣称任何命中率。<br>'
@@ -18729,8 +18730,8 @@ function openDg(){
   +  '<span style="color:var(--mut)">数据源：雷速源站逐场交锋/近况（五步主源）· 7m 交锋+近期真值库（回退，止于 10-13）· 竞彩官方 had · 北京体彩网七玩法 XML · 澳客北单 SP · Bet365/欧赔 · odds_timeline 逐帧 · jc_history 逐帧。每 15 分钟随 CVM 刷新；点「五步算式」逐项核对每一步原始数据与样本数。</span>'
   +  _dgDataStatusHTML(built)
   +  '<div id="dgMed" style="margin-top:4px;color:var(--mut);font-size:10px"></div>'
-  + '</div>'
-  + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;margin-bottom:8px;color:var(--txt)">'
+  + '</div></details>'
+  + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;margin-bottom:8px;color:var(--txt);position:sticky;top:0;z-index:6;background:var(--card);padding:6px 0 7px;border-bottom:1px solid var(--line)">'
   +   '<div class="htab-bar" style="margin:0">'
   +     '<button class="htab-btn on dgtab" data-z="jc" onclick="_dgZone(\'jc\')">🏛 竞彩北单区</button>'
   +     '<button class="htab-btn dgtab" data-z="wild" onclick="_dgZone(\'wild\')">🦆 非竞彩北单 · 野鸡区</button>'
