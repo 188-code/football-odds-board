@@ -18046,9 +18046,26 @@ function _dgOfficial(m){
   if(b && Array.isArray(b.sp) && _dgOver(b.sp)) return {src:'北单(澳客) SP',o:b.sp.map(Number),no:b.no||''};
   return null;
 }
+/* ★ 2026-11-13 开赛即冻结：比赛开赛后，解说帝哥的盘口类输入锁定到赛前最后一帧 coLive，
+   不再跟随 in-play 实时赔率变动（赛前仍按数据变化实时改变）；复盘(finished)同理。
+   野鸡区公司离散 spread 也走同一冻结缓存。 */
+window.__DG_FROZEN__ = window.__DG_FROZEN__ || {};
+try{ var _dgFZ=localStorage.getItem('dgFrozen'); if(_dgFZ) window.__DG_FROZEN__=JSON.parse(_dgFZ); }catch(e){}
+function _dgStarted(m){ var g=kickoffGapMin(m); return g!=null && g<=0; }
+function _dgCoLiveFor(m){
+  var tid=String((m&&m.tid)||'');
+  var an=_dgAn(m)||{}; var live=an.coLive||null;
+  if(_dgStarted(m)){
+    if(!(tid in window.__DG_FROZEN__)) window.__DG_FROZEN__[tid]=live;  // 首次遇到即冻结（开赛后第一帧），之后不再跟随
+    return window.__DG_FROZEN__[tid] || live;
+  }
+  window.__DG_FROZEN__[tid]=live;                                // 赛前→持续刷新最后一帧（开赛瞬间定格）
+  try{ if(typeof localStorage!=='undefined') localStorage.setItem('dgFrozen', JSON.stringify(window.__DG_FROZEN__)); }catch(e){}
+  return live;
+}
 function _dgOuter(m){
   const an=_dgAn(m); if(!an) return null;
-  const cl=an.coLive||{}; const b=cl.Bet365||cl['365']||cl.bet365||null;
+  const cl=_dgCoLiveFor(m)||{}; const b=cl.Bet365||cl['365']||cl.bet365||null;
   const c=b&&(b.c||b.o);
   if(c){ const o=[+c.h,+c.d,+c.a]; if(_dgOver(o)) return {src:'Bet365 '+(b.c?'临盘':'初盘'),o:o}; }
   const o1=[+an.o1h,+an.o1d,+an.o1a]; if(_dgOver(o1)) return {src:'欧赔临盘(汇总)',o:o1};
@@ -18057,7 +18074,7 @@ function _dgOuter(m){
 }
 /* 外围多家公司抽水离散（野鸡区替代判据，属扩展应用、非原文） */
 function _dgCompanySpread(m){
-  const cl=(_dgAn(m).coLive)||{}; const arr=[];
+  const cl=_dgCoLiveFor(m)||{}; const arr=[];
   for(const k in cl){ const c=cl[k]&&(cl[k].c||cl[k].o); if(!c)continue;
     const O=_dgOver([+c.h,+c.d,+c.a]); if(O) arr.push({k,over:O.over}); }
   if(arr.length<2) return null;
@@ -18492,6 +18509,7 @@ function _dgOpinion(r){
 }
 function _dgRowHTML(r){
   const v=r.v, s=v.sim;
+  const locked=_dgStarted(r.v.m);
   const zoneBadge = v.zone==='jc'
     ? '<span style="font-size:9px;color:#0d9488;border:1px solid #0d9488;border-radius:3px;padding:0 3px">'+(v.off.src.indexOf('竞彩')>=0?'竞彩':'北单')+'</span>'
     : '<span style="font-size:9px;color:#8b98a9;border:1px solid #8b98a9;border-radius:3px;padding:0 3px">野鸡</span>';
@@ -18515,7 +18533,7 @@ function _dgRowHTML(r){
     + '<td style="white-space:nowrap;font-size:10.5px" title="CVM odds_timeline 外围逐帧 + jc_history 官方 had 逐帧；无逐帧时回退开盘→临盘两点">'+_dgLiveCell(v)+'</td>'
     + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('大小球',s.ouLine,v.realOU,v.ouGap,'',!s.simComplete)+'</td>'
     + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'',!s.simComplete)+'</td>'
-    + '<td style="white-space:nowrap"><b style="color:'+v.col+'">'+v.tier+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
+    + '<td style="white-space:nowrap"><b style="color:'+v.col+'">'+v.tier+(locked?' 🔒':'')+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
     + '<td style="font-size:9.5px;color:var(--mut);max-width:180px">'+(v.acts.length?_dgEsc(v.acts.slice(0,2).join('；')):'—')+'</td>'
     + '<td style="font-size:10px;line-height:1.5;max-width:320px;color:var(--txt)">'+_dgOpinion(r)+'</td>'
     + '<td style="white-space:nowrap"><a onclick="_dgToggle(\''+_dgEsc(r.tid)+'\');return false" style="cursor:pointer;color:var(--acc);font-size:10px">五步算式 ▾</a></td>'
@@ -18704,7 +18722,7 @@ function _dgReviewHTML(st){
         +'<td style="padding:2px 5px;white-space:nowrap">'+esc(r.day)+' '+esc(r.time)+'</td>'
         +'<td style="padding:2px 5px">'+esc(r.league)+'</td>'
         +'<td style="padding:2px 5px"><b>'+esc(r.home)+'</b> vs <b>'+esc(r.away)+'</b></td>'
-        +'<td style="padding:2px 5px;color:'+r.v.col+'">'+esc(r.v.tier)+'</td>'
+        +'<td style="padding:2px 5px;color:'+r.v.col+'">'+esc(r.v.tier)+(_dgStarted(r.v.m)?' 🔒':'')+'</td>'
         +'<td style="padding:2px 5px">'+hcTxt+'</td>'
         +'<td style="padding:2px 5px">'+ouTxt+'</td>'
         +'<td style="padding:2px 5px"><b style="color:var(--grn)">'+esc(r.score)+'</b></td>'
