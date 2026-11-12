@@ -9765,7 +9765,7 @@ function openBifen(){
   if (host && host.parentNode) host.parentNode.removeChild(host);
   const wrap = document.createElement('div');
   wrap.innerHTML = html;
-  document.body.appendChild(wrap.firstChild);
+  document.body.appendChild(wrap);
   const _bm = document.getElementById('bifenModal');
   if (_bm) _bm.addEventListener('click', e=>{ if (e.target.id === 'bifenModal') closeBifen(); });
 }
@@ -18478,6 +18478,12 @@ function _dgOpinion(r){
     }
     segs.push('完场 <b>'+esc(r.score)+'</b>'+cons);
   }
+  // ★ 交叉提示：本场若挂着经样本外验证的真边信号，在「综合意见」列一并标出（与上方避雷结论并列，方便一处看全）
+  try{
+    const _sd=(typeof _structDown==='function')?_structDown(r.m&&r.m.an):null;
+    if(_sd) segs.push('<b style="color:#5fd49a">🟢结构下盘 +'+_sd.roi+'%·可下注</b>');
+    if(r.m&&r.m.plan&&r.m.plan.level==='PICK') segs.push('<b style="color:#f85149">⭐洋哥精选·可下注</b>');
+  }catch(e){}
   return segs.join(' ｜ ');
 }
 function _dgRowHTML(r){
@@ -18713,6 +18719,11 @@ function openDg(){
   +   '<b>🧭 解说帝哥 · 模拟盘 × 返还抽水换算（竞彩北单 / 野鸡区）</b>'
   +   '<button onclick="closeDg()" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:2px 10px;cursor:pointer">✕</button></div>'
   + '<div style="padding:11px 14px">'
+  + '<div style="background:linear-gradient(90deg,rgba(229,69,69,.12),rgba(13,148,136,.12));border:1px solid var(--line);border-radius:8px;padding:8px 11px;margin-bottom:9px;font-size:11px;line-height:1.7;color:var(--txt)">'
+  +  '📌 <b>本板是「避雷 / 观察板」，不是推荐下注板</b>：结论只可能是 <span style="color:var(--red);font-weight:700">放弃</span> / <span style="color:var(--yel);font-weight:700">谨慎</span> / 仅观察——这些<b>都不下注</b>。它的价值是帮你在几百场 obscure 比赛里<b>排雷（识别陷阱场、别送钱）</b>，不是出买信号。'
+  +  '<br>💡 <b>真下注边在别处</b>：① 比赛卡片上的 <span style="color:#5fd49a;font-weight:700">🟢结构下盘 +31.6%·可下注</span> 绿标（平手盘/结构下盘 edge，CVM 标定 66.3% 命中 / +31.6% ROI / 95%CI[22.7,40.5] 显著）；② <b>⭐今日优选精选 / 洋哥精选板</b> 的「最终下注方向」列（洋哥精选 24注 87.0%/+48.1%，z=3.54，唯一满足「两段同向 + n≥10 + 显著」的下注级信号）。'
+  +  '<br>🔗 当某场同时挂着结构下盘 / 洋哥精选信号时，会在下方「综合意见」列一并标出，方便一处看全。'
+  + '</div>'
   + '<details style="background:rgba(13,148,136,.09);border:1px solid rgba(13,148,136,.4);border-radius:8px;margin-bottom:9px;font-size:11px;line-height:1.75;color:var(--txt)"><summary style="cursor:pointer;padding:9px 11px;font-weight:700;color:#0d9488">📖 判据依据与口径说明（点开）· 甲·模拟盘(五步齐全才建盘) ｜ 乙·返还抽水(Δ&gt;6pt 判热门) ｜ 野鸡区只观察</summary><div style="padding:0 11px 9px">'
   +  '<b style="color:#0d9488">甲 · 模拟盘（原文算式）</b>：交锋场均造球 ① 与 近期主客造球 ② 折半 → 大小球线；交锋净胜差 ③ 与 近期净胜差之差 ④ 折半 → 让球盘（正=主让）。原文例题复算：2.6 / 2.6 → <b>2.5</b>；+0.2 / −0.6 → <b>客让 0.25</b>。<b style="color:var(--yel)">异常门 |Δ|≥0.5 / 1.0 球是本模块自定，原文只说「数据异常则放弃」、从未给数值门</b>；取 0.25 档与真实开盘对照亦属实现选择。<b style="color:var(--yel)">★ 五步必须齐全才建盘</b>：真实批次常缺 ①③ 历史交锋真值，此时按文档「(①+②)/2、(③+④)/2」根本不成立，模块<b>不建模拟盘、不比实盘、不参与判档</b>（此前拿 ②④ 单步外推硬凑，曾产出 4.5 球大小球、主让 5.25 球这类不存在的盘口并拿去判档，已修）。<br>'
   +  '<b style="color:#0d9488">乙 · 返还抽水换算（原文算式）</b>：Σ(1/官方SP) − Σ(1/外围SP) 的百分点差，原文「<b>≤6pt 正常、&gt;6pt</b> 大热/诱盘/假盘」——<b>只定义正向 Δ</b>；本模块对称化为 |Δ|&gt;6pt，属扩展，原始单侧结论同时展示。逐项按「<b>官方隐含 − 外围隐含 ≥ +6pt</b>」判该侧官方端更热、难正常打出（负向=官方更冷，<b>不判热门</b>）。教程原例：竞彩 112% vs 外围 104%（差 8pt），客胜 65% vs 58%（+7pt）→ 小心客胜。原文逐项先取整再加总，本模块用未取整倒数，差 ≤0.5pt。<br>'
@@ -18746,7 +18757,7 @@ function openDg(){
   + _dgReviewHTML(window._dgState)
   + '</div></div></div>';
   let host=document.getElementById('dgModal'); if(host&&host.parentNode) host.parentNode.removeChild(host);
-  const wrap=document.createElement('div'); wrap.innerHTML=html; document.body.appendChild(wrap.firstChild);
+  const wrap=document.createElement('div'); wrap.innerHTML=html; document.body.appendChild(wrap);
   const el=document.getElementById('dgModal');
   if(el) el.addEventListener('click',e=>{ if(e.target.id==='dgModal') closeDg(); });
   _dgRender();
