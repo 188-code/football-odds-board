@@ -18594,19 +18594,28 @@ function _dgReviewHTML(st){
         const fav=B.p.indexOf(Math.max.apply(null,B.p)); const side=q[0]>q[1]?0:(q[0]===q[1]?1:2); if(side!==fav) hit++; } }
       else hit++; }
     return {n,favN,hit,rate:favN?hit/favN*100:null}; };
-  /* 甲 · 模拟盘第⑤步 MAE（仅五步齐全） */
-  let nOU=0,sumSim=0,nBoth=0,sumSimBoth=0,sumReal=0,sumGap=0,simWin=0;
-  for(const r of done){
-    const q=String(r.score).split(':').map(Number), tg=q[0]+q[1];
-    if(!r.v.sim||!r.v.sim.simComplete) continue;   // 五步不齐 → 模拟盘不成立，不进误差复盘
-    const sl=r.v.sim.ouLine, rl=r.v.realOU;
-    if(sl==null) continue;
-    nOU++; const eS=Math.abs(tg-sl); sumSim+=eS;
-    if(rl!=null){ nBoth++; const eR=Math.abs(tg-rl);
-      sumSimBoth+=eS; sumReal+=eR; sumGap+=Math.abs(sl-rl); if(eS<=eR) simWin++; }
-  }
-  const simE=nBoth?sumSimBoth/nBoth:null, realE=nBoth?sumReal/nBoth:null;
   const jc=done.filter(r=>r.v.zone==='jc'), wild=done.filter(r=>r.v.zone==='wild');
+  /* 甲 · 模拟盘第⑤步 MAE（仅五步齐全）— 按区拆分统计，竞彩北单区/野鸡区各出各的数 */
+  const _simStats=g=>{
+    let nOU=0,sumSim=0,nBoth=0,sumSimBoth=0,sumReal=0,sumGap=0,simWin=0;
+    for(const r of g){
+      const q=String(r.score).split(':').map(Number), tg=q[0]+q[1];
+      if(!r.v.sim||!r.v.sim.simComplete) continue;   // 五步不齐 → 模拟盘不成立，不进误差复盘
+      const sl=r.v.sim.ouLine, rl=r.v.realOU;
+      if(sl==null) continue;
+      nOU++; const eS=Math.abs(tg-sl); sumSim+=eS;
+      if(rl!=null){ nBoth++; const eR=Math.abs(tg-rl);
+        sumSimBoth+=eS; sumReal+=eR; sumGap+=Math.abs(sl-rl); if(eS<=eR) simWin++; }
+    }
+    return {nOU,sumSim,nBoth,sumSimBoth,sumReal,sumGap,simWin,
+      mae:nOU?sumSim/nOU:null, se:nOU?100/Math.sqrt(nOU):null,
+      simE:nBoth?sumSimBoth/nBoth:null, realE:nBoth?sumReal/nBoth:null,
+      gapE:nBoth?sumGap/nBoth:null, winRate:nBoth?simWin/nBoth*100:null};
+  };
+  const allS=_simStats(done), jcS=_simStats(jc), wildS=_simStats(wild);
+  // 兼容下游旧变量（合并口径）
+  const nOU=allS.nOU, sumSim=allS.sumSim, nBoth=allS.nBoth, sumGap=allS.sumGap, simWin=allS.simWin;
+  const simE=allS.simE, realE=allS.realE;
   /* 全样本判档分布 */
   const dist={}; for(const r of rows){ const t=r.v.tier; dist[t]=(dist[t]||0)+1; }
   const distStr=Object.keys(dist).map(t=>esc(t)+' '+dist[t]).join(' · ');
@@ -18624,9 +18633,9 @@ function _dgReviewHTML(st){
   /* 一 · 总览 */
   html+='<div style="font-weight:800;margin:6px 0 3px">一 · 总览</div>';
   html+='已完场 <b>'+done.length+'</b> 场（竞彩北单区 '+jc.length+' · 野鸡区 '+wild.length+'）。全样本判档分布：'+distStr+'。<br>';
-  html+='甲·模拟盘第⑤步：仅统计五步齐全、模拟盘真正成立的完场场（缺 ①③ 交锋真值已排除，不拿单步外推凑样本）。可算 '+nOU+' 场，模拟大小球线对真实总进球 MAE <b>'+(nOU?(sumSim/nOU).toFixed(2):'—')+'</b> 球；'
-    +'同时有真实大小球盘的 '+nBoth+' 场，模拟线 <b>'+(simE!=null?simE.toFixed(2):'—')+'</b> vs 真实盘线 <b>'+(realE!=null?realE.toFixed(2):'—')+'</b> 球，'
-    +'两线均距 <b>'+(nBoth?(sumGap/nBoth).toFixed(2):'—')+'</b> 球，模拟线更贴近赛果 '+pct(simWin,nBoth)+'。<br>';
+  const _zS=(L,S)=>S.nOU? (L+' '+S.nOU+'场·MAE '+(S.mae!=null?S.mae.toFixed(2):'—')+(S.nBoth?('（模拟 '+S.simE.toFixed(2)+' vs 真实 '+S.realE.toFixed(2)+'，均距 '+S.gapE.toFixed(2)+'，'+pct(S.simWin,S.nBoth)+'更贴）'):'')) : (L+' 无五步齐全场');
+  html+='甲·模拟盘第⑤步（仅五步齐全、模拟盘真正成立的完场，缺①③交锋真值已排除）：'
+    +'全部 '+_zS('',allS)+'；<b style="color:#0d9488">竞彩北单区</b> '+_zS('',jcS)+'；<b style="color:#8b98a9">野鸡区</b> '+_zS('',wildS)+'。<br>';
   html+='<span style="color:var(--mut)">⚠ 参照「三盘资金过热复盘」格式：本模块是<b>观察/判档</b>而非下注系统，故「命中率/ROI」以<b>判档吻合率</b>对应（放弃/谨慎档＝外围热门侧未打出率）。这是<b>历史回测</b>，判档用完场后仍可见赔率，<b>无赛前冻结登记样本</b>，不称业绩；任一档 n&lt;5 只报读数不报率，差异跨 0 视为噪声。</span>';
   /* 二 · 按判档方向复盘表 */
   html+='<div style="font-weight:800;margin:9px 0 3px">二 · 按判档方向复盘（对应三盘过热「方向 / 下注 / 命中 / ROI / SE / 结论」）</div>';
@@ -18655,10 +18664,17 @@ function _dgReviewHTML(st){
   html+='<div style="font-weight:800;margin:9px 0 3px">三 · 关键结论</div>';
   const ab=done.filter(r=>/放弃/.test(r.v.tier)), wa=done.filter(r=>/谨慎/.test(r.v.tier));
   const abF=favAvoid(ab), waF=favAvoid(wa);
+  const abJ=favAvoid(done.filter(r=>/放弃/.test(r.v.tier)&&r.v.zone==='jc'));
+  const abW=favAvoid(done.filter(r=>/放弃/.test(r.v.tier)&&r.v.zone==='wild'));
+  const waJ=favAvoid(done.filter(r=>/谨慎/.test(r.v.tier)&&r.v.zone==='jc'));
+  const waW=favAvoid(done.filter(r=>/谨慎/.test(r.v.tier)&&r.v.zone==='wild'));
   html+='<ul style="margin:2px 0 2px 16px;padding:0;line-height:1.7">';
-  html+='<li>模拟盘第⑤步：'+(nBoth?('模拟线 MAE '+simE.toFixed(2)+' 球、真实盘线 '+realE.toFixed(2)+' 球，'+(simE<=realE?'模拟线略贴近赛果，但仅作背景对照，未做样本外检验，不构成 alpha':'模拟线未优于真实盘线，只作背景')):'缺真实盘对照样本')+'。</li>';
-  if(ab.length) html+='<li>⚠ 放弃 '+ab.length+' 场：外围热门侧未打出 '+pct(abF.hit,abF.favN)+(abF.favN?('（±'+se(abF.favN)+'pt）'):'')+'。'+(abF.favN&&abF.hit/abF.favN>=0.6?'警示有效。':'警示需更多样本验证。')+'</li>';
-  if(wa.length) html+='<li>⚠ 谨慎 '+wa.length+' 场：外围热门侧未打出 '+pct(waF.hit,waF.favN)+(waF.favN?('（±'+se(waF.favN)+'pt）'):'')+'。</li>';
+  html+='<li>模拟盘第⑤步：'+(nBoth?('模拟线 MAE '+simE.toFixed(2)+' 球、真实盘线 '+realE.toFixed(2)+' 球，'+(simE<=realE?'模拟线略贴近赛果，但仅作背景对照，未做样本外检验，不构成 alpha':'模拟线未优于真实盘线，只作背景')):'缺真实盘对照样本')+'（竞彩北单区 '+jcS.nOU+' / 野鸡区 '+wildS.nOU+' 场五步齐全）。</li>';
+  if(ab.length) html+='<li>⚠ 放弃 '+ab.length+' 场：外围热门侧未打出 '+pct(abF.hit,abF.favN)+(abF.favN?('（±'+se(abF.favN)+'pt）'):'')
+    +' ｜ <b style="color:#0d9488">竞彩北单区</b> '+(abJ.favN?pct(abJ.hit,abJ.favN):'无对照样本')+' · <b style="color:#8b98a9">野鸡区</b> '+(abW.favN?pct(abW.hit,abW.favN):'无对照样本')+'。'
+    +(abF.favN&&abF.hit/abF.favN>=0.6?'警示有效。':'警示需更多样本验证。')+'</li>';
+  if(wa.length) html+='<li>⚠ 谨慎 '+wa.length+' 场：外围热门侧未打出 '+pct(waF.hit,waF.favN)+(waF.favN?('（±'+se(waF.favN)+'pt）'):'')
+    +' ｜ <b style="color:#0d9488">竞彩北单区</b> '+(waJ.favN?pct(waJ.hit,waJ.favN):'无对照样本')+' · <b style="color:#8b98a9">野鸡区</b> '+(waW.favN?pct(waW.hit,waW.favN):'无对照样本')+'。</li>';
   html+='<li>口径三条不变：① 历史回测非赛前业绩；② 任一档 n&lt;5 只报读数；③ 野鸡区无官方 SP、判据与竞彩北单区不同，分开设表不合并。</li>';
   html+='</ul>';
   /* 四 · 逐场最终比分 */
