@@ -18682,17 +18682,31 @@ function _dgReviewHTML(st){
   if(!done.length) html+='<span style="color:var(--mut)">本批暂无已完场场次。</span>';
   else {
     html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;margin:3px 0"><thead><tr style="background:var(--card2)">'
-      +'<th style="text-align:left;padding:2px 5px">开赛</th><th style="text-align:left;padding:2px 5px">联赛</th><th style="text-align:left;padding:2px 5px">对阵</th><th style="text-align:left;padding:2px 5px">判档</th><th style="text-align:left;padding:2px 5px">完场比分</th><th style="text-align:left;padding:2px 5px">对照</th></tr></thead><tbody>';
+      +'<th style="text-align:left;padding:2px 5px">开赛</th><th style="text-align:left;padding:2px 5px">联赛</th><th style="text-align:left;padding:2px 5px">对阵</th><th style="text-align:left;padding:2px 5px">判档</th>'
+      +'<th style="text-align:left;padding:2px 5px">模拟盘口</th><th style="text-align:left;padding:2px 5px">模拟大小球</th>'
+      +'<th style="text-align:left;padding:2px 5px">完场比分</th><th style="text-align:left;padding:2px 5px">对照</th></tr></thead><tbody>';
     for(const r of done.slice().sort((a,b)=>String(a.day+a.time).localeCompare(String(b.day+b.time)))){
       const q=String(r.score).split(':').map(Number), B=r.v.B; let cons='';
       if(/放弃|谨慎/.test(r.v.tier) && B && Array.isArray(B.p)){ const fav=B.p.indexOf(Math.max.apply(null,B.p));
         const side=q[0]>q[1]?0:(q[0]===q[1]?1:2); cons = (side===fav)?'<span style="color:var(--red)">热门侧打出·诱盘未成立</span>':'<span style="color:var(--grn)">热门侧未打出·一致</span>'; }
       else cons='<span style="color:var(--mut)">非警示档</span>';
+      /* 模拟盘口/模拟大小球：仅五步齐全(simComplete)才建盘显示，缺步明写「不建盘」，绝不拿单步外推凑 */
+      const sim=r.v.sim||{}, simOK=!!sim.simComplete;
+      let hcTxt,ouTxt;
+      if(simOK){
+        hcTxt = sim.hcLine!=null ? (sim.hcLine>0?('主让'+sim.hcLine): sim.hcLine<0?('客让'+(-sim.hcLine)):'平手') : '—';
+        ouTxt = sim.ouLine!=null ? (sim.ouLine+' 球') : '—';
+      } else {
+        hcTxt = '<span style="color:var(--mut)">缺步·不建盘</span>';
+        ouTxt = '<span style="color:var(--mut)">缺步·不建盘</span>';
+      }
       html+='<tr style="border-top:1px solid var(--line)">'
         +'<td style="padding:2px 5px;white-space:nowrap">'+esc(r.day)+' '+esc(r.time)+'</td>'
         +'<td style="padding:2px 5px">'+esc(r.league)+'</td>'
         +'<td style="padding:2px 5px"><b>'+esc(r.home)+'</b> vs <b>'+esc(r.away)+'</b></td>'
         +'<td style="padding:2px 5px;color:'+r.v.col+'">'+esc(r.v.tier)+'</td>'
+        +'<td style="padding:2px 5px">'+hcTxt+'</td>'
+        +'<td style="padding:2px 5px">'+ouTxt+'</td>'
         +'<td style="padding:2px 5px"><b style="color:var(--grn)">'+esc(r.score)+'</b></td>'
         +'<td style="padding:2px 5px;font-size:9.5px">'+cons+'</td></tr>';
     }
