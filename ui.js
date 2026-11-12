@@ -18198,7 +18198,8 @@ function _dgVerdict(m, opt){
   const ouAbn=(ouGap!=null&&Math.abs(ouGap)>=gate), hcAbn=(hcGap!=null&&Math.abs(hcGap)>=gate);
   const abnN=(ouAbn?1:0)+(hcAbn?1:0);
   let A=null,B=null,delta=null,per=null,hotSide=null,maxPer=null,hotPer=null,favPer=null;
-  if(off&&out){ A=_dgOver(off.o); B=_dgOver(out.o);
+  if(out){ B=_dgOver(out.o); }   // ★ 外围(365/欧赔)1X2 隐含：两区都算，野鸡区靠它做赛后「外围热门侧未打出率」核验（不再因缺官方SP而恒为null）
+  if(off&&out){ A=_dgOver(off.o);
     if(A&&B){ delta=A.over-B.over; per=A.p.map((p,i)=>(p-B.p[i])*100);
       let ix=0; for(let i=1;i<3;i++) if(Math.abs(per[i])>Math.abs(per[ix])) ix=i;
       maxPer={v:per[ix],side:['主胜','平局','客胜'][ix],ix};   // 绝对最大：只用于「数据错配」检测，不判热门
@@ -18411,7 +18412,10 @@ function _dgDetailHTML(r){
     x+=li('抽水差 Δ', '<b style="color:'+(v.rawGate?'var(--red)':'var(--grn)')+'">'+(v.delta>=0?'+':'')+v.delta.toFixed(2)+'pt</b>（原文单侧门 Δ&gt;6pt → '+(v.rawGate?'异常':'正常')+'；本模块对称 |Δ|&gt;6pt → '+(v.rawGateSym?'异常':'正常')+'，<b>均仅展示</b>）'+(r.dev!=null?('；「'+_dgEsc(v.medSrc||'同组')+'」中位 '+(v.med!=null?v.med.toFixed(1):'—')+'pt（n='+(v.medN||0)+(v.medFallback?'，样本不足→全局':'')+'）→ <b style="color:'+(v.overGate?'var(--red)':'var(--grn)')+'">去基差偏离 '+(r.dev>=0?'+':'')+r.dev.toFixed(1)+'pt</b>（判档门 ±6pt → '+(v.overGate?'异常':'正常')+'）'):''));
     x+=li('逐项隐含偏差（官方−外围）', ['主胜','平局','客胜'].map((n,i)=>n+' '+(v.per[i]>=0?'+':'')+v.per[i].toFixed(1)).join(' · ')+' pt'
       +'<br><span style="color:var(--mut);font-size:9.5px">原文只把<b>正向 ≥+6pt</b>（官方端更热）判「形成热门、难打出」；负向=官方更冷，不判热门。外围最热侧：'+(v.favPer?_dgEsc(v.favPer.side)+' '+(v.favPer.v>=0?'+':'')+v.favPer.v.toFixed(1)+'pt':'—')+'</span>');
-  } else x+=li('不适用','无官方 SP（野鸡区），缺官方端，不虚构抽水差');
+  } else if(v.B){
+    x+=li('外围 1X2 隐含（无官方端·仅外围）', _dgFmtO(v.out.o)+' → 归一隐含 '+['主','平','客'].map((n,i)=>n+' '+(v.B.p[i]*100).toFixed(0)+'%').join(' · ')+'；抽水 <b>'+v.B.over.toFixed(2)+'%</b>');
+    x+=li('野鸡区判据','无官方 SP，不虚构官方−外围 Δ；以上外围隐含仅作「外围热门侧」参照，供赛后核验「外围热门侧是否打出」（见历史回测）');
+  } else x+=li('不适用','无官方 SP（野鸡区），且缺外围 1X2，无法对照');
   if(v.zone==='wild'){
     x+='<div style="font-weight:800;margin:8px 0 5px">🔍 野鸡区替代判据（扩展应用，非原文）</div>';
     x+=li('外围公司抽水离散', v.spread?(v.spread.n+' 家：'+v.spread.list.map(c=>_dgEsc(c.k)+' '+c.over.toFixed(1)+'%').join('、')+' → 极差 <b>'+v.spread.spread.toFixed(1)+'pt</b>'):'公司不足 2 家');
