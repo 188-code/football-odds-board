@@ -8426,6 +8426,35 @@ function fundplateHistoryHTML(){
     return String(v || '').replace(/<[^>]+>/g, '').replace(/&#x?[0-9a-fA-F]+;/g, '').trim();
   };
   const H = (typeof window !== 'undefined' && window.__FUNDPLATE_HISTORY__) || {};
+  /* ★ 2026-11-13 强推荐（新规律）派生：与 gen_index.recDirAltOf 完全一致；账本已有 recDirAlt 列则用之，否则本地派生。
+     规律① 买受让·过热反买类(大热必死/破缺口/造热) 仅 heatScore≥2 保留，<2 转观察（小联赛高热不过滤）；
+     规律② 买强队 仅「主流」且「强队主场」保留，非主流/客场转观察。
+     强推荐 = 原 recDir 下注 且 新规律也保留（即同时满足两条规则）。 */
+  const _recDirAltOf = function(rd, hs, sh){
+    rd = rd || '';
+    if (rd.indexOf('观察') === 0) return rd;
+    if (rd.indexOf('买受让') === 0){
+      if (rd.indexOf('大热必死') >= 0 || rd.indexOf('破缺口') >= 0 || rd.indexOf('造热') >= 0){
+        var h = (hs == null || hs === '' || hs === undefined) ? 0 : parseInt(hs, 10);
+        if (h >= 2) return rd;
+        return '观察·新规律过滤(过热反买·heatScore<' + h + '·不下注)';
+      }
+      return rd; // 小联赛高热等保留
+    }
+    if (rd.indexOf('买强队') === 0){
+      if (rd.indexOf('主流') < 0) return '观察·新规律过滤(买强队·非主流·不下注)';
+      if (!sh) return '观察·新规律过滤(买强队·客场·不下注)';
+      return rd;
+    }
+    return rd;
+  };
+  const _strongPickOf = function(e){
+    var alt = (e.recDirAlt && String(e.recDirAlt).trim() !== '') ? e.recDirAlt
+             : _recDirAltOf(e.recDir, e.heatScore, e.strongIsHome);
+    var isDown = String(e.recDir||'').indexOf('买强队')===0 || String(e.recDir||'').indexOf('买受让')===0;
+    var altDown = String(alt).indexOf('买强队')===0 || String(alt).indexOf('买受让')===0;
+    return { alt: alt, strong: (isDown && altDown), filtered: (isDown && !altDown) };
+  };
   const allItems = Array.isArray(H) ? H : (H.items || []);
   /* ★ 2026-11-07 用户要求：完整意见/历史复盘可按日期筛选 + 按时间排序。
      铁律「展示集 = 统计集」：筛选先作用在 items 上，后面所有 KPI、快照覆盖度、
@@ -8526,6 +8555,18 @@ function fundplateHistoryHTML(){
   };
   const nPre = items.filter(e=> _regInfo(e).post === false).length;
   const nPost = items.filter(e=> _regInfo(e).post === true).length;
+  /* ★ 2026-11-13 强推荐(新规律)·赛前业绩 KPI：与对照脚本同源口径（recDir 方向注 + 赛前登记 + 已结算 + 非走水） */
+  const _strongRows = items.filter(function(e){
+    if (!_isPre(e) || !e.result || e.result==='push' || e.result==='pending') return false;
+    if (!_strongPickOf(e).strong) return false;
+    const r = String(e.recDir||'');
+    return r.indexOf('买强队')===0 || r.indexOf('买受让')===0;
+  });
+  const _strongHit = _strongRows.filter(function(e){
+    const r = String(e.recDir||'');
+    return (r.indexOf('买强队')===0 && e.result==='lose') || (r.indexOf('买受让')===0 && e.result==='win');
+  }).length;
+  const _strongRate = _strongRows.length ? Math.round(_strongHit/_strongRows.length*1000)/10 : null;
   const _kpi=(n,v,c)=>'<span style="display:inline-block;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:5px 10px;margin:0 6px 6px 0;font-size:11.5px">'
     +'<span style="opacity:.6">'+n+'</span> <b style="color:'+(c||'var(--txt)')+';font-size:14px">'+v+'</b></span>';
   /* ★★ 2026-11-01 双向真结算（用户："赛前预测的比赛赛果出了很多，你发现问题没有"）：
@@ -8581,6 +8622,8 @@ function fundplateHistoryHTML(){
            (_recDirRate!=null && _recDirRate>=50 ? '#16a34a' : '#dc2626'))
     + _kpi('其中 · v2 现行算法', (_eraV2.n ? (_eraV2.hit+'/'+_eraV2.n+' 中 · '+_eraV2.rate+'%') : '无样本'),
            (_eraV2.rate!=null && _eraV2.rate>=50 ? '#16a34a' : '#dc2626'))
+    + _kpi('🔥 强推荐·赛前(新规律)', (_strongRows.length ? (_strongHit+'/'+_strongRows.length+' 中 · '+_strongRate+'%') : '—'),
+           (_strongRate!=null && _strongRate>=50 ? '#f59e0b' : '#dc2626'))
     + (_isFiltered ? _filteredKpi
         : ((_preL ? _kpi('赛前·押受让方', (_preL.hit==null?'—':_preL.hit+'%')+' / '+_fpct(_preL.roi), (_preL.roi>0?'#16a34a':'#dc2626')) : '')
          + (_preU ? _kpi('赛前·押让球方', (_preU.hit==null?'—':_preU.hit+'%')+' / '+_fpct(_preU.roi), (_preU.roi>0?'#16a34a':'#dc2626')) : '')));
@@ -8593,7 +8636,12 @@ function fundplateHistoryHTML(){
     kick_asc:  function(p,q){ return _tsOf(p)-_tsOf(q) || ((p.ts||0)-(q.ts||0)) || String(p.day||'').localeCompare(String(q.day||'')); },
     reg_desc:  function(p,q){ return ((q.ts||0)-(p.ts||0)) || _tsOf(q)-_tsOf(p); }
   };
-  const rows = items.slice().sort(_cmp[VIEW.sort] || _cmp.kick_desc).map(function(e){
+  const rows = items.slice().sort(function(p,q){
+      const sp=_strongPickOf(p).strong, sq=_strongPickOf(q).strong;
+      if (sp !== sq) return sq ? 1 : -1;   // ★ 2026-11-13 强推荐(新规律)置顶
+      return (_cmp[VIEW.sort] || _cmp.kick_desc)(p,q);
+    }).map(function(e){
+      const _sp = _strongPickOf(e);   // 本行强推荐判定（置顶/高亮/标记共用）
     /* ★ 2026-11-07 修：_fpName 解码失败时旧代码 fallback 到原始串，把
        <span class="review">&#xe915;</span> 这类图标标签当联赛/队名原样渲染（截图可见）。
        fallback 也必须剥标签 + 剥数字实体。 */
@@ -8637,7 +8685,7 @@ function fundplateHistoryHTML(){
     const _hCol = _hg ? _hg.color : '#e54545';
     const _hTag = _hg ? (' <span style="font-size:10px;font-weight:700;color:'+_hg.color+'">'+_hg.tag+'</span>') : '';
     const _ri = _regInfo(e);
-    return '<tr style="border-top:1px solid var(--line);background:'+bg+'">'
+    return '<tr style="border-top:1px solid var(--line);background:'+(_sp.strong?'rgba(245,158,11,.14)':bg)+(_sp.strong?';box-shadow:inset 3px 0 0 #f59e0b':'')+'">'
       +'<td style="padding:6px 7px;white-space:nowrap;opacity:.85">'+esc((e.day||'')+' '+(e.kickoff||''))+_ri.txt+'</td>'
       +'<td style="padding:6px 7px;font-size:12px">'+esc(lgD)+'<div style="font-size:10px;opacity:.55">'+esc(_hcTxt)+_hcSrc+(e.water!=null?(' · 水'+ (+e.water).toFixed(2)):'')+'</div></td>'
       +'<td style="padding:6px 7px"><b>'+esc(homeD)+'</b> vs <b>'+esc(awayD)+'</b></td>'
@@ -8648,6 +8696,7 @@ function fundplateHistoryHTML(){
          全部出自本历史区，是旧口径遗留值，不是今日信号。逐条标灰，不再误导。 */
       + (function(){ const _d=String(e.day||''); const _dN=/^\d{2}-\d{2}$/.test(_d)?('2026-'+_d):_d;
           return (_dN < '2026-10-31') ? '<div style="font-size:10px;color:#94a3b8;line-height:1.3">旧口径·未扣缺口<br>约虚高 8pt</div>' : ''; })()
+      + (_sp.strong ? '<div style="margin-top:4px;font-size:10.5px;font-weight:800;color:#f59e0b">🔥 强推荐(新规律)</div>' : (_sp.filtered ? '<div style="margin-top:4px;font-size:9.5px;color:#94a3b8">新规律·转观察</div>' : ''))
       +'</td>'
       /* ★ 2026-10-30 修（用户抓包"错的这两场都是下盘受让"）：历史板买法列不再显示
          「下盘受让·opp」——那是机械反买世界观（已被回测证伪）。改「拥挤警告」，
@@ -8732,7 +8781,7 @@ function fundplateHistoryHTML(){
      + '<span style="opacity:.35">│</span><span style="margin-left:8px">'+_rangeBar+'</span></div>'
      + '<div style="margin-top:2px"><b style="color:#c4b5fd;font-size:12px;margin-right:8px">⏱ 排序</b>'+_sortBar+'</div>'
      + '<div style="margin-top:3px;font-size:10.8px;opacity:.78;line-height:1.6">当前显示 <b style="color:#c4b5fd">'+items.length+'</b> 场 · '+_sortTxt
-     + ' · <b>上方统计与下方表格同步按当前筛选计算</b>（红/绿结论条为全账本固定口径，不随筛选变化）。切换即时刷新，不会重开面板。</div>'
+     + ' · <b>上方统计与下方表格同步按当前筛选计算</b>（红/绿结论条为全账本固定口径，不随筛选变化）。切换即时刷新，不会重开面板。 · 🔥强推荐(新规律·heatScore≥2买受让 / 主流强队主场)已置顶高亮</div>'
      + '</div>';
   if (items.length){
     h += '<table id="fpHistTable" style="width:100%;border-collapse:collapse;font-size:12.5px">'
