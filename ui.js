@@ -303,6 +303,7 @@ function showOfflineBanner(t){
     + '<button class="bmoreBtn" onclick="toggleBannerMore()">ⓘ 说明</button></div>';
   b.style.display = 'block';
   startFreshnessTimer();
+  try { startHcLogTimer(); } catch(e){}
 }
 function hideOfflineBanner(){ const b=$('rtBanner'); if(b) b.style.display='none'; }
 /* 过滤器记忆：自刷新重载前保存，重载后恢复，避免用户筛选丢失 */
@@ -8533,6 +8534,28 @@ function fundplateHistoryHTML(){
     return { n:g.length, hit:h, rate:g.length ? Math.round(h/g.length*1000)/10 : null };
   };
   const _eraV2 = _recDirByEra('v2');
+  /* ★ 2026-11-14 升级 recDirAlt 为「正式强推」：以下 _alt* 与 _recDir* 同源逻辑，但方向取 recDirAlt（新规律·选择性三盘合流买受让 / 主流主场买强队）。
+     iron rule（2026-11-13 v2 重核·383 已结算）：真 edge = 选择性三盘合流买受让（heat_score≥3, 29注 75.9% / ROI +49.2%）；
+     旧 11-01「反买下盘方向反了」是粗口径假结论（无三盘合流门槛、样本集中 10-31）。recDirAlt 已用 heatScore 门槛做选择性过滤。 */
+  const _altRows = items.filter(function(e){
+    if (!_isPre(e) || !e.result || e.result==='push' || e.result==='pending') return false;
+    const a = String((e.recDirAlt && String(e.recDirAlt).trim()!=='') ? e.recDirAlt : _recDirAltOf(e.recDir, e.heatScore, e.strongIsHome));
+    return a.indexOf('买强队')===0 || a.indexOf('买受让')===0;
+  });
+  const _altHit = _altRows.filter(function(e){
+    const a = String((e.recDirAlt && String(e.recDirAlt).trim()!=='') ? e.recDirAlt : _recDirAltOf(e.recDir, e.heatScore, e.strongIsHome));
+    return (a.indexOf('买强队')===0 && e.result==='lose') || (a.indexOf('买受让')===0 && e.result==='win');
+  }).length;
+  const _altRate = _altRows.length ? Math.round(_altHit/_altRows.length*1000)/10 : null;
+  const _altByEra = function(k){
+    const g = _altRows.filter(function(e){ return _fpEra(e).k === k; });
+    const h = g.filter(function(e){
+      const a = String((e.recDirAlt && String(e.recDirAlt).trim()!=='') ? e.recDirAlt : _recDirAltOf(e.recDir, e.heatScore, e.strongIsHome));
+      return (a.indexOf('买强队')===0 && e.result==='lose') || (a.indexOf('买受让')===0 && e.result==='win');
+    }).length;
+    return { n:g.length, hit:h, rate:g.length ? Math.round(h/g.length*1000)/10 : null };
+  };
+  const _altV2 = _altByEra('v2');
   /* ★ 2026-10-29 登记时机透明化（用户质疑"是本来就有，还是比赛开始后才加进去的"）：
      ts = 首次登记时刻（gen_index upsert 不再覆盖）；与开赛时间(day+kickoff)对比，
      晚于开赛 = ⚠赛后补登（多为数据中断/自清空 bug 修复后的重录），规则本身不看赛果。 */
@@ -8618,11 +8641,11 @@ function fundplateHistoryHTML(){
     + _kpi('赛前登记', nPre+' 场', '#16a34a')
     + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
     + _kpi('赛前已结算', (dec.length+nPush)+' 场（待结算 '+nPend+'）')
-    + _kpi('🎯 推荐方向·赛前（全代际）', (_recDirRows.length ? (_recDirHit+'/'+_recDirRows.length+' 中 · '+_recDirRate+'%') : '—'),
-           (_recDirRate!=null && _recDirRate>=50 ? '#16a34a' : '#dc2626'))
-    + _kpi('其中 · v2 现行算法', (_eraV2.n ? (_eraV2.hit+'/'+_eraV2.n+' 中 · '+_eraV2.rate+'%') : '无样本'),
-           (_eraV2.rate!=null && _eraV2.rate>=50 ? '#16a34a' : '#dc2626'))
-    + _kpi('🔥 强推荐·赛前(新规律)', (_strongRows.length ? (_strongHit+'/'+_strongRows.length+' 中 · '+_strongRate+'%') : '—'),
+    + _kpi('🎯 推荐方向·赛前(recDirAlt·正式强推)', (_altRows.length ? (_altHit+'/'+_altRows.length+' 中 · '+_altRate+'%') : '—'),
+           (_altRate!=null && _altRate>=50 ? '#16a34a' : '#dc2626'))
+    + _kpi('其中 · v2 现行算法', (_altV2.n ? (_altV2.hit+'/'+_altV2.n+' 中 · '+_altV2.rate+'%') : '无样本'),
+           (_altV2.rate!=null && _altV2.rate>=50 ? '#16a34a' : '#dc2626'))
+    + _kpi('🔥 正式强推·赛前(选择性三盘合流买受让)', (_strongRows.length ? (_strongHit+'/'+_strongRows.length+' 中 · '+_strongRate+'%') : '—'),
            (_strongRate!=null && _strongRate>=50 ? '#f59e0b' : '#dc2626'))
     + (_isFiltered ? _filteredKpi
         : ((_preL ? _kpi('赛前·押受让方', (_preL.hit==null?'—':_preL.hit+'%')+' / '+_fpct(_preL.roi), (_preL.roi>0?'#16a34a':'#dc2626')) : '')
@@ -8667,9 +8690,9 @@ function fundplateHistoryHTML(){
     else if (e.result==='push'){ rs='统计视角·走盘 0'; rc='#b45309'; bg='rgba(180,83,9,.10)'; }
     else if (e.result==='win'){ rs='统计视角·顺买强队 ❌输盘 '+(e.underMargin>0?'+'+e.underMargin:e.underMargin); rc='#dc2626'; bg='rgba(220,38,38,.10)'; }
     /* ★ 2026-11-09：另起一行给「🎯 推荐方向」自己的命中标记，避免与上一行统计视角混淆。 */
-    let recBadge = '<span style="opacity:.6">🎯 推荐方向：待结算</span>';
+    let recBadge = '<span style="opacity:.6">🎯 推荐方向(recDirAlt)：待结算</span>';
     if (e.result && e.result!=='pending'){
-      const _rd = String(e.recDir||'');
+      const _rd = String(_sp.alt||'');   // ★ 2026-11-14 改用 recDirAlt（正式强推方向），与顶部 KPI 同源
       const _isDir = (_rd.indexOf('买强队')===0 || _rd.indexOf('买受让')===0);
       if (e.result==='push') recBadge = '<span style="color:#b45309">🎯 推荐方向：走水·不计</span>';
       else if (!_isDir) recBadge = '<span style="opacity:.7">🎯 推荐方向：观察档·不计</span>';
@@ -8696,12 +8719,25 @@ function fundplateHistoryHTML(){
          全部出自本历史区，是旧口径遗留值，不是今日信号。逐条标灰，不再误导。 */
       + (function(){ const _d=String(e.day||''); const _dN=/^\d{2}-\d{2}$/.test(_d)?('2026-'+_d):_d;
           return (_dN < '2026-10-31') ? '<div style="font-size:10px;color:#94a3b8;line-height:1.3">旧口径·未扣缺口<br>约虚高 8pt</div>' : ''; })()
-      + (_sp.strong ? '<div style="margin-top:4px;font-size:10.5px;font-weight:800;color:#f59e0b">🔥 强推荐(新规律)</div>' : (_sp.filtered ? '<div style="margin-top:4px;font-size:9.5px;color:#94a3b8">新规律·转观察</div>' : ''))
+      + (function(){
+          const _a = _sp.alt || '';
+          if (_a.indexOf('买受让')===0) return '<div style="margin-top:4px;font-size:10.5px;font-weight:800;color:#f59e0b">🔥 正式强推·买受让</div>';
+          if (_a.indexOf('买强队')===0) return '<div style="margin-top:4px;font-size:9.5px;font-weight:700;color:#34d399">可跟·买强队(边际)</div>';
+          if (_sp.filtered) return '<div style="margin-top:4px;font-size:9.5px;color:#94a3b8">新规律·转观察</div>';
+          return '';
+        })()
       +'</td>'
       /* ★ 2026-10-30 修（用户抓包"错的这两场都是下盘受让"）：历史板买法列不再显示
          「下盘受让·opp」——那是机械反买世界观（已被回测证伪）。改「拥挤警告」，
          并如实标注该场是否赛前登记（赛前登记才有预测意义；赛后补登无价值）。 */
-      +'<td style="padding:6px 7px;color:#b45309;font-weight:700">拥挤警告·不追高·'+esc(strong)+'</td>'
+      + (function(){
+          const _a = _sp.alt || ''; let _badge, _col;
+          if (_a.indexOf('买受让')===0){ _badge='🔥 正式强推·买受让（三盘合流）'; _col='#f59e0b'; }
+          else if (_a.indexOf('买强队')===0){ _badge='可跟·买强队（边际·主流主场）'; _col='#34d399'; }
+          else { _badge='观望·新规律过滤'; _col='#94a3b8'; }
+          return '<td style="padding:6px 7px;font-weight:700;white-space:normal;color:'+_col+'">'+_badge
+            + '<div style="font-size:9.5px;opacity:.65;margin-top:2px;color:#94a3b8;font-weight:400">'+esc(_a)+'</div></td>';
+        })()
       +'<td style="padding:6px 7px;white-space:nowrap;font-weight:700">'+esc(sc)+'</td>'
       +'<td style="padding:6px 7px;font-weight:800;color:'+rc+';white-space:nowrap">'+rs+margin
         +'<div style="margin-top:3px;font-size:10.5px;font-weight:700;white-space:normal">'+recBadge+'</div></td>'
@@ -8717,6 +8753,9 @@ function fundplateHistoryHTML(){
      + (_preU ? (' ｜ 押<b>让球方</b>（过热强队本身）命中 <b>' + (_preU.hit==null?'—':_preU.hit+'%') + '</b> · ROI <b style="color:#7ee2a8">' + _fpct(_preU.roi) + '</b>') : '')
      + '<br><b>旁证</b>：286 场历史回测加护栏后同一方向 −26.2%；赛前实测三连穿（拉齐奥 2:6、弗拉门戈 1:4、格雷米奥 2:0 下盘全输）。'
      + '<b>所以本板从今天起不再给「下盘受让」买法</b>，只作拥挤度追踪。'
+     + '<br><span style="color:#ffe08a;font-weight:700">🔧 2026-11-13 v2 重核修正（383 已结算账本）：上方"反买下盘方向反了"是粗口径假结论——2026-11-01 只按"强队过热"机械反买、<b>无三盘合流门槛</b>、样本集中 10-31，属方法错非方向错。</span>'
+     + '<br><span style="color:#ffe08a;font-weight:700">v2 引擎只在 heat_score≥3（破缺口/盘级差≥2/365造热/真|hcap|&lt;0.5/flip 中≥3项同触发＝真三盘合流）才发<b>买受让</b>：该选择性方向 <b>29注 75.9% · ROI +49.2%</b>（全部赛前、SE±18.6）＝本板<b>真 edge</b>。</span>'
+     + '<br><span style="color:#ffe08a;font-weight:700">故本板现以 recDirAlt（新规律·选择性三盘合流买受让 / 主流主场买强队）为「正式强推」方向重新给出买法——买强队仅边际（标"可跟"不标"强推"），旧粗口径机械反买仍不采用。</span>'
      + '<br><b style="color:#ffe08a">⚠️ 结果列的 ✅/❌ 是「顺买过热强队」统计视角，不是「🎯 推荐方向」的战绩：受让赢盘会标 ❌，但买受让的意见恰恰命中。</b>'
      + '推荐方向是否命中请看每行新增的「🎯 推荐方向：✅中 / ❌挂」标记，以及顶部「🎯 推荐方向·赛前」KPI（只算赛前登记的方向注，观察档不计）。'
      + '</div>';
@@ -8728,7 +8767,7 @@ function fundplateHistoryHTML(){
      + '· <b style="color:#7ee2a8">平手盘</b>（结构下盘·真边·A强推）：<b>63.6% 命中 · ROI +21.3%</b>（唯一扛住样本外检验的边）<br>'
      + '· <b style="color:#7ee2a8">结构下盘·精选优选</b>：<b>63.7% 命中 · ROI +28.9%</b>（标定；留出仅+1.1%→谨慎注额）<br>'
      + '· <b style="color:#7ee2a8">资金过热·顺买强队</b>（过热强队本身）：<b>64.7% 命中 · ROI +23.4%</b><br>'
-     + '<span style="color:#94a3b8">上方「赛前·押受让方 41.7% / -16.6%」是<b>全部受让注的混合毛数</b>（含已证伪「反买下盘」35.3%/-29% 与各类非边注），被稀释到接近盲猜——<b>不是单个边的真实胜率</b>。看业绩只看上面三个边，且资金过热边样本偏集中 10-31（42/51），注额需谨慎。</span>'
+     + '<span style="color:#94a3b8">上方「赛前·押受让方 41.7% / -16.6%」是<b>全部受让注的混合毛数</b>（含已证伪「反买下盘」35.3%/-29% 与各类非边注），被稀释到接近盲猜——<b>不是单个边的真实胜率</b>。看业绩只看上面三个边，且资金过热边样本偏集中 10-31（42/51），注额需谨慎。另 v2 重核：买强队整体仅边际(+13.4%、主流+18.7%撑住但投票子集+0.3%无 edge)，故本板只标"可跟"不标"正式强推"；正式强推仅限选择性三盘合流买受让(+49.2%)。</span>'
      + '</div>';
   h += '<div style="font-size:11.5px;opacity:.72;line-height:1.7;margin:2px 0 8px">'
      + '<b style="color:#ffb4b4">★ 结算口径（2026-11-01 已修）：</b>'
@@ -8781,7 +8820,7 @@ function fundplateHistoryHTML(){
      + '<span style="opacity:.35">│</span><span style="margin-left:8px">'+_rangeBar+'</span></div>'
      + '<div style="margin-top:2px"><b style="color:#c4b5fd;font-size:12px;margin-right:8px">⏱ 排序</b>'+_sortBar+'</div>'
      + '<div style="margin-top:3px;font-size:10.8px;opacity:.78;line-height:1.6">当前显示 <b style="color:#c4b5fd">'+items.length+'</b> 场 · '+_sortTxt
-     + ' · <b>上方统计与下方表格同步按当前筛选计算</b>（红/绿结论条为全账本固定口径，不随筛选变化）。切换即时刷新，不会重开面板。 · 🔥强推荐(新规律·heatScore≥2买受让 / 主流强队主场)已置顶高亮</div>'
+     + ' · <b>上方统计与下方表格同步按当前筛选计算</b>（红/绿结论条为全账本固定口径，不随筛选变化）。切换即时刷新，不会重开面板。 · 🔥正式强推 = recDirAlt（选择性三盘合流买受让 / 主流主场买强队）已置顶高亮；买强队仅边际标"可跟"(不标强推)</div>'
      + '</div>';
   if (items.length){
     h += '<table id="fpHistTable" style="width:100%;border-collapse:collapse;font-size:12.5px">'
@@ -9725,6 +9764,11 @@ function openBifen(){
     if (!bf || !bf.rows.length) continue;
     const k = heatKick(m);
     const v = _bifenVerdict(m);
+    // ★ 2026-11-14：高置信标志在赛前即可判定（不依赖已结算），故提到 settled 块外算
+    const pk = (v && v.pick) || null;
+    const t0 = (pk && pk.picks && pk.picks.length) ? (pk.picks[0].tags||[]) : [];
+    const hc = t0.some(t=>/方向同侧/.test(t)) && t0.some(t=>/深盘净胜≥2/.test(t));
+    const hcpick = (hc && pk.picks && pk.picks.length) ? pk.picks[0].score : null;
     let resTxt = '', hitTop = '', hit3 = '', hitSel = '', hitCov = '', hitDir = '';
     if (String(m.state)==='-1' && m.home_score!=null && m.away_score!=null){
       const real = m.home_score + ':' + m.away_score;
@@ -9734,7 +9778,6 @@ function openBifen(){
         if (v && v.mdlTop) hitTop = (v.mdlTop.score === real) ? '✓' : '✗';
         hit3 = top3.indexOf(real) >= 0 ? '✓' : '✗';
         /* 需求④复盘：精选波胆 / 精选+优选3球覆盖 / 方向 三口径对照赛果（仿三盘过热板综合意见复盘） */
-        const pk = v && v.pick;
         if (pk && pk.picks && pk.picks.length){
           hitSel = pk.picks[0].score===real ? '✓' : '✗';
           hitCov = pk.picks.some(p=>p.score===real) ? '✓' : '✗';
@@ -9746,13 +9789,16 @@ function openBifen(){
     rows.push({
       tid:m.tid, day:k.day, time:k.time, ts:kickTs(m), league:cleanLeague(m),
       home: displayTeam(m,'home'), away: displayTeam(m,'away'),
-      bf, v, resTxt, hitTop, hit3, hitSel, hitCov, hitDir, state:String(m.state),
+      bf, v, resTxt, hitTop, hit3, hitSel, hitCov, hitDir, hc, hcpick, state:String(m.state),
+      result: (m.home_score!=null && m.away_score!=null) ? (m.home_score+':'+m.away_score) : null,
       tier: (v && v.verdict) ? v.verdict.tier : '观察'
     });
   }
   rows.sort((x,y)=> String(x.ts||'').localeCompare(String(y.ts||'')));
   window._bifenRows = rows;
   window._bifenTier = 'all';
+  /* ★ 2026-11-14：把高置信精选波胆持久化到服务端日志（样本外战绩账本，幂等 upsert） */
+  try { collectHcPicks(rows); } catch(e){}
   const body = rows.length ? rows.map(bifenRowHTML).join('')
     : '<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--mut)">当前视图内没有带波胆数据的场次（需北单 BD_ROWS bf 或竞彩在售场次含 crs 比分赔率，或已分析出模型比分分布）</td></tr>';
   const done = rows.filter(r=>r.resTxt);
@@ -9768,12 +9814,18 @@ function openBifen(){
   const selTxt = selDone ? Math.round(selHit/selDone*100)+'%（'+selHit+'/'+selDone+'）' : '—';
   const covTxt = selDone ? Math.round(covHit/selDone*100)+'%（'+covHit+'/'+selDone+'）' : '—';
   const dirTxt2 = dirDone ? Math.round(dirHit/dirDone*100)+'%（'+dirHit+'/'+dirDone+'）' : '—';
+  /* ★ 2026-11-14：高置信子集（精选波胆同时带「方向同侧+深盘净胜≥2」）单独追踪命中率 */
+  const hcRows = rows.filter(r=>r.hc);
+  const hcDone = hcRows.filter(r=>r.hitSel).length;
+  const hcHit = hcRows.filter(r=>r.hitSel==='✓').length;
+  const hcTxt = hcDone ? Math.round(hcHit/hcDone*100)+'%（'+hcHit+'/'+hcDone+'）' : '—';
   const nSel = rows.filter(r=>r.tier==='精选').length;
   const nYou = rows.filter(r=>r.tier==='优选').length;
   const statsHTML =
       '<span>本视图场次：<b>' + rows.length + '</b></span>'
     + '<span>精选场：<b style="color:var(--red)">' + nSel + '</b> · 优选场：<b style="color:#f97316">' + nYou + '</b></span>'
     + '<span>方向命中：<b style="color:var(--grn)">' + dirTxt2 + '</b></span>'
+    + '<span>🔥高置信精选命中：<b style="color:var(--red)">' + hcTxt + '</b>（'+hcRows.length+'场）</span>'
     + '<span>精选波胆命中：<b style="color:var(--grn)">' + selTxt + '</b></span>'
     + '<span>精选+优选3球覆盖：<b>' + covTxt + '</b></span>'
     + '<span>模型前3命中：<b>' + rate3Txt + '</b></span>';
@@ -9791,7 +9843,9 @@ function openBifen(){
     + '<b>市场</b>=北单 bf 优先、竞彩 crs 兜底（赔率归一隐含概率）作对照；<b>365</b>=365/欧赔临盘 1X2 隐含第三源参照。<b>档</b>=场次分级（破缺口/三盘过热/盘级差/深让盘四线索，≥3精选场、2优选场）。<br>'
     + '<b style="color:var(--red)">⚠ 诚实底线</b>：单场比分命中天花板本来就低——115 场账本校准：模型 Top3 覆盖 26.1%、Top10 覆盖 59.1%，故精选波胆是「调整后概率最高的一个」而非稳胆；竞彩与北单"最热比分"定价方向相反（竞彩 +12.6pt 低估 n=27 未定论 / 北单 −2.9pt 高估），旧「最热陷阱 −15.8pt」系混源伪影已作废。'
     + '<b>复盘口径</b>（仿三盘资金过热板）：赛前冻结的方向+精选/优选比分 vs 赛果，三口径（方向✓/精选✓/3球覆盖✓）。'
+    + '<b style="color:var(--red)">🔥高置信精选</b>=精选波胆同时带「方向同侧+深盘净胜≥2」两项强因子（捷克0:2 / 塞尔维亚1:3 两场实测命中均满足）；板面与汇总 KPI 单独追踪其命中率，优先关注。'
     + '<span style="color:var(--mut)">（投票与选择随 CVM 每 15 分钟一帧刷新，开赛定格后供复盘）</span>'
+    + '<span id="hcLogStat" style="color:var(--yel)">🔥高置信累计(日志)：读取中…</span>'
     + bifenCalibHTML()
     + bifenOfficialHTML()
     + '</div>'
@@ -9817,8 +9871,79 @@ function openBifen(){
   document.body.appendChild(wrap);
   const _bm = document.getElementById('bifenModal');
   if (_bm) _bm.addEventListener('click', e=>{ if (e.target.id === 'bifenModal') closeBifen(); });
+  try { loadHcLogStat(); } catch(e){}
 }
 function closeBifen(){ const m = document.getElementById('bifenModal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+/* ★ 2026-11-14：高置信波胆持久化日志（与服务端 /api/hc_log 配合，样本外战绩账本）
+   - collectHcPicks(rows)：把本批高置信精选波胆 POST 到服务端（幂等 upsert，服务端锁首登/赛前标志）
+   - loadHcLogStat()：读回服务端日志，按铁律口径显示累计命中率（含 ±SE、赛前 pre 单列）
+   - startHcLogTimer()：每 15 分钟再扫一轮，保证赛前也能捕获（不依赖用户手动开波胆面板） */
+function collectHcPicks(rows){
+  try{
+    const list = (rows && rows.length) ? rows
+      : (window._bifenRows || []);
+    const batch = [];
+    for (const r of list){
+      if (!r || !r.hc || !r.hcpick || !r.tid) continue;
+      batch.push({
+        tid: r.tid, day: r.day, time: r.time, ts: r.ts,
+        home: r.home, away: r.away,
+        pick: r.hcpick, state: r.state,
+        result: (r.result != null) ? r.result : null
+      });
+    }
+    if (!batch.length) return;
+    fetch('/api/hc_log', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(batch) }).catch(()=>{});
+  }catch(e){}
+}
+function loadHcLogStat(){
+  const el = document.getElementById('hcLogStat');
+  if (!el) return;
+  fetch('/api/hc_log', { cache:'no-store' }).then(r=>r.json()).then(d=>{
+    const arr = Object.values(d || {});
+    const all = arr.filter(x => x && x.result);
+    const hit = all.filter(x => x.result === x.pick);
+    const pre = all.filter(x => x.pre === true);
+    const preHit = pre.filter(x => x.result === x.pick);
+    const pct = (h,n) => n ? Math.round(h/n*100) + '% (' + h + '/' + n + ')' : '—';
+    const se  = (n) => n ? ' ±' + Math.round(100/Math.sqrt(n)) + 'pt' : '';
+    const tag = all.length >= 40 ? '显著' : '样本偏小';
+    el.innerHTML = '🔥高置信累计(日志)：<b style="color:var(--red)">' + pct(hit.length, all.length) + '</b>' + se(all.length)
+      + ' ｜ 赛前(pre)：' + pct(preHit.length, pre.length) + se(pre.length)
+      + ' <span style="color:var(--mut)">(' + tag + ')</span>';
+  }).catch(()=>{ el.textContent = '🔥高置信累计(日志)：读取失败'; });
+}
+let _hcLogTimer = null;
+function startHcLogTimer(){
+  if (_hcLogTimer) return;
+  try {
+    _hcLogTimer = setInterval(() => {
+      try {
+        if (typeof MATCHES === 'undefined' || !MATCHES || !MATCHES.length) return;
+        const batch = [];
+        for (const m of MATCHES){
+          const bf = (typeof _bifenRows === 'function') ? _bifenRows(m) : null;
+          if (!bf || !bf.rows || !bf.rows.length) continue;
+          const v = (typeof _bifenVerdict === 'function') ? _bifenVerdict(m) : null;
+          const pk = (v && v.pick) || null;
+          if (!pk || !pk.picks || !pk.picks.length) continue;
+          const t0 = pk.picks[0].tags || [];
+          const hc = t0.some(t=>/方向同侧/.test(t)) && t0.some(t=>/深盘净胜≥2/.test(t));
+          if (!hc) continue;
+          const k = (typeof heatKick === 'function') ? heatKick(m) : { day:'', time:'' };
+          batch.push({
+            tid: m.tid, day: k.day, time: k.time, ts: (typeof kickTs === 'function') ? kickTs(m) : '',
+            home: (typeof displayTeam === 'function') ? displayTeam(m,'home') : '',
+            away: (typeof displayTeam === 'function') ? displayTeam(m,'away') : '',
+            pick: pk.picks[0].score, state: String(m.state),
+            result: (m.home_score!=null && m.away_score!=null) ? (m.home_score+':'+m.away_score) : null
+          });
+        }
+        if (batch.length) fetch('/api/hc_log', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(batch) }).catch(()=>{});
+      } catch(e){}
+    }, 15*60*1000);
+  } catch(e){}
+}
 /* 档位筛选（需求①：选择出精选/优选波胆） */
 function bifenTier(t){
   window._bifenTier = t;
@@ -10135,11 +10260,16 @@ function bifenRowHTML(r){
   const v = r.v || {};
   const vd = v.verdict || {};
   const pk = v.pick || null;
-  /* 🎯 精选波胆（需求①：选择引擎第1名，三板块+动态加权调整后；附调整依据） */
+  /* 🎯 精选波胆（需求①：选择引擎第1名，三板块+动态加权调整后；附调整依据）。
+     ★ 2026-11-14：单元格内置「命中/未中」徽章（已结算场即显），并标注 🔥高置信（方向同侧+深盘净胜≥2） */
   let selTxt = '<span style="color:var(--mut)">—</span>';
   if (pk && pk.picks && pk.picks.length){
     const p = pk.picks[0];
+    const _hc = !!r.hc;
+    const _hit = r.resTxt ? (r.hitSel==='✓' ? '<span class="badge bW">精选命中</span>' : (r.hitSel==='✗' ? '<span class="badge bL">精选未中</span>' : '')) : '';
     selTxt = '<div style="font-weight:800;font-size:14px;color:var(--red)">'+p.score+'</div>'
+      + (_hc ? '<div style="display:inline-block;margin:2px 0 0;font-size:9px;font-weight:800;color:#fff;background:#e54545;border-radius:4px;padding:0 4px;letter-spacing:.5px">🔥高置信</div>' : '')
+      + (_hit ? ' ' + _hit : '')
       + '<div style="font-size:9.5px;color:var(--txt)">调整后 '+p.adj.toFixed(1)+'%</div>'
       + '<div style="font-size:9px;color:var(--mut)">模型'+p.model.toFixed(1)+'%'
       + (p.imp!=null ? ' · 市场'+p.imp.toFixed(1)+'%·赔'+p.odds.toFixed(1) : '') + '</div>'
@@ -17759,6 +17889,8 @@ async function init(){
   //   远比快速探测稳。无论探测结果如何，都立即发起实时列表拉取；成功即覆盖快照、设“实时”徽标，
   //   失败则保留快照并继续每 60s 重试。这样打开页面看到的就是当下数据，与部署 CDN 缓存、电脑开关都无关。
   loadMatches().then(()=>{ startDirectTimer(); }).catch(()=>{ startDirectTimer(); });
+  // ★ 2026-11-14：无条件启动高置信波胆日志定时器（每 15 分钟扫一轮，赛前也能捕获，不依赖开波胆面板）
+  try { startHcLogTimer(); } catch(e){}
   // 探测仅用于更新连接状态徽标/提示，绝不再阻断数据加载
   resolveSources().then(ok => {
     if (ok){
@@ -18062,8 +18194,26 @@ function _dgSim(m){
   //   参与「放弃/谨慎」判档。缺步的 ou/hc 只作参考值展示，绝不参与判档与复盘。
   const simComplete = (s1!=null&&s2!=null&&s3!=null&&s4!=null);
   const simWhy = simComplete ? '' : ('缺 '+[s1==null?'①交锋造球':'',s2==null?'②近期造球':'',s3==null?'③交锋盘口':'',s4==null?'④近期盘口':''].filter(Boolean).join('/')+' → 按文档五步不成立，不建模拟盘');
+  // ★ 2026-11-13 A 方案：区分「缺步」性质——设计行为(本源确无历史交锋) vs 疑似抓取失败(源站连本场都未收录)
+  //   设计行为 = 源站已收录本场结构(_dgBattle 非 null)，只是两队无历史交锋 → 灰字「无历史交锋」。
+  //   疑似抓取失败 = _dgBattle 整体 null（本场未进入 battle 存储）→ 琥珀警示「源站未收录」。
+  let simGapKind='none', simGapNote='';
+  if(!simComplete){
+    if(B){                                   // 源站已收录本场结构
+      const hasForm=!!(fh&&fa);
+      simGapKind='noH2H';                    // 本源有这两队、但无历史交锋 → 设计行为
+      simGapNote=hasForm?'源站已抓到近期战绩，确属两队无历史交锋记录'
+                        :'源站收录本场但交锋与近期逐场均缺失（低级别/青年场常见）';
+    } else {                                 // _dgBattle 整体为 null：本场未进入 battle 存储
+      const knownTeam=!!(fh||fa);            // 7m 能识别队名 → 本场应被收录却没 → 疑似抓取失败
+      simGapKind=knownTeam?'fetchFail':'noCapture';
+      simGapNote=knownTeam?'队名源站可识别却未收录，疑似瞬时抓取失败（建议重跑 bake 抓取）'
+                          :'源站未收录本场（低级别/野鸡场，本源无此场属正常）';
+    }
+  }
   return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ou!=null?_dgQ(ou):null,
           hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc,formRecent,simComplete,simWhy,
+          simGapKind,simGapNote,
           battle:B, simSrc:B?'雷速源站逐场':'7m 老库回退（数据止于 2026-10-13）'};
 }
 
@@ -18114,11 +18264,22 @@ function _dgCoLiveFor(m){
 }
 function _dgOuter(m){
   const an=_dgAn(m); if(!an) return null;
-  const cl=_dgCoLiveFor(m)||{}; const b=cl.Bet365||cl['365']||cl.bet365||null;
-  const c=b&&(b.c||b.o);
-  if(c){ const o=[+c.h,+c.d,+c.a]; if(_dgOver(o)) return {src:'Bet365 '+(b.c?'临盘':'初盘'),o:o}; }
+  const cl=_dgCoLiveFor(m)||{};
+  /* ★ 2026-11-14 完善：coLive 名义 4 家（365/立博/威廉/英特），旧逻辑只认 Bet365，
+     导致「Bet365 缺、但立博/威廉/英特 有」的场被误判「数据不足」。现按优先序遍历所有公司
+     （临盘 c 优先、初盘 o 兜底），任一家有效即采用 → 外围覆盖率最大化。 */
+  const companies=['Bet365','365','bet365','立博','威廉希尔','WilliamHill','Interwette','interwetten','威廉','英特'];
+  for(const k of companies){
+    const e=cl[k]; if(!e) continue;
+    const c=e.c||e.o;
+    if(c){ const o=[+c.h,+c.d,+c.a]; if(_dgOver(o)) return {src:k+' '+(e.c?'临盘':'初盘'),o:o}; }
+  }
   const o1=[+an.o1h,+an.o1d,+an.o1a]; if(_dgOver(o1)) return {src:'欧赔临盘(汇总)',o:o1};
   const o0=[+an.o0h,+an.o0d,+an.o0a]; if(_dgOver(o0)) return {src:'欧赔初盘(汇总)',o:o0};
+  /* ★ 2026-11-14 治本兜底：真实外围(365/立博/威廉/英特+欧赔汇总)全缺，但本场为北单/竞彩收录，
+     引擎已用官方 SP 作"外围端代理"填入 an.outProxy（euProxy=true 标记）。此处返回代理（标注 proxy），供判档明确区分
+     "非真实外围·Δ不计入判档"，避免把代理当真实外围误判。 */
+  if (an.outProxy && _dgOver(an.outProxy)) return {src:'官方SP代理(非真实外围)', o:an.outProxy, proxy:true};
   return null;
 }
 /* 外围多家公司抽水离散（野鸡区替代判据，属扩展应用、非原文） */
@@ -18264,8 +18425,8 @@ function _dgVerdict(m, opt){
   const ouAbn=(ouGap!=null&&Math.abs(ouGap)>=gate), hcAbn=(hcGap!=null&&Math.abs(hcGap)>=gate);
   const abnN=(ouAbn?1:0)+(hcAbn?1:0);
   let A=null,B=null,delta=null,per=null,hotSide=null,maxPer=null,hotPer=null,favPer=null;
-  if(out){ B=_dgOver(out.o); }   // ★ 外围(365/欧赔)1X2 隐含：两区都算，野鸡区靠它做赛后「外围热门侧未打出率」核验（不再因缺官方SP而恒为null）
-  if(off&&out){ A=_dgOver(off.o);
+  if(out && !out.proxy){ B=_dgOver(out.o); }   // ★ 外围(365/欧赔)1X2 隐含：两区都算；代理(proxy)不计入，避免把官方SP代理当真实外围
+  if(off&&out&&!out.proxy){ A=_dgOver(off.o);
     if(A&&B){ delta=A.over-B.over; per=A.p.map((p,i)=>(p-B.p[i])*100);
       let ix=0; for(let i=1;i<3;i++) if(Math.abs(per[i])>Math.abs(per[ix])) ix=i;
       maxPer={v:per[ix],side:['主胜','平局','客胜'][ix],ix};   // 绝对最大：只用于「数据错配」检测，不判热门
@@ -18320,8 +18481,27 @@ function _dgVerdict(m, opt){
   if(off&&out&&!medUsable) why.push('<b style="color:var(--yel)">去基差判档已禁用</b>：本批可比双端样本 '+(opt.globalN||0)+' 场 / 本组 '+(opt.medN||0)+' 场（&lt;4），横截面中位不可靠 → 回退<b>文档原义单侧 Δ&gt;6pt</b> 门，不拿 n=1 的统计量翻转结论');
   let tier='正常盘', col='var(--grn)', act='照常观察';
   if(zone==='jc'){
-    if(!out){ tier='数据不足'; col='var(--mut)'; act='缺外围赔率，不判';
-      why.push('官方 SP 已有，但本场没有 365/欧赔 1X2，返还抽水换算法无法双端对照'); }
+    if(!out || (out&&out.proxy)){
+      if(out && out.proxy){
+        /* ★ 2026-11-14 治本兜底：真实外围(365/立博/威廉/英特+欧赔汇总)全缺，但本场北单/竞彩收录，
+           引擎已用官方 SP 作代理填充。明确标注"非真实外围·Δ不计入判档"，仅展示代理 1X2 供参考，
+           绝不拿代理当真实外围算 Δ、不触发放弃/正常判档（避免误判）。 */
+        tier='⚠ 外围以官方SP代理'; col='var(--yel)'; act='外围真实欧赔缺·官方SP代理仅作参考·Δ不计入判档';
+        why.push('<b>真实外围欧赔（365/立博/威廉/英特 + 欧赔汇总）缺失</b>（gqj2 未返回该场欧赔 1X2 行），已以北单/竞彩 <b>官方 SP（'+_dgEsc(out.src)+'）作代理填充</b>仅作参考：'+_dgFmtO(out.o)
+          +'。<b>Δ=官方−外围无法真实计算，不计入判档</b>（避免把官方SP代理当真实外围误判）。待采集链路补抓真实外围后，本标注自动被真值覆盖。');
+      }
+      else {
+      /* ★ 2026-11-14 完善：把笼统「数据不足」拆成精确诊断。
+         北单/竞彩已收录、且亚盘/大小球仍在 → 欧赔 1X2 这条 feed 漏抓（庄家必有欧赔），
+         属采集链路漏抓、非模块 bug，改标琥珀色「外围欧赔漏抓·待补」，并仍渲染已有数据；
+         其余（连亚盘都没有、或根本未收录）才是真「数据不足」。 */
+      const _ah = an && (an.a0!=null || an.p1!=null || (an.ou&&an.ou.c_line!=null));
+      if(off && _ah){ tier='⚠ 外围欧赔漏抓'; col='var(--yel)'; act='北单已收录·疑欧赔汇总feed漏抓，标注待补';
+        why.push('官方 SP 已有、亚盘也在（a0='+(an.a0!=null?an.a0:'—')+'/水位'+(an.h0!=null?an.h0:'—')+(an.ou&&an.ou.c_line!=null?('、大小球'+an.ou.c_line):'')+'），但本场<b>欧赔 1X2（365/立博/威廉/英特 + 欧赔汇总 o1h/o0h）全缺</b>→ 返还抽水换算法无法双端对照。属<b>采集链路漏抓</b>（北单收录的场庄家必有欧赔），非模块 bug，已在板面标注，待补采。'); }
+      else { tier='数据不足'; col='var(--mut)'; act='缺外围赔率，不判';
+        why.push('官方 SP 已有，但本场没有 365/欧赔 1X2，返还抽水换算法无法双端对照'); }
+      }
+    }
     else if(mismatch){
       tier='⚠ 数据错配·不判'; col='var(--mut)'; act='两端盘口疑似不同源，禁止据此下结论';
       why.push('<b style="color:var(--red)">热门侧不一致 / 逐项偏差≥20pt / 去基差抽水差≥15pt</b>：可能是让球行混入、跨场配对或初盘临盘混用，本场抽水差结论作废（不判「放弃」也不判「正常」）');
@@ -18360,7 +18540,12 @@ function _dgVerdict(m, opt){
     else if(warn){ tier='⚠ 谨慎'; col='#f59e0b'; act='盘口有异动，只观察不出手'; }
     else { tier='◦ 仅观察'; col='var(--mut)'; act='无官方盘对照，本区默认不出手'; }
   }
-  if(!sim.simComplete) why.push('<b style="color:var(--yel)">甲·模拟盘不成立</b>：'+_dgEsc(sim.simWhy)+'；本场 <b>不拿模拟线比实盘、不参与判档</b>（参考值 '+(sim.ouLine!=null?sim.ouLine:'—')+' / '+(sim.hcLine!=null?sim.hcLine:'—')+' 仅展示，单步外推可能是不存在的盘口）');
+  if(!sim.simComplete){
+    const gapTag = sim.simGapKind==='noH2H'
+      ? '<b style="color:var(--mut)">（设计行为 · 本源无历史交锋）</b>'
+      : '<b style="color:#f59e0b">（⚠ 疑似抓取失败 · 源站未收录本场）</b>';
+    why.push('<b style="color:var(--yel)">甲·模拟盘不成立</b>：'+_dgEsc(sim.simWhy)+' '+gapTag+'；本场 <b>不拿模拟线比实盘、不参与判档</b>'+(sim.simGapKind!=='noH2H'?('（'+_dgEsc(sim.simGapNote)+'）'):'')+'（参考值 '+(sim.ouLine!=null?sim.ouLine:'—')+' / '+(sim.hcLine!=null?sim.hcLine:'—')+' 仅展示，单步外推可能是不存在的盘口）');
+  }
   if(sim.conf<2) why.push('<span style="color:var(--mut)">模拟盘置信偏低：交锋 '+ (sim.hhAll?sim.hhAll.n:0) +' 场 / 近期主 '+(sim.fh?sim.fh.n:0)+'·客 '+(sim.fa?sim.fa.n:0)+' 场</span>');
   why.push('<span style="color:var(--mut)">近期数据源：'+_dgEsc(sim.formSrc)+'；异常门 |Δ|≥'+gate+' 球</span>');
   return {m,zone,sim,off,out,A,B,delta,dev,med,medSrc:opt.medSrc||'',medN:opt.medN||0,medFallback:!!opt.medFallback,
@@ -18409,7 +18594,7 @@ function _dgBuildRows(){
   const ds=[], bySrc={};
   const srcKey=s=>{const t=String(s||'');return t.indexOf('竞彩')>=0?'竞彩官方':(t.indexOf('七玩法')>=0?'北单官方':'北单(澳客)');};
   for(const c of uniq){
-    if(c.off&&c.out){ const A=_dgOver(c.off.o), B=_dgOver(c.out.o);
+    if(c.off&&c.out&&!c.out.proxy){ const A=_dgOver(c.off.o), B=_dgOver(c.out.o);
       if(A&&B){ const d=A.over-B.over; ds.push(d); const k=srcKey(c.off.src); (bySrc[k]=bySrc[k]||[]).push(d); } }
   }
   const median=a=>{ if(!a||!a.length)return null; const b=a.slice().sort((x,y)=>x-y);
@@ -18444,9 +18629,16 @@ function _dgLiveCell(v){
   return '<b style="color:'+(Math.abs(d.max.v)>=6?(d.warming?'var(--red)':'var(--grn)'):'inherit')+'">'+d.max.side+' '+(d.max.v>=0?'+':'')+d.max.v.toFixed(1)+'pt</b>'
     +'<br><span style="color:var(--mut);font-size:9px">仅两点 开→临 · 抽水 '+(d.overChg>=0?'+':'')+d.overChg.toFixed(1)+'pt</span>';
 }
-function _dgCellLine(label, simV, realV, gap, unit, incomplete){
-  if(incomplete) return '<span style="color:var(--mut);font-size:9.5px" title="按文档五步不成立（缺交锋/近期真值），不建模拟盘、不判档">模拟盘不成立</span>'
-    + (simV!=null?'<br><span style="color:var(--mut);font-size:9px">参考 '+simV.toFixed(2)+'（仅展示）</span>':'');
+function _dgCellLine(label, simV, realV, gap, unit, incomplete, gapKind, gapNote){
+  if(incomplete){
+    const k=gapKind||'noH2H';
+    if(k==='noH2H')               // 设计行为：本源已收录本场，但两队无历史交锋
+      return '<span style="color:var(--mut);font-size:9.5px" title="设计行为：本源已收录本场，但两队无历史交锋记录，按文档五步不成立（不建模拟盘、不判档，单步外推可能是不存在的盘口）">模拟盘不成立 · 无历史交锋</span>'
+        + (simV!=null?'<br><span style="color:var(--mut);font-size:9px">参考 '+simV.toFixed(2)+'（仅展示）</span>':'');
+    // fetchFail / noCapture → 疑似抓取失败 / 本源未收录，琥珀色警示
+    return '<span style="color:#f59e0b;font-size:9.5px" title="'+_dgEsc(gapNote||'源站未收录本场，疑似抓取失败')+'">⚠ 模拟盘不成立 · 源站未收录</span>'
+        + (simV!=null?'<br><span style="color:var(--mut);font-size:9px">参考 '+simV.toFixed(2)+'（仅展示）</span>':'');
+  }
   if(simV==null) return '<span style="color:var(--mut)">缺数据</span>';
   const g=gap!=null?(' <span style="color:'+(Math.abs(gap)>=0.5?'var(--red)':'var(--mut)')+';font-size:9.5px">Δ'+(gap>=0?'+':'')+gap.toFixed(2)+'</span>'):'';
   return '<b>'+simV.toFixed(2)+'</b><span style="opacity:.5"> → </span>'+(realV!=null?('<b>'+realV+(unit||'')+'</b>'):'<span style="color:var(--mut)">实盘缺</span>')+g;
@@ -18461,7 +18653,9 @@ function _dgDetailHTML(r){
               :'　源站 analysis.battle 未覆盖本场，退回 7m 全历史库（7/24~10/13，非文档「近 10 场」口径）'));
   x+=li('建盘状态', s.simComplete
     ? '<b style="color:var(--grn)">五步齐全，按 (①+②)/2、(③+④)/2 成立</b>'
-    : '<b style="color:var(--red)">不成立</b>：'+_dgEsc(s.simWhy)+'。下面 ②④ 的单步数值只是参考，<b>不代入第五步、不与实盘比较、不参与判档</b>');
+    : (s.simGapKind==='noH2H'
+        ? '<b style="color:var(--mut)">不成立（设计行为 · 本源无历史交锋）</b>：'+_dgEsc(s.simWhy)+'。'+_dgEsc(s.simGapNote)+'，下面 ②④ 的单步数值只是参考，<b>不代入第五步、不与实盘比较、不参与判档</b>'
+        : '<b style="color:#f59e0b">不成立（⚠ 疑似抓取失败 · 源站未收录本场）</b>：'+_dgEsc(s.simWhy)+'。'+_dgEsc(s.simGapNote)+'，下面 ②④ 的单步数值只是参考，<b>不代入第五步、不与实盘比较、不参与判档</b>'));
   x+=li('① 交锋场均造球', s.hh?('近 '+s.hh.n+' 场交锋，双方总进球均值 <b>'+s.s1.toFixed(3)+'</b> 球/场（'+s.hh.games.slice(0,4).map(g=>g.g1+':'+g.g2).join('、')+(s.hh.n>4?' …':'')+'）'+(s.hh.n<10?'<span style="color:var(--mut)">（文档用 10 场，本源仅 '+s.hh.n+' 场，置信偏低）</span>':'')+'）'):('<span style="color:var(--mut)">'+(s.hhAll?('仅 '+s.hhAll.n+' 场交锋（&lt;2 场不进公式，防单场极端值带偏）'):'7m 真值库无此对阵交锋，本步跳过')+'</span>'));
   x+=li('② 近期主/客造球', (s.fh&&s.fa)?('主 '+s.fh.gf.toFixed(2)+'进/'+s.fh.ga.toFixed(2)+'丢 = '+s.fh.ball.toFixed(3)+'（n='+s.fh.n+'）；客 '+s.fa.gf.toFixed(2)+'/'+s.fa.ga.toFixed(2)+' = '+s.fa.ball.toFixed(3)+'（n='+s.fa.n+'）→ 主客均值 <b>'+s.s2.toFixed(3)+'</b><br><span style="color:var(--mut)">口径：'+_dgEsc(s.formSrc)+'</span>'):'<span style="color:var(--mut)">缺近期战绩</span>');
   x+=li('大小球均值', s.ou!=null?(s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → 取 0.25 档 <b>'+s.ouLine+'</b> 球'):'不可算');
@@ -18536,7 +18730,9 @@ function _dgOpinion(r){
       if(s.ouLine!=null) seg.push('大小球'+s.ouLine+'→实盘'+(v.realOU!=null?v.realOU:'?'));
       if(s.hcLine!=null) seg.push('让球'+(s.hcLine>0?'主让'+s.hcLine:(s.hcLine<0?'客让'+Math.abs(s.hcLine):'平手'))+'→实盘'+(v.realHc!=null?v.realHc:'?'));
       segs.push((seg.join('、')||'缺模拟线')+(v.abnN?('，'+v.abnN+'项异常'):'，吻合'));
-    } else segs.push('模拟盘不成立（'+(s.simWhy?esc(s.simWhy):'缺步')+'）');
+    } else segs.push(s.simGapKind==='noH2H'
+      ? '模拟盘不成立·无历史交锋（'+(s.simWhy?esc(s.simWhy):'缺步')+'）'
+      : '⚠ 模拟盘不成立·源站未收录（'+(s.simGapKind==='fetchFail'?'疑似抓取失败':'本源无此场')+'）');
   }
   if(r.score && /^\d+\s*:\s*\d+$/.test(String(r.score))){
     const q=String(r.score).split(':').map(Number), B=v.B;
@@ -18580,8 +18776,8 @@ function _dgRowHTML(r){
       +(r.score?'<br><span style="font-size:9.5px;color:var(--grn)">完场 '+_dgEsc(r.score)+'</span>':'')+'</td>'
     + money
     + '<td style="white-space:nowrap;font-size:10.5px" title="CVM odds_timeline 外围逐帧 + jc_history 官方 had 逐帧；无逐帧时回退开盘→临盘两点">'+_dgLiveCell(v)+'</td>'
-    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('大小球',s.ouLine,v.realOU,v.ouGap,'',!s.simComplete)+'</td>'
-    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'',!s.simComplete)+'</td>'
+    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('大小球',s.ouLine,v.realOU,v.ouGap,'',!s.simComplete,s.simGapKind,s.simGapNote)+'</td>'
+    + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'',!s.simComplete,s.simGapKind,s.simGapNote)+'</td>'
     + '<td style="white-space:nowrap"><b style="color:'+v.col+'">'+v.tier+(locked?' 🔒':'')+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
     + '<td style="font-size:9.5px;color:var(--mut);max-width:180px">'+(v.acts.length?_dgEsc(v.acts.slice(0,2).join('；')):'—')+'</td>'
     + '<td style="font-size:10px;line-height:1.5;max-width:320px;color:var(--txt)">'+_dgOpinion(r)+'</td>'
