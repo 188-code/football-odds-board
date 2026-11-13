@@ -3630,6 +3630,21 @@ function analyze(agg, zhanyi, aggBs, ppiInput, tid, home, away, league){
   const o0h=agg.o_h, o0d=agg.o_d, o0a=agg.o_a;
   const o1h=agg.c_h, o1d=agg.c_d, o1a=agg.c_a;
 
+  /* ★ 2026-11-14 治本兜底：欧赔 1X2 源(eu)偶发为空（gqj2 未返回该场欧赔 1X2 行），
+     导致解说帝哥模块对「北单/竞彩收录、但外围欧赔漏抓」的场无法双端对照→"数据不足"。
+     北单/竞彩本身即一个 1X2 市场（SP 就是胜平负赔率），以其 SP 作「外围端代理」存到 _outProxy，
+     **不覆盖**真实的 o1h/coLive（保证"真实外围确实缺失"的真相不丢），供 UI 标注
+     "官方SP代理·非真实外围·Δ不计入判档"。真实外围抓到时 _recalc 会用真值覆盖本代理。
+     仅当本场确为北单/竞彩收录（getBeidan/getJingcai 命中）才注入，避免对野鸡场瞎填。 */
+  if (agg.c_h == null){
+    let _sp = null;
+    try { const _bj = (typeof getBeidan==='function') ? getBeidan(home, away, league) : null;
+          if (_bj && Array.isArray(_bj.sp) && _bj.sp.length===3 && _bj.sp.every(x=>+x>1)) _sp = _bj.sp.map(Number); } catch(e){}
+    if (!_sp){ try { const _jc = (typeof getJingcai==='function') ? getJingcai(home, away) : null;
+          if (_jc && _jc.had && +_jc.had.h>1 && +_jc.had.d>1 && +_jc.had.a>1) _sp = [+_jc.had.h, +_jc.had.d, +_jc.had.a]; } catch(e){} }
+    if (_sp){ agg._outProxy = _sp; agg._euProxy = true; }
+  }
+
   const has_c_asia = (agg.c_valid||0) >= 3;
   const has_c_eu   = (agg.eu_valid||0) >= 3;
 
@@ -5456,6 +5471,10 @@ function analyze(agg, zhanyi, aggBs, ppiInput, tid, home, away, league){
     has_c_asia, has_c_eu, fav,
     /* ★ 2026-10-30 用户要求：365/立博/威廉/英特 4家实时欧赔（初盘→临盘），实时更新参考 */
     coLive: agg.coLive || null,
+    // ★ 2026-11-14 治本兜底：外围真实欧赔缺失时，以北单/竞彩 SP 作"外围端代理"填充（非真实外围），
+    //   UI 据此标注"官方SP代理·非真实外围·Δ不计入判档"，不再干巴巴"数据不足"。
+    outProxy: agg._outProxy || null,
+    euProxy: !!agg._euProxy,
     exp_hcap, pan_gap, pan_type: typ,
     pan_predict: predict,
     // ★ 2026-10-25：结构下盘（盘口结构正信号·独立样本池·不碰 t1 终局门 0.72）。
