@@ -7753,7 +7753,7 @@ function _fundPlateTodayPicks(opt){
        实时板块此前下注方向列写死"拥挤警告·不追高"，无明确方向 → 无法复盘。
        现按「主流/小联赛 + 资金侧 vs 强队 + 净超买档」给明确方向（与历史复盘 _deriveRecDir 同一套）：
          · 翻转型 → 观察·不追高
-         · 强队被买爆 & 主流联赛 → 顺买强队(让球方)，主流命中60-70%
+         · 强队被买爆 & 主流联赛 → 顺买强队(让球方)，仅主流子集边际 edge（69注 +18.7%；全期 +13.4% SE±10 仅边界，投票子集无 edge）
          · 强队被买爆 & 小联赛 & 差值≥10 → 反买受让(站对面66.7%)
          · 强队被买爆 & 小联赛 & 中低档 → 顺买强队 */
     const _lgNow = cleanLeague(m);
@@ -7813,6 +7813,7 @@ function _fundPlateTodayPicks(opt){
         const _og3 = ((_yg3.ygDiff || (h && h.ygDiff) || {}).overGap) === true;
         const _ld3 = (function(){ const b=(_yg3.lvlDiff||{}).bd; return (b!=null&&isFinite(+b))?+b:null; })();
         const _ea3 = String((_aa3.eaGap||{}).verdict || '');
+        const _npR = (h && h.netPt != null && isFinite(+h.netPt)) ? +h.netPt : null;
         let vS=0, vU=0; const vw=[];
         /* ★★ 2026-11-08 铁律对齐：翻转(冷门被买爆) = 只观察·不追高，不投票、直接观察（11-07 复盘证实） */
         if (_isFlip){ return '观察·翻转(冷门被买爆)·只观察不追高(铁律)'; }
@@ -7830,8 +7831,15 @@ function _fundPlateTodayPicks(opt){
         if (_og3){ vU+=1; vw.push('破缺口+1U'); }
         if (_ld3!=null && Math.abs(_ld3)>=2){ vU+=1; vw.push('盘级差'+_ld3+'+1U'); }
         const _tally='(投票S'+vS+':U'+vU+'·'+vw.join(' ')+')';
-        if (vS-vU>=2) return '买强队·'+_favNow+_tally;
-        if (vU-vS>=2) return '买受让·'+_oppNow+_tally;
+        /* ★★ 2026-11-14 用户质问「又是全部一致反买强队」修复：方向必须按数据逐场定，绝不机械一边倒。
+           铁律（v2 重核·样本外）：真 edge = 选择性三盘合流买受让（heat_score≥3，29注 75.9%·ROI+49.2%）；
+           买强队（跟过热方本身）全期 +13.4% SE±10 仅边际、主流子集 +18.7% 撑住；机械反买(非合流) −29% 证伪。
+           → 仅三盘合流(≥3 核心信号：破缺口/盘级差≥2/365造热/盘口浅)才发买受让；
+             主流强队 + 数据挺(非合流) 发买强队(边际)；其余一律观察，绝不机械反买。 */
+        if (_heat4.n>=3) return '买受让·'+_oppNow+_tally;
+        // 主流 + 非三盘合流 + 北单未说强队冷 → 跟过热方本身(买强队)，主流子集 +18.7% 边际 edge
+        if (_isMainNow && _heat4.n<=2 && (_npR==null || _npR>=0)) return '买强队·'+_favNow+'·主流边际+13%SE±10'+_tally;
+        if (vU-vS>=2) return '观察·未三盘合流·机械反买证伪不下注'+_tally.replace(')','·不下注)');
         return '观察·五五开'+_tally.replace(')','·不下注)');
       }catch(e){ return '观察(投票引擎异常)'; }
     })();
@@ -8039,7 +8047,7 @@ function _fundPlateCoverage(){
 /* ★★ 2026-11-06 用户核心问题修复：从账本现有字段推出「当时推荐的下注方向」。
    依据本次四板块复盘：
      · 冷门被买爆(flip) → 观察·翻转(不追高)
-     · 强队被买爆 & 主流联赛 → 顺买强队(让球方)，命中60-70%
+     · 强队被买爆 & 主流联赛 → 顺买强队(让球方)，仅主流子集边际（全期 +13.4% SE±10 边界）
      · 强队被买爆 & 小联赛 & 净超买≥10 → 反买受让(站对面)，命中66.7%
      · 强队被买爆 & 小联赛 & 中低档 → 顺买强队
    字段：heatSide(W/L=资金涌入侧)、strongIsHome(强队是否主场)、kind、over、league */
@@ -8113,7 +8121,7 @@ function _deriveRecDir(e){
 /* ★★ 2026-11-09 引擎代际分类唯一出口（用户抓包：369 条里 119 条被标「口径未识别」，
    其实是投票引擎上线前的规则引擎时代。不按代际分，任何命中率都是三段算法混算）。
    代际：
-     v0   规则引擎（10-28~11-05，recDir 形如「买强队·主队(主流·命中60%·ROI+16%)」）
+     v0   规则引擎（10-28~11-05，recDir 形如「买强队·主队(主流·仅边际 +13%·SE±10)」）
      v1   多信号投票引擎初版（11-06 起，水位「正常+1S」、带独立「365控赔+1S」票）
      v2   11-08 三盘交叉标定后现行版（「实测偏受让/实测偏强」、正常水改投+1U、撤独立365票）
      flip 翻转档（铁律只观察不投票，无方向代际）
@@ -9084,6 +9092,30 @@ function openFundPlate(){
     if (stored) h += '<div style="font-size:9.5px;color:var(--mut);margin-top:3px;line-height:1.55;border-left:2px solid '+pv.col+';padding-left:5px"><b style="color:var(--acc)">我的阵容综合意见：</b>'+esc(stored)+'</div>';
     return h;
   }
+  /* ★ 2026-11-15 三盘合流等级·一眼可辨徽章（用户"A"：过热板要"根据三盘好好看清楚"）。
+     只做清晰度提升 + 诚实分级，绝不改动任何下注阈值（heat_score≥3 等），绝不产假 edge。
+     分级依据（与引擎 v2 同口径，r.bigHot = ①盘同指 + ②盘365不设防 + ③盘北单大热 三盘合流）：
+       🟢 真三盘合流 + 方向=买受让 → 经样本外验证的真 edge（29注 75.9% / ROI +49.2%）
+       🟡 真三盘合流 + 方向=买强队 → 边际（仅主流子集 +18.7% 撑住，投票子集无 edge）
+       🟡 真三盘合流 + 观察       → 方向未达下注门槛
+       🟡 仅③盘未合流(soloHot)  → 只观察（缺①或②，弗拉门戈型误判）
+       ◦  翻转(flip)            → 冷门被买爆·铁律只观察不追高
+       ⚪  常温                  → 不构成过热·观察 */
+  const _confluenceTier=(r)=>{
+    if (r.flip) return { icon:'◦', color:'#7c3aed', label:'翻转·观察（冷门被买爆·铁律只观察不追高）' };
+    if (r.bigHot){
+      const bet = String(r.bet||'');
+      if (bet.indexOf('买受让')===0) return { icon:'🟢', color:'#0a8f4f', label:'真三盘合流·可下注买受让（样本外验证 edge 29注 75.9% · ROI +49.2% · SE±18.6 · 触发稀少）' };
+      if (bet.indexOf('买强队')===0) return { icon:'🟡', color:'#b45309', label:'三盘合流·买强队（边际·仅主流子集撑住）' };
+      return { icon:'🟡', color:'#ca8a04', label:'三盘合流·观察（方向未达下注门槛）' };
+    }
+    if (r.soloHot) return { icon:'🟡', color:'#b45309', label:'仅③盘未合流·只观察（缺①或②）' };
+    return { icon:'⚪', color:'#64748b', label:'常温·不构成过热·观察' };
+  };
+  const _tierBadgeHTML=(r)=>{
+    const t=_confluenceTier(r);
+    return '<div style="display:inline-block;padding:2px 8px;border-radius:6px;font-weight:900;font-size:11px;color:'+t.color+';background:'+t.color+'1f;border:1.5px solid '+t.color+';white-space:nowrap;margin-bottom:4px">'+t.icon+' '+esc(t.label)+'</div>';
+  };
   const _row=(r)=>{ const _g = r.flip ? {color:'#7c3aed',bg:'#ede9fe',tag:'翻转型'} : (r.bigHot&&r.grade ? r.grade : {color:'#94a3b8',bg:'#f1f5f9',tag:''});
     return '<tr onclick="closeFundPlate();jumpToMatch(\''+r.tid+'\')" style="cursor:pointer" title="点击定位到主看板该场实时盘口">'
     +'<td>'+esc(r.ts)+'</td><td>'+esc(r.league)+'</td>'
@@ -9093,7 +9125,8 @@ function openFundPlate(){
        但翻转型不是洋哥定义的"强队(热门方)被散户超买"，它连过热名额都不占，**根本不该判级**。
        故 flip 行徽章只给「观察档·不判级」，且不给「✅ 三盘合流」绿勾
        （翻转型的合流只说明资金方向自洽，不构成大热必死——冷门方基数低，同样资金算出的偏离天然更大）。 */
-    +'<td><span style="background:'+_g.bg+';color:'+_g.color+';font-weight:800;padding:2px 8px;border-radius:4px;white-space:nowrap">'+esc(r.verdict)+(r.flip?' · 观察档·不判级':(r.bigHot&&r.grade&&r.grade.tag?(' · '+r.grade.tag):''))+'</span>'
+    +'<td>'+_tierBadgeHTML(r)
+    +'<span style="background:'+_g.bg+';color:'+_g.color+';font-weight:800;padding:2px 8px;border-radius:4px;white-space:nowrap">'+esc(r.verdict)+(r.flip?' · 观察档·不判级':(r.bigHot&&r.grade&&r.grade.tag?(' · '+r.grade.tag):''))+'</span>'
     +(r.flip
         ? '<div style="font-size:10px;color:#7c3aed;margin-top:2px">🔁 北单买的是<b>冷门方(受让方)</b>，不是强队被超买 → 不构成「大热必死」、不占过热名额</div>'
         : (r.soloHot?'<div style="font-size:10px;color:#b45309;margin-top:2px">⚠ 仅北单超买·未三盘合流（缺①盘同指或②盘设防）</div>':'')
@@ -9129,8 +9162,8 @@ function openFundPlate(){
       const bad = rate < 45;
       return '<div style="margin:0 0 10px;padding:9px 12px;border:1.5px solid ' + (bad ? '#e54545' : 'var(--grn)') + ';border-radius:8px;background:' + (bad ? 'rgba(229,69,69,.10)' : 'rgba(54,194,117,.08)') + ';font-size:12.5px;line-height:1.7">'
         + (bad
-          ? '🔴 <b style="color:#e54545">本板块历史判定胜率仅 ' + rate + '%（' + w + '/' + done.length + ' 场已结算）</b>。已按洋哥原文把门槛收紧到完整三盘合流（①盘真实流速 + ②365不设防 + ③北单差值>缺口或盘级差≥2），但<b>历史数据证明"过热必死"并不成立</b>——本板<b>仅作问题盘观察参考，不提供任何买法，切勿据此反买</b>。'
-          : '🟢 历史判定胜率 ' + rate + '%（' + w + '/' + done.length + ' 场已结算）。仍须三盘合流才出手，本板不提供买法。')
+          ? '🔴 <b style="color:#e54545">本板块历史判定胜率仅 ' + rate + '%（' + w + '/' + done.length + ' 场已结算）</b>。已按洋哥原文把门槛收紧到完整三盘合流（①盘真实流速 + ②365不设防 + ③北单差值>缺口或盘级差≥2），但<b>历史数据证明"过热必死"并不成立</b>——本板<b>现用🟢徽章标出经样本外验证的「真三盘合流·可下注买受让」edge，其余行一律只观察，切勿对观察档机械反买</b>。'
+          : '🟢 历史判定胜率 ' + rate + '%（' + w + '/' + done.length + ' 场已结算）。仍须三盘合流才出手；本板已用🟢/🟡/◦/⚪徽章分级，只有🟢是可下注信号，其余观察档。')
         + '</div>';
     }catch(e){ return ''; }
   })();
@@ -9193,16 +9226,25 @@ function openFundPlate(){
       + '<div style="color:#94a3b8"><b>翻转型</b>（北单把弱势方买到翻转盘口，如美伊）≠ 洋哥定义的"热门方大热"，单独观察，不占上表名额。</div>'
       + '</div></div></details>';
   })();
+  const _confluenceLegend='<div style="background:rgba(10,143,79,.06);border:1px solid rgba(10,143,79,.3);border-radius:8px;padding:9px 12px;margin:8px 0 12px;font-size:12px;line-height:1.9;color:#cdeedb">'
+    +'<div style="font-weight:900;color:#34d399;margin-bottom:3px">🟢 三盘合流等级·一眼看清楚（每行最左「判定」列顶部徽章）</div>'
+    +'<div><b style="color:#0a8f4f">🟢 真三盘合流·可下注买受让</b>：①盘同指 + ②盘365不设防 + ③盘北单大热（r.bigHot）且方向=买受让。这是<b>经样本外验证的唯一真 edge</b>（29注 75.9% / ROI +49.2% / <b>SE±18.6</b>），但<b>触发稀少、样本极小有波动</b>——看到绿色才是有价值的下注信号，且注额须谨慎。</div>'
+    +'<div><b style="color:#b45309">🟡 三盘合流·买强队</b>：合流但方向买强队，仅主流子集有边际 edge，谨慎。<b style="color:#b45309">🟡 仅③盘未合流</b>：只有北单超买、缺①②，弗拉门戈型误判，只观察。</div>'
+    +'<div><b style="color:#7c3aed">◦ 翻转·观察</b>：冷门被买爆，铁律只观察不追高。<b style="color:#64748b">⚪ 常温</b>：不构成过热，观察。</div>'
+    +'<div style="color:#9ca3af;font-size:11px;margin-top:3px">⚠ 绝大多数行是 🟡/◦/⚪ 观察档（不下注）；只有 🟢 才是可下注信号。本板展示集=统计集，不改任何下注阈值。</div>'
+    +'</div>';
   const html=
     _truthBanner
     + _caseReview
+    + _confluenceLegend
     + _scaleDef
     +'<div style="background:linear-gradient(135deg,#0d2818,#10261a);border:1px solid #2faa6a;border-left:4px solid #2faa6a;padding:10px 13px;border-radius:8px;margin:8px 0 12px;line-height:1.85;font-size:13px;color:#cdeedb">'
     +'<div style="font-weight:900;color:#34d399;margin-bottom:4px;font-size:13.5px">✅ 本板实证成效（样本外留出 · 非回测自嗨）</div>'
-    +'<div style="font-size:12.5px">强队过热（净超买≥+3pt）的<b style="color:#fff">真实下注方向 = 顺势买让球方(过热强队本身)</b>，<b style="color:#fff">不是</b>洋哥「大热必死·反买下盘」。</div>'
-    +'<div style="font-size:12.5px;margin-top:2px">· 顺买强队：<b style="color:#34d399">51 场 · 64.7% 命中 · ROI +23.4%</b>（深度分层全同向：盘差 0~0.5 命中 61%、0.5~1 命中 69%）。</div>'
+    +'<div style="font-size:12.5px">强队过热（净超买≥+3pt）的<b style="color:#fff">稳健方向是「选择性三盘合流·买受让」</b>（见🟢徽章，29注 ROI +49.2% SE±18.6）；顺买强队本身全期仅<b style="color:#fff">边际</b>（97注 59.8% / +13.4% SE±10），<b style="color:#fff">不是</b>洋哥「大热必死·反买下盘」。</div>'
+    +'<div style="font-size:12.5px;margin-top:2px">· 顺买强队：51 场(集中10-31) · 64.7% 命中 · ROI +23.4%&nbsp;→&nbsp;<b style="color:#fcd34d">全期仅 +13.4% SE±10 边界</b>（主流子集 +18.7% 撑住，投票子集无 edge）。</div>'
     +'<div style="font-size:12.5px;margin-top:2px;color:#fca5a5">· 反买下盘（洋哥原法）：<b>35.3% 命中 · ROI −29%</b> → 已证伪，<b>不要做</b>。</div>'
-    +'<div style="font-size:11px;color:#9ca3af;margin-top:3px">⚠ 样本偏集中 10-31（42/51 场）→ 方向明确、注额谨慎，不锁死重仓。每场最终方向见右侧「系统方向」列。</div>'
+    +'<div style="font-size:12.5px;margin-top:2px;color:#34d399">· <b>真 edge = 选择性三盘合流·买受让</b>：29注 75.9% / ROI +49.2% / SE±18.6（样本外稳健，但触发稀少、样本小、波动高）。</div>'
+    +'<div style="font-size:11px;color:#9ca3af;margin-top:3px">⚠ 顺买强队样本偏集中 10-31（42/51 场）；+13.4% / +49.2% 样本均小（SE 大），波动风险高，注额谨慎，不锁死重仓。每场最终方向见右侧「系统方向」列。</div>'
     +'</div>'
     +'<div style="background:linear-gradient(135deg,#2a1b3d,#221a33);border-left:4px solid #a855f7;padding:10px 12px;border-radius:6px;margin:8px 0 12px;line-height:1.9;font-size:13px;color:#e6dbff">'
     +'<div style="font-weight:800;color:#c4a5ff;margin-bottom:2px">💡 三句话看懂（本板发拥挤警告 + 给实证下注方向）</div>'
@@ -18555,7 +18597,7 @@ function _dgVerdict(m, opt){
   why.push('<span style="color:var(--mut)">近期数据源：'+_dgEsc(sim.formSrc)+'；异常门 |Δ|≥'+gate+' 球</span>');
   return {m,zone,sim,off,out,A,B,delta,dev,med,medSrc:opt.medSrc||'',medN:opt.medN||0,medFallback:!!opt.medFallback,
           rawGate,rawGateSym,overGate,medUsable,medGlobalN:opt.globalN||0,per,maxPer,hotPer,favPer,hotSide,spread,drift,live,formRecent:sim.formRecent,
-          realOU,realHc,ouGap,hcGap,ouAbn,hcAbn,abnN,gate,tier,col,act,why,acts};
+          realOU,realHc,ouGap,hcGap,ouAbn,hcAbn,abnN,gate,tier,col,act,why,acts,degraded:(!sim.simComplete)};
 }
 
 /* ---- 组装行（两遍：先算本批抽水差中位数，再去基差判档） ---- */
@@ -18783,7 +18825,8 @@ function _dgRowHTML(r){
     + '<td style="white-space:nowrap;font-size:10.5px" title="CVM odds_timeline 外围逐帧 + jc_history 官方 had 逐帧；无逐帧时回退开盘→临盘两点">'+_dgLiveCell(v)+'</td>'
     + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('大小球',s.ouLine,v.realOU,v.ouGap,'',!s.simComplete,s.simGapKind,s.simGapNote)+'</td>'
     + '<td style="white-space:nowrap;font-size:10.5px">'+_dgCellLine('让球',s.hcLine,v.realHc,v.hcGap,'',!s.simComplete,s.simGapKind,s.simGapNote)+'</td>'
-    + '<td style="white-space:nowrap"><b style="color:'+v.col+'">'+v.tier+(locked?' 🔒':'')+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
+    + '<td style="white-space:nowrap">'+(v.degraded?'<span style="display:inline-block;font-size:9px;font-weight:800;color:#b45309;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:0 5px;margin-bottom:2px">⚠ 降级观察·五步不全</span><br>':'')
+    + '<b style="color:'+v.col+'">'+v.tier+(locked?' 🔒':'')+'</b><br><span style="font-size:9.5px;color:var(--mut)">'+_dgEsc(v.act)+'</span></td>'
     + '<td style="font-size:9.5px;color:var(--mut);max-width:180px">'+(v.acts.length?_dgEsc(v.acts.slice(0,2).join('；')):'—')+'</td>'
     + '<td style="font-size:10px;line-height:1.5;max-width:320px;color:var(--txt)">'+_dgOpinion(r)+'</td>'
     + '<td style="white-space:nowrap"><a onclick="_dgToggle(\''+_dgEsc(r.tid)+'\');return false" style="cursor:pointer;color:var(--acc);font-size:10px">五步算式 ▾</a></td>'
@@ -18998,6 +19041,7 @@ function _dgDataStatusHTML(b){
   const nH2H=rows.filter(r=>r.v.sim.hhAll&&r.v.sim.hhAll.n>=2).length;
   const nH2HAny=rows.filter(r=>r.v.sim.hhAll&&r.v.sim.hhAll.n>=1).length;
   const nSim=rows.filter(r=>r.v.sim.simComplete).length;
+  const nDegraded=rows.length - nSim;
   const nSrc=rows.filter(r=>r.v.sim.battle).length;
   const nBX=rows.filter(r=>r.v.sim.battle&&r.v.sim.battle.hh).length;
   const ok=!!R&&nR>0, dok=!!D&&D.n>0;
@@ -19006,6 +19050,7 @@ function _dgDataStatusHTML(b){
    + ' · 本表命中 <b>'+nSrc+'</b> / '+rows.length+' 场（其中历史交锋有逐场真值 <b>'+nBX+'</b> 场）'
    + ' · 源站每组通常给 5 场（文档要 10 场），样本数见逐场明细，&lt;3 场不进公式'
    + '<br><b style="color:'+(nSim?'var(--grn)':'var(--yel)')+'">甲·模拟盘五步齐全 <b>'+nSim+'</b> / '+rows.length+' 场</b>：缺 ①③ 交锋真值的场按文档五步不成立 → <b>不建盘、不比实盘、不参与判档</b>（表中显示「模拟盘不成立」，参考值仅展示）'
+   + '<br><b style="color:var(--yel)">乙·降级观察（五步不全）<b>'+nDegraded+'</b> / '+rows.length+' 场</b>：这些场甲·模拟盘五步不成立 → 已逐场显式标「降级观察」，其模拟盘不建/不比实盘；判档仍由乙(抽水差)单独给出，吻合率按现有 n&lt;5 口径谨慎读，绝不冒充可下注结论。'
    + '<br><span style="color:var(--mut)">回退源（仅源站缺步时）：7m 交锋库 '+nH+' 对 / 近10场真值表 '+nR+' 队（'+(meta.span?meta.span.join(' ~ '):'—')+'，止于 2026-10-13、非滚动）；本表 '+nH2HAny+' 场命中交锋、其中 ≥2 场可进公式 '+nH2H+' 场；'+nRecent+' 场用 n≥5 近况口径，其余异常门放宽到 1.0 球。</span>'
    + (ok?'':'<br><span style="color:var(--red)">⚠ 7m 回退真值表也缺失，模拟盘第②步口径变粗，判档仅可作背景对照。</span>')
    + '</div>';
