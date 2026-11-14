@@ -18788,8 +18788,12 @@ function _dgDetailHTML(r){
         : '<b style="color:#f59e0b">不成立（⚠ 疑似抓取失败 · 源站未收录本场）</b>：'+_dgEsc(s.simWhy)+'。'+_dgEsc(s.simGapNote)+'，下面 ②④ 的单步数值只是参考，<b>不代入第五步、不与实盘比较、不参与判档</b>'));
   x+=li('① 交锋场均造球', s.hh?('近 '+s.hh.n+' 场交锋，双方总进球均值 <b>'+s.s1.toFixed(3)+'</b> 球/场（'+s.hh.games.slice(0,4).map(g=>g.g1+':'+g.g2).join('、')+(s.hh.n>4?' …':'')+'）'+(s.hh.n<10?'<span style="color:var(--mut)">（文档用 10 场，本源仅 '+s.hh.n+' 场，置信偏低）</span>':'')+'）'):('<span style="color:var(--mut)">'+(s.hhAll?('仅 '+s.hhAll.n+' 场交锋（&lt;2 场不进公式，防单场极端值带偏）'):'7m 真值库无此对阵交锋，本步跳过')+'</span>'));
   x+=li('② 近期主/客造球', (s.fh&&s.fa)?('主 '+s.fh.gf.toFixed(2)+'进/'+s.fh.ga.toFixed(2)+'丢 = '+s.fh.ball.toFixed(3)+'（n='+s.fh.n+'）；客 '+s.fa.gf.toFixed(2)+'/'+s.fa.ga.toFixed(2)+' = '+s.fa.ball.toFixed(3)+'（n='+s.fa.n+'）→ 主客均值 <b>'+s.s2.toFixed(3)+'</b><br><span style="color:var(--mut)">口径：'+_dgEsc(s.formSrc)+'</span>'):'<span style="color:var(--mut)">缺近期战绩</span>');
-  x+=li('大小球均值 → ⑤ 结论', s.ou!=null?(s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → <b style="color:var(--grn)">文档第五步锚定 2.5 球</b>（原文「开盘不能低于2.5、也不能高于2.5」；例题 2.6 亦只取约等于 2.5）'
-    +'<br><span style="color:var(--mut);font-size:9.5px">模块连续 0.25 档算值 '+(s.ouLineCalc!=null?s.ouLineCalc:'—')+' 球<b>仅作对照</b>，不代入第五步、不与实盘比较、不参与判档；原文未定义「算值偏离 2.5 如何处置」，本模块不擅自加门</span>'):'不可算');
+  x+=li('大小球均值 → ⑤ 结论', s.ou!=null
+    ? (s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → '+(s.simComplete
+        ? '<b style="color:var(--grn)">文档第五步锚定 2.5 球</b>（原文「开盘不能低于2.5、也不能高于2.5」；例题 2.6 亦只取约等于 2.5）'
+        : '<b style="color:var(--mut)">模拟盘不成立（五步缺步）· 仅参考值、不产出结论</b>')
+       +'<br><span style="color:var(--mut);font-size:9.5px">连续 0.25 档算值 '+(s.ouLineCalc!=null?s.ouLineCalc:'—')+' 球<b>仅作对照</b>，不代入第五步、不与实盘比较、不参与判档'+(s.simComplete?'；原文未定义「算值偏离 2.5 如何处置」，本模块不擅自加门':'')+'</span>')
+    : '不可算');
   x+=li('③ 交锋净胜差', s.hh?('统一到当前主队视角，均值 <b>'+(s.s3>=0?'+':'')+s.s3.toFixed(3)+'</b> 球（正=主队占优）'):'—');
   x+=li('④ 近期净胜差之差', (s.fh&&s.fa)?('主净胜 '+(s.fh.diff>=0?'+':'')+s.fh.diff.toFixed(3)+' − 客净胜 '+(s.fa.diff>=0?'+':'')+s.fa.diff.toFixed(3)+' = <b>'+(s.s4>=0?'+':'')+s.s4.toFixed(3)+'</b>'):'—');
   x+=li('盘口均值', s.hc!=null?(s.hcHow+' = <b>'+(s.hc>=0?'+':'')+s.hc.toFixed(3)+'</b> → 取 0.25 档 <b>'+(s.hcLine>0?'主让 '+s.hcLine:(s.hcLine<0?'客让 '+Math.abs(s.hcLine):'平手'))+'</b>'):'不可算');
