@@ -7837,9 +7837,10 @@ function _fundPlateTodayPicks(opt){
            → 仅三盘合流(≥3 核心信号：破缺口/盘级差≥2/365造热/盘口浅)才发买受让；
              主流强队 + 数据挺(非合流) 发买强队(边际)；其余一律观察，绝不机械反买。 */
         // ★★ 2026-11-15 修正：方向由三盘数据算出来，绝不写死一边倒。
-        //   三盘合流(_heat4.n>=3) + heatSide 明确 + netPt>0 → 买【过热方的对面】：
+        //   三盘合流(_heat4.n>=3) + heatSide 明确 → 买【过热方的对面】：
         //     heatSide==强队 → 弱队受让（真 edge +49.2%）；heatSide==弱队 → 强队让球（站对面value）
         //   heatSide==平局/不清 或 未达合流 → 观察。双源(北单+竞彩)都说弱队过热 → 强队让球(弱置信)
+        //   注：netPt/jcDev 仅作展示信息，不卡方向门槛（真 edge 定义只需 heatScore≥3）。
         const _hsNow = (h && h.heatSide) || (_yg3 && _yg3.heatSide) || null;
         const _favOutNow = (_favNow === '主队') ? 'W' : 'L';
         const _hotNow = (_hsNow === 'W' || _hsNow === 'L') ? _hsNow : null;
