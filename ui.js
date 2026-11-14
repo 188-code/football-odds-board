@@ -1542,7 +1542,8 @@ function cleanTeam(m, side){
   //    收口 zh/zht/sb 多写法 + 跨源异名 妙瓦底↔米瓦迪 等），保证主列表/精选/档位板完全一致。
   const tid = m[side+'_team_id'];
   const lm = _leisuOf(tid);
-  if (lm && lm.n && lm.n.length >= 2) return lm.n;
+  // ★ 2026-11-14 健壮性：leisu 名也可能是裸 PUA / 实体串，必须先解码再返回，否则直接吐给 innerHTML 变豆腐块。
+  if (lm && lm.n && lm.n.length >= 2){ const _d = decodeName(lm.n); if (_d.length>=2) return _d; }
   if (typeof normTeamName === 'function'){
     const nm = normTeamName(tid, m[side+'_name_zh'], m[side+'_name_zht'], m[side+'_name_sb']);
     if (nm && nm.length>=2) return nm;
@@ -1555,6 +1556,8 @@ function cleanTeam(m, side){
   for (const c of cand){ const s=decodeName(c); if (s.length>=2) return s; }
   // 兜底：去标签清洗
   for (const c of cand){ const s=cleanName(c); if (s.length>=2) return s; }
+  // ★ 2026-11-14：最终兜底前再 decode 一次，彻底斩断裸 PUA/实体透传链（绝不产出含 &#xNNNN; 或裸 PUA 的串）。
+  for (const c of cand){ const s=decodeName(c); if (s && s.length>=1) return s; }
   // 最终兜底：绝不产出含 undefined 的串。
   if (tid != null && tid !== '') return (side==='home'?'主':'客') + '#' + tid;
   return '未知队';
@@ -2237,7 +2240,7 @@ async function loadMatches(){
       if (e && e.message === 'NET_TIMEOUT' && BAKE_READY) {
         const fbT = (typeof fallbackTimeText === 'function') ? fallbackTimeText() : '';
         $('conn').className='pill warn'; $('conn').textContent='● 离线快照';
-        setBaseUpd('离线快照 · 共' + (MATCHES.length||0) + '场 · 数据生成 ' + fbT + '（实时源拉取超时，已用本地快照；网络恢复后自动重试）');
+        setBaseUpd('离线快照 · 数据生成 ' + fbT + '（实时源拉取超时，已用本地快照；网络恢复后自动重试）');
         showOfflineBanner(fbT);
         return;   // 快照已由 applyFallback 秒出，直接收尾，不再干等源站
       }
@@ -2983,7 +2986,7 @@ async function offlineBatchAnalyze(){
       $('upd').textContent = (i < front.length)
         ? `${_baseUpd?_baseUpd+' · ':''}快照分析 ${i}/${front.length}（首屏）…`
         : (restN ? `${_baseUpd?_baseUpd+' · ':''}首屏分析完成，后台补算 ${restN} 场…`
-                 : `${_baseUpd?_baseUpd+' · ':''}快照分析完成，共 ${MATCHES.length} 场 / 已分析 ${done} 场${skipped?`（${skipped} 场无赔率·未开盘）`:''}`);
+                 : `${_baseUpd?_baseUpd+' · ':''}快照分析完成，共 ${MATCHES.length} 场 / 已分析 ${done} 场（含快照预分析）${skipped?` · ${skipped} 场无赔率·未开盘`:''}`);
       _obaThrottledRender();
     } finally {
       if (i < front.length) setTimeout(step, 0);
@@ -9916,6 +9919,8 @@ function loadHcLogStat(){
 let _hcLogTimer = null;
 function startHcLogTimer(){
   if (_hcLogTimer) return;
+  // 立即扫一轮（赛前捕获不等地等 15 分钟），随后每 15 分钟一轮
+  try { collectHcPicks(window._bifenRows || []); } catch(e){}
   try {
     _hcLogTimer = setInterval(() => {
       try {
