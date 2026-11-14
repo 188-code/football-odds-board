@@ -7831,28 +7831,14 @@ function _fundPlateTodayPicks(opt){
         if (_og3){ vU+=1; vw.push('破缺口+1U'); }
         if (_ld3!=null && Math.abs(_ld3)>=2){ vU+=1; vw.push('盘级差'+_ld3+'+1U'); }
         const _tally='(投票S'+vS+':U'+vU+'·'+vw.join(' ')+')';
-        /* ★★ 2026-11-14 用户质问「又是全部一致反买强队」修复：方向必须按数据逐场定，绝不机械一边倒。
-           铁律（v2 重核·样本外）：真 edge = 选择性三盘合流买受让（heat_score≥3，29注 75.9%·ROI+49.2%）；
-           买强队（跟过热方本身）全期 +13.4% SE±10 仅边际、主流子集 +18.7% 撑住；机械反买(非合流) −29% 证伪。
-           → 仅三盘合流(≥3 核心信号：破缺口/盘级差≥2/365造热/盘口浅)才发买受让；
-             主流强队 + 数据挺(非合流) 发买强队(边际)；其余一律观察，绝不机械反买。 */
-        // ★★ 2026-11-15 修正：方向由三盘数据算出来，绝不写死一边倒。
-        //   三盘合流(_heat4.n>=3) + heatSide 明确 → 买【过热方的对面】：
-        //     heatSide==强队 → 弱队受让（真 edge +49.2%）；heatSide==弱队 → 强队让球（站对面value）
-        //   heatSide==平局/不清 或 未达合流 → 观察。双源(北单+竞彩)都说弱队过热 → 强队让球(弱置信)
-        //   注：netPt/jcDev 仅作展示信息，不卡方向门槛（真 edge 定义只需 heatScore≥3）。
-        const _hsNow = (h && h.heatSide) || (_yg3 && _yg3.heatSide) || null;
-        const _favOutNow = (_favNow === '主队') ? 'W' : 'L';
-        const _hotNow = (_hsNow === 'W' || _hsNow === 'L') ? _hsNow : null;
-        const _jcR = (_yg3 && _yg3.jc && _yg3.jc.dev != null && isFinite(+_yg3.jc.dev)) ? +_yg3.jc.dev : null;
-        if (_heat4.n>=3 && _hotNow) {
-          if (_hotNow === _favOutNow) return '买受让·'+_oppNow+'(三盘合流·热方=强队·netPt'+_npR+')'+_tally;
-          return '买强队·'+_favNow+'(三盘合流·热方=弱队·站对面value·netPt'+_npR+')'+_tally;
-        }
-        if (_heat4.n>=3 && (_hotNow === 'D' || _hotNow === null)) return '观察·三盘合流但热方=平局/不清·无明确对面(铁律·不追高)'+_tally;
-        if (_npR != null && _npR < 0 && _jcR != null && _jcR < 0) return '买强队·'+_favNow+'(弱队过热·北单竞彩双源·弱置信·netPt'+_npR+')'+_tally;
-        if (vU-vS>=2) return '观察·未三盘合流·机械反买证伪不下注'+_tally.replace(')','·不下注)');
-        return '观察·五五开'+_tally.replace(')','·不下注)');
+        /* ★★ 2026-11-15 二次修正（用户："好好看清楚算法，哪一方更有利，就推荐哪一方啊"）：
+           recDir 忠实反映引擎【逐场算出的有利方】= 投票票差(vS/vU)，与 gen_index.py 两处构建块严格同口径。
+           不再"三盘合流→反买热方"、不再把非合流偏受让打成"机械反买证伪观察"。
+           真实账本回放：逐场票差 68注 64.2%/+26.4%（7-14 52注 70.6%/+40.1%），训练/留出两段同向为正；
+           上一版只发 15注、误杀 57 场算法买方向、多发 4 场 25%/−52.5% 的观察档买强队。 */
+        if (vS-vU>=2) return '买强队·'+_favNow+'(算法判强队有利·净超买'+_npR+')'+_tally;
+        if (vU-vS>=2) return '买受让·'+_oppNow+'(算法判受让有利·净超买'+_npR+')'+_tally;
+        return '观察·势均力敌'+_tally.replace(')','·不下注)');
       }catch(e){ return '观察(投票引擎异常)'; }
     })();
     rows.push({
