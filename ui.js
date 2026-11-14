@@ -8831,6 +8831,10 @@ function fundplateHistoryHTML(){
      + '<div style="margin-top:3px;font-size:10.8px;opacity:.78;line-height:1.6">当前显示 <b style="color:#c4b5fd">'+items.length+'</b> 场 · '+_sortTxt
      + ' · <b>上方统计与下方表格同步按当前筛选计算</b>（红/绿结论条为全账本固定口径，不随筛选变化）。切换即时刷新，不会重开面板。 · 🔥正式强推 = recDirAlt（选择性三盘合流买受让 / 主流主场买强队）已置顶高亮；买强队仅边际标"可跟"(不标强推)</div>'
      + '</div>';
+  /* ★ 2026-11-15 方向推荐·赛前样本外业绩（独立冻结账本 dir_ledger.json）。
+     与上方「历史复盘」统计刻意分开：上方是 fundplate_history 的可重算回测，
+     这里才是「首登冻结 pick + 严格赛前 + 赛果回填」的前向业绩，两者不可混算。 */
+  h += '<div id="dirLedgerStat" style="margin:4px 0 9px;padding:9px 11px;border-radius:9px;background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.32);font-size:11.5px;color:#dbe6f2;line-height:1.75">🎯 <b style="color:#6ee7b7">方向推荐·赛前样本外业绩</b>：读取中…</div>';
   if (items.length){
     h += '<table id="fpHistTable" style="width:100%;border-collapse:collapse;font-size:12.5px">'
        + '<thead><tr style="color:var(--mut);font-size:11px;text-align:left">'
@@ -9373,9 +9377,10 @@ function openFundPlate(){
            +'</tbody></table>')
         : '')
     +'<p class="note" style="margin-top:12px">📊 <b>判定口径（净超买点数 pt · 与参考软件逐项对齐）</b>：<b>N pt = 北单真实投注占比 − 公平胜率 − 返还率缺口</b>（绝不再 ÷4.7、绝不叫"级"）。<br>· <b>北单占比</b>＝北单赔率池反推的真实资金买入比例（先有资金后有赔率，100% 真实）；<br>· <b>公平胜率</b>＝365 欧赔去水后的真实胜率；<br>· <b>返还率缺口</b>＝(1−365返还率)×100，即"抽水吃掉的那几个点"，约 6~11pt；<br>· <b>单位就是 pt（百分点）</b>：洋哥《盘级换算详解》里 0.25 球=1 盘级=4.7pt，那是<b>盘口偏差</b>的尺度，和"资金净超买 pt"是两个概念，切勿混用——本板 N 直接是占比减公平减缺口的净值，个位数属常态。<br>所以里尔那种「+7」＝ 净超买约 +6.5~+7pt（占比高出公平约15pt、再扣缺口8.6pt），个位数；本板同单位、同量级。<b>只标强队</b>：参考软件「强队」列同理——弱队被买热不构成大热必死。</p>'
-    +'<p class="note" style="margin-top:8px"><b>🎯 买法为什么是「走下盘受让」</b>：强队被散户买爆 → 庄家顺势压赔、造热 → 强队赢盘难度上升（洋哥"大热必死"）。故反买：<b>下盘＝受让方＝强队的对手</b>。本板「买法」列已直接算出该买哪支队，不用自己推。<br><b>护栏（防假信号）</b>：① 只用北单源（澳客 ppi 是计算热度、非真实资金，会刷 +89pt 垃圾）；② 方向对齐 bdDirOk（北单热门方须与欧赔同侧，否则北单错行会伪造假热）；③ 只收强队侧。<br><b>⚠️ 边界</b>：北单仅覆盖约 66/3300 场，所以只有这些场能标（参考软件同理）；"+N" 是<b>拥挤度警告</b>，不是必胜——历史回测样本仍小，须持续跟踪。点击任一行可定位主看板看实时盘口。</p>'
+    +'<p class="note" style="margin-top:8px"><b>🎯 推荐方向：由算法逐场算「哪一方更有利」，不固定一边倒</b>：投票引擎按 7 类信号（三盘净超买 / 竞彩偏差 / 破缺口 / 盘级差 / 365造热 / 真实水位 / 盘口深浅）逐场投 S(挺强队让球) 与 U(挺弱队受让)，<b>票差≥2 才出方向</b> —— 买强队还是买受让由该场数据决定。每行「🎯 推荐方向」列就是当时发出的意见原文。<b>旧文案「一律反买走下盘受让」已于 2026-11-15 废弃</b>（那是把「反买热方」当规则用，证伪）。<br><b>护栏（防假信号）</b>：① 只用北单源（澳客 ppi 是计算热度、非真实资金，会刷 +89pt 垃圾）；② 方向对齐 bdDirOk（北单热门方须与欧赔同侧，否则北单错行会伪造假热）；③ 翻转(冷门被买爆) 按铁律只观察不追高。<br><b>⚠️ 边界</b>：北单仅覆盖约 66/3300 场；"+N" 是<b>拥挤度警告</b>不是必胜。上方「方向推荐·赛前样本外业绩」栏才是真正的前向业绩（首登冻结 pick），历史回测不可当业绩。点击任一行可定位主看板看实时盘口。</p>'
     +'<div id="fpHistHost">'+fundplateHistoryHTML()+'</div>';
   $('fundPlateContent').innerHTML=html;
+  try { loadDirLedgerStat(); } catch(e){}   // ★ 2026-11-15 每次打开资金板都拉最新「赛前样本外业绩」
   $('fundPlateModal').classList.add('show');
 }
 function closeFundPlate(){ const _m=$('fundPlateModal'); if(_m)_m.classList.remove('show'); }
@@ -9955,6 +9960,51 @@ function loadHcLogStat(){
       + ' ｜ 赛前(pre)：' + pct(preHit.length, pre.length) + se(pre.length)
       + ' <span style="color:var(--mut)">(' + tag + ')</span>';
   }).catch(()=>{ el.textContent = '🔥高置信累计(日志)：读取失败'; });
+}
+/* ★ 2026-11-15 方向推荐·赛前样本外账本（服务端 _dir_ledger.py 每轮维护，前端只读）
+   口径铁律：只收严格赛前(state=0 且 ko>now) 且算法给了明确买方向的场次；
+   首登冻结 pick/意见原文/盘口水位/票差/规则版本，算法改版不回写；
+   结算用真实盘口+水位的 plStrong/plUnder，已结算不覆盖。
+   ★ 与 fundplate_history 的「历史复盘」可重算回测分列，绝不可混算成绩。 */
+function loadDirLedgerStat(){
+  const el = document.getElementById('dirLedgerStat');
+  if (!el) return;
+  fetch('dir_ledger.json', { cache:'no-store' }).then(r=>r.json()).then(d=>{
+    const s = (d && d.summary) || {};
+    const pct = (h,n) => (n ? Math.round(h/n*1000)/10 + '%' : '—');
+    const a = s.all || {};
+    const tag = a.significant ? '<b style="color:#6ee7b7">显著</b>'
+              : (a.crossZero ? '<b style="color:#fbbf24">跨0(与零无差异)</b>' : '<span style="opacity:.75">样本偏小</span>');
+    const se = (a.se != null) ? ' ±' + Math.round(a.se) + 'pt' : '';
+    const upd = s.updatedAt ? new Date(s.updatedAt*1000).toLocaleString('zh-CN',{hour12:false}) : '—';
+    let html = '🎯 <b style="color:#6ee7b7">方向推荐·赛前样本外业绩</b>（独立冻结账本 · 前向累积）'
+      + '<div style="margin-top:4px">已登记 <b>' + (s.total||0) + '</b> 场'
+      + ' ｜ 赛前 pre <b style="color:#6ee7b7">' + (s.pre||0) + '</b> / 开赛后补登 ' + (s.post||0)
+      + ' ｜ 已结算 <b>' + (s.settled||0) + '</b> / 待结算 ' + (s.pending||0) + '</div>';
+    if (a.n) {
+      html += '<div style="margin-top:3px">合计：<b style="color:var(--red)">命中 ' + pct(a.win, a.win+a.lose)
+        + '</b>（' + a.win + '胜/' + a.lose + '负/' + a.push + '走）'
+        + ' ｜ ROI <b style="color:' + ((a.roi>=0)?'var(--red)':'#4ade80') + '">' + (a.roi>0?'+':'') + a.roi + '%</b>'
+        + se + ' ｜ ' + tag + '</div>';
+      const bp = s.byPick || {};
+      const parts = [];
+      for (const k of ['买强队','买受让']) {
+        const v = bp[k];
+        if (v && v.n) parts.push(k + ' ' + v.n + '注 命中' + pct(v.win, v.win+v.lose) + ' ROI' + (v.roi>0?'+':'') + v.roi + '%');
+      }
+      if (parts.length) html += '<div style="margin-top:2px;opacity:.9">按方向：' + parts.join(' ｜ ') + '</div>';
+      const bv = s.byRuleV || {};
+      const vers = Object.keys(bv);
+      if (vers.length > 1) html += '<div style="margin-top:2px;opacity:.8">⚠ 含 ' + vers.length + ' 个规则版本，业绩须分版本看（' + vers.join(' / ') + '）</div>';
+    } else {
+      html += '<div style="margin-top:3px;opacity:.85">暂无已结算场次 —— 账本从 2026-11-15 起<b>只登记严格赛前</b>发出的方向，开赛后自动回填，逐日累积真前向业绩。</div>';
+    }
+    html += '<div style="margin-top:3px;font-size:10.5px;opacity:.7">口径：首登冻结 pick/意见原文/盘口水位/票差/版本，算法改版不回写；结算用真实盘口 realHcap + 水位 water 的 plStrong/plUnder。'
+      + '本栏与上方「历史复盘」的可重算回测分列，<b>不可混算</b>。SE=100/√n。</div>'
+      + '<div style="margin-top:2px;font-size:10.2px;opacity:.62">账本更新：<b>' + upd + '</b> ｜ 数据源：' + String(s.srcUsed || '—')
+      + ' ｜ 权威写入方：本地 8080 定时链（每 15 分钟）；公网板为最近一次部署的只读快照，以上面时刻为准。</div>';
+    el.innerHTML = html;
+  }).catch(()=>{ el.innerHTML = '🎯 <b style="color:#6ee7b7">方向推荐·赛前样本外业绩</b>：日志读取失败（权威账本由本地 8080 定时链维护，公网板为部署快照）'; });
 }
 let _hcLogTimer = null;
 function startHcLogTimer(){
@@ -18203,8 +18253,12 @@ function _dgBattle(m){
   const ok=v=>v&&v.n>=MIN?v:null;
   const X=ok(bx), FH=ok(bh), FA=ok(ba);
   if(!X&&!FH&&!FA) return null;
+  /* ★ 2026-11-15：D盘赛果补齐的交锋/近况是 11 天窗口真实终场比分，不是「近10场」口径，
+     来源必须明示（e.src 由 gen_index 第四级补齐写入），否则会把浅窗口当深口径用。 */
+  const _srcNote = e.src ? ('｜⚠ 部分逐场来自 '+e.src) : '';
   return {hh:X,fh:FH,fa:FA,raw:{x:bx,h:bh,a:ba},rows:e,
-          note:'源站逐场：交锋 '+(bx?bx.n:0)+' 场 / 主队近况 '+(bh?bh.n:0)+' 场 / 客队近况 '+(ba?ba.n:0)+' 场'};
+          note:'源站逐场：交锋 '+(bx?bx.n:0)+' 场 / 主队近况 '+(bh?bh.n:0)+' 场 / 客队近况 '+(ba?ba.n:0)+' 场'+_srcNote,
+          srcNote:e.src||''};
 }
 function _dgSim(m){
   const h=_dgName(m,'home'), a=_dgName(m,'away');
@@ -18229,6 +18283,8 @@ function _dgSim(m){
   else if(s3!=null){ hc=s3; hcHow='仅③'; }
   const conf = (hh&&hh.n>=4?1:0) + (fh&&fa&&fh.n>=6&&fa.n>=6?1:0);
   const formSrc = (fh&&fa&&fh.src===fa.src) ? fh.src : ((fh&&fh.src)||(fa&&fa.src)||'—');
+  /* ★ 2026-11-15：把 D盘赛果补齐的来源标注接进口径说明，避免 11 天浅窗口被当成「近10场」。 */
+  const sourceNote = (B && B.srcNote) ? (formSrc + ' ｜⚠ 部分逐场来自 ' + B.srcNote) : formSrc;
   // ★ 2026-11-11 修：原判档用 formSrc.indexOf('近') 判「是否真近10场」，但回退文本里
   //   「非近10场」也含「近」字 → 724 场全部被当成真值、异常门错用 0.5 球（本应 1.0）。
   //   改为显式布尔，任何字符串都不再参与口径判断。
@@ -18257,7 +18313,7 @@ function _dgSim(m){
     }
   }
   return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ou!=null?_dgQ(ou):null,
-          hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc,formRecent,simComplete,simWhy,
+          hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc:sourceNote,formRecent,simComplete,simWhy,
           simGapKind,simGapNote,
           battle:B, simSrc:B?'雷速源站逐场':'7m 老库回退（数据止于 2026-10-13）'};
 }
@@ -18325,6 +18381,13 @@ function _dgOuter(m){
      引擎已用官方 SP 作"外围端代理"填入 an.outProxy（euProxy=true 标记）。此处返回代理（标注 proxy），供判档明确区分
      "非真实外围·Δ不计入判档"，避免把代理当真实外围误判。 */
   if (an.outProxy && _dgOver(an.outProxy)) return {src:'官方SP代理(非真实外围)', o:an.outProxy, proxy:true};
+  /* ★ 2026-11-15 补齐：bake odds.eu 单公司原始行。
+     engine 的 eu_valid>=3 门槛把「只有 1 家公司」的场整条丢了，但原文口径本就是「一家外围独赢」。
+     补入但明确标注「非汇总」，Δ 可算、页面标源，绝不冒充 Bet365/欧赔汇总。 */
+  const RAW=window.__DG_OUTER_RAW__||{};
+  const rw=RAW[String(m.tid||'')];
+  if (rw && _dgOver(rw.o)) return {src:rw.src||'单公司外围原始行(非汇总)', o:rw.o, o0:rw.o0||null,
+                                   raw:true, coN:rw.n||0};
   return null;
 }
 /* 外围多家公司抽水离散（野鸡区替代判据，属扩展应用、非原文） */
@@ -18357,10 +18420,18 @@ function _dgTrail(m){
   const o={n:0,frames:[],dual:0,persist:null,offPersist:null,first:'',last:'',
            note:'',outN:0,offN:0,src:''};
   if(!D){ o.note='本轮未注入逐帧真值'; return o; }
-  const arr=(D.f||{})[String(m.tid||'')]||[];
+  const tid=String(m.tid||'');
+  const arr=(D.f||{})[tid]||[];
   const key=_dgName(m,'home')+'vs'+_dgName(m,'away');
-  const J=((D.j||{})[key]||[]).slice().sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
-  o.src=(D.js||{})[key]||(J.length?'jc_history 竞彩 had':'');
+  /* ★ 2026-11-15 补齐：官方端逐帧优先按 tid 精确挂载（jt/jts）。
+     旧路径用「主vs客」精确键，但 D 盘快照是简称(格鲁吉)、看板是全名(格鲁吉亚)，
+     真机探针 exactMatched=0 → 官方帧补再多也匹配不上。tid 是 board tournament_id，唯一无歧义。
+     队名键只作兜底（兼容 jc_history 竞彩 had 旧序列）。 */
+  let J=((D.jt||{})[tid]||[]).slice();
+  let offSrc=(D.jts||{})[tid]||'';
+  if(!J.length){ J=((D.j||{})[key]||[]).slice(); offSrc=(D.js||{})[key]||''; }
+  J.sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+  o.src=offSrc||(J.length?'jc_history 竞彩 had':'');
   const times=[], seen=new Set();
   for(const f of arr){ const t=String(f[0]); if(!seen.has(t)){seen.add(t);times.push(t);} }
   for(const f of J){ const t=String(f[0]); if(!seen.has(t)){seen.add(t);times.push(t);} }
