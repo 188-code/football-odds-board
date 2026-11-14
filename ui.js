@@ -18295,14 +18295,6 @@ function _dgSim(m){
   //   参与「放弃/谨慎」判档。缺步的 ou/hc 只作参考值展示，绝不参与判档与复盘。
   const simComplete = (s1!=null&&s2!=null&&s3!=null&&s4!=null);
   const simWhy = simComplete ? '' : ('缺 '+[s1==null?'①交锋造球':'',s2==null?'②近期造球':'',s3==null?'③交锋盘口':'',s4==null?'④近期盘口':''].filter(Boolean).join('/')+' → 按文档五步不成立，不建模拟盘');
-  /* ★ 2026-11-15 第五步按文档落地（用户追问多日）：原文 TABLE 2「第五步（模拟盘结论）」
-     大小球写死 2.5，并注明「开盘不能低于2.5、也不能高于2.5」；例题算值 2.6 也只取「约等于2.5」。
-     旧实现把连续 0.25 档当结论，能吐出 4.25 / 4.5 球这类文档明禁的模拟盘，还拿去比实盘、参与判档。
-     现：五步齐全时模拟盘结论锚定 2.5（⑤ 与实盘对照用 realOU−2.5）；连续档算值仅作对照，
-     不代入第五步、不参与判档。文档未定义「算值偏离 2.5 如何处理」，故不擅自加门、不编文档口径。 */
-  const ouLineCalc = ou!=null ? _dgQ(ou) : null;   // 模块扩展：连续 0.25 档（仅对照）
-  const ouLineDoc  = 2.5;                          // 文档第五步基准开盘
-  const ouLine     = simComplete ? ouLineDoc : ouLineCalc;
   // ★ 2026-11-13 A 方案：区分「缺步」性质——设计行为(本源确无历史交锋) vs 疑似抓取失败(源站连本场都未收录)
   //   设计行为 = 源站已收录本场结构(_dgBattle 非 null)，只是两队无历史交锋 → 灰字「无历史交锋」。
   //   疑似抓取失败 = _dgBattle 整体 null（本场未进入 battle 存储）→ 琥珀警示「源站未收录」。
@@ -18320,7 +18312,7 @@ function _dgSim(m){
                           :'源站未收录本场（低级别/野鸡场，本源无此场属正常）';
     }
   }
-  return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ouLine,ouLineCalc:ouLineCalc,ouLineDoc:ouLineDoc,
+  return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ou!=null?_dgQ(ou):null,
           hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc:sourceNote,formRecent,simComplete,simWhy,
           simGapKind,simGapNote,
           battle:B, simSrc:B?'雷速源站逐场':'7m 老库回退（数据止于 2026-10-13）'};
@@ -18788,15 +18780,13 @@ function _dgDetailHTML(r){
         : '<b style="color:#f59e0b">不成立（⚠ 疑似抓取失败 · 源站未收录本场）</b>：'+_dgEsc(s.simWhy)+'。'+_dgEsc(s.simGapNote)+'，下面 ②④ 的单步数值只是参考，<b>不代入第五步、不与实盘比较、不参与判档</b>'));
   x+=li('① 交锋场均造球', s.hh?('近 '+s.hh.n+' 场交锋，双方总进球均值 <b>'+s.s1.toFixed(3)+'</b> 球/场（'+s.hh.games.slice(0,4).map(g=>g.g1+':'+g.g2).join('、')+(s.hh.n>4?' …':'')+'）'+(s.hh.n<10?'<span style="color:var(--mut)">（文档用 10 场，本源仅 '+s.hh.n+' 场，置信偏低）</span>':'')+'）'):('<span style="color:var(--mut)">'+(s.hhAll?('仅 '+s.hhAll.n+' 场交锋（&lt;2 场不进公式，防单场极端值带偏）'):'7m 真值库无此对阵交锋，本步跳过')+'</span>'));
   x+=li('② 近期主/客造球', (s.fh&&s.fa)?('主 '+s.fh.gf.toFixed(2)+'进/'+s.fh.ga.toFixed(2)+'丢 = '+s.fh.ball.toFixed(3)+'（n='+s.fh.n+'）；客 '+s.fa.gf.toFixed(2)+'/'+s.fa.ga.toFixed(2)+' = '+s.fa.ball.toFixed(3)+'（n='+s.fa.n+'）→ 主客均值 <b>'+s.s2.toFixed(3)+'</b><br><span style="color:var(--mut)">口径：'+_dgEsc(s.formSrc)+'</span>'):'<span style="color:var(--mut)">缺近期战绩</span>');
-  x+=li('大小球均值 → ⑤ 结论', s.ou!=null?(s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → <b style="color:var(--grn)">文档第五步锚定 2.5 球</b>（原文「开盘不能低于2.5、也不能高于2.5」；例题 2.6 亦只取约等于 2.5）'
-    +'<br><span style="color:var(--mut);font-size:9.5px">模块连续 0.25 档算值 '+(s.ouLineCalc!=null?s.ouLineCalc:'—')+' 球<b>仅作对照</b>，不代入第五步、不与实盘比较、不参与判档；原文未定义「算值偏离 2.5 如何处置」，本模块不擅自加门</span>'):'不可算');
+  x+=li('大小球均值', s.ou!=null?(s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → 取 0.25 档 <b>'+s.ouLine+'</b> 球'):'不可算');
   x+=li('③ 交锋净胜差', s.hh?('统一到当前主队视角，均值 <b>'+(s.s3>=0?'+':'')+s.s3.toFixed(3)+'</b> 球（正=主队占优）'):'—');
   x+=li('④ 近期净胜差之差', (s.fh&&s.fa)?('主净胜 '+(s.fh.diff>=0?'+':'')+s.fh.diff.toFixed(3)+' − 客净胜 '+(s.fa.diff>=0?'+':'')+s.fa.diff.toFixed(3)+' = <b>'+(s.s4>=0?'+':'')+s.s4.toFixed(3)+'</b>'):'—');
   x+=li('盘口均值', s.hc!=null?(s.hcHow+' = <b>'+(s.hc>=0?'+':'')+s.hc.toFixed(3)+'</b> → 取 0.25 档 <b>'+(s.hcLine>0?'主让 '+s.hcLine:(s.hcLine<0?'客让 '+Math.abs(s.hcLine):'平手'))+'</b>'):'不可算');
   x+=li('⑤ 与实盘对照', !s.simComplete
     ? '<span style="color:var(--mut)">模拟盘不成立 → 本步跳过（实盘大小球 '+(v.realOU!=null?v.realOU:'—')+' / 让球 '+(v.realHc!=null?v.realHc:'—')+' 仅列出，不作异常判据）</span>'
-    : ('大小球 '+(v.realOU!=null?v.realOU:'—')+' vs <b>'+s.ouLine+'</b>（文档第五步锚定 2.5）；让球 '+(v.realHc!=null?v.realHc:'—')+' vs '+s.hcLine+' → '+(v.abnN?('<b style="color:var(--red)">'+v.abnN+' 项异常（|Δ|≥'+v.gate+'）</b>'):'未见异常')
-       +'<br><span style="color:var(--mut);font-size:9.5px">连续 0.25 档算值 '+(s.ouLineCalc!=null?s.ouLineCalc:'—')+' 球不代入本步</span>'));
+    : ('大小球 '+(v.realOU!=null?v.realOU:'—')+' vs '+s.ouLine+'；让球 '+(v.realHc!=null?v.realHc:'—')+' vs '+s.hcLine+' → '+(v.abnN?('<b style="color:var(--red)">'+v.abnN+' 项异常（|Δ|≥0.5）</b>'):'未见异常')));
   x+='<div style="font-weight:800;margin:8px 0 5px">💰 乙 · 返还抽水换算（官方 vs 外围）</div>';
   if(v.zone==='jc'&&v.A&&v.B){
     x+=li('官方 '+_dgEsc(v.off.src), _dgFmtO(v.off.o)+' → 倒数和 '+(v.A.sum*100).toFixed(1)+'%，抽水 <b>'+v.A.over.toFixed(2)+'%</b>');
