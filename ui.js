@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-08-vote-calib-v4';   // 治「刷新数据时突然跳回主页面」：外壳更新不再空闲即整页跳转，改为右下角非遮挡提示 + 用户点「更新」或切后台 8 秒才重载；重载前后 captureViewState/restoreViewState 自动恢复打开的板块、日期筛选、板块内滚动。数据软刷新照常后台进行，完全不打断阅读。纯展示层改动，不动模型数字/门规则。
+const UI_V = '2026-11-15-tri-trail-v3';   // ★ v3 三盘「开盘→临盘」整条序列：历史板每行展示竞彩 had / 北单不让球资金 / 365 开盘价的双段轨迹、Δ、拐点、同向数与序列不齐护栏标注；方向票权重未改（两段标定反向，按铁律不启用）。北单让球行(rq≠0)已隔离，不再与 365 独赢盘相减。
 /* 源站主机（2026-09-13 实测结论，已据此重排优先级）：
      · m.gqj2.tv    —— 实战稳定主源。列表/赔率(oddshistorypc)/交锋(analysis) 均稳定 HTTP 200，
                         且路径**带** /api 前缀。www.gqj2.tv 仅是它的 301 跳转别名。
@@ -8483,6 +8483,45 @@ function fundplateHistoryHTML(){
     var hs = (e && e.heatScore != null) ? +e.heatScore : 0;
     return (o.overGap === true) && hs >= 3;
   };
+  /* ★★ 2026-11-15 v3：三盘「开盘→临盘」整条序列展示（用户口径：谁先动、动多少、谁跟谁没跟）。
+     数据来自 gen_index 内联 __TRI_TRAIL__（gzip 异步解压）或账本冻结的 e.trail/e.op.trail。
+     ★ 北单 rqspf.rq!=0 是让球胜平负，与 365 独赢盘玩法不同 → 只作灰字参考，绝不进 ②北单独赢。
+     ★ 序列不齐时红字标「v3 护栏应观察」；历史意见原文按冻结铁律保留不改，只做复盘标注。 */
+  const _fpTrailCell = function(e){
+    try{
+      var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+      var t = (e && e.trail) || (e && e.op && e.op.trail) || T[String(e && e.tid)] || null;
+      if (!t) return '';
+      var f3 = function(a){ return Array.isArray(a) ? a.map(function(v){ return (+v).toFixed(1); }).join('/') : '—'; };
+      var line = function(lbl, s, extra){
+        var hdr = '<span style="color:#7dd3fc;font-weight:700">' + lbl + '</span> ';
+        if (!s || !s.ok) return '<div style="margin-top:2px">' + hdr + '<span style="color:#ff8a8a">缺·无开盘→临盘序列</span></div>';
+        var d = +s.net || 0, col = d > 1 ? '#f59e0b' : (d < -1 ? '#38bdf8' : '#94a3b8');
+        return '<div style="margin-top:2px">' + hdr + (s.n || 0) + '帧 ' + f3(s.open) + ' → ' + f3(s.close)
+          + ' <b style="color:' + col + '">Δ强' + (d >= 0 ? '+' : '') + d.toFixed(1) + 'pp</b>'
+          + (s.turnT ? ' <span style="opacity:.65">拐' + esc(String(s.turnT).slice(5, 16)) + '</span>' : '')
+          + (extra || '') + '</div>';
+      };
+      var h = '<div style="margin-top:7px;padding:6px 8px;border:1px dashed #3b82f6;border-radius:7px;font-size:10px;line-height:1.55;color:#cbd5e1">';
+      h += '<div style="font-weight:800;color:#93c5fd;margin-bottom:3px">📈 三盘开盘→临盘（v3 序列·非单帧）</div>';
+      h += line('①竞彩 had', t.jc);
+      h += line('②北单独赢', t.bd, (t.flags && t.flags.rqOnly) ? ' <span style="color:#ff8a8a">[仅让球行·玩法不同]</span>' : '');
+      h += line('③365开盘价', t.eu, (t.eu && isFinite(+t.eu.hcapMove) && +t.eu.hcapMove !== 0)
+                ? ' <span style="opacity:.7">初盘' + (+t.eu.hcapMove > 0 ? '升' : '降') + Math.abs(+t.eu.hcapMove).toFixed(2) + '</span>' : '');
+      h += '<div style="margin-top:3px;opacity:.85">同向 <b>' + (t.same || 0) + '/' + (t.nSrc || 0) + '</b>'
+         + (t.lead ? ' · 先动 ' + esc(String(t.lead)) : '')
+         + (t.rq && t.rq.n ? ' · <span style="opacity:.7">让球行 ' + f3(t.rq.open) + '→' + f3(t.rq.close) + '（玩法不同·不进独赢对齐）</span>' : '')
+         + '</div>';
+      h += '<div style="margin-top:3px">' + (t.ok
+        ? '<span style="color:#34d399">序列齐·三盘可判</span>'
+        : '<span style="color:#ff8a8a;font-weight:800">⚠ ' + esc(t.why || '序列不齐') + ' → v3 护栏：只观察</span>') + '</div>';
+      var rd = String((e && e.recDir) || '');
+      if (!t.ok && /^(买强队|买受让)/.test(rd))
+        h += '<div style="margin-top:2px;color:#fca5a5">当时发了「' + esc(rd.slice(0, 18)) + '」，按 v3 序列护栏应判观察（意见原文按冻结铁律保留）</div>';
+      h += '</div>';
+      return h;
+    }catch(_e){ return ''; }
+  };
   const allItems = Array.isArray(H) ? H : (H.items || []);
   /* ★ 2026-11-07 用户要求：完整意见/历史复盘可按日期筛选 + 按时间排序。
      铁律「展示集 = 统计集」：筛选先作用在 items 上，后面所有 KPI、快照覆盖度、
@@ -8745,6 +8784,7 @@ function fundplateHistoryHTML(){
       +'<td style="padding:6px 7px"><b>'+esc(homeD)+'</b> vs <b>'+esc(awayD)+'</b></td>'
       +'<td style="padding:6px 7px;font-weight:800">'+esc(strong)+'</td>'
       +'<td style="padding:6px 7px;vertical-align:top">'+_fpHistOpCell(e,_eLvl,_hCol,_hTag)
+      + _fpTrailCell(e)
       /* ★ 2026-10-31 七修·历史口径标记：10-31 之前登记的条目是**旧口径**（未扣返还率缺口，普遍虚高约 8pt），
          与今日主榜的净超买不可直接比较。用户质问"哪来那么多10几pt"——查证后确认：板上 ≥+10pt 的 33 次
          全部出自本历史区，是旧口径遗留值，不是今日信号。逐条标灰，不再误导。 */
@@ -8795,6 +8835,8 @@ function fundplateHistoryHTML(){
      + '<br><span style="color:#ffe08a;font-weight:700">v2 引擎只在 heat_score≥3（破缺口/盘级差≥2/365造热/真|hcap|&lt;0.5/flip 中≥3项同触发＝真三盘合流）才发<b>买受让</b>：该选择性方向 <b>29注 75.9% · ROI +49.2%</b>（全部赛前、SE±18.6）＝本板<b>真 edge</b>。</span>'
      + '<br><span style="color:#ffe08a;font-weight:700">故本板现以 recDirAlt（新规律·选择性三盘合流买受让 / 主流主场买强队）为「正式强推」方向重新给出买法——买强队仅边际（标"可跟"不标"强推"），旧粗口径机械反买仍不采用。⚠ 上句 29 注 +49.2% 出自 daily_picks 另一本账，本板 KPI 一律用本板账本，勿混算。</span>'
      + '<br><span style="color:#ffe08a;font-weight:700">🔧 2026-11-15 v3 改版：方向改为「逐场票差」独立判定（哪边有利推哪边），已撤销二次合流门槛。本板自身分层：破缺口买受让 69.0% / ROI +38.3%，未破缺口(吃水区) 50.0% / ROI +0.1%＝零 edge。故未合流场只标「票差方向·未合流·非强推」，不再冒称「正式强推·三盘合流」；两场 11-15 连挂（heatScore 1/2、竞彩无数据）正是落在零 edge 桶，不是算法突然失灵。</span>'
+     + '<br><span style="color:#93c5fd;font-weight:700">📈 2026-11-15 v3 三盘序列：判读改为三端「开盘→临盘」整条轨迹（①竞彩 had ②北单 fund.rq=0 不让球资金占比 ③365 Bet365 开盘价逐帧 + 初盘升降），看同向数／拐点／谁先动，不再是某一刻两项赔率相减。北单让球胜平负(rq≠0)是另一玩法，已隔离，禁止再与 365 独赢盘相减造出 20~34pp 假差。序列不齐（缺盘／仅让球行／365 未到）一律只观察。</span>'
+     + '<br><span style="color:#fca5a5;font-weight:700">⚠ 离线标定(_calib_trail.cjs)：全部序列方向票在训练段 11-07~11-11 与留出段 11-12~11-15 符号相反，按铁律不启用任何序列方向票、不改票权重；本版只启用「序列不齐→观察」的数据正确性护栏。修的是数据链与「不该出注的场」，不是拿两场个案反推新方向。</span>'
      + '<br><b style="color:#ffe08a">⚠️ 结果列的 ✅/❌ 是「顺买过热强队」统计视角，不是「🎯 推荐方向」的战绩：受让赢盘会标 ❌，但买受让的意见恰恰命中。</b>'
      + '推荐方向是否命中请看每行新增的「🎯 推荐方向：✅中 / ❌挂」标记，以及顶部「🎯 推荐方向·赛前」KPI（只算赛前登记的方向注，观察档不计）。'
      + '</div>';
@@ -19290,6 +19332,15 @@ try{
       st.rows=b.rows; st.med=b.med; st.medBy=b.medBy; st.nDelta=b.nDelta;
       if(typeof _dgRender==='function') _dgRender();
     }catch(e){ console.warn('dg-battle-ready',e); }
+  });
+}catch(e){}
+/* v3 三盘开盘→临盘序列走 gzip 异步解压：落地后历史板必须重绘，否则时序块要等下次筛选才出现。 */
+try{
+  window.addEventListener('tri-trail-ready', function(){
+    try{
+      const host=document.getElementById('fpHistHost');
+      if(host && typeof fundplateHistoryHTML==='function') host.innerHTML=fundplateHistoryHTML();
+    }catch(e){ console.warn('tri-trail-ready',e); }
   });
 }catch(e){}
 /* 按钮：动态挂到「看板板块」栏，零改外壳 index.html */
