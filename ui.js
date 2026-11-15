@@ -18232,8 +18232,8 @@ const _DG_PUA={"1000":"马耳","1014":"摩尔","1016":"英女北","1032":"德戊
 function _dgPua(s){
   let v=String(s==null?"":s);
   v=v.replace(/&#x([eE][0-9a-fA-F]{2,4});/g,(_m,c)=>_DG_PUA[c.toLowerCase()]||"");
-  v=v.replace(/[-]/g,ch=>_DG_PUA[ch.charCodeAt(0).toString(16)]||"");
-  return _dgClean(v).replace(/s/g,"");
+  v=v.replace(/[\uE000-\uF8FF]/g,ch=>_DG_PUA[ch.charCodeAt(0).toString(16)]||"");
+  return _dgClean(v);
 }
 
 function _dgBattle(m){
