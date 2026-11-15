@@ -8127,6 +8127,11 @@ function _deriveRecDir(e){
 function _fpEra(e){
   if (!e) return { k:'unk', txt:'口径未识别', col:'#64748b' };
   var s = String(e.recDir || '');
+  /* ★ 2026-11-15 v3：方向改为「逐场票差」(recDir 文案换成「算法判…有利·票Sx:Uy」)，
+     旧识别器只认 v1/v2 的票理由关键词，会把全部 v3 新场标成「口径未识别」并把它们
+     排除在「现行算法」KPI 之外。版本有 ruleV 列时优先读，没有则按文案识别。 */
+  if (/^v3_/.test(String(e.ruleV || '')) || /算法判(强队|受让)有利·票S\d+:U\d+/.test(s))
+    return { k:'v3', txt:'v3 · 现行（11-15 逐场票差方向）', col:'#15803d' };
   if (/主流·命中|小联赛高热|小联赛低热/.test(s))
     return { k:'v0', txt:'v0 · 规则引擎（投票引擎上线前）· 该场成绩不计入现行算法业绩', col:'#b45309' };
   if (/实测偏受让|实测偏强/.test(s))
@@ -8465,6 +8470,19 @@ function fundplateHistoryHTML(){
     var altDown = String(alt).indexOf('买强队')===0 || String(alt).indexOf('买受让')===0;
     return { alt: alt, strong: (isDown && altDown), filtered: (isDown && !altDown) };
   };
+  /* ★★ 2026-11-15 修（用户抓包「两连跪·结果这么离谱」）：v3 撤掉二次合流门槛后，
+     recDirAlt 对任何票差≥2 的买方向都原样保留，而下面 8733/8744 的旧文案却硬写
+     「🔥 正式强推·买受让（三盘合流）」——11-15 班菲尔德 0:3、鹿岛鹿角 3:2 两场
+     heatScore 仅 1/2、op.overGap=false（吃水区）、jcDev=null（竞彩无数据），根本没合流。
+     本板自身分层复核：破缺口买受让 42注 69.0% / ROI +38.3%；
+     未破缺口(吃水区) 38注 50.0% / ROI +0.1% ＝ 零 edge（抛硬币）。
+     故「强推/三盘合流」只在真合流时成立，其余只标「票差方向·未合流」。
+     ★ 只改标签/统计分组，不拦方向、不改 v3 算法（用户要求逐场判哪边有利就推哪边）。 */
+  const _fpConverged = function(e){
+    var o = (e && e.op && typeof e.op === 'object') ? e.op : {};
+    var hs = (e && e.heatScore != null) ? +e.heatScore : 0;
+    return (o.overGap === true) && hs >= 3;
+  };
   const allItems = Array.isArray(H) ? H : (H.items || []);
   /* ★ 2026-11-07 用户要求：完整意见/历史复盘可按日期筛选 + 按时间排序。
      铁律「展示集 = 统计集」：筛选先作用在 items 上，后面所有 KPI、快照覆盖度、
@@ -8565,6 +8583,7 @@ function fundplateHistoryHTML(){
     return { n:g.length, hit:h, rate:g.length ? Math.round(h/g.length*1000)/10 : null };
   };
   const _altV2 = _altByEra('v2');
+  const _altV3 = _altByEra('v3');   // ★ 2026-11-15：v3 逐场票差方向单独分列，别混进 v2 业绩
   /* ★ 2026-10-29 登记时机透明化（用户质疑"是本来就有，还是比赛开始后才加进去的"）：
      ts = 首次登记时刻（gen_index upsert 不再覆盖）；与开赛时间(day+kickoff)对比，
      晚于开赛 = ⚠赛后补登（多为数据中断/自清空 bug 修复后的重录），规则本身不看赛果。 */
@@ -8591,6 +8610,7 @@ function fundplateHistoryHTML(){
   const _strongRows = items.filter(function(e){
     if (!_isPre(e) || !e.result || e.result==='push' || e.result==='pending') return false;
     if (!_strongPickOf(e).strong) return false;
+    if (!_fpConverged(e)) return false;   // ★ 2026-11-15：未合流/吃水区不算「强推」，避免拿零 edge 样本冒领 v2 业绩
     const r = String(e.recDir||'');
     return r.indexOf('买强队')===0 || r.indexOf('买受让')===0;
   });
@@ -8650,11 +8670,13 @@ function fundplateHistoryHTML(){
     + _kpi('赛前登记', nPre+' 场', '#16a34a')
     + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
     + _kpi('赛前已结算', (dec.length+nPush)+' 场（待结算 '+nPend+'）')
-    + _kpi('🎯 推荐方向·赛前(recDirAlt·正式强推)', (_altRows.length ? (_altHit+'/'+_altRows.length+' 中 · '+_altRate+'%') : '—'),
+    + _kpi('🎯 逐场票差方向·赛前(全部买方向)', (_altRows.length ? (_altHit+'/'+_altRows.length+' 中 · '+_altRate+'%') : '—'),
            (_altRate!=null && _altRate>=50 ? '#16a34a' : '#dc2626'))
-    + _kpi('其中 · v2 现行算法', (_altV2.n ? (_altV2.hit+'/'+_altV2.n+' 中 · '+_altV2.rate+'%') : '无样本'),
+    + _kpi('其中 · v3 现行(11-15 票差)', (_altV3.n ? (_altV3.hit+'/'+_altV3.n+' 中 · '+_altV3.rate+'%') : '无样本'),
+           (_altV3.rate!=null && _altV3.rate>=50 ? '#16a34a' : '#dc2626'))
+    + _kpi('其中 · v2 旧算法', (_altV2.n ? (_altV2.hit+'/'+_altV2.n+' 中 · '+_altV2.rate+'%') : '无样本'),
            (_altV2.rate!=null && _altV2.rate>=50 ? '#16a34a' : '#dc2626'))
-    + _kpi('🔥 正式强推·赛前(选择性三盘合流买受让)', (_strongRows.length ? (_strongHit+'/'+_strongRows.length+' 中 · '+_strongRate+'%') : '—'),
+    + _kpi('🔥 真三盘合流·赛前(heatScore≥3 且破缺口)', (_strongRows.length ? (_strongHit+'/'+_strongRows.length+' 中 · '+_strongRate+'%') : '—'),
            (_strongRate!=null && _strongRate>=50 ? '#f59e0b' : '#dc2626'))
     + (_isFiltered ? _filteredKpi
         : ((_preL ? _kpi('赛前·押受让方', (_preL.hit==null?'—':_preL.hit+'%')+' / '+_fpct(_preL.roi), (_preL.roi>0?'#16a34a':'#dc2626')) : '')
@@ -8669,8 +8691,8 @@ function fundplateHistoryHTML(){
     reg_desc:  function(p,q){ return ((q.ts||0)-(p.ts||0)) || _tsOf(q)-_tsOf(p); }
   };
   const rows = items.slice().sort(function(p,q){
-      const sp=_strongPickOf(p).strong, sq=_strongPickOf(q).strong;
-      if (sp !== sq) return sq ? 1 : -1;   // ★ 2026-11-13 强推荐(新规律)置顶
+      const sp=_strongPickOf(p).strong && _fpConverged(p), sq=_strongPickOf(q).strong && _fpConverged(q);
+      if (sp !== sq) return sq ? 1 : -1;   // ★ 只有真三盘合流才置顶；v3 未合流场按时间正常排序
       return (_cmp[VIEW.sort] || _cmp.kick_desc)(p,q);
     }).map(function(e){
       const _sp = _strongPickOf(e);   // 本行强推荐判定（置顶/高亮/标记共用）
@@ -8717,7 +8739,7 @@ function fundplateHistoryHTML(){
     const _hCol = _hg ? _hg.color : '#e54545';
     const _hTag = _hg ? (' <span style="font-size:10px;font-weight:700;color:'+_hg.color+'">'+_hg.tag+'</span>') : '';
     const _ri = _regInfo(e);
-    return '<tr style="border-top:1px solid var(--line);background:'+(_sp.strong?'rgba(245,158,11,.14)':bg)+(_sp.strong?';box-shadow:inset 3px 0 0 #f59e0b':'')+'">'
+    return '<tr style="border-top:1px solid var(--line);background:'+((_sp.strong&&_fpConverged(e))?'rgba(245,158,11,.14)':bg)+((_sp.strong&&_fpConverged(e))?';box-shadow:inset 3px 0 0 #f59e0b':'')+'">'
       +'<td style="padding:6px 7px;white-space:nowrap;opacity:.85">'+esc((e.day||'')+' '+(e.kickoff||''))+_ri.txt+'</td>'
       +'<td style="padding:6px 7px;font-size:12px">'+esc(lgD)+'<div style="font-size:10px;opacity:.55">'+esc(_hcTxt)+_hcSrc+(e.water!=null?(' · 水'+ (+e.water).toFixed(2)):'')+'</div></td>'
       +'<td style="padding:6px 7px"><b>'+esc(homeD)+'</b> vs <b>'+esc(awayD)+'</b></td>'
@@ -8730,7 +8752,11 @@ function fundplateHistoryHTML(){
           return (_dN < '2026-10-31') ? '<div style="font-size:10px;color:#94a3b8;line-height:1.3">旧口径·未扣缺口<br>约虚高 8pt</div>' : ''; })()
       + (function(){
           const _a = _sp.alt || '';
-          if (_a.indexOf('买受让')===0) return '<div style="margin-top:4px;font-size:10.5px;font-weight:800;color:#f59e0b">🔥 正式强推·买受让</div>';
+          if (_a.indexOf('买受让')===0){
+            return _fpConverged(e)
+              ? '<div style="margin-top:4px;font-size:10.5px;font-weight:800;color:#f59e0b">🔥 正式强推·买受让（真三盘合流）</div>'
+              : '<div style="margin-top:4px;font-size:10px;font-weight:700;color:#94a3b8">🎯 票差方向·买受让（未合流·非强推）</div>';
+          }
           if (_a.indexOf('买强队')===0) return '<div style="margin-top:4px;font-size:9.5px;font-weight:700;color:#34d399">可跟·买强队(边际)</div>';
           if (_sp.filtered) return '<div style="margin-top:4px;font-size:9.5px;color:#94a3b8">新规律·转观察</div>';
           return '';
@@ -8741,7 +8767,10 @@ function fundplateHistoryHTML(){
          并如实标注该场是否赛前登记（赛前登记才有预测意义；赛后补登无价值）。 */
       + (function(){
           const _a = _sp.alt || ''; let _badge, _col;
-          if (_a.indexOf('买受让')===0){ _badge='🔥 正式强推·买受让（三盘合流）'; _col='#f59e0b'; }
+          if (_a.indexOf('买受让')===0){
+            if (_fpConverged(e)){ _badge='🔥 正式强推·买受让（三盘合流）'; _col='#f59e0b'; }
+            else { _badge='🎯 票差方向·买受让（未合流·吃水区·非强推）'; _col='#94a3b8'; }
+          }
           else if (_a.indexOf('买强队')===0){ _badge='可跟·买强队（边际·主流主场）'; _col='#34d399'; }
           else { _badge='观望·新规律过滤'; _col='#94a3b8'; }
           return '<td style="padding:6px 7px;font-weight:700;white-space:normal;color:'+_col+'">'+_badge
@@ -8764,7 +8793,8 @@ function fundplateHistoryHTML(){
      + '<b>所以本板从今天起不再给「下盘受让」买法</b>，只作拥挤度追踪。'
      + '<br><span style="color:#ffe08a;font-weight:700">🔧 2026-11-13 v2 重核修正（383 已结算账本）：上方"反买下盘方向反了"是粗口径假结论——2026-11-01 只按"强队过热"机械反买、<b>无三盘合流门槛</b>、样本集中 10-31，属方法错非方向错。</span>'
      + '<br><span style="color:#ffe08a;font-weight:700">v2 引擎只在 heat_score≥3（破缺口/盘级差≥2/365造热/真|hcap|&lt;0.5/flip 中≥3项同触发＝真三盘合流）才发<b>买受让</b>：该选择性方向 <b>29注 75.9% · ROI +49.2%</b>（全部赛前、SE±18.6）＝本板<b>真 edge</b>。</span>'
-     + '<br><span style="color:#ffe08a;font-weight:700">故本板现以 recDirAlt（新规律·选择性三盘合流买受让 / 主流主场买强队）为「正式强推」方向重新给出买法——买强队仅边际（标"可跟"不标"强推"），旧粗口径机械反买仍不采用。</span>'
+     + '<br><span style="color:#ffe08a;font-weight:700">故本板现以 recDirAlt（新规律·选择性三盘合流买受让 / 主流主场买强队）为「正式强推」方向重新给出买法——买强队仅边际（标"可跟"不标"强推"），旧粗口径机械反买仍不采用。⚠ 上句 29 注 +49.2% 出自 daily_picks 另一本账，本板 KPI 一律用本板账本，勿混算。</span>'
+     + '<br><span style="color:#ffe08a;font-weight:700">🔧 2026-11-15 v3 改版：方向改为「逐场票差」独立判定（哪边有利推哪边），已撤销二次合流门槛。本板自身分层：破缺口买受让 69.0% / ROI +38.3%，未破缺口(吃水区) 50.0% / ROI +0.1%＝零 edge。故未合流场只标「票差方向·未合流·非强推」，不再冒称「正式强推·三盘合流」；两场 11-15 连挂（heatScore 1/2、竞彩无数据）正是落在零 edge 桶，不是算法突然失灵。</span>'
      + '<br><b style="color:#ffe08a">⚠️ 结果列的 ✅/❌ 是「顺买过热强队」统计视角，不是「🎯 推荐方向」的战绩：受让赢盘会标 ❌，但买受让的意见恰恰命中。</b>'
      + '推荐方向是否命中请看每行新增的「🎯 推荐方向：✅中 / ❌挂」标记，以及顶部「🎯 推荐方向·赛前」KPI（只算赛前登记的方向注，观察档不计）。'
      + '</div>';
