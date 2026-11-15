@@ -18070,8 +18070,10 @@ document.addEventListener('DOMContentLoaded', function(){
  *     表1 标题「以主场为准」，客队盘口值已按主队视角取反（−D_a），
  *     相加 = D_h + (−D_a) = D_h − D_a，与表2 的相减是同一式。
  *     2026-11-12 更正：此前误判为「文档自相矛盾」。
- *   ★ 表2 第五步「2.5（开盘不能低于2.5、也不能高于2.5）」把模拟大小球锚定 2.5；
- *     本模块保留连续量化值（0.25 档）以便与实盘比较，属有意偏离，页面已标注。
+ *   ★ 表2 第五步「2.5（开盘不能低于2.5、也不能高于2.5）」= 模拟盘的**基准/约束**：
+ *     (①+②)/2 实算后落 0.25 档得到模拟大小球线，该线应为 2.5；落在其它档即
+ *     「分析数据有异常」，按原文计 1 项异常（竞彩北单区参与判档）。
+ *     2026-11-15 更正：曾误实现成「结论恒等于 2.5」，那会把 ①~④ 全废掉（所有场结论相同），已撤销。
  *
  * 【乙】返还抽水换算法：
  *   官方（竞彩/北单）1X2 赔率倒数求和 − 1 = 官方抽水值；外围（365/欧赔）同理。
@@ -18248,10 +18250,15 @@ function _dgBattle(m){
             last:games[0]?games[0].d:'',
             src:'雷速源站逐场近 '+n+' 场（文档要 10 场）'};
   };
-  const MIN=3;                       // 每组 <3 行不进公式：单场 7:0 会带飞整条盘口线
+  /* ★★ 2026-11-15 第五步根治：交锋与近况必须分开设门。
+     旧版对交锋也套 MIN=3，但 _dgSim 的 hh 门只有 n>=2（与引擎 applyInfoPrior 同门）。
+     真机实测 595 场「模拟盘不成立」里，118 场源站确有 2 场真实交锋被整条丢弃，
+     而 7m H2H_MAP 回退在这批场 >=2 场命中 0 场 → ①③ 凭空缺失、⑤ 建不起来。
+     近况仍保持 >=3（单场 7:0 会带飞造球均值），交锋改为 >=2。 */
+  const MIN=3, MIN_HH=2;
   const bx=build(e.x,h), bh=build(e.h,h), ba=build(e.a,a);
-  const ok=v=>v&&v.n>=MIN?v:null;
-  const X=ok(bx), FH=ok(bh), FA=ok(ba);
+  const ok=(v,min)=>v&&v.n>=min?v:null;
+  const X=ok(bx,MIN_HH), FH=ok(bh,MIN), FA=ok(ba,MIN);
   if(!X&&!FH&&!FA) return null;
   /* ★ 2026-11-15：D盘赛果补齐的交锋/近况是 11 天窗口真实终场比分，不是「近10场」口径，
      来源必须明示（e.src 由 gen_index 第四级补齐写入），否则会把浅窗口当深口径用。 */
@@ -18265,7 +18272,10 @@ function _dgSim(m){
   // ★ 2026-11-12：源站逐场真值优先（随 bake 刷新）；只有缺步才回退 7m 老库
   //   （_7m_db.json 只到 2026-10-13，时效差一个月），来源与样本数在明细卡逐项写明。
   const B=_dgBattle(m);
-  const hhAll=(B&&B.hh)?B.hh:_dgH2H(h,a);
+  // 二次保险：源站交锋原始行数 >=2 就直接用真值，不再被任何内部门槛判成「缺 ①③」。
+  let hhAll=(B&&B.hh)?B.hh:null;
+  if(!hhAll && B && B.raw && B.raw.x && B.raw.x.n>=2) hhAll=B.raw.x;
+  if(!hhAll) hhAll=_dgH2H(h,a);
   // 交锋门 n>=2（与引擎 applyInfoPrior 同门）：单场 7:0 会把大小球线带飞，故 n=1 跳过并标注。
   const hh=(hhAll&&hhAll.n>=2)?hhAll:null;
   const fh=(B&&B.fh)?B.fh:_dgForm(h,true), fa=(B&&B.fa)?B.fa:_dgForm(a,false);
@@ -18295,14 +18305,16 @@ function _dgSim(m){
   //   参与「放弃/谨慎」判档。缺步的 ou/hc 只作参考值展示，绝不参与判档与复盘。
   const simComplete = (s1!=null&&s2!=null&&s3!=null&&s4!=null);
   const simWhy = simComplete ? '' : ('缺 '+[s1==null?'①交锋造球':'',s2==null?'②近期造球':'',s3==null?'③交锋盘口':'',s4==null?'④近期盘口':''].filter(Boolean).join('/')+' → 按文档五步不成立，不建模拟盘');
-  /* ★ 2026-11-15 第五步按文档落地（用户追问多日）：原文 TABLE 2「第五步（模拟盘结论）」
-     大小球写死 2.5，并注明「开盘不能低于2.5、也不能高于2.5」；例题算值 2.6 也只取「约等于2.5」。
-     旧实现把连续 0.25 档当结论，能吐出 4.25 / 4.5 球这类文档明禁的模拟盘，还拿去比实盘、参与判档。
-     现：五步齐全时模拟盘结论锚定 2.5（⑤ 与实盘对照用 realOU−2.5）；连续档算值仅作对照，
-     不代入第五步、不参与判档。文档未定义「算值偏离 2.5 如何处理」，故不擅自加门、不编文档口径。 */
-  const ouLineCalc = ou!=null ? _dgQ(ou) : null;   // 模块扩展：连续 0.25 档（仅对照）
-  const ouLineDoc  = 2.5;                          // 文档第五步基准开盘
-  const ouLine     = simComplete ? ouLineDoc : ouLineCalc;
+  /* ★★ 2026-11-15 二次纠正（上午那版是错的）：把「第五步锚定 2.5」实现成「结论恒等于 2.5」，
+     等于把 ①②③④ 全废掉——398 场结论一模一样，⑤ 与实盘对照退化成 realOU−2.5，
+     前四步算值完全不参与。原文那句是**基准/约束**：模拟盘线应当落在 2.5，
+     算出别的档即「分析数据有异常」，而不是把算值抹掉换个常数。
+     现恢复连续 0.25 档作为模拟盘结论（有区分度、与实盘对照、参与判档），
+     把 2.5 单列为「文档第五步基准」并按原文计入异常项。 */
+  const ouLine    = ou!=null ? _dgQ(ou) : null;    // 模拟盘结论：①~④ 实算后落 0.25 档
+  const ouLineDoc = 2.5;                           // 文档第五步基准开盘
+  const ouDevDoc  = ouLine!=null ? (ouLine-ouLineDoc) : null;   // 与文档基准偏离（球）
+  const ouDocAbn  = simComplete && ouLine!=null && Math.abs(ouDevDoc)>0.001;  // 严格按原文：非 2.5 即异常
   // ★ 2026-11-13 A 方案：区分「缺步」性质——设计行为(本源确无历史交锋) vs 疑似抓取失败(源站连本场都未收录)
   //   设计行为 = 源站已收录本场结构(_dgBattle 非 null)，只是两队无历史交锋 → 灰字「无历史交锋」。
   //   疑似抓取失败 = _dgBattle 整体 null（本场未进入 battle 存储）→ 琥珀警示「源站未收录」。
@@ -18320,7 +18332,7 @@ function _dgSim(m){
                           :'源站未收录本场（低级别/野鸡场，本源无此场属正常）';
     }
   }
-  return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ouLine,ouLineCalc:ouLineCalc,ouLineDoc:ouLineDoc,
+  return {h,a,hh,hhAll,fh,fa,s1,s2,s3,s4,ou,ouHow,ouLine:ouLine,ouLineDoc:ouLineDoc,ouDevDoc:ouDevDoc,ouDocAbn:ouDocAbn,
           hc,hcHow,hcLine:hc!=null?_dgQ(hc):null,conf,formSrc:sourceNote,formRecent,simComplete,simWhy,
           simGapKind,simGapNote,
           battle:B, simSrc:B?'雷速源站逐场':'7m 老库回退（数据止于 2026-10-13）'};
@@ -18646,9 +18658,15 @@ function _dgVerdict(m, opt){
       // ★ 三轮校读：文档「逐项 ≥6pt → 该侧形成热门、难以正常打出」本身就是一个异常项。
       //   旧代码只在 (抽水差异常 && 热门侧) 才判放弃，单有逐项 +18.6pt 却只给「谨慎」；
       //   文档例题正是 Δ8pt + 客胜 +7pt 两个异常项叠加 → 放弃。改按异常项计数。
-      const abnItems=(overGate?1:0)+(hotSide?1:0)+abnN;
+      /* ★ 2026-11-15 第五步真正落地：原文「开盘不能低于2.5、也不能高于2.5」= 模拟盘基准约束。
+         五步齐全却算出非 2.5 档（含 4.25 / 4.5 球这类不存在的盘口），
+         按原文「如分析数据有异常，则建议放弃」计 1 项异常——这是文档口径，不是自定阈值。
+         野鸡区无官方盘校验，仍只作对照、不在此计入。 */
+      const docAbn=(sim.simComplete&&sim.ouDocAbn)?1:0;
+      const abnItems=(overGate?1:0)+(hotSide?1:0)+abnN+docAbn;
+      if(docAbn) why.push('<b style="color:var(--yel)">文档第五步基准异常项</b>：模拟大小球 <b>'+sim.ouLine+' 球</b>，偏离原文基准 2.5 球 '+(sim.ouDevDoc>=0?'+':'')+sim.ouDevDoc.toFixed(2)+'，按「开盘不能低于2.5、也不能高于2.5」计 1 项异常');
       if(hotSide) why.push('<b style="color:var(--yel)">文档逐项异常项</b>：<b>'+hotSide+'</b> 官方隐含高于外围 ≥6pt，按原文「该侧形成热门、难以正常打出」计 1 项异常');
-      why.push('<span style="color:var(--mut);font-size:9.5px">异常项合计 <b>'+abnItems+'</b>（去基差抽水差 '+(overGate?1:0)+' + 逐项热门 '+(hotSide?1:0)+' + 模拟盘 '+abnN+'）→ 叠加 ≥2 项按原文「分析数据有异常则建议放弃」</span>');
+      why.push('<span style="color:var(--mut);font-size:9.5px">异常项合计 <b>'+abnItems+'</b>（去基差抽水差 '+(overGate?1:0)+' + 逐项热门 '+(hotSide?1:0)+' + 模拟盘 '+abnN+' + 文档第五步基准 '+docAbn+'）→ 叠加 ≥2 项按原文「分析数据有异常则建议放弃」</span>');
       if(abnItems>=2){ tier='⚠ 放弃'; col='var(--red)'; act='按教程：分析数据异常 → 放弃本场'; }
       else if(abnItems===1){ tier='⚠ 谨慎'; col='#f59e0b'; act='异常项未叠加，降仓/只观察'; }
       else { tier='✔ 正常盘'; act='按教程口径可继续跟踪'; }
@@ -18789,18 +18807,21 @@ function _dgDetailHTML(r){
   x+=li('① 交锋场均造球', s.hh?('近 '+s.hh.n+' 场交锋，双方总进球均值 <b>'+s.s1.toFixed(3)+'</b> 球/场（'+s.hh.games.slice(0,4).map(g=>g.g1+':'+g.g2).join('、')+(s.hh.n>4?' …':'')+'）'+(s.hh.n<10?'<span style="color:var(--mut)">（文档用 10 场，本源仅 '+s.hh.n+' 场，置信偏低）</span>':'')+'）'):('<span style="color:var(--mut)">'+(s.hhAll?('仅 '+s.hhAll.n+' 场交锋（&lt;2 场不进公式，防单场极端值带偏）'):'7m 真值库无此对阵交锋，本步跳过')+'</span>'));
   x+=li('② 近期主/客造球', (s.fh&&s.fa)?('主 '+s.fh.gf.toFixed(2)+'进/'+s.fh.ga.toFixed(2)+'丢 = '+s.fh.ball.toFixed(3)+'（n='+s.fh.n+'）；客 '+s.fa.gf.toFixed(2)+'/'+s.fa.ga.toFixed(2)+' = '+s.fa.ball.toFixed(3)+'（n='+s.fa.n+'）→ 主客均值 <b>'+s.s2.toFixed(3)+'</b><br><span style="color:var(--mut)">口径：'+_dgEsc(s.formSrc)+'</span>'):'<span style="color:var(--mut)">缺近期战绩</span>');
   x+=li('大小球均值 → ⑤ 结论', s.ou!=null
-    ? (s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → '+(s.simComplete
-        ? '<b style="color:var(--grn)">文档第五步锚定 2.5 球</b>（原文「开盘不能低于2.5、也不能高于2.5」；例题 2.6 亦只取约等于 2.5）'
-        : '<b style="color:var(--mut)">模拟盘不成立（五步缺步）· 仅参考值、不产出结论</b>')
-       +'<br><span style="color:var(--mut);font-size:9.5px">连续 0.25 档算值 '+(s.ouLineCalc!=null?s.ouLineCalc:'—')+' 球<b>仅作对照</b>，不代入第五步、不与实盘比较、不参与判档'+(s.simComplete?'；原文未定义「算值偏离 2.5 如何处置」，本模块不擅自加门':'')+'</span>')
+    ? (s.ouHow+' = <b>'+s.ou.toFixed(3)+'</b> → 落 0.25 档 <b>'+(s.ouLine!=null?s.ouLine:'—')+'</b> 球'
+       +(s.simComplete
+          ? (s.ouDocAbn
+             ? '；<b style="color:var(--red)">偏离文档第五步基准 2.5 球 '+(s.ouDevDoc>0?'+':'')+s.ouDevDoc.toFixed(2)+'</b> → 按原文「分析数据有异常则建议放弃」计 <b>1 项异常</b>'
+             : '；<b style="color:var(--grn)">与文档第五步基准 2.5 球一致</b>（例题 2.6 亦只取约等于 2.5）')
+          : '；<b style="color:var(--mut)">模拟盘不成立（五步缺步）· 仅参考值、不产出结论</b>')
+       +'<br><span style="color:var(--mut);font-size:9.5px">原文「开盘不能低于2.5、也不能高于2.5」是<b>基准/约束</b>，不是把结论写死成常数；本行由 ①~④ 实算得出，与实盘对照并参与竞彩北单区判档</span>')
     : '不可算');
   x+=li('③ 交锋净胜差', s.hh?('统一到当前主队视角，均值 <b>'+(s.s3>=0?'+':'')+s.s3.toFixed(3)+'</b> 球（正=主队占优）'):'—');
   x+=li('④ 近期净胜差之差', (s.fh&&s.fa)?('主净胜 '+(s.fh.diff>=0?'+':'')+s.fh.diff.toFixed(3)+' − 客净胜 '+(s.fa.diff>=0?'+':'')+s.fa.diff.toFixed(3)+' = <b>'+(s.s4>=0?'+':'')+s.s4.toFixed(3)+'</b>'):'—');
   x+=li('盘口均值', s.hc!=null?(s.hcHow+' = <b>'+(s.hc>=0?'+':'')+s.hc.toFixed(3)+'</b> → 取 0.25 档 <b>'+(s.hcLine>0?'主让 '+s.hcLine:(s.hcLine<0?'客让 '+Math.abs(s.hcLine):'平手'))+'</b>'):'不可算');
   x+=li('⑤ 与实盘对照', !s.simComplete
     ? '<span style="color:var(--mut)">模拟盘不成立 → 本步跳过（实盘大小球 '+(v.realOU!=null?v.realOU:'—')+' / 让球 '+(v.realHc!=null?v.realHc:'—')+' 仅列出，不作异常判据）</span>'
-    : ('大小球 '+(v.realOU!=null?v.realOU:'—')+' vs <b>'+s.ouLine+'</b>（文档第五步锚定 2.5）；让球 '+(v.realHc!=null?v.realHc:'—')+' vs '+s.hcLine+' → '+(v.abnN?('<b style="color:var(--red)">'+v.abnN+' 项异常（|Δ|≥'+v.gate+'）</b>'):'未见异常')
-       +'<br><span style="color:var(--mut);font-size:9.5px">连续 0.25 档算值 '+(s.ouLineCalc!=null?s.ouLineCalc:'—')+' 球不代入本步</span>'));
+    : ('大小球 实盘 '+(v.realOU!=null?v.realOU:'—')+' vs 模拟 <b>'+s.ouLine+'</b>（差 '+(v.ouGap!=null?(v.ouGap>=0?'+':'')+v.ouGap.toFixed(2):'—')+'）；让球 实盘 '+(v.realHc!=null?v.realHc:'—')+' vs 模拟 '+s.hcLine+' → '+(v.abnN?('<b style="color:var(--red)">'+v.abnN+' 项异常（|Δ|≥'+v.gate+'）</b>'):'未见异常')
+       +'<br><span style="color:var(--mut);font-size:9.5px">文档第五步基准 2.5 球；模拟线偏离基准另计 '+(s.ouDocAbn?1:0)+' 项异常（见上，竞彩北单区计入判档）</span>'));
   x+='<div style="font-weight:800;margin:8px 0 5px">💰 乙 · 返还抽水换算（官方 vs 外围）</div>';
   if(v.zone==='jc'&&v.A&&v.B){
     x+=li('官方 '+_dgEsc(v.off.src), _dgFmtO(v.off.o)+' → 倒数和 '+(v.A.sum*100).toFixed(1)+'%，抽水 <b>'+v.A.over.toFixed(2)+'%</b>');
@@ -19165,10 +19186,10 @@ function openDg(){
   +  '<b style="color:#0d9488">乙 · 返还抽水换算（原文算式）</b>：Σ(1/官方SP) − Σ(1/外围SP) 的百分点差，原文「<b>≤6pt 正常、&gt;6pt</b> 大热/诱盘/假盘」——<b>只定义正向 Δ</b>；本模块对称化为 |Δ|&gt;6pt，属扩展，原始单侧结论同时展示。逐项按「<b>官方隐含 − 外围隐含 ≥ +6pt</b>」判该侧官方端更热、难正常打出（负向=官方更冷，<b>不判热门</b>）。教程原例：竞彩 112% vs 外围 104%（差 8pt），客胜 65% vs 58%（+7pt）→ 小心客胜。原文逐项先取整再加总，本模块用未取整倒数，差 ≤0.5pt。<br>'
   +  '<b style="color:var(--yel)">★ 去基差（灵活应用）</b>：实测本批官方 SP 抽水<b>系统性低于外围约 6~7pt</b>（北单/竞彩返还口径不同），直接套原始 6pt 门会把一半场次误判成诱盘。故<b>判档用「Δ − 同官方源组的本批中位」的偏离套 6pt 门</b>（竞彩官方 / 北单官方七玩法 / 澳客北单 SP 分组，单组 n&lt;4 退回全局并逐场标注），原始 Δ 与文档门结论同时逐场展示、不隐藏；中位数与样本数见本框底部。中位仅为本批横截面统计，未做样本外验证，不宣称任何命中率。<br>'
   +  '<details style="margin:4px 0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--card2)"><summary style="cursor:pointer;font-size:10.5px;font-weight:700;color:var(--red)">⚖ 原文三处需留意（符号笔误 / 相加相减口径 / 2.5 锚点）· 点开逐项核对</summary><div style="font-size:10.5px;line-height:1.7;margin-top:5px;color:var(--txt)">'
-  +  '① 表2 第三步「1.4−1.2 | −0.2」符号错，应为 <b>+0.2</b>；② 「历史盘口值+近期盘口值÷2」那格写成「−0.2+−0.6=0.4÷2=0.2」符号丢失，<b>但同一行结果栏「负-0.2」与第五步结论「客让 0.25」是自洽的</b>（(+0.2−0.6)/2=−0.2 → 落档 −0.25），错的是中间算式、不是结论（此前本页写「第五步不成立」措辞过头，已更正）；③ 表1 定义行第四步写「两项<b>相加</b>」、表2 例题写「两项<b>相减</b>」并算出 −0.6，<b>看似矛盾其实自洽</b>：表1 标题「以主场为准」，客队盘口值已按主队视角取反（−D_a），相加 = D_h + (−D_a) = D_h − D_a，与表2 相减同式（此前本页写「原文自相矛盾」是误判，2026-11-12 更正）。另：原文第五步「2.5（开盘不能低于2.5、也不能高于2.5）」把模拟大小球<b>锚定 2.5</b>，本模块保留连续 0.25 档量化值以便与实盘比较，属有意偏离。'
+  +  '① 表2 第三步「1.4−1.2 | −0.2」符号错，应为 <b>+0.2</b>；② 「历史盘口值+近期盘口值÷2」那格写成「−0.2+−0.6=0.4÷2=0.2」符号丢失，<b>但同一行结果栏「负-0.2」与第五步结论「客让 0.25」是自洽的</b>（(+0.2−0.6)/2=−0.2 → 落档 −0.25），错的是中间算式、不是结论（此前本页写「第五步不成立」措辞过头，已更正）；③ 表1 定义行第四步写「两项<b>相加</b>」、表2 例题写「两项<b>相减</b>」并算出 −0.6，<b>看似矛盾其实自洽</b>：表1 标题「以主场为准」，客队盘口值已按主队视角取反（−D_a），相加 = D_h + (−D_a) = D_h − D_a，与表2 相减同式（此前本页写「原文自相矛盾」是误判，2026-11-12 更正）。另：原文第五步「2.5（开盘不能低于2.5、也不能高于2.5）」是<b>基准/约束</b>——(①+②)/2 实算落档得到的模拟大小球线应为 2.5，落在其它档即「分析数据有异常」，按原文计 1 项异常（竞彩北单区参与判档）。<b>2026-11-15 更正</b>：曾误做成「结论恒等于 2.5」，那会把 ①~④ 全废掉（所有场结论相同），已撤销。'
   +  '</div></details>'
   +  '<b>分区</b>：<b>竞彩北单区</b>=有竞彩 had / 北单官方七玩法 SP，甲乙全跑；<b style="color:#8b98a9">非竞彩北单区（野鸡区）</b>=无官方 SP，乙缺官方端<b>明确不适用</b>，改跑甲 + 外围多公司抽水离散 + 初→临漂移，只给观察/谨慎，不冒充可下注结论。<br>'
-  +  '<b style="color:#0d9488">数据口径（重要 · 2026-11-12 更正）</b>：五步 ①②③④ 的逐场原始数据<b>优先取源站雷速分析接口</b>（<code>bake_pack.json → packs[tid].analysis.battle</code>：两队历史交锋逐场、主队近期逐场、客队近期逐场，每行带日期 + 队名 + 比分），构建时已 gzip 内联进首页（<span id="dgBattleN">'+_dgBattleN()+'</span>），随 CVM 每 15 分钟刷新。<b style="color:var(--yel)">此前为给首屏瘦身把整个 analysis 字段删掉，前端根本拿不到，只能退回 7m 老库（数据止于 2026-10-13，不是文档「近 10 场」）→ 竞彩北单区五步齐全 0 场；这是数据捕捉缺口，现已补齐。</b>源站每组通常给 5 场（文档要 10 场），<b>逐场标注样本数、&lt;3 场不进公式</b>；只有源站缺步才回退 7m 交锋/近况表并注明时效，回退时<b>自定</b>异常门从 0.5 放宽到 1.0 球。交锋 &lt;2 场不进公式（防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
+  +  '<b style="color:#0d9488">数据口径（重要 · 2026-11-12 更正）</b>：五步 ①②③④ 的逐场原始数据<b>优先取源站雷速分析接口</b>（<code>bake_pack.json → packs[tid].analysis.battle</code>：两队历史交锋逐场、主队近期逐场、客队近期逐场，每行带日期 + 队名 + 比分），构建时已 gzip 内联进首页（<span id="dgBattleN">'+_dgBattleN()+'</span>），随 CVM 每 15 分钟刷新。<b style="color:var(--yel)">此前为给首屏瘦身把整个 analysis 字段删掉，前端根本拿不到，只能退回 7m 老库（数据止于 2026-10-13，不是文档「近 10 场」）→ 竞彩北单区五步齐全 0 场；这是数据捕捉缺口，现已补齐。</b>源站每组通常给 5 场（文档要 10 场），<b>逐场标注样本数：近况 &lt;3 场不进公式、交锋 &lt;2 场不进公式</b>（2026-11-15 修：旧版交锋也套 3 场门，把 118 场源站确有 2 场真交锋的比赛误判成「模拟盘不成立」）；只有源站缺步才回退 7m 交锋/近况表并注明时效，回退时<b>自定</b>异常门从 0.5 放宽到 1.0 球。交锋 &lt;2 场不进公式（防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
   +  '<details style="margin:4px 0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--card2)"><summary style="cursor:pointer;font-size:10.5px;font-weight:700;color:var(--yel)">⚖ 哪些是原文、哪些不是（原文只有两块公式，其余为分区要求/自研/校准）· 点开</summary><div style="font-size:10.5px;line-height:1.7;margin-top:5px;color:var(--txt)">'
   +  '<b>原文只有两块</b>——五步模拟盘 + 返还抽水换算，外加「如分析数据有异常，则建议放弃」。「竞彩北单 / 野鸡区」<b>分区是按用户要求加的，原文没有</b>；野鸡区的「外围多公司抽水离散 + 初→临漂移」、两道防脏数据闸、逐项热门方向符号、0.5/1.0 球门、去基差判档，<b>均为本模块自研/校准，不是原文公式</b>。原文的 6pt 门是拿<b>竞彩 vs 一家外围</b>（截图为「独赢」一家 4.48/4.15/1.71）标定的，本模块外围优先 Bet365、其次欧赔汇总（口径已变），套到<b>北单 SP 属外推</b>，虽按官方源分组去基差缓解，仍未经样本外验证。'
   +  '</div></details>'
