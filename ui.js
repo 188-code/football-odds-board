@@ -6,7 +6,25 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-15-tri-trail-v3';   // ★ v3 三盘「开盘→临盘」整条序列：历史板每行展示竞彩 had / 北单不让球资金 / 365 开盘价的双段轨迹、Δ、拐点、同向数与序列不齐护栏标注；方向票权重未改（两段标定反向，按铁律不启用）。北单让球行(rq≠0)已隔离，不再与 365 独赢盘相减。
+const UI_V = '2026-11-16-twopan-observe-v1';   // ★ 纯2盘(北单+365无竞彩)「反北单净Δ」观察方向提示位：只在观察档展示，不改任何引擎方向权重。规律=北单开盘→临盘资金推强(bNet>0)→观察买受让/推受(bNet<0)→观察买强队。79场回测命中64.6%/ROI+31.3%、训练+35.9%/留出+14.7%(留出±24.3跨0·n小)→按铁律只作观察参考·不叫业绩·不下注指令。上版 v3 三盘序列方向票权重仍未改(两段标定反向·不启用)。
+/* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
+   只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
+   ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
+function twoPanObsByTid(tid){
+  try{
+    var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+    var t = T[String(tid)];
+    if (!t || !t.seg) return null;
+    var bd = t.seg.bd, eu = t.seg.eu, jc = t.seg.jc;
+    if (!bd || !bd.ok || bd.net == null || !eu || !eu.ok || (jc && jc.ok)) return null;
+    var bNet = +bd.net, eNet = (eu && eu.net != null) ? +eu.net : null;
+    var dir = bNet > 0 ? 'U' : (bNet < 0 ? 'S' : null);
+    if (!dir) return null;
+    return { dir:dir, bNet:bNet, eNet:eNet,
+             div:(eNet != null && bNet * eNet < 0),
+             dirTxt:(dir === 'U' ? '观察买受让' : '观察买强队') + ((eNet != null && bNet * eNet < 0) ? '（两盘背离）' : '') };
+  }catch(e){ return null; }
+}
 /* 源站主机（2026-09-13 实测结论，已据此重排优先级）：
      · m.gqj2.tv    —— 实战稳定主源。列表/赔率(oddshistorypc)/交锋(analysis) 均稳定 HTTP 200，
                         且路径**带** /api 前缀。www.gqj2.tv 仅是它的 301 跳转别名。
@@ -7898,7 +7916,8 @@ function _fundPlateTodayPicks(opt){
       recDir:_recDirReal,                                   // ★ 推荐方向（复盘对齐用）
       bet:_recDirReal,                                        // ★ 下注方向列：明确方向
       bigHot:h.bigHot, extreme:h.extreme, soloHot:h.soloHot,
-      grade:_fpGrade(h.lvl)                              // ★ 分级按净超买 pt
+      grade:_fpGrade(h.lvl),                             // ★ 分级按净超买 pt
+      twoPanObs: twoPanObsByTid(m.tid)                   // ★ 2026-11-16 纯2盘观察方向（只读·观察档·不进票权重）
     });
   }
   rows.sort((x,y)=> y.lvl-x.lvl);
@@ -8483,6 +8502,34 @@ function fundplateHistoryHTML(){
     var hs = (e && e.heatScore != null) ? +e.heatScore : 0;
     return (o.overGap === true) && hs >= 3;
   };
+  /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向（用户："只有2盘没竞彩的比赛，总结一个规律"）。
+     规律：北单开盘→临盘资金推强(bNet>0) → 观察参考方向=买受让；推受(bNet<0) → 买强队。
+     证据：纯2盘79场回测 命中64.6% / ROI+31.3%，训练+35.9% / 留出+14.7%（留出±24.3跨0·n小）；
+           加强版(两盘背离 bNet×eNet<0) 39注 ROI+59.2%、留出+76%(n9·跨0)。
+     ★★ 铁律：留出跨0 + 样本小 → 只作【观察档参考方向】，绝不进引擎方向权重、绝不叫业绩、绝非下注指令。
+        本函数只读 tri_trail 的 bd.net（已核对与回测 bNet 79场零差异，同口径），不参与任何 recDir/票权重。 */
+  const _twoPanObserve = function(e){
+    try{
+      var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+      var t = (e && e.trail) || (e && e.op && e.op.trail) || T[String(e && e.tid)] || null;
+      if (!t || !t.seg) return null;
+      var bd = t.seg.bd, eu = t.seg.eu, jc = t.seg.jc;
+      if (!bd || !bd.ok || bd.net == null) return null;          // 北单独赢序列是判据核心
+      if (!eu || !eu.ok) return null;                            // 必须365也在 → 纯2盘(缺一不可)
+      if (jc && jc.ok) return null;                              // 竞彩也在=三盘场，本规律只针对纯2盘
+      var bNet = +bd.net, eNet = (eu && eu.net != null) ? +eu.net : null;
+      var dir = bNet > 0 ? 'U' : (bNet < 0 ? 'S' : null);        // 反北单净Δ：>0买受让 / <0买强队
+      if (!dir) return null;
+      var div = (eNet != null && bNet * eNet < 0);               // 两盘背离=加强版
+      // 结果核对：账本 result win=受让赢盘 / lose=强队赢盘
+      var hit = null;
+      if (e && e.result && e.result !== 'pending'){
+        hit = (dir === 'U' && e.result === 'win') || (dir === 'S' && e.result === 'lose');
+      }
+      return { dir:dir, bNet:bNet, eNet:eNet, div:div, hit:hit,
+               dirTxt: (dir === 'U' ? '买受让' : '买强队') + (div ? '（两盘背离·加强版）' : '') };
+    }catch(_e){ return null; }
+  };
   /* ★★ 2026-11-15 v3：三盘「开盘→临盘」整条序列展示（用户口径：谁先动、动多少、谁跟谁没跟）。
      数据来自 gen_index 内联 __TRI_TRAIL__（gzip 异步解压）或账本冻结的 e.trail/e.op.trail。
      ★ 北单 rqspf.rq!=0 是让球胜平负，与 365 独赢盘玩法不同 → 只作灰字参考，绝不进 ②北单独赢。
@@ -8518,6 +8565,20 @@ function fundplateHistoryHTML(){
       var rd = String((e && e.recDir) || '');
       if (!t.ok && /^(买强队|买受让)/.test(rd))
         h += '<div style="margin-top:2px;color:#fca5a5">当时发了「' + esc(rd.slice(0, 18)) + '」，按 v3 序列护栏应判观察（意见原文按冻结铁律保留）</div>';
+      /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向（只观察·非信号·非业绩·不下注指令） */
+      var _tp = _twoPanObserve(e);
+      if (_tp){
+        var _hcol = _tp.hit === true ? '#34d399' : (_tp.hit === false ? '#f87171' : '#94a3b8');
+        var _htxt = _tp.hit === true ? '✅该场对' : (_tp.hit === false ? '❌该场挂' : '待结算');
+        h += '<div style="margin-top:6px;padding:5px 7px;border-left:2px solid #64748b;background:rgba(148,163,184,.07);border-radius:4px;font-size:10px;line-height:1.5">'
+          + '<b style="color:#cbd5e1">🧭 纯2盘观察方向（反北单净Δ·观察档）</b> '
+          + '<span style="color:' + _hcol + ';font-weight:800">' + esc(_tp.dirTxt) + ' · ' + _htxt + '</span><br>'
+          + '<span style="opacity:.8">北单净Δ <b>' + (_tp.bNet >= 0 ? '+' : '') + _tp.bNet.toFixed(1) + '</b>'
+          + (_tp.eNet != null ? (' / 365净Δ <b>' + (_tp.eNet >= 0 ? '+' : '') + _tp.eNet.toFixed(1) + '</b>') : '')
+          + ' → ' + (_tp.dir === 'U' ? '资金推强·站受让' : '资金推受·站强队') + '</span><br>'
+          + '<span style="color:#fca5a5">⚠ 回测规律：79场命中64.6%/ROI+31.3%（留出仅+14.7%±24.3跨0）→只作观察参考，非下注指令、不进引擎权重</span>'
+          + '</div>';
+      }
       h += '</div>';
       return h;
     }catch(_e){ return ''; }
@@ -8837,6 +8898,8 @@ function fundplateHistoryHTML(){
      + '<br><span style="color:#ffe08a;font-weight:700">🔧 2026-11-15 v3 改版：方向改为「逐场票差」独立判定（哪边有利推哪边），已撤销二次合流门槛。本板自身分层：破缺口买受让 69.0% / ROI +38.3%，未破缺口(吃水区) 50.0% / ROI +0.1%＝零 edge。故未合流场只标「票差方向·未合流·非强推」，不再冒称「正式强推·三盘合流」；两场 11-15 连挂（heatScore 1/2、竞彩无数据）正是落在零 edge 桶，不是算法突然失灵。</span>'
      + '<br><span style="color:#93c5fd;font-weight:700">📈 2026-11-15 v3 三盘序列：判读改为三端「开盘→临盘」整条轨迹（①竞彩 had ②北单 fund.rq=0 不让球资金占比 ③365 Bet365 开盘价逐帧 + 初盘升降），看同向数／拐点／谁先动，不再是某一刻两项赔率相减。北单让球胜平负(rq≠0)是另一玩法，已隔离，禁止再与 365 独赢盘相减造出 20~34pp 假差。序列不齐（缺盘／仅让球行／365 未到）一律只观察。</span>'
      + '<br><span style="color:#fca5a5;font-weight:700">⚠ 离线标定(_calib_trail.cjs)：全部序列方向票在训练段 11-07~11-11 与留出段 11-12~11-15 符号相反，按铁律不启用任何序列方向票、不改票权重；本版只启用「序列不齐→观察」的数据正确性护栏。修的是数据链与「不该出注的场」，不是拿两场个案反推新方向。</span>'
+     + '<br><span style="color:#93c5fd;font-weight:700">🧭 2026-11-16 纯2盘观察方向（北单+365、无竞彩）：每场三盘序列块下新增「🧭 纯2盘观察方向」行，规律=<b>反北单净Δ</b>（开盘→临盘资金推强 bNet&gt;0 → 观察买受让；推受 bNet&lt;0 → 观察买强队）。纯2盘79场回测 命中64.6%/ROI+31.3%、训练+35.9%/留出+14.7%；两盘背离加强版39注 ROI+59.2%(留出+76%·n9)。</span>'
+     + '<br><span style="color:#fca5a5;font-weight:700">⚠ 该规律留出段 ±24.3 跨0、n小 → 只作【观察档参考方向】，逐场标 ✅对/❌挂 仅供复盘；<b>绝不进引擎方向权重、绝不叫业绩、绝非下注指令</b>。它反的是北单资金流Δ方向、不是反强队，与机械反买是两回事。</span>'
      + '<br><b style="color:#ffe08a">⚠️ 结果列的 ✅/❌ 是「顺买过热强队」统计视角，不是「🎯 推荐方向」的战绩：受让赢盘会标 ❌，但买受让的意见恰恰命中。</b>'
      + '推荐方向是否命中请看每行新增的「🎯 推荐方向：✅中 / ❌挂」标记，以及顶部「🎯 推荐方向·赛前」KPI（只算赛前登记的方向注，观察档不计）。'
      + '</div>';
@@ -9201,6 +9264,8 @@ function openFundPlate(){
        （翻转型的合流只说明资金方向自洽，不构成大热必死——冷门方基数低，同样资金算出的偏离天然更大）。 */
     +'<td>'+_tierBadgeHTML(r)
     +'<span style="background:'+_g.bg+';color:'+_g.color+';font-weight:800;padding:2px 8px;border-radius:4px;white-space:nowrap">'+esc(r.verdict)+(r.flip?' · 观察档·不判级':(r.bigHot&&r.grade&&r.grade.tag?(' · '+r.grade.tag):''))+'</span>'
+    /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向（只读观察档·非信号·非业绩·不下注指令） */
+    +(r.twoPanObs?('<div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.4" title="回测规律79场命中64.6%/ROI+31.3%，留出仅+14.7%±24.3跨0 →只作观察参考，非下注指令">🧭 纯2盘观察：<b style="color:#94a3b8">'+esc(r.twoPanObs.dirTxt)+'</b> <span style="opacity:.75">(北单净Δ '+(r.twoPanObs.bNet>=0?'+':'')+r.twoPanObs.bNet.toFixed(1)+')</span><br><span style="color:#b91c1c;opacity:.85">⚠观察档·非信号·不进引擎</span></div>'):'')
     +(r.flip
         ? '<div style="font-size:10px;color:#7c3aed;margin-top:2px">🔁 北单买的是<b>冷门方(受让方)</b>，不是强队被超买 → 不构成「大热必死」、不占过热名额</div>'
         : (r.soloHot?'<div style="font-size:10px;color:#b45309;margin-top:2px">⚠ 仅北单超买·未三盘合流（缺①盘同指或②盘设防）</div>':'')
