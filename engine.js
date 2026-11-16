@@ -3169,7 +3169,9 @@ function getBeidan(home, away, league){
   for (const r of (globalThis.BD_ROWS||[])){ if (_bdStdRow(r) && _bdNameEq(home, r.home) && _bdNameEq(away, r.away) && _cupOk(league, r.league)) return r; }
   for (const r of (globalThis.BD_ROWS||[])){
     if (_bdStdRow(r) && _bdNameEq(home, r.away) && _bdNameEq(away, r.home) && _cupOk(league, r.league)){
-      const sw = o => { if (!o) return o; const out = {}; for (const k in o) out[k] = (/^h/.test(k) ? 'a' + k.slice(1) : /^a/.test(k) ? 'h' + k.slice(1) : k); return out; };
+      /* ★ 2026-11-17：原此处定义 sw 却从未调用（死代码）。北单 sp/pct 是【数组】[胜,平,负]，
+         不是 {h,d,a} 对象，故应在消费点按 swapped 做数组反转（见 analyze 中 bd.sp 构造处），
+         而非在此反转——若在此反转，消费点的 pct 反转会造成双重反转。返回原始数组 + swapped 标志。 */
       return Object.assign({}, r, { swapped: true, home: r.away, away: r.home });
     }
   }
@@ -3250,7 +3252,9 @@ function getJingcai(home, away){
   //    命中则返回官方赔率已同步对调(h<->a)的副本，保证与页面主客一致。
   for (const r of JC_ROWS){
     if (_jcNameEq(home, r.away) && _jcNameEq(away, r.home)){
-      const sw = o => { if (!o) return o; const out = {}; for (const k in o) out[k] = (/^h/.test(k) ? 'a' + k.slice(1) : /^a/.test(k) ? 'h' + k.slice(1) : k); return out; };
+      /* ★ 2026-11-17 修复：原 sw 写成 out[k]=新键名，把 h/d/a 的【赔率值】改成了字符串 'a'/'d'/'h'，
+         下游 +jcRow.had.h 全变 NaN。正确做法是交换【键】而保留原值（goalLine 等非 h/a 键原样保留）。 */
+      const sw = o => { if (!o) return o; const out = {}; for (const k in o){ let nk = k; if (/^h/.test(k)) nk = 'a' + k.slice(1); else if (/^a/.test(k)) nk = 'h' + k.slice(1); out[nk] = o[k]; } return out; };
       return Object.assign({}, r, { swapped: true, had: sw(r.had), hhad: sw(r.hhad), home: r.away, away: r.home });
     }
   }
@@ -4436,7 +4440,11 @@ function analyze(agg, zhanyi, aggBs, ppiInput, tid, home, away, league){
         const flow = P.map((p, i) => +(p - Q[i]).toFixed(1));
         const maxIdx = flow.indexOf(Math.max(...flow));
         const minIdx = flow.indexOf(Math.min(...flow));
-        const lowIdx = bd.sp.indexOf(Math.min(...bd.sp));
+        /* ★ 2026-11-17：lowIdx 原用 bd.sp（源站原序），但 P/W-D-L 已按 swapped 对齐页面主客；
+           反向匹配场 sp 原序与主客相反 → lowSide 标错方。改用与 P 同序的赔率取最小。
+           （bd.sp 保持原序不动：下游 4550/4749 盘级差换算依赖 bd.swapped 自行对齐，反转会双重反转。） */
+        const _spForSide = bd.swapped ? [bd.sp[2], bd.sp[1], bd.sp[0]] : bd.sp;
+        const lowIdx = _spForSide.indexOf(Math.min(..._spForSide));
         const maxFlow = flow[maxIdx];
         /* ★ 2026-10-28 数据护栏（用户：板子 +N 出现 +62/+73 物理不可能值 = 北单/365 错配）：
            洋哥方法「差值」>15pt 即大热、>~16 为其旗舰案例上限；超过 25pt 物理上不可能
