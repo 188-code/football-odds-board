@@ -8339,6 +8339,11 @@ function _fpEra(e){
 }
 function _fpNetPt(e){
   if (!e) return null;
+  // 必发档位不等于北单净超买；缺净值时禁止回落到 maxFlow(缺省0)-gap。
+  if (e.heatSrc === 'betfa' && e.netPt == null && !(e.op && e.op.netPt != null)) {
+    var realFrames = Array.isArray(e.dirTrail) ? e.dirTrail : [];
+    if (!realFrames.some(function(x){ return x && x.netPt != null && isFinite(+x.netPt); })) return null;
+  }
   var tr = e.dirTrail;
   if (Array.isArray(tr) && tr.length){
     for (var _ni = tr.length - 1; _ni >= 0; _ni--){
@@ -8407,7 +8412,9 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
   // 冻结标记
   var _frozenTxt = '';
   try{
-    if (e && e.opFrozen && e.opFrozenAt){
+    if (e && (e.opBackfill || e.dirBackfill)){
+      _frozenTxt = '<div style="font-size:8.5px;color:#b45309;margin-top:2px;font-weight:700">赛后补登·不是赛前定格意见·不计预测成绩</div>';
+    } else if (e && e.opFrozen && e.opFrozenAt){
       var _d = new Date((+e.opFrozenAt) * 1000);
       var _p2 = function(n){ return String(n).padStart(2,'0'); };
       _frozenTxt = '<div style="font-size:8.5px;color:#2faa6a;margin-top:2px;font-weight:700">🔒 开赛定格 '
@@ -8759,6 +8766,10 @@ function fundplateHistoryHTML(){
           + (extra || '') + '</div>';
       };
       var h = '<div style="margin-top:7px;padding:6px 8px;border:1px dashed #3b82f6;border-radius:7px;font-size:10px;line-height:1.55;color:#cbd5e1">';
+      // 仅必发登记、无任何官方采集帧：不能把尚未接入冒充采集失败或三盘结论。
+      if (e && e.heatSrc === 'betfa' && ![t.jc,t.bd,t.rq].some(function(x){return x && x.n>0;})) {
+        return h + '<b>三盘待接入·仅有必发来源登记</b><br>未见该场竞彩/北单赛前帧；不代表已确认未开售。<br>365现有 ' + ((t.eu&&t.eu.n)||0) + ' 帧，尚不足构建完整三盘。<br>本行不是三盘分析结论，不作强推依据。</div>';
+      }
       h += '<div style="font-weight:800;color:#93c5fd;margin-bottom:3px">📈 三盘开盘→临盘（v3 序列·非单帧）</div>';
       h += line('①竞彩 had', t.jc);
       h += line('②北单独赢', t.bd, (t.flags && t.flags.rqOnly) ? ' <span style="color:#ff8a8a">[仅让球行·玩法不同]</span>' : '');
