@@ -8676,6 +8676,28 @@ function fundplateHistoryHTML(){
     var hs = (e && e.heatScore != null) ? +e.heatScore : 0;
     return (o.overGap === true) && hs >= 3;
   };
+  /* ★ 2026-11-17：当前/未开赛场优先读最新 __TRI_TRAIL，冻结 e.trail 只用于历史复盘。
+     事故：瑞士vs苏格兰(2981515) 11-16 10:53 首登冻结的 trail 只有 365 15帧、竞彩/北单皆空，
+     但 D 盘竞彩/北单数据齐全；根因是北单凌晨场 phase 跨日误标导致构建器剔除赛前帧。
+     构建器已修、最新 tri_trail 三端齐全(jc19/bd127/eu65)，若 UI 仍优先读冻结 trail，
+     页面就会一直显示旧的「序列不齐」，用户据此质疑"竞彩北单数据D盘都有"。
+     冻结铁律只约束【已结算】条目的复盘口径；未结算场本就该反映最新数据链。 */
+  const _latestTrailItem = function(e){
+    var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+    var live = T[String(e && e.tid)] || null;
+    var settled = !!(e && e.result && e.result !== 'pending');
+    return (!settled && live && live.seg) ? live : null;
+  };
+  /* 把 __TRI_TRAIL 的 {seg:{jc,bd,eu,rq},flags,align,ok,why} 拍平成账本 trail 的扁平口径 */
+  const _flatTrail = function(it){
+    if (!it) return null;
+    if (!it.seg) return it; // 已是账本扁平 trail
+    var s = it.seg || {}, a = it.align || {};
+    return { jc: s.jc || null, bd: s.bd || null, eu: s.eu || null, rq: s.rq || null,
+      flags: it.flags || null, same: a.same || 0, nSrc: a.nSrc || 0,
+      lead: a.lead || '', leadT: a.leadT || '', ok: !!it.ok, why: it.why || '',
+      dir: a.dir || 0, converge: !!a.converge, rqFade: a.rqFade || null, _live: true };
+  };
   /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向（用户："只有2盘没竞彩的比赛，总结一个规律"）。
      规律：北单开盘→临盘资金推强(bNet>0) → 观察参考方向=买受让；推受(bNet<0) → 买强队。
      证据：纯2盘79场回测 命中64.6% / ROI+31.3%，训练+35.9% / 留出+14.7%（留出±24.3跨0·n小）；
@@ -8685,7 +8707,8 @@ function fundplateHistoryHTML(){
   const _twoPanObserve = function(e){
     try{
       var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
-      var t = (e && e.trail) || (e && e.op && e.op.trail) || T[String(e && e.tid)] || null;
+      var live = _latestTrailItem(e);
+      var t = live || (e && e.trail) || (e && e.op && e.op.trail) || T[String(e && e.tid)] || null;
       if (!t || !t.seg) return null;
       var bd = t.seg.bd, eu = t.seg.eu, jc = t.seg.jc;
       if (!bd || !bd.ok || bd.net == null) return null;          // 北单独赢序列是判据核心
@@ -8711,7 +8734,8 @@ function fundplateHistoryHTML(){
   const _fpTrailCell = function(e){
     try{
       var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
-      var t = (e && e.trail) || (e && e.op && e.op.trail) || T[String(e && e.tid)] || null;
+      var live = _latestTrailItem(e);
+      var t = _flatTrail(live || (e && e.trail) || (e && e.op && e.op.trail) || T[String(e && e.tid)] || null);
       if (!t) return '';
       var f3 = function(a){ return Array.isArray(a) ? a.map(function(v){ return (+v).toFixed(1); }).join('/') : '—'; };
       var line = function(lbl, s, extra){
