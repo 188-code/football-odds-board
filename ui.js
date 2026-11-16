@@ -6112,11 +6112,13 @@ function rqLvlHTML(){
       const rqHcap = homeIsGiver ? L.hcap : -L.hcap;     // 主队视角盘口
       // 365 真实亚盘盘口（tri_trail eu.hcap1）
       const euHcap = (eu && eu.hcap1 != null && isFinite(+eu.hcap1)) ? +eu.hcap1 : null;
-      const diff = euHcap != null ? +((rqHcap - euHcap) / 0.25).toFixed(2) : null;   // 盘级差(级)
+      // ★ 让球方视角盘级差：|北单让球盘级|−|365盘级|，与账本 _rq_ledger.cjs 同源。
+      //   旧版用主队视角 (rqHcap−euHcap)，客让场符号会反 →「大热反买」方向判反，必须修正。
+      const lvlDiff = euHcap != null ? +((Math.abs(rqHcap) - Math.abs(euHcap)) / 0.25).toFixed(2) : null;
       rows.push({
         tid, home: it.home || bd.home || '?', away: it.away || bd.away || '?',
         kickoff: it.kickoff || '', no: bd.no, rqV, homeIsGiver,
-        upOdds, tag: L.tag, hcap: L.hcap, rqHcap, euHcap, diff
+        upOdds, tag: L.tag, hcap: L.hcap, rqHcap, euHcap, lvlDiff
       });
     }
     rows.sort((x, y) => String(x.kickoff || '').localeCompare(String(y.kickoff || '')));
@@ -6124,25 +6126,28 @@ function rqLvlHTML(){
     const seenNo = new Set(), uniq = [];
     for (const r of rows){ if (seenNo.has(r.no)) continue; seenNo.add(r.no); uniq.push(r); }
     rows.length = 0; rows.push(...uniq);
-    if (!rows.length) return '<p class="note">今日暂无「北单只开让球盘」的场次。北单对强弱悬殊场才只开让球胜平负；这些场旧三盘口径给不出资金热度，本挑战版正是为它们而设。</p>';
-    const hot = rows.filter(r => r.diff != null && Math.abs(r.diff) >= 2);
-    const warn = rows.filter(r => r.diff != null && Math.abs(r.diff) >= 1 && Math.abs(r.diff) < 2);
-    let h = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px">'
+    if (!rows.length) return '<div id="rqLedgerStat"></div><p class="note">今日暂无「北单只开让球盘」的场次。北单对强弱悬殊场才只开让球胜平负；这些场旧三盘口径给不出资金热度，本挑战版正是为它们而设。</p>';
+    const hot = rows.filter(r => r.lvlDiff != null && Math.abs(r.lvlDiff) >= 2);
+    const warn = rows.filter(r => r.lvlDiff != null && Math.abs(r.lvlDiff) >= 1 && Math.abs(r.lvlDiff) < 2);
+    let h = '<div id="rqLedgerStat"></div>'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px">'
       + '<div style="flex:1;min-width:120px;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 12px"><div style="font-size:11px;color:var(--mut)">让球盘场(原版覆盖不到)</div><div style="font-size:20px;font-weight:700;color:var(--acc)">' + rows.length + '</div></div>'
       + '<div style="flex:1;min-width:120px;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 12px"><div style="font-size:11px;color:var(--mut)">挑战判大热(盘级差≥2级)</div><div style="font-size:20px;font-weight:700;color:var(--red)">' + hot.length + '</div></div>'
       + '<div style="flex:1;min-width:120px;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 12px"><div style="font-size:11px;color:var(--mut)">流速异常(≥1级)</div><div style="font-size:20px;font-weight:700;color:#f97316">' + warn.length + '</div></div>'
       + '</div>';
     h += '<table class="htab"><thead><tr>'
-      + '<th>开赛</th><th>对阵</th><th>北单让球</th><th>让球方胜赔(北单)</th><th>北单让球盘级</th><th>365亚盘盘口</th><th>盘级差</th><th>挑战判定</th>'
+      + '<th>开赛</th><th>对阵</th><th>北单让球</th><th>让球方胜赔(北单)</th><th>北单让球盘级</th><th>365亚盘盘口</th><th>盘级差(让球方)</th><th>挑战判定</th>'
       + '</tr></thead><tbody>';
     for (const r of rows){
       const giveTxt = r.homeIsGiver ? '主让' : '客让';
       let verdict;
-      if (r.diff == null) verdict = '<span style="color:var(--mut)">—</span>';
-      else if (Math.abs(r.diff) >= 2) verdict = '<b style="color:var(--red)">大热·反买</b>';
-      else if (Math.abs(r.diff) >= 1) verdict = '<b style="color:#f97316">流速异常</b>';
+      if (r.lvlDiff == null) verdict = '<span style="color:var(--mut)">—</span>';
+      else if (Math.abs(r.lvlDiff) >= 2) verdict = r.lvlDiff > 0
+        ? '<b style="color:var(--red)">大热·反买受让方</b>'
+        : '<b style="color:var(--red)">大热·反买让球方</b>';
+      else if (Math.abs(r.lvlDiff) >= 1) verdict = '<b style="color:#f97316">流速异常(只观察)</b>';
       else verdict = '<span style="color:var(--mut)">正常</span>';
-      const diffTxt = r.diff == null ? '—' : (r.diff > 0 ? '+' : '') + r.diff + '级';
+      const diffTxt = r.lvlDiff == null ? '—' : (r.lvlDiff > 0 ? '+' : '') + r.lvlDiff + '级';
       h += '<tr>'
         + '<td>' + (r.kickoff || '—') + '</td>'
         + '<td><b style="color:var(--acc)">' + r.home + '</b> <span style="opacity:.6">vs</span> <b style="color:var(--acc)">' + r.away + '</b></td>'
@@ -6159,16 +6164,91 @@ function rqLvlHTML(){
       + '<div class="note" style="border-left:3px solid var(--acc)">'
       + '① 北单返还率 100%，让球盘映射表按<b>北单原赔率直接查</b>（只有竞彩这类低返还率源才需先乘 R365 换算）。<br>'
       + '② 查让球盘映射表（★带让球数 n）：≥2.99 n球高水 | 2.75~2.99 n球中水 | 2.5~2.75 n球低水 | 2.36~2.49 n+0.25高水 | 2.23~2.36 n+0.25中水 | 2.10~2.23 n+0.25低水 | &lt;2.10 n+0.5（2.09起）。<br>'
-      + '③ 盘级差 = 北单让球盘级 − 365亚盘盘级。|差|≥2级(0.5球)=洋哥大热；≥1级=流速异常；≤1级=正常。<br>'
-      + '<b>实验性质：本板与原「三盘资金·过热」并列 A/B 对照，不触发任何信号，数日后用真实赛果判谁更准。</b></div></details>';
+      + '③ 盘级差 = |北单让球盘级| − |365亚盘盘级|（<b>让球方视角</b>，与下方逐场结算账本同源）：差&gt;0=北单让球方过热→反买受让方；差&lt;0→反买让球方。|差|≥2级(0.5球)=洋哥大热（才登记账本）；1级=流速异常（只观察不下注）。<br>'
+      + '<b>实验性质：本板与原「三盘资金·过热」并列 A/B 对照，不触发任何信号，逐场结算见下方账本（两边各自前向累积，绝不混算）。</b></div></details>';
     return h;
-  }catch(e){ return '<p class="note">生成失败：' + (e && e.message || e) + '</p>'; }
+  }catch(e){ return '<div id="rqLedgerStat"></div><p class="note">生成失败：' + (e && e.message || e) + '</p>'; }
 }
 async function openRqLvl(){
-  const _box = $('rqLvlContent'); if (_box) _box.innerHTML = (function(){ try{ return rqLvlHTML(); }catch(e){ return '<p class="note">生成失败：'+(e&&e.message||e)+'</p>'; } })();
+  const _box = $('rqLvlContent'); if (_box) _box.innerHTML = (function(){ try{ return rqLvlHTML(); }catch(e){ return '<div id="rqLedgerStat"></div><p class="note">生成失败：'+(e&&e.message||e)+'</p>'; } })();
+  loadRqLedger();   // ★ 挂逐场结算复盘账本（与原版 A/B 对照的客观依据）
   const _modal = $('rqLvlModal'); if (_modal) _modal.classList.add('show');
 }
 function closeRqLvl(){ const _m = $('rqLvlModal'); if(_m) _m.classList.remove('show'); }
+
+/* ★ 2026-11-16 挑战版·逐场结算复盘账本（_rq_ledger.cjs 产出的独立前向账本，前端只读）。
+   口径铁律（与账本脚本逐字同源）：
+   - 只收【仅让球行/无独赢】+ 严格赛前(state=0 且 ko>now) + 让球方视角盘级差≥2级(洋哥大热)；
+     流速异常(1级)只观察不登记，所以样本偏少但口径干净。
+   - 首登冻结盘级判定/反买方向/365盘口水位/规则版本；结算用 gqj2 完场 + 365 真实亚盘盘口水位，已结算不覆盖。
+   - ★ 与 dir_ledger.json（原「方向推荐·赛前样本外业绩」）并列 A/B 对照，两者物理隔离、绝不混算。 */
+function loadRqLedger(){
+  const el = document.getElementById('rqLedgerStat');
+  if (!el) return;
+  fetch('rq_ledger.json', { cache:'no-store' }).then(r=>r.json()).then(d=>{
+    const s = (d && d.summary) || {};
+    const items = (d && d.items) || {};
+    const a = s.all || {};
+    const pct = (h,n) => n ? (Math.round(h/n*1000)/10 + '%') : '—';
+    const upd = s.updatedAt ? new Date(s.updatedAt*1000).toLocaleString('zh-CN',{hour12:false}) : '—';
+    const roiCol = v => v==null ? 'var(--mut)' : (v>0 ? 'var(--red)' : (v<0 ? '#4ade80' : 'var(--yel)'));
+    const sg = v => v==null ? '—' : ((v>0?'+':'')+v+'%');
+    let h = '<div style="margin:10px 0 8px;padding:9px 11px;border-radius:9px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.34);font-size:11.5px;color:var(--fg);line-height:1.7">'
+      + '📒 <b style="color:#c4b5fd">挑战版·逐场结算复盘账本</b>（独立冻结 · 前向累积 · 与原版 A/B 对照）'
+      + '<div style="margin-top:4px">已登记 <b>' + (s.total||0) + '</b> 场 ｜ 赛前 <b style="color:#c4b5fd">' + (s.pre||0) + '</b> / 开赛后 ' + (s.post||0)
+      + ' ｜ 已结算 <b>' + (s.settled||0) + '</b> / 待结算 ' + (s.pending||0) + '</div>';
+    if (a.n) {
+      const tag = a.significant ? '<b style="color:#6ee7b7">显著</b>'
+        : (a.crossZero ? '<b style="color:#fbbf24">跨0(与零无差异)</b>' : '<span style="opacity:.7">样本偏小</span>');
+      h += '<div style="margin-top:3px">合计：<b>命中 ' + pct(a.win, a.win+a.lose) + '</b>（' + a.win + '胜/' + a.lose + '负/' + a.push + '走）'
+        + ' ｜ ROI <b style="color:' + roiCol(a.roi) + '">' + sg(a.roi) + '</b> ±' + (a.se==null?'—':Math.round(a.se)) + 'pt ｜ ' + tag + '</div>';
+      const bp = s.byPick || {}, parts = [];
+      for (const k of ['受让方','让球方']) {
+        const v = bp[k];
+        if (v && v.n) parts.push(k + ' ' + v.n + '注 命中' + pct(v.win,v.win+v.lose) + ' ROI' + sg(v.roi));
+      }
+      if (parts.length) h += '<div style="margin-top:2px;opacity:.9">按反买方向：' + parts.join(' ｜ ') + '</div>';
+    } else {
+      h += '<div style="margin-top:3px;opacity:.85">当前无已结算样本 —— 账本只登记<b>严格赛前</b>且<b>盘级差≥2级(洋哥大热)</b>的场；'
+        + '流速异常(1级)只观察不登记。样本会偏少但口径干净，随赛程自然累积。</div>';
+    }
+    h += '<div style="margin-top:3px;font-size:10.5px;opacity:.72">口径：首登冻结盘级/方向/盘口水位/版本；结算用 gqj2 完场 + 365 真实亚盘盘口水位；已结算不覆盖。'
+      + '与原「方向推荐·赛前样本外业绩」并列 A/B 对照，<b>绝不混算</b>。</div>'
+      + '<div style="margin-top:2px;font-size:10px;opacity:.6">更新 ' + upd + ' ｜ 规则 ' + (s.ruleV||'—') + ' ｜ 权威写入方：本地刷新链（公网为部署快照）</div>'
+      + '</div>';
+    const arr = Object.values(items).sort((x,y)=>(y.ko||0)-(x.ko||0));
+    if (arr.length) {
+      const byDay = {};
+      for (const e of arr) (byDay[e.day||'unknown'] || (byDay[e.day||'unknown']=[])).push(e);
+      h += '<details style="margin-top:6px"><summary style="cursor:pointer;font-weight:700;color:#c4b5fd;font-size:12.5px">📋 逐场对账明细（' + arr.length + ' 场，点开）</summary><div style="overflow-x:auto;margin-top:6px">'
+        + '<table class="tbl" style="width:100%"><thead><tr>'
+        + '<th>开赛</th><th>对阵</th><th>北单让球/胜赔</th><th>盘级差</th><th>反买方向</th><th>365盘口/水</th><th>比分</th><th>结果</th><th>本注盈亏</th>'
+        + '</tr></thead><tbody>';
+      for (const d in byDay) {
+        h += '<tr><td colspan="9" style="background:var(--card2);font-weight:700;color:#c4b5fd">' + esc(d) + '（' + byDay[d].length + ' 场）</td></tr>';
+        for (const e of byDay[d]) {
+          const resTxt = e.result==='win'?'✓ 赢':(e.result==='lose'?'✗ 输':(e.result==='push'?'= 走':'⏳ 待'));
+          const resCol = e.result==='win'?'var(--grn)':(e.result==='lose'?'var(--red)':'var(--yel)');
+          const plTxt = e.pl==null?'—':((e.pl>=0?'+':'')+e.pl);
+          const plCol  = e.pl==null?'var(--mut)':(e.pl>0?'var(--grn)':(e.pl<0?'var(--red)':'var(--gry)'));
+          h += '<tr><td style="white-space:nowrap">' + esc(e.kickoff||'—') + '</td>'
+            + '<td style="text-align:left">' + esc(e.home||'?') + ' <span style="opacity:.6">vs</span> ' + esc(e.away||'?') + '</td>'
+            + '<td>' + esc(e.tag||'—') + ' @' + esc(e.upOdds) + '（' + (e.rq<0?'主让':'客让') + Math.abs(e.rq) + '球）</td>'
+            + '<td>' + (e.lvlDiff>0?'+':'') + esc(e.lvlDiff) + '级</td>'
+            + '<td style="font-weight:700;color:#c4b5fd">' + esc(e.pick||'—') + '</td>'
+            + '<td>' + (e.euHcap>0?'主让':'客让') + Math.abs(e.euHcap) + '球 @' + esc(e.euWater) + '</td>'
+            + '<td>' + (e.hs!=null&&e.as!=null?(e.hs+'-'+e.as):'—') + '</td>'
+            + '<td style="font-weight:800;color:' + resCol + '">' + resTxt + '</td>'
+            + '<td style="font-weight:700;color:' + plCol + '">' + plTxt + '</td></tr>';
+        }
+      }
+      h += '</tbody></table></div></details>';
+    }
+    el.innerHTML = h;
+  }).catch(()=>{
+    el.innerHTML = '📒 <b style="color:#c4b5fd">挑战版·逐场结算复盘账本</b>：读取失败（权威账本由本地刷新链维护，公网为部署快照）';
+  });
+}
 
 /* ★ 2026-10-16：三盘·资金流向板独立实时比分脉冲（与纯深盘/_htScoreTick 同口径）。
    三盘板此前无 data-pscore、无 30s 节拍 → 比分永远停在打开面板那一刻的快照，从不随比赛推进刷新（用户多次强调的痛点）。
@@ -8636,7 +8716,18 @@ function fundplateHistoryHTML(){
       var f3 = function(a){ return Array.isArray(a) ? a.map(function(v){ return (+v).toFixed(1); }).join('/') : '—'; };
       var line = function(lbl, s, extra){
         var hdr = '<span style="color:#7dd3fc;font-weight:700">' + lbl + '</span> ';
-        if (!s || !s.ok) return '<div style="margin-top:2px">' + hdr + '<span style="color:#ff8a8a">缺·无开盘→临盘序列</span></div>';
+        /* ★ 2026-11-16：旧文案「缺·无开盘→临盘序列」把「北单没开独赢(只开让球行)」误报成
+           数据缺失，用户据此质疑"北单竞彩都有数据怎么可能缺"。其实竞彩/365 帧都在，
+           缺的只是【北单独赢 spf rq=0】这一路——北单对强弱悬殊场只开让球行，这是玩法特性，
+           不是漏采；该场已由「🔬 三盘资金·过热·挑战版」用洋哥盘级换算覆盖。按准确口径重写。 */
+        if (!s || !s.ok) {
+          var _why = '序列不齐';
+          if (s && !s.n && /仅让球行|无独赢/.test(String(s.src || '')))
+            _why = '北单未开独赢·仅让球行（挑战版已覆盖）';
+          else if (s && s.n === 1) _why = '仅1帧·建不起开盘→临盘';
+          else if (s && !s.n) _why = '无赛前帧';
+          return '<div style="margin-top:2px">' + hdr + '<span style="color:#fbbf24">' + _why + '</span></div>';
+        }
         var d = +s.net || 0, col = d > 1 ? '#f59e0b' : (d < -1 ? '#38bdf8' : '#94a3b8');
         return '<div style="margin-top:2px">' + hdr + (s.n || 0) + '帧 ' + f3(s.open) + ' → ' + f3(s.close)
           + ' <b style="color:' + col + '">Δ强' + (d >= 0 ? '+' : '') + d.toFixed(1) + 'pp</b>'
