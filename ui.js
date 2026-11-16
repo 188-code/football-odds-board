@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-16-twopan-observe-v1';   // ★ 纯2盘(北单+365无竞彩)「反北单净Δ」观察方向提示位：只在观察档展示，不改任何引擎方向权重。规律=北单开盘→临盘资金推强(bNet>0)→观察买受让/推受(bNet<0)→观察买强队。79场回测命中64.6%/ROI+31.3%、训练+35.9%/留出+14.7%(留出±24.3跨0·n小)→按铁律只作观察参考·不叫业绩·不下注指令。上版 v3 三盘序列方向票权重仍未改(两段标定反向·不启用)。
+const UI_V = '2026-11-16-coverage-prekick-v2';   // ★ 纯2盘(北单+365无竞彩)「反北单净Δ」观察方向提示位：只在观察档展示，不改任何引擎方向权重。规律=北单开盘→临盘资金推强(bNet>0)→观察买受让/推受(bNet<0)→观察买强队。79场回测命中64.6%/ROI+31.3%、训练+35.9%/留出+14.7%(留出±24.3跨0·n小)→按铁律只作观察参考·不叫业绩·不下注指令。上版 v3 三盘序列方向票权重仍未改(两段标定反向·不启用)。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -8595,7 +8595,8 @@ function fundplateHistoryHTML(){
     return { day: v.day || 'all', range: v.range || 'all',
              sort: (v.sort === 'kick_asc' || v.sort === 'reg_desc') ? v.sort : 'kick_desc' };
   })();
-  const _allDays = Array.from(new Set(allItems.map(function(e){ return String(e.day || ''); }).filter(Boolean))).sort().reverse();
+  const _watchDayRows = Object.values((window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {}).filter(function(e){return e && e.watch;});
+  const _allDays = Array.from(new Set(allItems.concat(_watchDayRows).map(function(e){ return String(e.day || ''); }).filter(Boolean))).sort().reverse();
   let items = allItems.slice();
   if (VIEW.day !== 'all'){
     items = items.filter(function(e){ return String(e.day || '') === VIEW.day; });
@@ -8943,7 +8944,7 @@ function fundplateHistoryHTML(){
   };
   const _fmtDay = function(d){ return /^\d{8}$/.test(d) ? (d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8)) : d; };
   const _dayCnt = {};
-  allItems.forEach(function(e){ const _d = String(e.day || ''); if (_d) _dayCnt[_d] = (_dayCnt[_d] || 0) + 1; });
+  allItems.concat(_watchDayRows).forEach(function(e){ const _d = String(e.day || ''); if (_d) _dayCnt[_d] = (_dayCnt[_d] || 0) + 1; });
   const _opts = ['<option value="all"'+(VIEW.day==='all'?' selected':'')+'>全部日期（'+allItems.length+' 场）</option>']
     .concat(_allDays.map(function(d){
       return '<option value="'+esc(d)+'"'+(VIEW.day===d?' selected':'')+'>'+esc(_fmtDay(d))+'（'+(_dayCnt[d]||0)+' 场）</option>';
@@ -8985,6 +8986,93 @@ function fundplateHistoryHTML(){
   } else {
     h += '<div style="padding:14px;text-align:center;border:1px dashed var(--line);border-radius:9px;font-size:12px;color:var(--mut)">该日期 / 范围内暂无登记场次，换个日期或点「全部」即可。</div>';
   }
+  /* ★★ 2026-11-16 观察区·未入围场次（用户抓包：西班牙vs英格兰等在售场整段消失）。
+     根因：fundplate 入围门槛 heatSrc=="beidan" 要北单【独赢三项】，北单仅让球盘(rq≠0)场 /
+     纯竞彩场 / 竞彩深让无独赢场 / 纯365场（竞彩北单都未售，如法国v土耳其）整段被丢。
+     本区由 _build_tri_trail.cjs 观察档扩展产出：同一快照流水 + 365 真逐帧（帧自带队名元数据锚定 tid），
+     展示开盘→临盘序列 + 完场比分/亚盘结果，但【不进账本、不出方向票、不参与任何命中/ROI 统计】。 */
+  h += (function(){
+    try{
+      var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+      var wAll = Object.keys(T).map(function(k){ return T[k]; }).filter(function(it){ return it && it.watch === true; });
+      if (!wAll.length) return '';
+      // 跟随上方日期筛选（latest/3d/7d 的比赛日集合 = 账本日 ∪ 观察区日）
+      var wDays = Array.from(new Set(wAll.map(function(it){ return String(it.day||''); }).filter(Boolean)));
+      var uDays = Array.from(new Set(_allDays.concat(wDays))).sort().reverse();
+      var wItems = wAll.slice();
+      if (VIEW.day !== 'all') wItems = wItems.filter(function(it){ return String(it.day||'') === VIEW.day; });
+      else if (VIEW.range !== 'all'){
+        var _n = VIEW.range === 'latest' ? 1 : (VIEW.range === '3d' ? 3 : 7);
+        var _keep = {};
+        uDays.slice(0, _n).forEach(function(d){ _keep[d] = 1; });
+        wItems = wItems.filter(function(it){ return _keep[String(it.day||'')]; });
+      }
+      // 排序：未开赛(开赛正序)在前，已完赛(开赛倒序)在后
+      var _nowBj = new Date(Date.now() + 8*3600e3);
+      var _nowKey = _nowBj.toISOString().slice(0,10).replace(/-/g,'') + ' ' + _nowBj.toISOString().slice(11,16);
+      var _kkey = function(it){ return String(it.day||'') + ' ' + String(it.kickoff||'99:99'); };
+      wItems.sort(function(a, b){
+        var ka = _kkey(a), kb = _kkey(b);
+        var fa = ka <= _nowKey ? 1 : 0, fb = kb <= _nowKey ? 1 : 0;
+        if (fa !== fb) return fa - fb;
+        return fa ? (ka < kb ? 1 : -1) : (ka < kb ? -1 : 1);
+      });
+      var _f3 = function(a){ return Array.isArray(a) ? a.map(function(v){ return (+v).toFixed(1); }).join('/') : '—'; };
+      var _segLine = function(lbl, s, extra){
+        var hdr = '<span style="color:#7dd3fc;font-weight:700">' + lbl + '</span> ';
+        if (!s) return '';
+        if (!s.ok) return '<div style="margin-top:1px">' + hdr + '<span style="opacity:.5">' + (s.n ? '仅' + s.n + '帧·序列未成' : '缺') + '</span></div>';
+        var d = +s.net || 0, col = d > 1 ? '#f59e0b' : (d < -1 ? '#38bdf8' : '#94a3b8');
+        return '<div style="margin-top:1px">' + hdr + (s.n || 0) + '帧 ' + _f3(s.open) + ' → ' + _f3(s.close)
+          + ' <b style="color:' + col + '">Δ强' + (d >= 0 ? '+' : '') + d.toFixed(1) + 'pp</b>'
+          + (s.turnT ? ' <span style="opacity:.6">拐' + esc(String(s.turnT).slice(5, 16)) + '</span>' : '')
+          + (extra || '') + '</div>';
+      };
+      var rows2 = wItems.map(function(it){
+        var seg = it.seg || {};
+        var resTxt = '<span style="opacity:.45">' + ((it.kickTs && it.kickTs < Date.now()) ? '已过开赛·比分待核' : '未开赛') + '</span>';
+        if (it.res){
+          var vc = it.res.verdict === '受让赢盘' || it.res.verdict === '受让赢半' ? '#7ee2a8'
+                 : (it.res.verdict === '走盘' ? '#94a3b8' : '#ff9a9a');
+          resTxt = '<b>' + it.res.hs + ':' + it.res.as + '</b>'
+            + (it.res.ahLine != null ? '<div style="font-size:10px;opacity:.75">365收盘 ' + (it.res.ahLine > 0 ? '主让' : '客让') + Math.abs(it.res.ahLine)
+              + (it.res.verdict ? ' · <b style="color:' + vc + '">' + it.res.verdict + '</b>' : '') + '</div>' : '');
+        }
+        var seqHtml = '<div style="font-size:10.5px;line-height:1.55;color:#cbd5e1">'
+          + _segLine('①竞彩had', seg.jc)
+          + _segLine('②北单独赢', seg.bd, (it.flags && it.flags.rqOnly) ? ' <span style="color:#ff8a8a">[仅让球行·玩法不同]</span>' : '')
+          + (seg.rq && seg.rq.n ? '<div style="margin-top:1px"><span style="color:#a5b4fc;font-weight:700">②b北单让球</span> '
+              + seg.rq.n + '帧 ' + _f3(seg.rq.open) + ' → ' + _f3(seg.rq.close)
+              + ' <span style="opacity:.6">(rq=' + (seg.rq.rq != null ? seg.rq.rq : (seg.rq.goalLine || '?')) + '·让球玩法·不与独赢相减)</span></div>' : '')
+          + _segLine('③365独赢', seg.eu, (seg.eu && isFinite(+seg.eu.hcapMove) && +seg.eu.hcapMove !== 0)
+              ? ' <span style="opacity:.7">初盘' + (+seg.eu.hcapMove > 0 ? '升' : '降') + Math.abs(+seg.eu.hcapMove).toFixed(2) + '</span>' : '')
+          + '<div style="margin-top:2px;opacity:.8">同向 <b>' + ((it.align && it.align.same) || 0) + '/' + ((it.align && it.align.nSrc) || 0) + '</b>'
+          + (it.align && it.align.lead ? ' · 先动 ' + esc(String(it.align.lead)) : '')
+          + ' · ' + (it.ok ? '<span style="color:#34d399">序列齐</span>' : '<span style="color:#fca5a5">' + esc(it.why || '序列不齐') + '→只观察</span>')
+          + '</div></div>';
+        return '<tr data-watch-row="1" style="border-top:1px solid var(--line)">'
+          + '<td style="padding:5px 7px;white-space:nowrap;opacity:.85">' + esc(_fmtDay(String(it.day||''))) + ' ' + esc(String(it.kickoff||'')) + '</td>'
+          + '<td style="padding:5px 7px;font-size:11.5px">' + esc(String(it.league||'')) + '</td>'
+          + '<td style="padding:5px 7px"><b>' + esc(String(it.home||'')) + '</b> vs <b>' + esc(String(it.away||'')) + '</b>'
+          + '<div style="font-size:10px;opacity:.55">' + (it.noJc ? '竞彩' + esc(it.noJc) + ' ' : '') + (it.noBd ? '北单' + esc(it.noBd) : '') + '</div></td>'
+          + '<td style="padding:5px 7px;font-size:10.5px;color:#fca5a5;line-height:1.5;max-width:170px">' + esc(String(it.watchWhy||'')) + '</td>'
+          + '<td style="padding:5px 7px">' + seqHtml + '</td>'
+          + '<td style="padding:5px 7px;white-space:nowrap;font-size:12px">' + resTxt + '</td>'
+          + '</tr>';
+      }).join('');
+      return '<div style="margin-top:14px;padding:10px 12px;border:1px dashed rgba(125,211,252,.45);border-radius:10px">'
+        + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 观察区 · 在售但未入围资金过热判定的场次（当前筛选 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
+        + '<div style="font-size:11px;line-height:1.7;color:#b9c7d8;margin-bottom:7px">本区补列原账本之外或尚未可靠匹配的场次。北单让球盘与独赢盘严格分开；缺联赛、时间冲突或队名有歧义时不猜配。'
+        + '只展示已取得的赛前序列，某端为空不代表另一端也未采集。'
+        + '<b style="color:#fca5a5">不进账本、不出方向票、不参与任何命中/ROI 统计</b>。比分仅在赛程身份核对通过后显示；暂不进行亚盘结算。</div>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        + '<thead><tr style="color:var(--mut);font-size:10.5px;text-align:left">'
+        + '<th style="padding:4px 7px;font-weight:500">日期/开赛</th><th style="padding:4px 7px;font-weight:500">联赛</th>'
+        + '<th style="padding:4px 7px;font-weight:500">对阵</th><th style="padding:4px 7px;font-weight:500">未入围原因</th>'
+        + '<th style="padding:4px 7px;font-weight:500">开盘→临盘序列（三/两盘）</th><th style="padding:4px 7px;font-weight:500">比分·亚盘结果</th>'
+        + '</tr></thead><tbody>' + rows2 + '</tbody></table></div>';
+    }catch(_e){ return ''; }
+  })();
   if (dec.length===0){
     h += '<div style="font-size:11.5px;opacity:.6;line-height:1.75;margin-top:8px">⏳ 目前只有登记、还没有结算样本——开赛后下一轮构建会自动回填比分。'
        + '<b style="opacity:.9">为什么历史不能回溯</b>：北单真实资金只覆盖当轮在售场次，历史完场在引擎里已无北单匹配（3369 场完场仅 1 场可算），事后算不出来。</div>';
