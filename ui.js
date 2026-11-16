@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-16-sale-joinfix-v3';   // ★ 纯2盘(北单+365无竞彩)「反北单净Δ」观察方向提示位：只在观察档展示，不改任何引擎方向权重。规律=北单开盘→临盘资金推强(bNet>0)→观察买受让/推受(bNet<0)→观察买强队。79场回测命中64.6%/ROI+31.3%、训练+35.9%/留出+14.7%(留出±24.3跨0·n小)→按铁律只作观察参考·不叫业绩·不下注指令。上版 v3 三盘序列方向票权重仍未改(两段标定反向·不启用)。
+const UI_V = '2026-11-16-rqlevel-v1';   // ★ 2026-11-16 新增「🔬 让球盘级对照」实验板块(独立 A/B 对照，不触发信号)：北单只开让球盘(无独赢)的场，用洋哥《盘级换算详解》让球盘赔率→盘级(含让球数n)再与365真实亚盘对比。原三盘资金·过热算法未动。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -6076,6 +6076,100 @@ async function openTriFlow(){
   })();
 }
 function closeTriFlow(){ const _m = $('triFlowModal'); if(_m) _m.classList.remove('show'); try{ if (_triPoll){ clearInterval(_triPoll); _triPoll = null; } }catch(e){} }
+/* ═══════════ 🔬 三盘资金·过热·挑战版（A/B 对照，独立板块，不触发信号）═══════════
+   对照对象：原「💰 三盘资金·过热」板块（净超买 pt 口径，只覆盖北单独赢 rq=0 场）。
+   挑战口径：北单对强弱悬殊场只开「让球胜平负」(rq≠0)、无独赢三项 → 原版完全覆盖不到。
+   本挑战版用洋哥《盘级换算详解》把「让球盘赔率 → 盘级(让球数+水位)」，再与 365 真实亚盘盘级对比：
+   盘级差≥2级(0.5球)=洋哥大热(美伊/莫尔德型)。数据源：__TRI_TRAIL__(365亚盘+仅让球行标记) + BD_ROWS(北单让球行 rq/sp)。
+   定位：纯实验展示，A/B 对照用——原「三盘资金·过热」算法一行未动，本板跑几天用真实赛果验证哪套更准。 */
+function rqLvlHTML(){
+  try{
+    const _today = (typeof panelDay === 'function') ? panelDay() : todayStr();
+    const T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+    const BD = (typeof window !== 'undefined' && window.__BD_RAW__) || [];
+    // 北单让球行索引：no → 行（只收让球盘 rq≠0）
+    const bdByNo = {};
+    for (const r of BD){ if (r && r.rq != null && r.rq !== 0 && r.no != null && r.sp) bdByNo[String(r.no)] = r; }
+    const rows = [];
+    for (const tid in T){
+      const it = T[tid];
+      const bd = it.seg && it.seg.bd, eu = it.seg && it.seg.eu;
+      // 只收「仅让球行/无独赢」场（原版覆盖不到的），且未开赛（北单快照本就是今明两天，不必卡单日）
+      if (!bd || !/仅让球行|无独赢/.test(bd.src || '')) continue;
+      const _kick = it.kickTs != null ? +it.kickTs : null;
+      if (_kick && _kick <= Date.now()) continue;   // 已开赛的跳过，只留未开赛
+      const bdRow = bdByNo[String(bd.no)];
+      if (!bdRow) continue;                              // 找不到让球行赔率 → 跳过
+      // 北单让球行：rq=让球数(负=主让)，sp=[让球后主胜,平,客胜]
+      const rqV = +bdRow.rq;
+      const homeIsGiver = rqV < 0;                       // 负=主队让球
+      const upIdx = homeIsGiver ? 0 : 2;                 // 让球方胜赔：主让→sp[0]，客让→sp[2]
+      const upOdds = bdRow.sp[upIdx];
+      // ★ 北单返还率 100%，洋哥《盘级换算详解》的映射表就是按北单原赔率(100%口径)直接查——
+      //   不需要乘 R365（只有竞彩这类低返还率源才需先换算）。竞彩才乘 R365，北单直接查。
+      const L = (typeof rqHcapLevel === 'function') ? rqHcapLevel(Math.abs(rqV), upOdds) : null;
+      if (!L) continue;
+      const rqHcap = homeIsGiver ? L.hcap : -L.hcap;     // 主队视角盘口
+      // 365 真实亚盘盘口（tri_trail eu.hcap1）
+      const euHcap = (eu && eu.hcap1 != null && isFinite(+eu.hcap1)) ? +eu.hcap1 : null;
+      const diff = euHcap != null ? +((rqHcap - euHcap) / 0.25).toFixed(2) : null;   // 盘级差(级)
+      rows.push({
+        tid, home: it.home || bd.home || '?', away: it.away || bd.away || '?',
+        kickoff: it.kickoff || '', no: bd.no, rqV, homeIsGiver,
+        upOdds, tag: L.tag, hcap: L.hcap, rqHcap, euHcap, diff
+      });
+    }
+    rows.sort((x, y) => String(x.kickoff || '').localeCompare(String(y.kickoff || '')));
+    // ★ 去重：同一场比赛可能有多种译名（如"阿尔瓦 vs 塞尔塔" 与 "阿尔瓦塞特 vs 维戈塞尔塔B队"），按北单编号 no 去重
+    const seenNo = new Set(), uniq = [];
+    for (const r of rows){ if (seenNo.has(r.no)) continue; seenNo.add(r.no); uniq.push(r); }
+    rows.length = 0; rows.push(...uniq);
+    if (!rows.length) return '<p class="note">今日暂无「北单只开让球盘」的场次。北单对强弱悬殊场才只开让球胜平负；这些场旧三盘口径给不出资金热度，本挑战版正是为它们而设。</p>';
+    const hot = rows.filter(r => r.diff != null && Math.abs(r.diff) >= 2);
+    const warn = rows.filter(r => r.diff != null && Math.abs(r.diff) >= 1 && Math.abs(r.diff) < 2);
+    let h = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px">'
+      + '<div style="flex:1;min-width:120px;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 12px"><div style="font-size:11px;color:var(--mut)">让球盘场(原版覆盖不到)</div><div style="font-size:20px;font-weight:700;color:var(--acc)">' + rows.length + '</div></div>'
+      + '<div style="flex:1;min-width:120px;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 12px"><div style="font-size:11px;color:var(--mut)">挑战判大热(盘级差≥2级)</div><div style="font-size:20px;font-weight:700;color:var(--red)">' + hot.length + '</div></div>'
+      + '<div style="flex:1;min-width:120px;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 12px"><div style="font-size:11px;color:var(--mut)">流速异常(≥1级)</div><div style="font-size:20px;font-weight:700;color:#f97316">' + warn.length + '</div></div>'
+      + '</div>';
+    h += '<table class="htab"><thead><tr>'
+      + '<th>开赛</th><th>对阵</th><th>北单让球</th><th>让球方胜赔(北单)</th><th>北单让球盘级</th><th>365亚盘盘口</th><th>盘级差</th><th>挑战判定</th>'
+      + '</tr></thead><tbody>';
+    for (const r of rows){
+      const giveTxt = r.homeIsGiver ? '主让' : '客让';
+      let verdict;
+      if (r.diff == null) verdict = '<span style="color:var(--mut)">—</span>';
+      else if (Math.abs(r.diff) >= 2) verdict = '<b style="color:var(--red)">大热·反买</b>';
+      else if (Math.abs(r.diff) >= 1) verdict = '<b style="color:#f97316">流速异常</b>';
+      else verdict = '<span style="color:var(--mut)">正常</span>';
+      const diffTxt = r.diff == null ? '—' : (r.diff > 0 ? '+' : '') + r.diff + '级';
+      h += '<tr>'
+        + '<td>' + (r.kickoff || '—') + '</td>'
+        + '<td><b style="color:var(--acc)">' + r.home + '</b> <span style="opacity:.6">vs</span> <b style="color:var(--acc)">' + r.away + '</b></td>'
+        + '<td>' + giveTxt + ' ' + Math.abs(r.rqV) + '球</td>'
+        + '<td><b>' + r.upOdds + '</b>（北单100%口径直接查表）</td>'
+        + '<td><b>' + r.tag + '</b>（' + r.hcap + '）</td>'
+        + '<td>' + (r.euHcap != null ? (r.euHcap > 0 ? '让' : (r.euHcap < 0 ? '受让' : '平手')) + ' ' + Math.abs(r.euHcap) + '球' : '—') + '</td>'
+        + '<td>' + diffTxt + '</td>'
+        + '<td>' + verdict + '</td>'
+        + '</tr>';
+    }
+    h += '</tbody></table>';
+    h += '<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700;color:var(--acc);font-size:13px">📖 挑战版口径（洋哥《盘级换算详解》原文，已金标准验证）</summary>'
+      + '<div class="note" style="border-left:3px solid var(--acc)">'
+      + '① 北单返还率 100%，让球盘映射表按<b>北单原赔率直接查</b>（只有竞彩这类低返还率源才需先乘 R365 换算）。<br>'
+      + '② 查让球盘映射表（★带让球数 n）：≥2.99 n球高水 | 2.75~2.99 n球中水 | 2.5~2.75 n球低水 | 2.36~2.49 n+0.25高水 | 2.23~2.36 n+0.25中水 | 2.10~2.23 n+0.25低水 | &lt;2.10 n+0.5（2.09起）。<br>'
+      + '③ 盘级差 = 北单让球盘级 − 365亚盘盘级。|差|≥2级(0.5球)=洋哥大热；≥1级=流速异常；≤1级=正常。<br>'
+      + '<b>实验性质：本板与原「三盘资金·过热」并列 A/B 对照，不触发任何信号，数日后用真实赛果判谁更准。</b></div></details>';
+    return h;
+  }catch(e){ return '<p class="note">生成失败：' + (e && e.message || e) + '</p>'; }
+}
+async function openRqLvl(){
+  const _box = $('rqLvlContent'); if (_box) _box.innerHTML = (function(){ try{ return rqLvlHTML(); }catch(e){ return '<p class="note">生成失败：'+(e&&e.message||e)+'</p>'; } })();
+  const _modal = $('rqLvlModal'); if (_modal) _modal.classList.add('show');
+}
+function closeRqLvl(){ const _m = $('rqLvlModal'); if(_m) _m.classList.remove('show'); }
+
 /* ★ 2026-10-16：三盘·资金流向板独立实时比分脉冲（与纯深盘/_htScoreTick 同口径）。
    三盘板此前无 data-pscore、无 30s 节拍 → 比分永远停在打开面板那一刻的快照，从不随比赛推进刷新（用户多次强调的痛点）。
    现：_triScoreCell 复用 tbScoreCell（进行中比分到终场✓/✗），_triScoreTick 每 30s 按 tid 从 MATCHES 取【当前】比赛对象就地重算，
@@ -18087,6 +18181,8 @@ async function init(){
   $('btnDeep').onclick = openDeepPlate;
   { const _m=document.getElementById('deepModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='deepModal') closeDeepPlate(); }); }
   $('btnTriFlow').onclick = openTriFlow;
+  { const _b=document.getElementById('btnRqLvl'); if(_b) _b.onclick = openRqLvl; }
+  { const _m=document.getElementById('rqLvlModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='rqLvlModal') closeRqLvl(); }); }
   { const _b=document.getElementById('btnMethodRef'); if(_b) _b.onclick = openMethodRef; }
   { const _b=document.getElementById('btnTarot'); if(_b) _b.onclick = openTarot; }
   { const _m=document.getElementById('methodRefModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='methodRefModal') closeMethodRef(); }); }

@@ -39,7 +39,7 @@
    但 ENGINE_V 没动 ⇒ bake_pack 里那 930 条 an 全打的是旧戳，_recalc_bake_an.cjs / _merge_analysis.cjs
    的版本门认不出它们陈旧，CDP 一查线上 t1 仍有 44 场 mk<0.80（全是 snapshot:true 的旧结论在说话）。
    ⇒ 以后凡是动到「结论口径」的改动（含门槛数值、门控条件），都要顺手改这个戳，再跑 _recalc_bake_an.cjs。 */
-const ENGINE_V = '2026-11-06-vote-engine-v1';  // 🔴 2026-11-05 修 TDZ 根因：判档段4852引用 lvlDiff，但它 yg构造5067才定义→ReferenceError被外层catch吞→an.yg恒null(19场受害)。改用 lvlDiffVsReal/table/bdLvlDiff/lvlFlip 重建等价判定。
+const ENGINE_V = '2026-11-16-rqlevel-v1';  // 🔴 2026-11-16 加 yg.rqLvl(让球盘→盘级，纯展示) + rqHcapLevel(修让球盘硬编码n=1)。原 vote-engine-v1 的 lvlDiff TDZ 修复保留。
                                             //     2026-10-12b：#305 扩展——强档剔除不再只看联赛名，联赛名"国际友谊"等主流名下藏 U19/女足/青年队也被一并降权（用户曾投诉 U21/U19 错标强档），故 _leagueHtFlag 同时扫描 home/away 队名。
                                             //     正确判据下逐格受让覆盖 44~57%，全线低于 54.1% 盈亏线，无 alpha → 回到「无方向」；
                                             //     十三修市场认同门 / 十四修小球线区 [2.5,3.0] 保留；见 ou_stable 下方 ASIA_PICK 块）
@@ -652,23 +652,14 @@ function expectedHcap(o0h,o0d,o0a){
  * 与 expectedHcap（连续线性 0.25+2.5×(pH−pA)）并列使用：查表=洋哥原法（离散），线性=本系统原法。
  * 原文末句："数据是冰冷的，盘也无定式，读懂原理，而不是死记硬背"——故两法并列展示，不单独采信任一法。 */
 const _YG_HCAP_NAMES = ['平手','平半','半球','半一','一球','一又四分之一','一球半','一又四分之三','两球','两又四分之一','两球半'];
-function yanggeHcapLevel(o, isRq){
+function yanggeHcapLevel(o, isRq, handicap){
   if (o == null || !isFinite(o) || o <= 1) return null;
   let lvl = null, water = null;
   if (isRq){
-    // 让球盘（-1 上盘赔率）：赔率越低 → 盘口越深
-    if (o >= 2.99)      { lvl = 4; water = '高水'; }
-    else if (o >= 2.75) { lvl = 4; water = '中水'; }
-    else if (o >= 2.50) { lvl = 4; water = '低水'; }
-    else if (o >= 2.36) { lvl = 5; water = '高水'; }
-    else if (o >= 2.23) { lvl = 5; water = '中水'; }
-    else if (o >= 2.10) { lvl = 5; water = '低水'; }
-    else {
-      const step = Math.floor((2.10 - o) / 0.30);
-      const inStep = (2.10 - o) - step * 0.30;
-      water = inStep < 0.10 ? '高水' : (inStep < 0.20 ? '中水' : '低水');
-      lvl = 6 + step;
-    }
+    // ★ 2026-11-16 修复：让球盘必须带「让球数 n」（原文「让球(-1,-2,-3,-n)都适用」）。
+    //   旧实现硬编码 n=1（lvl=4 一球起步），让2球·胜赔2.40 会被误判成「1.25球」而非「2.25球」。
+    //   现委托 rqHcapLevel(n, upOdds)；未传 handicap 时按 n=1（原文举例盘）兼容。
+    return rqHcapLevel(handicap == null ? 1 : Math.abs(handicap), o);
   } else {
     if (o >= 2.35)      { lvl = 0; water = '平手'; }
     else if (o >= 2.25) { lvl = 1; water = '高水'; }
@@ -687,6 +678,32 @@ function yanggeHcapLevel(o, isRq){
   return { lvl, hcap: +(lvl * 0.25).toFixed(2), water,
            tag: (lvl === 0 ? '平手' : (name + water)),
            name };
+}
+/* ===== ★ 2026-11-16 让球盘 → 盘级（修正版，含让球数 n）=====
+ * 修上版 bug：旧 yanggeHcapLevel 的 isRq 分支硬编码 n=1（lvl=4 一球起步），
+ * 与原文「让球（-1,-2,-3,-n）都适用」不符——让2球·胜赔2.40 会被误判成「1.25球」而非「2.25球」。
+ * 本函数把让球数 n 作为显式参数：赔率映射「相对 n 的盘口增量」，再 n+inc 得真实盘口。
+ * 判据来源：《盘级换算详解》"北单区间"段 + 《资金流速详解》葡萄牙/捷克两例已金标准验证通过。
+ * 等级 = 盘口/0.25（一球=4、两球=8、2.25球=9 …）。 */
+function rqHcapLevel(handicap, upOdds){
+  if (!isFinite(handicap) || upOdds == null || !isFinite(upOdds) || upOdds <= 1) return null;
+  let inc = null, water = null;
+  if (upOdds >= 2.99)           { inc = 0.00; water = '高水'; }
+  else if (upOdds >= 2.75)      { inc = 0.00; water = '中水'; }
+  else if (upOdds >= 2.50)      { inc = 0.00; water = '低水'; }
+  else if (upOdds >= 2.36)      { inc = 0.25; water = '高水'; }
+  else if (upOdds >= 2.23)      { inc = 0.25; water = '中水'; }
+  else if (upOdds >= 2.10)      { inc = 0.25; water = '低水'; }
+  else {
+    const step = Math.floor((2.10 - upOdds) / 0.30);
+    const inStep = (2.10 - upOdds) - step * 0.30;
+    water = inStep < 0.10 ? '高水' : (inStep < 0.20 ? '中水' : '低水');
+    inc = 0.50 + step * 0.25;
+  }
+  const hcap = +(handicap + inc).toFixed(2);
+  const lvl = Math.round(hcap / 0.25);
+  const name = _YG_HCAP_NAMES[lvl] || (lvl + '级盘');
+  return { lvl, hcap, inc, water, tag: (name + water), name };
 }
 /* ===== 无盘口场「理论档位」评估（2026-09-23 新增，对应 #200）=====
  * 痛点：低级别/友谊/青年/女足/小国联赛庄家不开盘 → 卡片只剩「无盘口·庄家未开盘」死路。
@@ -5059,6 +5076,36 @@ function analyze(agg, zhanyi, aggBs, ppiInput, tid, home, away, league){
         }
       }
     } catch(e){ jcLvlDiff = null; jcLvlDiffUp = null; }
+    /* ★ 2026-11-16 A：北单让球盘 → 盘级（纯展示，不触发任何信号）
+       北单对强弱悬殊场只开「让球胜平负」(rq≠0)、无独赢三项 → 旧口径无法做三盘。
+       洋哥《盘级换算详解》：让球盘上盘赔率（×R365 换算后）按区间映射「相对让球数 n 的盘口增量」。
+       本字段只产出让球盘级，供「让球盘级对照」新板块展示，不参与 heatExcess / lvlDiff / 触发。 */
+    let rqLvl = null;
+    try {
+      const bdRqRow = (typeof getBeidanRq === 'function') ? getBeidanRq(home, away, league) : null;
+      if (bdRqRow && Array.isArray(bdRqRow.sp) && bdRqRow.sp.length === 3 && bdRqRow.rq != null && bdRqRow.rq !== 0
+          && bdRqRow.sp.every(v => v > 1) && _R365 != null){
+        const rqVal = +bdRqRow.rq;
+        const swapped = !!bdRqRow.swapped;
+        // 让球方是谁：未swapped 且 rq<0 → BD主队让球(=主队)；swapped 且 rq>0 → BD主队受让(=bake客队让球)
+        const homeIsGiver = (rqVal < 0 && !swapped) || (rqVal > 0 && swapped);
+        const upIdx = homeIsGiver ? 0 : 2;             // 让球方胜赔所在项（主让→sp[0]，客让→sp[2]）
+        const upOdds = bdRqRow.sp[upIdx];              // 让球方胜赔（北单 100% 返还率）
+        const up365 = +(upOdds * _R365).toFixed(3);    // 换算到 365 返还率
+        const L = rqHcapLevel(Math.abs(rqVal), up365);
+        if (L){
+          const rqHcap = homeIsGiver ? L.hcap : -L.hcap;      // 主队视角盘口（主让为正）
+          const rqRealLvl = (p1 != null && isFinite(+p1)) ? Math.round(Math.abs(+p1) / 0.25) * (+p1 > 0 ? 1 : -1) : null;
+          rqLvl = {
+            n: rqVal, homeIsGiver, upOdds, up365,
+            lvl: L.lvl, hcap: L.hcap, inc: L.inc, water: L.water, tag: L.tag,
+            rqHcap,
+            diff: rqRealLvl != null ? +((L.lvl * (homeIsGiver ? 1 : -1)) - rqRealLvl).toFixed(2) : null,
+            euRealLvl: rqRealLvl
+          };
+        }
+      }
+    } catch(e){ rqLvl = null; }
     yg = {
       heatSide, heatShare: +heatShare.toFixed(1), fairProb: fairProb!=null?+(fairProb*100).toFixed(1):null,
       pan2,                                                                 // ★ 2026-10-21 洋哥②二盘设防（观察期信号）
@@ -5100,6 +5147,7 @@ function analyze(agg, zhanyi, aggBs, ppiInput, tid, home, away, league){
       heatSrc: heatSrc,                                   // 'beidan'(北单赔率池) | 'betfa'(必发真占比·破禁) | 'model'(赔率vs模型背离·破定义) | 'ppi'(代理) | 'na'
       oddsSrc: (agg && (agg.euSrc || agg.asiaSrc)) ? (agg.euSrc && agg.euSrc!=='none' ? agg.euSrc : agg.asiaSrc) : null,  // 主盘口取自哪家公司
       bd: bd ? { rq: bd.rq, sp: bd.sp, pct: [bd.W, bd.D, bd.L] } : null,   // 北单赔率池：让球/三项赔率/真实资金占比%
+      rqLvl: rqLvl,   // ★ 2026-11-16 北单让球盘→盘级（纯展示，让球盘对照板块专用，不参与信号）
       triFlow: triFlow || null,                       // ★ 2026-10-14 #319：三盘·流速差（北单SP隐含 vs 欧赔即时隐含）
       bf: bf ? { pct: [bf.W, bf.D, bf.L] } : null,  // 2026-10-10 必发真投注占比%（破禁启用）
       betfaFlow                                       // ★ 2026-10-11 #294：真实资金流速差（即时−初盘占比，dir/mag/t_open/t_now）
@@ -5509,7 +5557,7 @@ const TIER1_GATE = 56;
 function recalibBin(v){ v = +v || 0; for (let i = 0; i < RECAL_BINS.length - 1; i++){ if (v >= RECAL_BINS[i] && v < RECAL_BINS[i + 1]) return i; } return RECAL_BINS.length - 2; }
 function recalibValue(v, deep){ const t = deep ? RECAL_DEEP : RECAL_SHALLOW; return Math.round(t[recalibBin(v)]); }
 
-return { KB, med, parseHcap, num, validAsia, validEu, aggregate, aggregateBs, validOU, classifyOU, analyzePanlu, _prob, expectedHcap, yanggeHcapLevel, waterBand, classifyPan, analyze, drawCard,
+return { KB, med, parseHcap, num, validAsia, validEu, aggregate, aggregateBs, validOU, classifyOU, analyzePanlu, _prob, expectedHcap, yanggeHcapLevel, rqHcapLevel, waterBand, classifyPan, analyze, drawCard,
          improvedPick, predictScore, predictHTFT, predictBreak, computeHeat, computePPI, fusePanlu3, recalibValue, recalibBin, RECAL_DEEP, RECAL_SHALLOW, TIER1_GATE,
          loadBetfa, getBetfa,
          cleanName, decodePua, decodeName, learnPua, PUA_MAP, LEAGUE_MAP, LEAGUE_PY, leagueName, leagueSortKey, normTeamName, TEAM_CANON, TEAM_ALIAS,
