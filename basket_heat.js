@@ -35,11 +35,11 @@
   function moment(v) { return timestamp(v) === null ? '未取得 / 时点未核' : esc(v.replace('T', ' ')); }
   function keys(market) { return market === 'hilo' ? ['over', 'under'] : ['home', 'away']; }
   function labels(market) { return market === 'hilo' ? ['大分', '小分'] : ['主队', '客队']; }
-  function quote(raw, market) {
+  function quote(raw, market, rawWater) {
     const q = object(raw), ks = keys(market);
     const a = odd(q[ks[0]]), b = odd(q[ks[1]]), line = market === 'mnl' ? null : num(q.line);
     if (a === null || b === null || market === 'mnl' && (a <= 1 || b <= 1) || market !== 'mnl' && line === null) return null;
-    return { a: a, b: b, line: line };
+    return { a: a, b: b, line: line, decimal: !rawWater || market === 'mnl' };
   }
   function bdQuote(raw) {
     const q = quote(raw, 'mnl');
@@ -50,7 +50,7 @@
     return imported(state.data) || object(state.data).captureTimeVerified === false || row.captureTimeVerified === false || object(endpoint).captureTimeVerified === false;
   }
   function probabilities(q) {
-    if (!q) return null;
+    if (!q || q.decimal === false || q.a <= 1 || q.b <= 1) return null;
     const sum = 1 / q.a + 1 / q.b;
     if (!Number.isFinite(sum) || sum <= 0) return null;
     return { a: (1 / q.a) / sum, b: (1 / q.b) / sum, R: 1 / sum };
@@ -60,11 +60,13 @@
     if (!q) return '盘口线未取得';
     return market === 'hilo' ? '总分线 ' + fmt(q.line) : '原始让分线 ' + fmt(q.line) + '（不擅自换向）';
   }
-  function quoteHTML(raw, market, withProbability) {
-    const q = quote(raw, market);
+  function quoteHTML(raw, market, withProbability, rawWater) {
+    const q = quote(raw, market, rawWater);
     if (!q) return '<p class="bh-missing">本玩法报价缺失或字段无效（空值不当作 0）</p>';
-    const ls = labels(market), p = probabilities(q);
-    let html = '<p>' + esc(lineText(q, market)) + '</p><p class="bh-price">' + ls[0] + ' ' + fmt(q.a) + ' / ' + ls[1] + ' ' + fmt(q.b) + '</p>';
+    const ls = labels(market), p = withProbability ? probabilities(q) : null;
+    let html = '<p>' + esc(lineText(q, market)) + '</p><p class="bh-price">' +
+      (q.decimal ? '十进制赔率：' : '原始水位：') + ls[0] + ' ' + fmt(q.a) + ' / ' + ls[1] + ' ' + fmt(q.b) + '</p>';
+    if (!q.decimal) html += '<p class="bh-muted">原始水位制式未核，不标作十进制赔率；禁止概率、返还率与 Δpp 换算。</p>';
     if (withProbability && p) {
       html += '<p>去水隐含概率 q：' + ls[0] + ' ' + fmt(p.a * 100) + '% / ' + ls[1] + ' ' + fmt(p.b * 100) + '%</p>' +
         '<p class="bh-muted">隐含返还率 R ' + fmt(p.R * 100) + '%；这是赔率归一化，不是资金占比，也不是已验证的真实胜率。</p>';
@@ -80,14 +82,31 @@
     return ls[0] + ' ' + signed((pb.a - pa.a) * 100) + ' pp / ' + ls[1] + ' ' + signed((pb.b - pa.b) * 100) + ' pp';
   }
   function sourceErrors(data, source) {
-    return list(object(object(data.sourceStatus)[source]).errors).map(text).filter(Boolean).join('；') || '未报告错误（不代表实时采集成功）';
+    return list(object(object(data.sourceStatus)[source]).errors).map(text).filter(Boolean).join('；');
+  }
+  function euIdentity(row) {
+    const match = object(row.euMatch);
+    return text(match.id) && text(match.home) && text(match.away) && num(match.kickTs) !== null ? match : null;
+  }
+  function euBlocked(row) {
+    return object(object(state.data.sourceStatus).eu).state === 'blocked' || object(row.eu).blocked === true;
+  }
+  function euFailure(row) {
+    const eu = object(row.eu), status = object(object(state.data.sourceStatus).eu);
+    return euBlocked(row) ? '报价获取失败（源站访问受限；非无报价）' :
+      status.state === 'error' || text(eu.sourceError) ? '报价获取失败（详见来源原因）' : '报价未接入（当前玩法未采得有效报价）';
   }
   function missingReason(row, source, market) {
-    const endpoint = object(row[source]);
-    const evidence = object(state.data.evidence);
+    const endpoint = object(row[source]), data = object(state.data);
+    const status = object(object(data.sourceStatus)[source]), evidence = object(data.evidence);
     const rejected = object(evidence[source === 'eu' ? 'euRejected' : 'bdRejected']);
-    return [text(object(endpoint.marketErrors)[market]), text(rejected[row.id]), text(evidence.externalLinkBlocker),
-      sourceErrors(state.data, source), text(object(object(state.data.sourceStatus)[source]).reason), text(endpoint.reason)].filter(Boolean).join('；') || '采集结果未提供本场此端报价，不能推定已取得';
+    const linked = source === 'eu' && euIdentity(row);
+    const blocked = source === 'eu' && euBlocked(row);
+    const reasons = [text(status.reason), text(endpoint.sourceError),
+      blocked ? text(object(status.blockEvidence).pageText) || text(object(endpoint.blockEvidence).pageText) || '源站访问受限，已停用，不绕过重试' : '',
+      text(endpoint.reason), text(object(endpoint.marketErrors)[market]), sourceErrors(data, source),
+      !linked && !blocked ? text(rejected[row.id]) : '', !linked && !blocked ? text(evidence.externalLinkBlocker) : ''];
+    return Array.from(new Set(reasons.filter(Boolean))).join('；') || '采集结果未提供本场此端报价，不能推定已取得';
   }
   function flag(value, yes, no) { return value === true ? yes : value === false ? no : '未核实'; }
   function staleText(row, endpoint) {
@@ -144,16 +163,33 @@
       '；' + esc(staleText(row)) + '</p>' + (!quote(object(row.markets)[market], market) ? '<p class="bh-missing">缺端说明：本场竞彩该玩法未提供有效双边赔率或盘口线。' + esc(sourceErrors(state.data, 'jc')) + '</p>' : '') +
       historyHTML(row, market) + '</section>';
   }
+  function euIdentityHTML(row) {
+    const match = euIdentity(row);
+    if (!match) return '<p data-basket-eu-identity>比赛身份尚未关联；不把候选赛程当作本场报价。</p>';
+    const capture = object(match.capture), kick = new Date(num(match.kickTs) * 1000);
+    return '<div data-basket-eu-identity><p>已匹配 tid：<strong>' + esc(match.id) + '</strong>；' + esc(match.away) +
+      '（客队） vs ' + esc(match.home) + '（主队）</p><p>身份依据：' + esc(match.identityMethod || '后端已关联，方法未提供') +
+      '；开赛时间差 ' + fmt(match.kickDeltaSeconds, 0) + ' 秒。</p><p class="bh-muted">来源：' +
+      (match.cachedSchedule === true || match.staleSchedule === true ? '已存真实赛程缓存' : '后端赛程身份记录') +
+      (capture.path ? '；' + esc(capture.path) + (num(capture.line) !== null ? ' · 第 ' + esc(capture.line) + ' 行' : '') : '') +
+      '；赛程采集 ' + moment(match.observed_at) + '；源赛程开赛 ' + (Number.isFinite(kick.getTime()) ? moment(kick.toISOString()) : '未取得') +
+      '（原始 kickTs ' + esc(match.kickTs) + '）。</p><p class="bh-muted">' +
+      (match.staleSchedule === true ? '旧赛程缓存，当前赛程状态未重核；' : '') +
+      '只作身份桥接，不是赔率采集时点，不计作已取得报价或赛前意见。</p></div>';
+  }
   function euHTML(row, market) {
-    const eu = object(row.eu), raw = object(eu.markets)[market], q = quote(raw, market);
+    const eu = object(row.eu), raw = object(eu.markets)[market], q = quote(raw, market, true);
     const opening = object(object(eu.opening)[market]), times = object(object(eu.sourceTimes)[market]);
     return '<section class="bh-source" data-source="eu" data-market="' + market + '"><h4>二盘 · Bet365</h4>' +
-      (q ? quoteHTML(raw, market, false) : '<p class="bh-missing">此玩法未取得有效 Bet365 报价。缺端原因：' + esc(missingReason(row, 'eu', market)) + '</p>') +
-      '<p>可比状态：' + (eu.comparable === true ? '源标记可比；本观察板仍未核验结算规则，不启用跨源差值' : '不可比 / 尚未核实') +
-      '</p><p class="bh-muted">' + esc(eu.reason || '第三方公开转引；水位制式、让分符号、含加时和源时间均待核') + '</p>' +
-      '<p class="bh-muted">采集 ' + moment(eu.observed_at) + '；赛前标记 ' + flag(eu.pregame, '是', '否') + '；' + esc(staleText(row, eu)) + '</p>' +
+      '<p data-basket-eu-stages><strong>' + (euIdentity(row) ? '比赛身份已关联' : '比赛身份未关联') + ' → ' +
+      (q ? '已取得有效原始报价' : euFailure(row)) + ' → 可比规则待核</strong></p>' + euIdentityHTML(row) +
+      (q ? quoteHTML(raw, market, false, true) : '<p class="bh-missing">' + esc(euFailure(row)) + '。原因：' + esc(missingReason(row, 'eu', market)) + '</p>') +
+      (q && euBlocked(row) ? '<p class="bh-missing">源站访问受限；仅保留已取得的原始报价，不代表本轮采集成功。原因：' + esc(missingReason(row, 'eu', market)) + '</p>' : '') +
+      '<p>可比状态：' + (eu.comparable === true ? '源标记可比；本观察板仍未核验结算规则，不启用跨源差值' : 'comparable=false / 尚未核实，不启用跨源差值') +
+      '；规则待核不妨碍原始报价展示。</p><p class="bh-muted">' + esc(eu.reason || '第三方公开转引；水位制式、让分符号、含加时和源时间均待核') + '</p>' +
+      '<p class="bh-muted">报价采集 ' + moment(eu.observed_at) + '；赛前标记 ' + flag(eu.pregame, '是', '否') + '；' + esc(staleText(row, eu)) + '</p>' +
       '<p class="bh-muted">源变更时间（原样）：' + esc(times.display || '未取得') + '；核验 ' + flag(times.verified, '已标记核验', '未核验') + '</p>' +
-      (quote(opening.quote, market) ? '<details><summary>网页标签“初盘”（非已验证开盘）</summary>' + quoteHTML(opening.quote, market, false) +
+      (quote(opening.quote, market, true) ? '<details><summary>网页标签“初盘”（非已验证开盘）</summary>' + quoteHTML(opening.quote, market, false, true) +
         '<p class="bh-muted">源标签时点 ' + esc(opening.source_time || '未取得') + '；不参与历史 Δpp 或赛前信号。当前 JSON 未提供 Bet365 连续历史帧。</p></details>' :
         '<p class="bh-muted">Bet365 初盘 / 连续历史未取得，不编造开→当前变化。</p>') + '</section>';
   }
@@ -179,9 +215,9 @@
   function rowHTML(row) {
     const market = state.market;
     const hasJC = !!quote(object(row.markets)[market], market);
-    const hasEU = !!quote(object(object(row.eu).markets)[market], market);
+    const hasEU = !!quote(object(object(row.eu).markets)[market], market, true);
     const hasBD = !!bdQuote(object(object(row.bd).markets).sfgg);
-    const missing = [!hasJC ? '竞彩本玩法缺报价' : '', !hasEU ? 'Bet365本玩法缺报价：' + missingReason(row, 'eu', market) : '',
+    const missing = [!hasJC ? '竞彩本玩法缺报价' : '', !hasEU ? 'Bet365：' + euFailure(row) + '；' + missingReason(row, 'eu', market) : '',
       !hasBD ? '北单缺SP：' + missingReason(row, 'bd', 'sfgg') : '北单sfgg与当前市场可比规则未核'].filter(Boolean);
     return '<article class="bh-match" data-basket-row="' + esc(row.id) + '" data-market="' + market + '">' +
       '<header><h3>' + esc(row.away) + ' <small>（客队）</small> vs ' + esc(row.home) + ' <small>（主队）</small></h3>' +
