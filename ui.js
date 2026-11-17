@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-17-trifull-v1';   // ★ 2026-11-17 新增「📋 全量逐场三盘序列」纯展示清单(__TRI_TRAIL__ 全量419场，此前仅观察区154场可见；不进账本/不出方向票/不参与统计)。 ★ 2026-11-16 新增「🔬 让球盘级对照」实验板块(独立 A/B 对照，不触发信号)：北单只开让球盘(无独赢)的场，用洋哥《盘级换算详解》让球盘赔率→盘级(含让球数n)再与365真实亚盘对比。原三盘资金·过热算法未动。
+const UI_V = '2026-11-18-tworule-v1';   // ★ 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -24,6 +24,64 @@ function twoPanObsByTid(tid){
              div:(eNet != null && bNet * eNet < 0),
              dirTxt:(dir === 'U' ? '观察买受让' : '观察买强队') + ((eNet != null && bNet * eNet < 0) ? '（两盘背离）' : '') };
   }catch(e){ return null; }
+}
+/* ★★ 2026-11-18 两盘场(北单独赢+365)方向修正规则 v1 评分卡（短期观察标签）。
+   来源：7号至今13场明确方向逐场归因 → 三条硬门槛 G1净超买 / G2票型 / G3·365确认，G4控赔定A/B档。
+   回测：可发档(A+B) 8场7中 87.5%/+75.5%，观察档 5场1中 20%/−60%（n小·事后归因·无独立留出）。
+   ★ 铁律：只读展示标签，不参与 recDir、不进票权重、不叫业绩、非下注指令、不进推送。 */
+function twoPanRule(e, t){
+  try{
+    if (!e || !t) return null;
+    var jc = t.jc || (t.seg && t.seg.jc), bd = t.bd || (t.seg && t.seg.bd), eu = t.eu || (t.seg && t.seg.eu);
+    if (!bd || !bd.ok || !(bd.n > 0) || !eu || !eu.ok || !(eu.n > 0)) return null;  // 北单独赢+365都在
+    if (jc && jc.ok) return null;                                                   // 三盘场不适用
+    var rd = String(e.recDir || '');
+    var side = /^买受让/.test(rd) ? 'U' : (/^买强队/.test(rd) ? 'S' : null);
+    if (!side) return null;
+    var netPt = (e.netPt !== null && e.netPt !== undefined && e.netPt !== '') ? +e.netPt : null;
+    var voteS = e.voteS, voteU = e.voteU;
+    if (voteS === null || voteS === undefined || voteU === null || voteU === undefined) return null;
+    var eaOk = !!(e.op && e.op.eaOk);
+    var euN = +eu.n || 0, euNet = (eu.net !== null && eu.net !== undefined) ? +eu.net : null;
+    var g1 = side === 'U' ? (netPt === null) : (netPt !== null && netPt <= -2);
+    var g2 = side === 'U' ? (+voteU >= 3) : (+voteS >= 2);
+    var g3 = ((euN >= 4) && euNet !== null && Math.abs(euNet) >= 1) || eaOk;
+    var pass = g1 && g2 && g3;
+    return { tier: pass ? (eaOk ? 'A' : 'B') : 'OBS', side: side,
+             netPt: netPt, voteS: +voteS, voteU: +voteU, euN: euN, euNet: euNet, eaOk: eaOk,
+             g1: g1, g2: g2, g3: g3,
+             dirTxt: side === 'U' ? '买受让' : '买强队' };
+  }catch(err){ return null; }
+}
+/* 按 tid 从内联账本+tri_trail 查评分卡（实时板用；账本复盘直接用 twoPanRule(e,t)） */
+function twoPanRuleByTid(tid){
+  try{
+    var W = (typeof window !== 'undefined') ? window : {};
+    var H = (W.__FUNDPLATE_HISTORY__ && W.__FUNDPLATE_HISTORY__.items) || [];
+    var T = (W.__TRI_TRAIL__ && W.__TRI_TRAIL__.items) || {};
+    var e = null;
+    for (var i = 0; i < H.length; i++){ if (String(H[i].tid) === String(tid)){ e = H[i]; break; } }
+    if (!e) return null;
+    return twoPanRule(e, T[String(tid)]);
+  }catch(err){ return null; }
+}
+/* 评分卡标签 HTML（两处渲染共用；深色/浅色底各自内联，不改全局主题） */
+function twoPanRuleHTML(r){
+  if (!r) return '';
+  var A = r.tier === 'A', B = r.tier === 'B';
+  var col = A ? '#dc2626' : (B ? '#b45309' : '#64748b');
+  var bg  = A ? 'rgba(220,38,38,.08)' : (B ? 'rgba(180,83,9,.08)' : 'rgba(100,116,139,.08)');
+  var label = A ? 'A级·可发' : (B ? 'B级·可发' : '观察·不发');
+  var yn = function(b){ return b ? '✓' : '✗'; };
+  var np = r.netPt === null ? '空' : ((r.netPt > 0 ? '+' : '') + r.netPt);
+  var en = r.euNet === null ? '—' : ((r.euNet > 0 ? '+' : '') + r.euNet);
+  return '<div style="margin-top:6px;padding:5px 7px;border-left:2px solid '+col+';background:'+bg+';border-radius:4px;font-size:10px;line-height:1.5">'
+    + '<b style="color:'+col+'">📋 两盘评分卡v1：'+label+'</b> '
+    + '<span style="opacity:.8">G1净超买'+yn(r.g1)+' G2票型'+yn(r.g2)+' G3·365确认'+yn(r.g3)+'</span><br>'
+    + '<span style="opacity:.72">' + r.dirTxt + ' · netPt ' + np + ' · 票S'+r.voteS+':U'+r.voteU
+    + ' · 365 '+r.euN+'帧/'+en+' · 控赔'+yn(r.eaOk)+'</span><br>'
+    + '<span style="color:#b91c1c;opacity:.85">⚠观察标签·不进引擎/不推送/非下注指令（可发档回测87.5%·n小·无独立留出）</span>'
+    + '</div>';
 }
 /* 源站主机（2026-09-13 实测结论，已据此重排优先级）：
      · m.gqj2.tv    —— 实战稳定主源。列表/赔率(oddshistorypc)/交锋(analysis) 均稳定 HTTP 200，
@@ -8092,7 +8150,8 @@ function _fundPlateTodayPicks(opt){
       bet:_recDirReal,                                        // ★ 下注方向列：明确方向
       bigHot:h.bigHot, extreme:h.extreme, soloHot:h.soloHot,
       grade:_fpGrade(h.lvl),                             // ★ 分级按净超买 pt
-      twoPanObs: twoPanObsByTid(m.tid)                   // ★ 2026-11-16 纯2盘观察方向（只读·观察档·不进票权重）
+      twoPanObs: twoPanObsByTid(m.tid),                   // ★ 2026-11-16 纯2盘观察方向（只读·观察档·不进票权重）
+      twoPanRule: twoPanRuleByTid(m.tid)                  // ★ 2026-11-18 两盘评分卡v1（只读观察标签·不进 recDir/推送）
     });
   }
   rows.sort((x,y)=> y.lvl-x.lvl);
@@ -8800,6 +8859,8 @@ function fundplateHistoryHTML(){
           + '<span style="color:#fca5a5">⚠ 回测规律：79场命中64.6%/ROI+31.3%（留出仅+14.7%±24.3跨0）→只作观察参考，非下注指令、不进引擎权重</span>'
           + '</div>';
       }
+      /* ★ 2026-11-18 方向修正规则 v1 评分卡（只读观察标签·不进 recDir/票权重/推送） */
+      try{ h += twoPanRuleHTML(twoPanRule(e, t)); }catch(_e){}
       h += '</div>';
       return h;
     }catch(_e){ return ''; }
@@ -9664,6 +9725,7 @@ function openFundPlate(){
     +'<span style="background:'+_g.bg+';color:'+_g.color+';font-weight:800;padding:2px 8px;border-radius:4px;white-space:nowrap">'+esc(r.verdict)+(r.flip?' · 观察档·不判级':(r.bigHot&&r.grade&&r.grade.tag?(' · '+r.grade.tag):''))+'</span>'
     /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向（只读观察档·非信号·非业绩·不下注指令） */
     +(r.twoPanObs?('<div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.4" title="回测规律79场命中64.6%/ROI+31.3%，留出仅+14.7%±24.3跨0 →只作观察参考，非下注指令">🧭 纯2盘观察：<b style="color:#94a3b8">'+esc(r.twoPanObs.dirTxt)+'</b> <span style="opacity:.75">(北单净Δ '+(r.twoPanObs.bNet>=0?'+':'')+r.twoPanObs.bNet.toFixed(1)+')</span><br><span style="color:#b91c1c;opacity:.85">⚠观察档·非信号·不进引擎</span></div>'):'')
+    +twoPanRuleHTML(r.twoPanRule)
     +(r.flip
         ? '<div style="font-size:10px;color:#7c3aed;margin-top:2px">🔁 北单买的是<b>冷门方(受让方)</b>，不是强队被超买 → 不构成「大热必死」、不占过热名额</div>'
         : (r.soloHot?'<div style="font-size:10px;color:#b45309;margin-top:2px">⚠ 仅北单超买·未三盘合流（缺①盘同指或②盘设防）</div>':'')
