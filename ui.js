@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-16-rqlevel-v1';   // ★ 2026-11-16 新增「🔬 让球盘级对照」实验板块(独立 A/B 对照，不触发信号)：北单只开让球盘(无独赢)的场，用洋哥《盘级换算详解》让球盘赔率→盘级(含让球数n)再与365真实亚盘对比。原三盘资金·过热算法未动。
+const UI_V = '2026-11-17-trifull-v1';   // ★ 2026-11-17 新增「📋 全量逐场三盘序列」纯展示清单(__TRI_TRAIL__ 全量419场，此前仅观察区154场可见；不进账本/不出方向票/不参与统计)。 ★ 2026-11-16 新增「🔬 让球盘级对照」实验板块(独立 A/B 对照，不触发信号)：北单只开让球盘(无独赢)的场，用洋哥《盘级换算详解》让球盘赔率→盘级(含让球数n)再与365真实亚盘对比。原三盘资金·过热算法未动。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9291,6 +9291,95 @@ function fundplateHistoryHTML(){
         + '<th style="padding:4px 7px;font-weight:500">对阵</th><th style="padding:4px 7px;font-weight:500">未入围原因</th>'
         + '<th style="padding:4px 7px;font-weight:500">开盘→临盘序列（三/两盘）</th><th style="padding:4px 7px;font-weight:500">比分·亚盘结果</th>'
         + '</tr></thead><tbody>' + rows2 + '</tbody></table></div>';
+    }catch(_e){ return ''; }
+  })();
+  /* ★★ 2026-11-17 全量逐场三盘序列清单（用户明确选择"加全量清单"）：
+     __TRI_TRAIL__ 419 场里此前只有 watch===true 的观察区场次可见，账本区虽有完整 seg 却无独立清单。
+     本区把 items 全量列示：账本区队名按 key(tid) 从 __FUNDPLATE_HISTORY__ 取并解 PUA，观察区直接用快照字段；
+     跟随 VIEW.day / VIEW.range 筛选；纯展示，不进账本、不出方向票、不参与任何命中/ROI 统计。 */
+  h += (function(){
+    try{
+      var T2 = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+      var tAll = Object.keys(T2).map(function(k){ return { k:k, it:T2[k] }; })
+                       .filter(function(x){ return x.it && typeof x.it === 'object'; });
+      if (!tAll.length) return '';
+      var Hmap = {};
+      allItems.forEach(function(e){ if (e && e.tid != null) Hmap[String(e.tid)] = e; });
+      // 日期集合 = 账本 ∪ 观察 ∪ tri 全量，保证只在 tri 里出现的日期也能被筛选到
+      var tDays = Array.from(new Set(tAll.map(function(x){ return String(x.it.day||''); }).filter(Boolean)));
+      var aDays = Array.from(new Set(_allDays.concat(tDays))).sort().reverse();
+      var tItems = tAll.slice();
+      if (VIEW.day !== 'all') tItems = tItems.filter(function(x){ return String(x.it.day||'') === VIEW.day; });
+      else if (VIEW.range !== 'all'){
+        var _nT = VIEW.range === 'latest' ? 1 : (VIEW.range === '3d' ? 3 : 7);
+        var _keepT = {};
+        aDays.slice(0, _nT).forEach(function(d){ _keepT[d] = 1; });
+        tItems = tItems.filter(function(x){ return _keepT[String(x.it.day||'')]; });
+      }
+      var _nowBJ = new Date(Date.now() + 8*3600e3);
+      var _nowK = _nowBJ.toISOString().slice(0,10).replace(/-/g,'') + ' ' + _nowBJ.toISOString().slice(11,16);
+      var _kk = function(x){ return String(x.it.day||'') + ' ' + String(x.it.kickoff||'99:99'); };
+      tItems.sort(function(a,b){
+        var ka=_kk(a), kb=_kk(b);
+        var fa=ka<=_nowK?1:0, fb=kb<=_nowK?1:0;
+        if(fa!==fb) return fa-fb;
+        return fa ? (ka<kb?1:-1) : (ka<kb?-1:1);
+      });
+      var _f3T = function(a){ return Array.isArray(a) ? a.map(function(v){ return (+v).toFixed(1); }).join('/') : '—'; };
+      var _segT = function(lbl, s, extra){
+        if (!s) return '';
+        var hdr = '<span style="color:#7dd3fc;font-weight:700">' + lbl + '</span> ';
+        if (!s.ok) return '<div style="margin-top:1px">' + hdr + '<span style="opacity:.5">' + (s.n ? '仅'+s.n+'帧·序列未成' : '缺') + '</span></div>';
+        var d=+s.net||0, col=d>1?'#f59e0b':(d<-1?'#38bdf8':'#94a3b8');
+        return '<div style="margin-top:1px">' + hdr + (s.n||0) + '帧 ' + _f3T(s.open) + ' → ' + _f3T(s.close)
+          + ' <b style="color:' + col + '">Δ强' + (d>=0?'+':'') + d.toFixed(1) + 'pp</b>'
+          + (s.turnT ? ' <span style="opacity:.6">拐' + esc(String(s.turnT).slice(5,16)) + '</span>' : '')
+          + (extra||'') + '</div>';
+      };
+      var tRows = tItems.map(function(x){
+        var it=x.it, be=Hmap[x.k]||{}, isW=it.watch===true, seg=it.seg||{};
+        var hm = isW ? String(it.home||'')  : (_fpName(be.homeId,be.home,be.homeZht) || _cleanName(be.home||''));
+        var aw = isW ? String(it.away||'')  : (_fpName(be.awayId,be.away,be.awayZht) || _cleanName(be.away||''));
+        var lg = isW ? String(it.league||'') : (_fpName(null,be.league,'') || _cleanName(be.league||''));
+        var badge = isW ? '<span style="color:#fbbf24">观察区·未入围</span>'
+                        : '<span style="color:#34d399">账本区·已登记</span>';
+        var why = esc(String(isW ? (it.watchWhy||'') : (it.why||'')));
+        var whyHtml = '<div style="font-size:10px;color:#b9c7d8;line-height:1.5;max-width:150px">'+badge+(why?'<br>'+why:'')+'</div>';
+        var seqHtml = '<div style="font-size:10.5px;line-height:1.55;color:#cbd5e1">'
+          + _segT('①竞彩had', seg.jc)
+          + _segT('②北单独赢', seg.bd, (it.flags&&it.flags.rqOnly)?' <span style="color:#ff8a8a">[仅让球行·玩法不同]</span>':'')
+          + (seg.rq&&seg.rq.n ? '<div style="margin-top:1px"><span style="color:#a5b4fc;font-weight:700">②b北单让球</span> '+seg.rq.n+'帧 '+_f3T(seg.rq.open)+' → '+_f3T(seg.rq.close)+' <span style="opacity:.6">(让球玩法·不与独赢相减)</span></div>' : '')
+          + _segT('③365独赢', seg.eu)
+          + '<div style="margin-top:2px;opacity:.8">同向 <b>'+((it.align&&it.align.same)||0)+'/'+((it.align&&it.align.nSrc)||0)+'</b>'
+          + ' · '+(it.ok?'<span style="color:#34d399">序列齐</span>':'<span style="color:#fca5a5">序列不齐·只观察</span>')+'</div></div>';
+        var resTxt = '<span style="opacity:.45">' + ((it.kickTs && it.kickTs < Date.now()) ? '已过开赛·比分待核' : '未开赛') + '</span>';
+        if (it.res){
+          var vc = it.res.verdict==='受让赢盘'||it.res.verdict==='受让赢半'?'#7ee2a8':(it.res.verdict==='走盘'?'#94a3b8':'#ff9a9a');
+          resTxt = '<b>'+it.res.hs+':'+it.res.as+'</b>'+(it.res.ahLine!=null?'<div style="font-size:10px;opacity:.75">365收盘 '+(it.res.ahLine>0?'主让':'客让')+Math.abs(it.res.ahLine)+(it.res.verdict?' · <b style="color:'+vc+'">'+it.res.verdict+'</b>':'')+'</div>':'');
+        } else if (be.hs!=null && be.as!=null){
+          var rc = be.result==='win'?'#7ee2a8':(be.result==='lose'?'#ff9a9a':'#94a3b8');
+          resTxt = '<b>'+esc(String(be.hs))+':'+esc(String(be.as))+'</b><div style="font-size:10px;opacity:.75">账本结算 <b style="color:'+rc+'">'+esc(String(be.result||'—'))+'</b></div>';
+        }
+        return '<tr style="border-top:1px solid var(--line)">'
+          + '<td style="padding:5px 7px;white-space:nowrap;opacity:.85">'+esc(_fmtDay(String(it.day||'')))+' '+esc(String(it.kickoff||''))+'</td>'
+          + '<td style="padding:5px 7px;font-size:11.5px">'+esc(lg)+'</td>'
+          + '<td style="padding:5px 7px"><b>'+esc(hm)+'</b> vs <b>'+esc(aw)+'</b>'
+          + ((isW&&(it.noJc||it.noBd))?'<div style="font-size:10px;opacity:.55">'+(it.noJc?'竞彩'+esc(it.noJc)+' ':'')+(it.noBd?'北单'+esc(it.noBd):'')+'</div>':'')+'</td>'
+          + '<td style="padding:5px 7px">'+whyHtml+'</td>'
+          + '<td style="padding:5px 7px">'+seqHtml+'</td>'
+          + '<td style="padding:5px 7px;white-space:nowrap;font-size:12px">'+resTxt+'</td>'
+          + '</tr>';
+      }).join('');
+      return '<div style="margin-top:14px;padding:10px 12px;border:1px solid rgba(52,211,153,.4);border-radius:10px">'
+        + '<div style="font-weight:800;color:#34d399;font-size:13px;margin-bottom:3px">📋 全量逐场三盘序列 · __TRI_TRAIL__ 全量（当前筛选 '+tItems.length+' / 共 '+tAll.length+' 场）</div>'
+        + '<div style="font-size:11px;line-height:1.7;color:#b9c7d8;margin-bottom:7px">此前只有「观察区」的 '+tAll.filter(function(x){return x.it.watch===true;}).length+' 场可见；本区把已构建的全部 '+tAll.length+' 场逐场三盘开盘→临盘序列一次列全（账本区 '+tAll.filter(function(x){return x.it.watch!==true;}).length+' 场 + 观察区）。北单让球行与独赢严格分开，缺端只显示已取得序列。'
+        + '<b style="color:#fca5a5">纯展示 · 不进账本 · 不出方向票 · 不参与任何命中/ROI 统计</b>。</div>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        + '<thead><tr style="color:var(--mut);font-size:10.5px;text-align:left">'
+        + '<th style="padding:4px 7px;font-weight:500">日期/开赛</th><th style="padding:4px 7px;font-weight:500">联赛</th>'
+        + '<th style="padding:4px 7px;font-weight:500">对阵</th><th style="padding:4px 7px;font-weight:500">归属/原因</th>'
+        + '<th style="padding:4px 7px;font-weight:500">开盘→临盘序列（三/两盘）</th><th style="padding:4px 7px;font-weight:500">比分·结算</th>'
+        + '</tr></thead><tbody>'+tRows+'</tbody></table></div>';
     }catch(_e){ return ''; }
   })();
   if (dec.length===0){
