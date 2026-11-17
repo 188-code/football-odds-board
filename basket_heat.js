@@ -8,7 +8,7 @@
   const SOURCES = { jc: '竞彩篮球', eu: 'Bet365（公开转引）', bd: '北单胜负过关' };
   const STATES = { ok: '成功', partial: '部分成功', error: '失败', blocked: '停用 / 访问受限', pending: '等待', cached_sample: '已导入缓存快照（非实时采集成功）', not_connected: '未接入' };
   const IMPORT_NOTICE = '真实抓取快照导入·非实时·采集时刻未核，不计赛前意见';
-  const state = { data: null, day: '', market: 'mnl', keyword: '', selling: false, loading: false, focus: null };
+  const state = { data: null, ledger: null, day: '', market: 'mnl', keyword: '', selling: false, loading: false, focus: null };
   let modal;
   let observer;
   const scriptURL = document.currentScript && document.currentScript.src;
@@ -225,11 +225,89 @@
       ' · 开赛 ' + moment(row.kickoff) + ' · ' + (sale(row, market) ? '当前所选玩法赛前在售快照' : '不满足当前所选玩法新鲜赛前在售条件') + '</p></header>' +
       '<div class="bh-three">' + jcHTML(row, market) + euHTML(row, market) + bdHTML(row, market) + '</div>' +
       '<footer data-basket-conclusion><strong>结论：仅观察 · 篮球留出标定尚未建立</strong><p>当前玩法竞彩 / Bet365 报价 ' + (Number(hasJC) + Number(hasEU)) +
-      '/2 端；北单原始 SP ' + (hasBD ? '已取得（可比性未核）' : '缺失') + '。不输出强推、投注方向或下注信号。</p><p>' +
+      '/2 端；北单原始 SP ' + (hasBD ? '已取得（可比性未核）' : '缺失') + '。不输出强推，方向仅是竞彩赔率观察记录、非投注信号。</p>' +
+      '<div data-basket-direction>' + directionHTML(row, market) + '</div><p>' +
       esc(missing.join('；')) + '</p><p class="bh-muted">源分析状态 ' + esc(object(row.analysis).state || '未提供') + '：' +
       esc(object(row.analysis).reason || '无合格篮球样本外证据') + '。跨源可比 / 资金流速均未建立。</p></footer></article>';
   }
 
+  /* ★ 2026-11-17 方向观察账本（仿足球 dir_ledger）：赛前冻结方向 + 待结算/已结算复盘。
+     方向来自竞彩真实报价的去水隐含概率倾向方 = 赔率观察方向，不是资金流向、不是有 edge 的下注建议。 */
+  function ledgerEntries(row, market) {
+    const items = object(state.ledger && state.ledger.items), out = [];
+    for (const key in items) {
+      const e = object(items[key]);
+      if (text(e.id) === text(row.id) && text(e.market) === market) out.push(e);
+    }
+    return out;
+  }
+  function frozenTime(e) {
+    const t = num(e.firstSeen);
+    if (t === null) return '未取得';
+    const d = new Date(t * 1000);
+    return Number.isFinite(d.getTime()) ? esc(d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC') : '未取得';
+  }
+  function directionHTML(row, market) {
+    const list = ledgerEntries(row, market);
+    if (!list.length) return '<p data-basket-dir-note>该玩法无赛前冻结方向（非赛前合格场或报价无效，不补造）</p>';
+    return list.map(e => {
+      const settled = e.result !== null && e.result !== undefined;
+      const res = settled ? ({ win: '中', lose: '未中', push: '走水' }[e.result] || e.result) : '待结算';
+      const resColor = settled ? (e.result === 'win' ? '#16a34a' : '#e54545') : 'var(--mut,#8b98a9)';
+      const dp = object(e.deltaPP), dpTxt = dp && num(dp.dA) !== null ?
+        ' · 同线Δpp ' + ((dp.dA > 0 ? '+' : '') + dp.dA.toFixed(2) + 'pp') : '';
+      return '<p data-basket-dir-entry data-dir-key="' + esc(e.id + ':' + e.market) + '"><b>方向（观察·非投注建议）：' +
+        esc(e.pick) + '</b> · 去水隐含 ' + (num(e.probA) !== null ? fmt(e.probA * 100, 1) + '%' : '—') + dpTxt +
+        '<br><small>首登冻结 ' + frozenTime(e) + ' · 规则 ' + esc(e.ruleV || '—') +
+        ' · 结算 <span style="color:' + resColor + '">' + res + '</span>' +
+        (settled && num(e.pl) !== null ? '（盈亏 ' + (e.pl > 0 ? '+' : '') + fmt(e.pl, 2) + '）' : '') + '</small></p>';
+    }).join('');
+  }
+  function dirLedgerSummaryHTML() {
+    const led = state.ledger, s = led && object(led.summary);
+    if (!s || !num(s.total)) return '<p data-basket-dir-summary>方向账本尚未生成；当前无赛前冻结方向可展示，不用 0 代替未知。</p>';
+    const a = object(s.all), settledN = num(s.settled) || 0, pendingN = num(s.pending) || 0;
+    const cards = [
+      '<div class="bh-dir-card"><div class="rl">冻结方向</div><div class="rr">' + s.total + ' 条 / ' +
+        (num(s.pre) || 0) + ' 赛前</div></div>',
+      '<div class="bh-dir-card"><div class="rl">已结算 / 待结算</div><div class="rr">' + settledN + ' / ' + pendingN + '</div></div>',
+      '<div class="bh-dir-card"><div class="rl">方向命中率</div><div class="rr">' +
+        (num(a.hit) !== null ? a.hit + '%（' + (num(a.win) || 0) + '/' + ((num(a.win) || 0) + (num(a.lose) || 0)) + '）' : '待结算') + '</div></div>',
+      '<div class="bh-dir-card"><div class="rl">ROI / SE</div><div class="rr">' +
+        (num(a.roi) !== null ? (a.roi > 0 ? '+' : '') + a.roi + '% / ±' + (num(a.se) !== null ? a.se : '—') + 'pt' : '待结算') + '</div></div>',
+    ].join('');
+    const note = settledN === 0 ?
+      '当前全部待结算：无官方篮球赛果接口，方向只做赛前冻结；赛果到位后由账本回填，不会有事后造预测。' :
+      (a.significant ? '样本显著。' : a.crossZero ? '|ROI|<SE 跨0，与零无差异。' : '样本偏小，不作结论。') +
+      ' 命中率=方向命中（不含走水）；ROI 按冻结赔率逐注累计。';
+    return '<div class="bh-dir-cards" data-basket-dir-summary>' + cards + '</div>' +
+      '<p class="bh-muted">' + esc(note) + '</p>' +
+      '<p class="bh-muted">账本更新 ' + moment(new Date((num(s.updatedAt) || 0) * 1000).toISOString()) +
+      ' · 规则 ' + esc(s.ruleV || '—') + ' · ' + esc(s.srcUsed || '') + '</p>';
+  }
+  function dirLedgerTableHTML() {
+    const led = state.ledger, items = object(led && led.items);
+    const keys = Object.keys(items).filter(k => {
+      const e = object(items[k]);
+      return !state.day || text(e.day) === state.day;
+    }).sort((a, b) => {
+      const x = object(items[a]), y = object(items[b]);
+      return (num(x.kickTs) || 0) - (num(y.kickTs) || 0) || a.localeCompare(b);
+    });
+    if (!keys.length) return '<p class="bh-muted">当前筛选下无冻结方向条目。</p>';
+    const rows = keys.map(k => {
+      const e = object(items[k]), settled = e.result !== null && e.result !== undefined;
+      const res = settled ? ({ win: '中', lose: '未中', push: '走水' }[e.result] || e.result) : '待结算';
+      return '<tr data-basket-dir-row><td>' + esc(e.day) + ' ' + esc(e.kickoff || '') + '</td><td>' +
+        esc(e.home) + ' vs ' + esc(e.away) + '</td><td>' + esc(MARKETS[e.market] || e.market) + '</td><td>' +
+        '<b>' + esc(e.pick) + '</b><br><small>' + esc(e.recDirText || '') + '</small></td><td>' +
+        (settled ? res + (num(e.pl) !== null ? '（' + (e.pl > 0 ? '+' : '') + fmt(e.pl, 2) + '）' : '') : res) +
+        '</td><td>' + esc(e.ruleV || '—') + '</td></tr>';
+    }).join('');
+    return '<div class="bh-scroll" tabindex="0" aria-label="篮球方向账本横向滚动表"><table><thead><tr>' +
+      '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>结算</th><th>规则</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
   function referenceHTML() {
     return '<details class="bh-reference" id="basketHeatReference"><summary>洋哥篮球原文摘录与迁移边界</summary>' +
       '<p>“5资料”参考范围：本地“洋哥资料”四份 TXT 已全文读取；以下仅短摘录、概述与出处，不打包私有教程全文。作者方法论声称与统计实证严格分开；四份 TXT 没有可直接上线的独立篮球过热阈值。</p>' +
@@ -282,8 +360,10 @@
       '；北单关联 ' + fmt(totals.bdLinked, 0) + '；Bet365 候选赛程 ' + fmt(totals.euSchedule, 0) + '；Bet365 关联 ' + fmt(totals.euLinked, 0) +
       '。保留旧行：' + flag(object(data.evidence).retainedPreviousRows, '是', '否') + '。</p>' +
       (text(object(data.evidence).externalLinkBlocker) ? '<p class="bh-missing">外源关联阻断：' + esc(data.evidence.externalLinkBlocker) + '</p>' : '') +
-      '<p class="bh-muted">胜率：尚未建立 / 待前向样本；ROI：尚未建立 / 待前向样本。</p>';
+      '<p class="bh-muted">胜率 / ROI：见下方「方向观察账本」；未结算前不给数字。</p>';
     modal.querySelector('#basketHeatSourceStatus').innerHTML = statusHTML(data);
+    modal.querySelector('#basketHeatDirSummary').innerHTML = dirLedgerSummaryHTML();
+    modal.querySelector('#basketHeatDirTable').innerHTML = dirLedgerTableHTML();
     modal.querySelector('#basketHeatRows').innerHTML = filtered.length ? filtered.map(rowHTML).join('') :
       '<div class="bh-empty" data-basket-empty><strong>' + (rows.length ? '当前独立筛选下 0 场' : '0 场：没有可信竞彩篮球名单，不能构造三盘齐全画面') +
       '</strong><p>' + (rows.length ? '请调整日期、关键词或在售条件；不会修改足球筛选。' : 'Bet365 候选赛程不等于已取得本场报价；缺竞彩身份时不补造比赛。请查看上方逐源错误。') + '</p></div>';
@@ -310,6 +390,16 @@
     });
     return Object.assign({}, data, { rows: data.rows.map(row => Object.assign({}, row, { id: text(row.id) })) });
   }
+  async function loadLedger(baseURL) {
+    try {
+      const url = new URL('basket_dir_ledger.json', baseURL);
+      if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) return;
+      const response = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
+      if (!response.ok) return;
+      const d = await response.json();
+      if (d && typeof d === 'object' && d.items && typeof d.items === 'object' && d.summary && typeof d.summary === 'object') state.ledger = d;
+    } catch (_) { /* 账本缺失不影响观察板主画面 */ }
+  }
   async function refresh() {
     if (state.loading) return;
     state.loading = true;
@@ -328,6 +418,7 @@
       const next = validate(await response.json());
       const previous = state.data;
       state.data = next;
+      await loadLedger(scriptURL || window.location.href);
       try { render(); } catch (error) { state.data = previous; if (previous) render(); throw error; }
       notice.className = 'bh-notice';
       notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '只手动刷新，无自动定时。';
@@ -365,6 +456,14 @@
 #basketHeatModal .bh-match{margin:16px 0;border:1px solid var(--line,#2c3848);border-radius:12px;padding:14px;background:var(--card,#1a2230)}
 #basketHeatModal .bh-match header{padding-bottom:8px}#basketHeatModal .bh-match footer{margin-top:12px;border-top:1px solid var(--line,#2c3848);padding-top:10px}
 #basketHeatModal .bh-price{font-variant-numeric:tabular-nums;font-weight:700}#basketHeatModal details{margin:10px 0}#basketHeatModal summary{cursor:pointer;font-weight:700;white-space:normal}
+#basketHeatModal .bh-dir{padding:12px;border:1px solid var(--line,#2c3848);border-radius:10px;margin:12px 0;background:var(--card,#1a2230)}
+#basketHeatModal .bh-dir-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0}
+#basketHeatModal .bh-dir-card{padding:10px;border:1px solid var(--line,#2c3848);border-radius:8px;background:var(--bg,#0f1419);text-align:center}
+#basketHeatModal .bh-dir-card .rl{font-size:12px;color:var(--mut,#8b98a9)}
+#basketHeatModal .bh-dir-card .rr{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
+#basketHeatModal [data-basket-direction]{margin:8px 0;padding:8px;border-left:3px solid #b45309;background:var(--bg,#0f1419);border-radius:0 6px 6px 0}
+#basketHeatModal [data-basket-dir-entry]{margin:4px 0}
+@media(max-width:900px){#basketHeatModal .bh-dir-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
 #basketHeatModal .bh-scroll{max-width:100%;overflow-x:auto;border:1px solid var(--line,#2c3848);border-radius:6px}#basketHeatModal table{width:100%;min-width:660px;border-collapse:collapse;font-size:12px;color:inherit}
 #basketHeatModal th,#basketHeatModal td{text-align:left;padding:8px;border-bottom:1px solid var(--line,#2c3848);vertical-align:top}#basketHeatModal ul{padding-left:22px}#basketHeatModal li{margin:8px 0}
 #btnBasketHeat{color:var(--fg,var(--txt,#e6edf3));border-color:var(--line,#2c3848)}
@@ -410,6 +509,10 @@
       '<div id="basketHeatNotice" class="bh-notice" role="status" aria-live="polite">尚未读取；首次打开时读取同源 basket_heat.json，无自动定时。</div>' +
       '<div id="basketHeatSummary" class="bh-summary"><p>总场数 / 结果生成时间：尚未读取，不用 0 代替未知。</p><p>胜率、ROI：尚未建立 / 待前向样本。</p></div>' +
       '<div id="basketHeatSourceStatus" class="bh-statuses"></div>' +
+      '<details class="bh-dir" id="basketHeatDir" open><summary>方向观察账本 · 赛前冻结 + 逐场复盘（观察档，非投注建议）</summary>' +
+      '<p class="bh-muted">方向=竞彩真实报价去水隐含概率倾向方（赔率观察，不是资金流向 / 非有 edge 的下注建议）；首登冻结、后续算法改版不回写；结算只认已核验的外部赛果，当前待结算。足球方向账本规则与业绩不可混入。</p>' +
+      '<div id="basketHeatDirSummary" class="bh-summary"></div>' +
+      '<div id="basketHeatDirTable"></div></details>' +
       '<div class="bh-filters"><label>独立日期 <select id="basketHeatDay" data-basket-filter="day"><option value="">全部日期</option></select></label>' +
       '<label>市场 <select id="basketHeatMarket" data-basket-filter="market"><option value="mnl">mnl · 胜负 / 独赢</option><option value="hdc">hdc · 让分胜负</option><option value="hilo">hilo · 大小分</option></select></label>' +
       '<label>关键词 <input type="search" id="basketHeatKeyword" data-basket-filter="keyword" placeholder="队名 / 联赛 / 篮球 ID"></label>' +
