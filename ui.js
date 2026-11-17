@@ -354,7 +354,8 @@ const __VIEW_OPENERS = {
   htBreakModal:'openHtBreak', anaModal:'openPpi', ppiModal:'openPpi',
   tierBoardModal:'openTierBoard', kbModal:'openKb', methodRefModal:'openMethodRef',
   tarotModal:'openTarot', halfLawModal:'openHalfLaw', htPickModal:'openHtPick',
-  structDownModal:'openStructDown', recapModal:'openRecap', triFlowModal:'openTriFlow'
+  structDownModal:'openStructDown', recapModal:'openRecap', triFlowModal:'openTriFlow',
+  basketHeatModal:'openBasketHeat'
 };
 function captureViewState(ts){
   try{
@@ -597,7 +598,7 @@ async function softRefreshData(ts, shellChanged){
 }
 function currentOpenModal(){
   const ids = ['pickModal','htBreakModal','deepModal','heatModal','reviewModal','half500Modal',
-    'htBreakDetailModal','anaModal','t7Modal','ppiModal','htPickModal','halfLawModal','kbModal','tierBoardModal'];
+    'htBreakDetailModal','anaModal','t7Modal','ppiModal','htPickModal','halfLawModal','kbModal','tierBoardModal','basketHeatModal'];
   for (let i=0;i<ids.length;i++){ const m=document.getElementById(ids[i]); if (m && m.classList.contains('show')) return ids[i]; }
   return null;
 }
