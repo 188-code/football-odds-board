@@ -32,11 +32,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "win",
+   "pl": 0.15,
+   "settleSrc": "EuroLeague J12 · Las Provincias/AS · 迪拜80-75伊斯坦布尔埃菲斯 | calc:80-75 → home",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042846:hdc": {
    "id": "2042846",
@@ -68,11 +68,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · Las Provincias/AS · 迪拜80-75伊斯坦布尔埃菲斯 | calc:80-7.5=72.5 vs 75 → away",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042846:hilo": {
    "id": "2042846",
@@ -104,11 +104,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · Las Provincias/AS · 迪拜80-75伊斯坦布尔埃菲斯 | calc:80+75=155 vs 176.5 → under",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042847:hdc": {
    "id": "2042847",
@@ -140,11 +140,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "EuroLeague J12 · Las Provincias · 费内巴切115-81阿斯维尔 | calc:115-12.5=102.5 vs 81 → home",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042847:hilo": {
    "id": "2042847",
@@ -176,11 +176,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "EuroLeague J12 · Las Provincias · 费内巴切115-81阿斯维尔 | calc:115+81=196 vs 166.5 → over",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042848:mnl": {
    "id": "2042848",
@@ -212,11 +212,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · 腾讯新闻(q.com 20261118A03IB500)/Las Provincias · 米兰91-77贝尔格莱德红星 | calc:91-77 → home",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042848:hdc": {
    "id": "2042848",
@@ -248,11 +248,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "EuroLeague J12 · 腾讯新闻(q.com 20261118A03IB500)/Las Provincias · 米兰91-77贝尔格莱德红星 | calc:91+3.5=94.5 vs 77 → home",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042848:hilo": {
    "id": "2042848",
@@ -284,11 +284,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "win",
+   "pl": 0.66,
+   "settleSrc": "EuroLeague J12 · 腾讯新闻(q.com 20261118A03IB500)/Las Provincias · 米兰91-77贝尔格莱德红星 | calc:91+77=168 vs 166.5 → over",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042849:mnl": {
    "id": "2042849",
@@ -320,11 +320,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · 球迷屋(2044959138176)/Las Provincias · 巴塞罗那86-89巴黎 | calc:86-89 → away",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042849:hdc": {
    "id": "2042849",
@@ -356,11 +356,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · 球迷屋(2044959138176)/Las Provincias · 巴塞罗那86-89巴黎 | calc:86-6.5=79.5 vs 89 → away",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042849:hilo": {
    "id": "2042849",
@@ -392,11 +392,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · 球迷屋(2044959138176)/Las Provincias · 巴塞罗那86-89巴黎 | calc:86+89=175 vs 187.5 → under",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042850:mnl": {
    "id": "2042850",
@@ -428,11 +428,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "win",
+   "pl": 0.6,
+   "settleSrc": "EuroLeague J12 · Las Provincias · 贝尔格莱德游击64-76巴伦西亚 | calc:64-76 → away",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042850:hdc": {
    "id": "2042850",
@@ -464,11 +464,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "win",
+   "pl": 0.65,
+   "settleSrc": "EuroLeague J12 · Las Provincias · 贝尔格莱德游击64-76巴伦西亚 | calc:64+1.5=65.5 vs 76 → away",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042850:hilo": {
    "id": "2042850",
@@ -500,11 +500,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · Las Provincias · 贝尔格莱德游击64-76巴伦西亚 | calc:64+76=140 vs 175.5 → under",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042851:mnl": {
    "id": "2042851",
@@ -536,11 +536,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · Las Provincias · 博洛尼亚84-79帕纳辛纳科斯 | calc:84-79 → home",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042851:hdc": {
    "id": "2042851",
@@ -572,11 +572,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "EuroLeague J12 · Las Provincias · 博洛尼亚84-79帕纳辛纳科斯 | calc:84+8.5=92.5 vs 79 → home",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042851:hilo": {
    "id": "2042851",
@@ -608,11 +608,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-17T18:16:08+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "EuroLeague J12 · Las Provincias · 博洛尼亚84-79帕纳辛纳科斯 | calc:84+79=163 vs 169.5 → under",
+   "settledAt": 1794966303,
+   "verified": true
   },
   "2042852:mnl": {
    "id": "2042852",
@@ -944,7 +944,7 @@
    "kickoff": "2026-11-18T11:30:00+08:00",
    "kickTs": 1794972600,
    "firstSeen": 1794925552,
-   "lastSeen": 1794965403,
+   "lastSeen": 1794966308,
    "pre": true,
    "home": "洛杉矶快船",
    "away": "犹他爵士",
@@ -980,7 +980,7 @@
    "kickoff": "2026-11-18T11:30:00+08:00",
    "kickTs": 1794972600,
    "firstSeen": 1794925552,
-   "lastSeen": 1794965403,
+   "lastSeen": 1794966308,
    "pre": true,
    "home": "洛杉矶快船",
    "away": "犹他爵士",
@@ -1016,7 +1016,7 @@
    "kickoff": "2026-11-18T11:30:00+08:00",
    "kickTs": 1794972600,
    "firstSeen": 1794925552,
-   "lastSeen": 1794965403,
+   "lastSeen": 1794966308,
    "pre": true,
    "home": "洛杉矶快船",
    "away": "犹他爵士",
@@ -1052,7 +1052,7 @@
    "kickoff": "2026-11-18T12:00:00+08:00",
    "kickTs": 1794974400,
    "firstSeen": 1794925552,
-   "lastSeen": 1794965403,
+   "lastSeen": 1794966308,
    "pre": true,
    "home": "洛杉矶湖人",
    "away": "夏洛特黄蜂",
@@ -1088,7 +1088,7 @@
    "kickoff": "2026-11-18T12:00:00+08:00",
    "kickTs": 1794974400,
    "firstSeen": 1794925552,
-   "lastSeen": 1794965403,
+   "lastSeen": 1794966308,
    "pre": true,
    "home": "洛杉矶湖人",
    "away": "夏洛特黄蜂",
@@ -1124,7 +1124,7 @@
    "kickoff": "2026-11-18T12:00:00+08:00",
    "kickTs": 1794974400,
    "firstSeen": 1794925552,
-   "lastSeen": 1794965403,
+   "lastSeen": 1794966308,
    "pre": true,
    "home": "洛杉矶湖人",
    "away": "夏洛特黄蜂",
@@ -1156,29 +1156,143 @@
   }
  },
  "summary": {
-  "updatedAt": 1794965403,
+  "updatedAt": 1794966308,
   "srcUsed": "cloud_app basket_heat.json(离线兜底)(竞彩真实报价·赛前冻结)",
   "ruleV": "basket_odds_lean_observe_1",
   "total": 32,
-  "settled": 0,
-  "pending": 32,
+  "settled": 17,
+  "pending": 15,
   "pre": 32,
   "post": 0,
   "all": {
-   "n": 0,
-   "win": 0,
-   "lose": 0,
+   "n": 17,
+   "win": 8,
+   "lose": 9,
    "push": 0,
-   "hit": null,
-   "roi": null,
-   "se": null,
+   "hit": 47.1,
+   "roi": -24.4,
+   "se": 24.3,
    "significant": false,
    "crossZero": false
   },
-  "byPick": {},
-  "byMarket": {},
-  "byDay": {},
-  "byRuleV": {},
+  "byPick": {
+   "主胜": {
+    "n": 2,
+    "win": 1,
+    "lose": 1,
+    "push": 0,
+    "hit": 50,
+    "roi": -42.5,
+    "se": 70.7,
+    "significant": false,
+    "crossZero": true
+   },
+   "让分主胜": {
+    "n": 5,
+    "win": 3,
+    "lose": 2,
+    "push": 0,
+    "hit": 60,
+    "roi": 2,
+    "se": 44.7,
+    "significant": false,
+    "crossZero": true
+   },
+   "大分": {
+    "n": 6,
+    "win": 2,
+    "lose": 4,
+    "push": 0,
+    "hit": 33.3,
+    "roi": -44,
+    "se": 40.8,
+    "significant": false,
+    "crossZero": false
+   },
+   "客胜": {
+    "n": 3,
+    "win": 1,
+    "lose": 2,
+    "push": 0,
+    "hit": 33.3,
+    "roi": -46.7,
+    "se": 57.7,
+    "significant": false,
+    "crossZero": true
+   },
+   "让分客胜": {
+    "n": 1,
+    "win": 1,
+    "lose": 0,
+    "push": 0,
+    "hit": 100,
+    "roi": 65,
+    "se": 100,
+    "significant": false,
+    "crossZero": true
+   }
+  },
+  "byMarket": {
+   "mnl": {
+    "n": 5,
+    "win": 2,
+    "lose": 3,
+    "push": 0,
+    "hit": 40,
+    "roi": -45,
+    "se": 44.7,
+    "significant": false,
+    "crossZero": false
+   },
+   "hdc": {
+    "n": 6,
+    "win": 4,
+    "lose": 2,
+    "push": 0,
+    "hit": 66.7,
+    "roi": 12.5,
+    "se": 40.8,
+    "significant": false,
+    "crossZero": true
+   },
+   "hilo": {
+    "n": 6,
+    "win": 2,
+    "lose": 4,
+    "push": 0,
+    "hit": 33.3,
+    "roi": -44,
+    "se": 40.8,
+    "significant": false,
+    "crossZero": false
+   }
+  },
+  "byDay": {
+   "2026-11-18": {
+    "n": 17,
+    "win": 8,
+    "lose": 9,
+    "push": 0,
+    "hit": 47.1,
+    "roi": -24.4,
+    "se": 24.3,
+    "significant": false,
+    "crossZero": false
+   }
+  },
+  "byRuleV": {
+   "basket_odds_lean_observe_1": {
+    "n": 17,
+    "win": 8,
+    "lose": 9,
+    "push": 0,
+    "hit": 47.1,
+    "roi": -24.4,
+    "se": 24.3,
+    "significant": false,
+    "crossZero": false
+   }
+  },
   "note": "篮球方向观察账本：只收严格赛前、竞彩真实完整报价的场次，按玩法独立成条。方向=去水隐含概率倾向方，是赔率观察方向，不是资金流向，也不是有 edge 的下注建议。首登冻结方向/赔率/Δpp/规则版本，后续轮次与算法改版不回写。结算只在 result 为空时回填一次，且只认 basket_result.json 中 verified=true 的显式赛果；当前无官方篮球赛果接口，故全部待结算。SE=100/√n(pt)；n<40 样本偏小，|ROI|<SE 跨0。足球 dir_ledger 的方向规则与业绩不可混入本账本。"
  }
 }
