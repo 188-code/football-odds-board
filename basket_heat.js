@@ -8,7 +8,7 @@
   const SOURCES = { jc: '竞彩篮球', eu: 'Bet365（公开转引）', bd: '北单胜负过关' };
   const STATES = { ok: '成功', partial: '部分成功', error: '失败', blocked: '停用 / 访问受限', pending: '等待', cached_sample: '已导入缓存快照（非实时采集成功）', not_connected: '未接入' };
   const IMPORT_NOTICE = '真实抓取快照导入·非实时·采集时刻未核，不计赛前意见';
-  const state = { data: null, ledger: null, day: '', market: 'mnl', keyword: '', selling: false, loading: false, focus: null };
+  const state = { data: null, ledger: null, preset: null, day: '', market: 'mnl', keyword: '', selling: false, loading: false, focus: null };
   let modal;
   let observer;
   const scriptURL = document.currentScript && document.currentScript.src;
@@ -333,6 +333,39 @@
       '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>最终比分</th><th>结算</th><th>规则</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
+  function presetHTML() {
+    const p = state.preset;
+    if (!p) return '<details class="bh-reference" id="basketHeatPreset"><summary>预设盘地基（洋哥 L85）· 尚未生成</summary>' +
+      '<p class="bh-muted">basket_preset.json 尚未生成；不能用 0 代替未知，也不虚构预设线。</p></details>';
+    const nba = p.nba || [], unavail = p.unavailable || [];
+    const head = '<details class="bh-reference" id="basketHeatPreset"><summary>预设盘地基（洋哥 L85 · 三盘地基）· ' + nba.length + ' 场 NBA 估计 + ' + unavail.length + ' 场不可用</summary>' +
+      '<p class="bh-missing">观察档，非投注信号。洋哥 L85 算例推导有缺口（119+107=226 却给 215.5），本预设线为可复刻标准法估计，<strong>不是洋哥原公式</strong>；未经篮球样本外验证。样本不足（n=5&lt;40），不得宣称有效。</p>' +
+      '<p class="bh-muted">方法：预设让分 = -(两队赛前滚动净胜分之差 + 主场优势3分)，力量差限幅±14（事前稳健约束）；预设总分 = 双方攻防合成。严格只用开赛前完赛场算场均，杜绝前视。主场3分源自 L85 原文假设，非拟合常量。</p>';
+    let table = '<div class="bh-scroll" tabindex="0"><table><thead><tr><th>对阵</th><th>样本(主/客)</th><th>预设线</th><th>竞彩实际线</th><th>偏差</th><th>预设总</th><th>实际总</th><th>总偏差</th><th>观察</th></tr></thead><tbody>';
+    for (const x of nba) {
+      const pr = x.preset || {};
+      const dev = x.dev || {};
+      const dl = dev.line;
+      const devTxt = dl === null || dl === undefined ? '—' : (dl > 0 ? '+' : '') + dl;
+      const obs = !pr.ok ? '样本不足' : (pr.meetsYangGe ? '达标·观察' : '低于15场·观察') + (pr.strengthClamped ? ' ·力量差限幅' : '');
+      table += '<tr><td>' + esc(x.home) + ' vs ' + esc(x.away) + '</td>' +
+        '<td>' + fmt(pr.nHome, 0) + '/' + fmt(pr.nAway, 0) + '</td>' +
+        '<td class="bh-price">' + fmt(pr.presetLine, 1) + '</td>' +
+        '<td class="bh-price">' + fmt(x.actual && x.actual.line, 1) + '</td>' +
+        '<td class="bh-price">' + devTxt + '</td>' +
+        '<td class="bh-price">' + fmt(pr.presetTotal, 1) + '</td>' +
+        '<td class="bh-price">' + fmt(x.actual && x.actual.total, 1) + '</td>' +
+        '<td class="bh-price">' + (dev.total === null || dev.total === undefined ? '—' : (dev.total > 0 ? '+' : '') + dev.total) + '</td>' +
+        '<td>' + esc(obs) + '</td></tr>';
+    }
+    table += '</tbody></table></div>';
+    let ua = '';
+    if (unavail.length) {
+      ua = '<p class="bh-muted">不可用（不编造预设线）：' + unavail.map(x => esc(x.home) + ' vs ' + esc(x.away)).join('、') + '。原因：ESPN 无该联赛逐场比分/统计端点。</p>';
+    }
+    const verify = '<p class="bh-missing">验证结论（n=5，仅诊断）：预设线方向 3/5=60%±44.7pt、市场实际盘方向 3/5=60%±44.7pt（完全持平）、按偏差反向 2/4=50%±50pt（跨0）。<strong>样本远不足，预设盘地基暂未显示超越市场的价值，禁止进入下注引擎或宣称有效。</strong></p>';
+    return head + table + ua + verify + '</details>';
+  }
   function referenceHTML() {
     return '<details class="bh-reference" id="basketHeatReference"><summary>洋哥篮球原文摘录与迁移边界</summary>' +
       '<p>“5资料”参考范围：本地“洋哥资料”四份 TXT 已全文读取；以下仅短摘录、概述与出处，不打包私有教程全文。作者方法论声称与统计实证严格分开；四份 TXT 没有可直接上线的独立篮球过热阈值。</p>' +
@@ -389,6 +422,8 @@
     modal.querySelector('#basketHeatSourceStatus').innerHTML = statusHTML(data);
     modal.querySelector('#basketHeatDirSummary').innerHTML = dirLedgerSummaryHTML();
     modal.querySelector('#basketHeatDirTable').innerHTML = dirLedgerTableHTML();
+    const presetSlot = modal.querySelector('#basketHeatPresetSlot');
+    if (presetSlot) presetSlot.innerHTML = presetHTML();
     modal.querySelector('#basketHeatRows').innerHTML = filtered.length ? filtered.map(rowHTML).join('') :
       '<div class="bh-empty" data-basket-empty><strong>' + (rows.length ? '当前独立筛选下 0 场' : '0 场：没有可信竞彩篮球名单，不能构造三盘齐全画面') +
       '</strong><p>' + (rows.length ? '请调整日期、关键词或在售条件；不会修改足球筛选。' : 'Bet365 候选赛程不等于已取得本场报价；缺竞彩身份时不补造比赛。请查看上方逐源错误。') + '</p></div>';
@@ -425,6 +460,16 @@
       if (d && typeof d === 'object' && d.items && typeof d.items === 'object' && d.summary && typeof d.summary === 'object') state.ledger = d;
     } catch (_) { /* 账本缺失不影响观察板主画面 */ }
   }
+  async function loadPreset(baseURL) {
+    try {
+      const url = new URL('basket_preset.json', baseURL);
+      if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) return;
+      const response = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
+      if (!response.ok) return;
+      const d = await response.json();
+      if (d && typeof d === 'object' && Array.isArray(d.nba)) state.preset = d;
+    } catch (_) { /* 预设盘地基缺失不影响观察板主画面 */ }
+  }
   async function refresh() {
     if (state.loading) return;
     state.loading = true;
@@ -444,6 +489,7 @@
       const previous = state.data;
       state.data = next;
       await loadLedger(scriptURL || window.location.href);
+      await loadPreset(scriptURL || window.location.href);
       try { render(); } catch (error) { state.data = previous; if (previous) render(); throw error; }
       notice.className = 'bh-notice';
       notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '只手动刷新，无自动定时。';
@@ -538,6 +584,7 @@
       '<p class="bh-muted">方向=竞彩真实报价去水隐含概率倾向方（赔率观察，不是资金流向 / 非有 edge 的下注建议）；首登冻结、后续算法改版不回写；结算只认已核验的外部赛果，当前待结算。足球方向账本规则与业绩不可混入。</p>' +
       '<div id="basketHeatDirSummary" class="bh-summary"></div>' +
       '<div id="basketHeatDirTable"></div></details>' +
+      '<div id="basketHeatPresetSlot"></div>' +
       '<div class="bh-filters"><label>独立日期 <select id="basketHeatDay" data-basket-filter="day"><option value="">全部日期</option></select></label>' +
       '<label>市场 <select id="basketHeatMarket" data-basket-filter="market"><option value="mnl">mnl · 胜负 / 独赢</option><option value="hdc">hdc · 让分胜负</option><option value="hilo">hilo · 大小分</option></select></label>' +
       '<label>关键词 <input type="search" id="basketHeatKeyword" data-basket-filter="keyword" placeholder="队名 / 联赛 / 篮球 ID"></label>' +
