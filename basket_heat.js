@@ -260,6 +260,7 @@
         esc(e.pick) + '</b> · 去水隐含 ' + (num(e.probA) !== null ? fmt(e.probA * 100, 1) + '%' : '—') + dpTxt +
         '<br><small>首登冻结 ' + frozenTime(e) + ' · 规则 ' + esc(e.ruleV || '—') +
         ' · 结算 <span style="color:' + resColor + '">' + res + '</span>' +
+        (settled && text(e.finalScore) ? ' · 最终比分 ' + esc(e.finalScore) : '') +
         (settled && num(e.pl) !== null ? '（盈亏 ' + (e.pl > 0 ? '+' : '') + fmt(e.pl, 2) + '）' : '') + '</small></p>';
     }).join('');
   }
@@ -301,11 +302,13 @@
       return '<tr data-basket-dir-row><td>' + esc(e.day) + ' ' + esc(e.kickoff || '') + '</td><td>' +
         esc(e.home) + ' vs ' + esc(e.away) + '</td><td>' + esc(MARKETS[e.market] || e.market) + '</td><td>' +
         '<b>' + esc(e.pick) + '</b><br><small>' + esc(e.recDirText || '') + '</small></td><td>' +
+        (settled && text(e.finalScore) ? '<b>' + esc(e.finalScore) + '</b>' : '—') +
+        '</td><td>' +
         (settled ? res + (num(e.pl) !== null ? '（' + (e.pl > 0 ? '+' : '') + fmt(e.pl, 2) + '）' : '') : res) +
         '</td><td>' + esc(e.ruleV || '—') + '</td></tr>';
     }).join('');
     return '<div class="bh-scroll" tabindex="0" aria-label="篮球方向账本横向滚动表"><table><thead><tr>' +
-      '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>结算</th><th>规则</th>' +
+      '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>最终比分</th><th>结算</th><th>规则</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
   function referenceHTML() {
