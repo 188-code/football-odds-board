@@ -247,6 +247,26 @@
     const d = new Date(t * 1000);
     return Number.isFinite(d.getTime()) ? esc(d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC') : '未取得';
   }
+  /* ★ 2026-11-18 开盘→临盘逐帧轨迹（和足球三盘 dirTrail 口径一致）：
+     每帧显示 方向/去水隐含/报价/线/Δpp；保留开盘首帧，开赛即冻结不再追加。 */
+  function trailHTML(e) {
+    const tr = Array.isArray(e.dirTrail) ? e.dirTrail : [];
+    if (!tr.length) return '';
+    const fm = (t) => { const d = new Date((num(t) || 0) * 1000); return Number.isFinite(d.getTime()) ? d.toISOString().replace('T', ' ').slice(5, 16) : '—'; };
+    const pct = (v) => num(v) !== null ? fmt(v * 100, 1) + '%' : '—';
+    const rows = tr.map((f, i) => {
+      const first = i === 0, last = i === tr.length - 1;
+      const tag = (first ? '开盘' : (last ? '临盘' : '盘' + i));
+      const dpp = num(f.dA) !== null ? ((f.dA > 0 ? '+' : '') + fmt(f.dA, 2) + 'pp') : '—';
+      return '<tr><td>' + tag + ' · ' + esc(fm(f.t)) + '</td><td><b>' + esc(f.pick || '—') + '</b></td><td>' +
+        pct(f.pa) + ' / ' + pct(f.pb) + '</td><td>' + esc(fmt(f.a, 2)) + '/' + esc(fmt(f.b, 2)) +
+        (num(f.line) !== null ? ' · 线' + esc(f.line) : '') + '</td><td>' + esc(dpp) + '</td></tr>';
+    }).join('');
+    return '<details class="bh-trail" style="margin:4px 0 0"><summary style="cursor:pointer;color:var(--mut,#8b98a9);font-size:12px">' +
+      '开盘→临盘轨迹 ' + tr.length + ' 帧（首登冻结方向不变， trace 仅记录变化）</summary>' +
+      '<div class="bh-scroll"><table style="font-size:12px"><thead><tr><th>时点</th><th>方向</th><th>去水隐含(主/客)</th><th>报价/线</th><th>同线Δpp</th></tr></thead><tbody>' +
+      rows + '</tbody></table></div></details>';
+  }
   function directionHTML(row, market) {
     const list = ledgerEntries(row, market);
     if (!list.length) return '<p data-basket-dir-note>该玩法无赛前冻结方向（非赛前合格场或报价无效，不补造）</p>';
@@ -256,12 +276,14 @@
       const resColor = settled ? (e.result === 'win' ? '#16a34a' : '#e54545') : 'var(--mut,#8b98a9)';
       const dp = object(e.deltaPP), dpTxt = dp && num(dp.dA) !== null ?
         ' · 同线Δpp ' + ((dp.dA > 0 ? '+' : '') + dp.dA.toFixed(2) + 'pp') : '';
-      return '<p data-basket-dir-entry data-dir-key="' + esc(e.id + ':' + e.market) + '"><b>方向（观察·非投注建议）：' +
+      return '<div data-basket-dir-entry data-dir-key="' + esc(e.id + ':' + e.market) + '">' +
+        '<p style="margin:0"><b>方向（观察·非投注建议）：' +
         esc(e.pick) + '</b> · 去水隐含 ' + (num(e.probA) !== null ? fmt(e.probA * 100, 1) + '%' : '—') + dpTxt +
         '<br><small>首登冻结 ' + frozenTime(e) + ' · 规则 ' + esc(e.ruleV || '—') +
         ' · 结算 <span style="color:' + resColor + '">' + res + '</span>' +
         (settled && text(e.finalScore) ? ' · 最终比分 ' + esc(e.finalScore) : '') +
-        (settled && num(e.pl) !== null ? '（盈亏 ' + (e.pl > 0 ? '+' : '') + fmt(e.pl, 2) + '）' : '') + '</small></p>';
+        (settled && num(e.pl) !== null ? '（盈亏 ' + (e.pl > 0 ? '+' : '') + fmt(e.pl, 2) + '）' : '') + '</small></p>' +
+        trailHTML(e) + '</div>';
     }).join('');
   }
   function dirLedgerSummaryHTML() {
