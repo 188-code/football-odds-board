@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-18-tworule-v1';   // ★ 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
+const UI_V = '2026-11-19-yangge-gapcheck-v1';   // ★ 2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -8866,6 +8866,68 @@ function fundplateHistoryHTML(){
     }catch(_e){ return ''; }
   };
   const allItems = Array.isArray(H) ? H : (H.items || []);
+  /* ★★ 2026-11-19 新增「洋哥动态缺口核对」列（只读观察·不进引擎/方向/票权重/推送）。
+     口径来源：用户精读勘误 + 洋哥自传 L174 —— 缺口 = 100% − 365返还率（逐场动态）；
+       大热站对面 = 强队(让球方)被超买(kind=normal) 且 偏差 excess > 动态缺口 gap → 买受让；
+       弃用固定 15%（查询文件 L8 粗筛线，与自传三个实例矛盾）。
+     与旧 15% 口径并列显示判定 + 赛后命中，方便用户日后核对哪个口径更准。
+     ★ 铁律：本列不读取/不改变任何 recDir、票权重、下注方向；仅展示核对。 */
+  const _ygNum = v => (v != null && isFinite(+v)) ? +v : null;
+  const _ygGapCheck = function(e){
+    const ex = _ygNum(e && e.excess), gp = _ygNum(e && e.gap);
+    return { ex: ex, gp: gp, ok: (ex != null && gp != null),
+             normal: String((e && e.kind) || '') === 'normal',
+             broke: (ex != null && gp != null && ex > gp), broke15: (ex != null && ex > 15) };
+  };
+  const _yanggeGapCell = function(e){
+    const c = _ygGapCheck(e);
+    if (!c.ok) return '<td style="padding:6px 7px;vertical-align:top;font-size:10.5px;color:var(--mut)">动态缺口无法核对<small style="display:block;opacity:.7">缺 excess / gap 快照</small></td>';
+    let verdict, vcol;
+    if (!c.normal)            { verdict = '冷门被买爆·不适用站大热对面'; vcol = '#94a3b8'; }
+    else if (c.broke)         { verdict = '🟠破缺口·大热站对面(买受让)'; vcol = '#f59e0b'; }
+    else                      { verdict = '⚪未破缺口·不判大热';          vcol = '#94a3b8'; }
+    let hit = '<span style="opacity:.6">待结算</span>';
+    if (e.result && e.result !== 'pending'){
+      if (e.result === 'push')                    hit = '<span style="color:#b45309">走水·不计</span>';
+      else if (!c.normal || !c.broke)             hit = '<span style="opacity:.55">非本口径注·不计</span>';
+      else                                        hit = e.result === 'win'
+        ? '<b style="color:#16a34a">✅站受让命中</b>' : '<b style="color:#dc2626">❌站受让挂</b>';
+    }
+    const c15 = !c.normal ? '—' : (c.broke15
+      ? '<span style="color:#f59e0b">旧15%也判热</span>' : '<span style="color:#94a3b8">旧15%不判</span>');
+    const diff = (c.normal && c.broke !== c.broke15)
+      ? '<div style="color:#7dd3fc;font-size:9.5px">⚑两口径不一致·正是核对点</div>' : '';
+    return '<td style="padding:6px 7px;vertical-align:top;font-size:10.5px;line-height:1.5;min-width:158px">'
+      + '<div style="font-weight:800;color:#93c5fd">洋哥动态缺口核对</div>'
+      + '<div>偏差 <b>' + c.ex.toFixed(1) + '</b>pt / 缺口 <b>' + c.gp.toFixed(1) + '</b>pt</div>'
+      + '<div style="color:' + vcol + ';font-weight:700">' + verdict + '</div>'
+      + '<div style="margin-top:2px">' + hit + '</div>'
+      + '<div style="opacity:.72">旧15%口径：' + c15 + '</div>'
+      + diff
+      + '<div style="opacity:.5;font-size:9px;margin-top:2px">缺口=100%−365返还率·弃用固定15%（洋哥L174）</div>'
+      + '</td>';
+  };
+  /* ★ 2026-11-19 当前筛选集·两口径命中率对照（展示集=统计集，仅赛前登记+已结算非走水） */
+  const _ygStat = function(which){
+    const g = items.filter(function(e){
+      const c = _ygGapCheck(e);
+      return _isPre(e) && c.normal && c.ok && e.result && e.result !== 'pending' && e.result !== 'push'
+             && (which === 'dyn' ? c.broke : c.broke15);
+    });
+    const w = g.filter(function(e){ return e.result === 'win'; }).length; // 买受让：win=受让赢盘
+    return { n: g.length, w: w, rate: g.length ? Math.round(1000 * w / g.length) / 10 : null };
+  };
+  /* ★ 延迟到调用时求值：此处 items/_isPre 尚未定义（TDZ），故包成函数。 */
+  const _ygBarHTML = function(){
+  const _ygS_dyn = _ygStat('dyn'), _ygS_15 = _ygStat('15');
+  return '<div style="margin:0 0 9px;padding:8px 10px;border-radius:8px;background:rgba(147,197,253,.08);border:1px solid rgba(147,197,253,.35);font-size:11.5px;line-height:1.7;color:#cfe3f7">'
+    + '<b style="color:#93c5fd;font-size:12.5px">🔍 洋哥动态缺口核对（观察列·口径对照，不进引擎）</b>：'
+    + '缺口 = 100% − 365返还率（逐场动态）；偏差 &gt; 缺口才算大热·站对面(买受让) → 命中=受让赢盘。<br>'
+    + '<span style="opacity:.85">当前筛选·赛前已结算(非走水)：</span>'
+    + ' <b style="color:#f59e0b">动态缺口口径 ' + (_ygS_dyn.rate == null ? '—' : _ygS_dyn.w + '/' + _ygS_dyn.n + ' · ' + _ygS_dyn.rate + '%') + '</b>'
+    + ' ｜ <span style="opacity:.8">旧固定15%口径 ' + (_ygS_15.rate == null ? '—' : _ygS_15.w + '/' + _ygS_15.n + ' · ' + _ygS_15.rate + '%') + '</span>'
+    + '<br><span style="opacity:.6;font-size:10.5px">15% 出自查询文件 L8 粗筛线，与自传 L174 及三实例(缺口 6.02/5.21/9.69)矛盾，应弃用；本列仅并列供你核对哪个更准，不改变原方案任何方向/仓位/推送。</span></div>';
+  };
   /* ★ 2026-11-07 用户要求：完整意见/历史复盘可按日期筛选 + 按时间排序。
      铁律「展示集 = 统计集」：筛选先作用在 items 上，后面所有 KPI、快照覆盖度、
      赛前/赛后计数、结算统计一律用筛选后的集合，不允许表格变了统计还报全量。 */
@@ -9163,6 +9225,7 @@ function fundplateHistoryHTML(){
       +'<td style="padding:6px 7px;white-space:nowrap;font-weight:700">'+esc(sc)+'</td>'
       +'<td style="padding:6px 7px;font-weight:800;color:'+rc+';white-space:nowrap">'+rs+margin
         +'<div style="margin-top:3px;font-size:10.5px;font-weight:700;white-space:normal">'+recBadge+'</div></td>'
+      + _yanggeGapCell(e)   /* ★ 2026-11-19 洋哥动态缺口核对列（只读观察·不进引擎） */
       +'</tr>';
   }).join('');
   let h = '<div style="margin:16px 0 4px;padding:12px 14px;background:linear-gradient(135deg,#141b26,#111823);border:1px solid var(--line);border-radius:12px;color:#dbe6f2">';
@@ -9214,6 +9277,7 @@ function fundplateHistoryHTML(){
      + '与上方今日主榜的<b>净超买 pt</b> <u>不是同一个量</u>，不可直接比较、也不能拿来当今日门槛。'
      + '旧口径下常见的 +15~+25pt，换成新口径多半只有 +7~+17pt。历史登记时刻的赔率快照已无法重算，故如实标注而非改数。</div>';
   h += '<div style="margin-bottom:2px">'+sum+'</div>';
+  try{ h += _ygBarHTML(); }catch(_e){}   /* ★ 2026-11-19 洋哥动态缺口两口径命中率对照（当前筛选集） */
   /* ★ 2026-11-07 用户要求：「完整意见这里按时间排序 + 加日期选择按钮」。
      下拉选具体比赛日 / 快捷范围（最新比赛日、近 3 / 7 个比赛日）/ 三种时间排序；
      控件只重渲染本历史块（_fpHistSet → #fpHistHost），不重开整个三盘面板、不丢失上方实时板块。 */
@@ -9264,6 +9328,7 @@ function fundplateHistoryHTML(){
        + '<th style="padding:5px 7px;font-weight:500">拥挤警告</th>'
        + '<th style="padding:5px 7px;font-weight:500">最终比分</th>'
        + '<th style="padding:5px 7px;font-weight:500">结算·按顺买强队</th>'
+       + '<th style="padding:5px 7px;font-weight:500" title="洋哥L174动态缺口口径：缺口=100%−365返还率，偏差>缺口才算大热站对面(买受让)，弃用固定15%。只读观察列，不进引擎/方向/仓位。">洋哥动态缺口核对<br><span style="font-size:9px;font-weight:400;opacity:.7">观察·不进引擎</span></th>'
        + '</tr></thead><tbody>'+rows+'</tbody></table>';
   } else {
     h += '<div style="padding:14px;text-align:center;border:1px dashed var(--line);border-radius:9px;font-size:12px;color:var(--mut)">该日期 / 范围内暂无登记场次，换个日期或点「全部」即可。</div>';
