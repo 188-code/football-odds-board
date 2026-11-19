@@ -8,7 +8,7 @@
   const SOURCES = { jc: '竞彩篮球', eu: 'Bet365（公开转引）', bd: '北单胜负过关' };
   const STATES = { ok: '成功', partial: '部分成功', error: '失败', blocked: '停用 / 访问受限', pending: '等待', cached_sample: '已导入缓存快照（非实时采集成功）', not_connected: '未接入' };
   const IMPORT_NOTICE = '真实抓取快照导入·非实时·采集时刻未核，不计赛前意见';
-  const state = { data: null, ledger: null, preset: null, day: '', market: 'mnl', keyword: '', selling: false, loading: false, focus: null };
+  const state = { data: null, ledger: null, preset: null, overheat: null, day: '', market: 'mnl', keyword: '', selling: false, loading: false, focus: null };
   let modal;
   let observer;
   const scriptURL = document.currentScript && document.currentScript.src;
@@ -333,6 +333,54 @@
       '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>最终比分</th><th>结算</th><th>规则</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
+  /* ★ 2026-11-19 篮球三盘资金过热核对（观察档，洋哥口径迁移）：
+     只收「竞彩SP+北单池SP+已结算赛果」三者齐全的场次；按洋哥L174原始公式算缺口/偏差，
+     参照盘用竞彩替代被封的365；仅同让分线可比。展示集=统计集，n<40观察档。 */
+  function overheatHTML() {
+    const o = state.overheat;
+    if (!o) return '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥口径·观察档）· 尚未生成</summary>' +
+      '<p class="bh-muted">basket_overheat.json 尚未生成；不虚构判定与命中率。</p></details>';
+    const s = o.summary || {}, items = o.items || [];
+    const head = '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥动态缺口口径·观察档）· ' +
+      items.length + ' 场有完整三盘数据 · ' + s.sameLineMatches + ' 场同线可比</summary>' +
+      '<p class="bh-missing">观察档，非投注信号，不计入方向账本/引擎/仓位。缺口=100%−竞彩返还率（动态，篮球≈15%；洋哥案例365返还94%→缺口6%）。' +
+      '<strong>参照盘用竞彩替代被封的365，非洋哥原法；北单270仅胜负两项让分盘</strong>。仅当竞彩与北单让分线一致才做偏差对比（' +
+      s.sameLineMatches + ' 场），异线 ' + s.diffLineMatches + ' 场标不可比。第4步「临场盘水印证」篮球无连续序列，做不到。</p>';
+    // 统计条
+    let stat = '<div style="margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(147,197,253,.08);border:1px solid rgba(147,197,253,.35);font-size:11.5px;line-height:1.7;color:#cfe3f7">';
+    stat += '有完整三盘数据 <b>' + (s.totalMatches || 0) + '</b> 场 · 同线可比 <b>' + (s.sameLineMatches || 0) +
+      '</b> · 异线不可比 <b>' + (s.diffLineMatches || 0) + '</b> · 判大热 <b>' + (s.hotFlagged || 0) + '</b> 场<br>';
+    if (s.settledN > 0) {
+      stat += '站对面核对：命中 <b>' + s.hit + '/' + s.settledN + '</b>' +
+        (s.hitRate !== null ? ' = <b>' + s.hitRate + '% ± ' + (s.se === null ? '—' : s.se) + 'pt</b>' : '') +
+        (s.significant ? '（n≥40）' : '（n&lt;40样本不足）') + '</div>';
+    } else {
+      stat += '<b>暂无可核对场次</b>：同线场偏差未超缺口（受注均衡）或全部异线不可比 → 命中率留空，不用 0% 冒充战绩。</div>';
+    }
+    // 逐场表
+    let table = '<div class="bh-scroll" tabindex="0"><table style="font-size:11.5px"><thead><tr><th>日期/对阵</th><th>竞彩返还/缺口</th>' +
+      '<th>让分线(竞彩/北单)</th><th>北单池份额(主/客)</th><th>偏差(主/客)</th><th>判定</th><th>赛果·站对面</th></tr></thead><tbody>';
+    for (const x of items) {
+      const m = x.metrics || {};
+      const sameCls = m.sameLine ? 'color:#16a34a' : 'color:#e54545';
+      const verdictCls = x.hotFlag ? 'color:#d97706;font-weight:700' : 'color:var(--mut,#8b98a9)';
+      const setTxt = x.hotFlag ? (x.settle === 'hit' ? '✅命中' : x.settle === 'miss' ? '❌未中' : '待结算') : '—';
+      table += '<tr><td>' + esc(x.day) + '<br>' + esc(x.away) + '@' + esc(x.home) + '</td>' +
+        '<td>' + fmt(m.Rjc, 1) + '% / <b>' + fmt(m.gap, 1) + '%</b></td>' +
+        '<td style="' + sameCls + '">' + esc(m.lineJc === null ? '—' : m.lineJc) + ' / ' + esc(m.lineBd === null ? '—' : m.lineBd) +
+        (m.sameLine ? ' 同' : ' 异·不可比') + '</td>' +
+        '<td>' + fmt(m.shareHome, 1) + '% / ' + fmt(m.shareAway, 1) + '%</td>' +
+        '<td>' + (m.devHome > 0 ? '+' : '') + fmt(m.devHome, 1) + '% / ' + (m.devAway > 0 ? '+' : '') + fmt(m.devAway, 1) + '%</td>' +
+        '<td style="' + verdictCls + '">' + esc(x.verdict) + '</td>' +
+        '<td>' + esc(x.result || '待结算') + (x.resultScore ? ' ' + esc(x.resultScore) : '') + ' · ' + setTxt + '</td></tr>';
+    }
+    table += '</tbody></table></div>';
+    const foot = '<p class="bh-muted">账本 ' + esc(o.version || '') + ' · 更新 ' + moment(o.updated) + '。' +
+      esc(s.caveat || '') + '</p>' +
+      '<p class="bh-muted">数学：北单赔率池100%返还→Σ(1/SP)≈1→1/SP≈资金份额；换算赔率=SP北单×R竞彩；偏差=1/换算赔率−1/竞彩SP；偏差&gt;缺口即大热站对面。' +
+      '三盘是顺序链（竞彩资金趋势→365操盘→北单资金分布），不从三盘倒推；本板块仅第三环 aligns 观察，不构成完整三盘出手。</p>';
+    return head + stat + table + foot + '</details>';
+  }
   function presetHTML() {
     const p = state.preset;
     if (!p) return '<details class="bh-reference" id="basketHeatPreset"><summary>预设盘地基（洋哥 L85）· 尚未生成</summary>' +
@@ -424,6 +472,8 @@
     modal.querySelector('#basketHeatDirTable').innerHTML = dirLedgerTableHTML();
     const presetSlot = modal.querySelector('#basketHeatPresetSlot');
     if (presetSlot) presetSlot.innerHTML = presetHTML();
+    const overheatSlot = modal.querySelector('#basketHeatOverheatSlot');
+    if (overheatSlot) overheatSlot.innerHTML = overheatHTML();
     modal.querySelector('#basketHeatRows').innerHTML = filtered.length ? filtered.map(rowHTML).join('') :
       '<div class="bh-empty" data-basket-empty><strong>' + (rows.length ? '当前独立筛选下 0 场' : '0 场：没有可信竞彩篮球名单，不能构造三盘齐全画面') +
       '</strong><p>' + (rows.length ? '请调整日期、关键词或在售条件；不会修改足球筛选。' : 'Bet365 候选赛程不等于已取得本场报价；缺竞彩身份时不补造比赛。请查看上方逐源错误。') + '</p></div>';
@@ -470,6 +520,16 @@
       if (d && typeof d === 'object' && Array.isArray(d.nba)) state.preset = d;
     } catch (_) { /* 预设盘地基缺失不影响观察板主画面 */ }
   }
+  async function loadOverheat(baseURL) {
+    try {
+      const url = new URL('basket_overheat.json', baseURL);
+      if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) return;
+      const response = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
+      if (!response.ok) return;
+      const d = await response.json();
+      if (d && typeof d === 'object' && Array.isArray(d.items) && d.summary && typeof d.summary === 'object') state.overheat = d;
+    } catch (_) { /* 过热核对账本缺失不影响观察板主画面 */ }
+  }
   async function refresh() {
     if (state.loading) return;
     state.loading = true;
@@ -490,6 +550,7 @@
       state.data = next;
       await loadLedger(scriptURL || window.location.href);
       await loadPreset(scriptURL || window.location.href);
+      await loadOverheat(scriptURL || window.location.href);
       try { render(); } catch (error) { state.data = previous; if (previous) render(); throw error; }
       notice.className = 'bh-notice';
       notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '只手动刷新，无自动定时。';
@@ -585,6 +646,7 @@
       '<div id="basketHeatDirSummary" class="bh-summary"></div>' +
       '<div id="basketHeatDirTable"></div></details>' +
       '<div id="basketHeatPresetSlot"></div>' +
+      '<div id="basketHeatOverheatSlot"></div>' +
       '<div class="bh-filters"><label>独立日期 <select id="basketHeatDay" data-basket-filter="day"><option value="">全部日期</option></select></label>' +
       '<label>市场 <select id="basketHeatMarket" data-basket-filter="market"><option value="mnl">mnl · 胜负 / 独赢</option><option value="hdc">hdc · 让分胜负</option><option value="hilo">hilo · 大小分</option></select></label>' +
       '<label>关键词 <input type="search" id="basketHeatKeyword" data-basket-filter="keyword" placeholder="队名 / 联赛 / 篮球 ID"></label>' +
