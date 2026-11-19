@@ -333,52 +333,57 @@
       '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>最终比分</th><th>结算</th><th>规则</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
-  /* ★ 2026-11-19 篮球三盘资金过热核对（观察档，洋哥口径迁移）：
-     只收「竞彩SP+北单池SP+已结算赛果」三者齐全的场次；按洋哥L174原始公式算缺口/偏差，
-     参照盘用竞彩替代被封的365；仅同让分线可比。展示集=统计集，n<40观察档。 */
+  /* ★★ 2026-11-19 框架重构：洋哥三盘=顺序链，一盘竞彩独赢资金趋势就能给方向。
+     旧版错用让分盘hdc+sfgg+要求让分线一致→大量不可比；北单缺失就跳过→丢方向。
+     新版：一盘竞彩独赢(mnl)定方向(站大热门对面)，二盘365缺位标注，三盘北单共振确认。 */
   function overheatHTML() {
     const o = state.overheat;
-    if (!o) return '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥口径·观察档）· 尚未生成</summary>' +
+    if (!o) return '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥顺序链·观察档）· 尚未生成</summary>' +
       '<p class="bh-muted">basket_overheat.json 尚未生成；不虚构判定与命中率。</p></details>';
     const s = o.summary || {}, items = o.items || [];
-    const head = '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥动态缺口口径·观察档）· ' +
-      items.length + ' 场有完整三盘数据 · ' + s.sameLineMatches + ' 场同线可比</summary>' +
-      '<p class="bh-missing">观察档，非投注信号，不计入方向账本/引擎/仓位。缺口=100%−竞彩返还率（动态，篮球≈15%；洋哥案例365返还94%→缺口6%）。' +
-      '<strong>参照盘用竞彩替代被封的365，非洋哥原法；北单270仅胜负两项让分盘</strong>。仅当竞彩与北单让分线一致才做偏差对比（' +
-      s.sameLineMatches + ' 场），异线 ' + s.diffLineMatches + ' 场标不可比。第4步「临场盘水印证」篮球无连续序列，做不到。</p>';
+    const head = '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥顺序链口径·观察档）· ' +
+      items.length + ' 场 · 其中 ' + (s.withNorth || 0) + ' 场有北单三盘确认</summary>' +
+      '<p class="bh-missing">观察档，非投注信号，不计入方向账本/引擎/仓位。<strong>洋哥三盘是顺序链：一盘竞彩独赢资金趋势→二盘365操盘→三盘北单资金分布</strong>。' +
+      '本板块一盘用竞彩独赢（篮球完全可得，站大热门对面给方向）；二盘365篮球被封<strong>缺位</strong>；三盘北单270让分胜负两项作近似共振确认（' +
+      (s.resonanceN || 0) + ' 场共振）。北单缺失不吞一盘方向，只降档标"仅一盘"。第4步「临场盘水印证」篮球无连续序列做不到。</p>';
     // 统计条
     let stat = '<div style="margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(147,197,253,.08);border:1px solid rgba(147,197,253,.35);font-size:11.5px;line-height:1.7;color:#cfe3f7">';
-    stat += '有完整三盘数据 <b>' + (s.totalMatches || 0) + '</b> 场 · 同线可比 <b>' + (s.sameLineMatches || 0) +
-      '</b> · 异线不可比 <b>' + (s.diffLineMatches || 0) + '</b> · 判大热 <b>' + (s.hotFlagged || 0) + '</b> 场<br>';
+    stat += '有方向场次 <b>' + (s.totalMatches || 0) + '</b> · 北单三盘确认 <b>' + (s.withNorth || 0) +
+      '</b> · 仅一盘 <b>' + (s.noNorth || 0) + '</b> · 一盘+三盘共振 <b>' + (s.resonanceN || 0) +
+      '</b> · 明确大热门方向 <b>' + (s.hotFlagged || 0) + '</b> 场<br>';
     if (s.settledN > 0) {
       stat += '站对面核对：命中 <b>' + s.hit + '/' + s.settledN + '</b>' +
         (s.hitRate !== null ? ' = <b>' + s.hitRate + '% ± ' + (s.se === null ? '—' : s.se) + 'pt</b>' : '') +
         (s.significant ? '（n≥40）' : '（n&lt;40样本不足）') + '</div>';
     } else {
-      stat += '<b>暂无可核对场次</b>：同线场偏差未超缺口（受注均衡）或全部异线不可比 → 命中率留空，不用 0% 冒充战绩。</div>';
+      stat += '<b>暂无可核对场次</b>：方向未触及结算或从缺赛果 → 命中率留空，不用 0% 冒充战绩。</div>';
     }
-    // 逐场表
-    let table = '<div class="bh-scroll" tabindex="0"><table style="font-size:11.5px"><thead><tr><th>日期/对阵</th><th>竞彩返还/缺口</th>' +
-      '<th>让分线(竞彩/北单)</th><th>北单池份额(主/客)</th><th>偏差(主/客)</th><th>判定</th><th>赛果·站对面</th></tr></thead><tbody>';
+    // 逐场表：日期/对阵 | 竞彩独赢隐含(主/客) | 大热门→站对面 | 北单三盘 | 判定 | 赛果·结算
+    let table = '<div class="bh-scroll" tabindex="0"><table style="font-size:11.5px"><thead><tr><th>日期/对阵</th><th>竞彩独赢(主/客)</th>' +
+      '<th>隐含(主/客)</th><th>方向(站对面)</th><th>北单三盘(份额/共振)</th><th>判定</th><th>赛果·结算</th></tr></thead><tbody>';
     for (const x of items) {
       const m = x.metrics || {};
-      const sameCls = m.sameLine ? 'color:#16a34a' : 'color:#e54545';
       const verdictCls = x.hotFlag ? 'color:#d97706;font-weight:700' : 'color:var(--mut,#8b98a9)';
       const setTxt = x.hotFlag ? (x.settle === 'hit' ? '✅命中' : x.settle === 'miss' ? '❌未中' : '待结算') : '—';
+      const sideTxt = x.fadeSide === 'home' ? '主(' + esc(x.home) + ')' : '客(' + esc(x.away) + ')';
+      const bdTxt = x.bd && m.shareHome !== null
+        ? fmt(m.shareHome, 0) + '/' + fmt(m.shareAway, 0) + '% · ' + esc(m.resonance || '')
+        : '缺·仅一盘';
       table += '<tr><td>' + esc(x.day) + '<br>' + esc(x.away) + '@' + esc(x.home) + '</td>' +
-        '<td>' + fmt(m.Rjc, 1) + '% / <b>' + fmt(m.gap, 1) + '%</b></td>' +
-        '<td style="' + sameCls + '">' + esc(m.lineJc === null ? '—' : m.lineJc) + ' / ' + esc(m.lineBd === null ? '—' : m.lineBd) +
-        (m.sameLine ? ' 同' : ' 异·不可比') + '</td>' +
-        '<td>' + fmt(m.shareHome, 1) + '% / ' + fmt(m.shareAway, 1) + '%</td>' +
-        '<td>' + (m.devHome > 0 ? '+' : '') + fmt(m.devHome, 1) + '% / ' + (m.devAway > 0 ? '+' : '') + fmt(m.devAway, 1) + '%</td>' +
+        '<td>' + esc(x.mnl ? x.mnl.home : '—') + ' / ' + esc(x.mnl ? x.mnl.away : '—') + '</td>' +
+        '<td>' + fmt(m.pH, 1) + '% / ' + fmt(m.pA, 1) + '%' + (m.hotPct ? '<br>大热门' + fmt(m.hotPct, 1) + '%' : '') + '</td>' +
+        '<td style="color:#2563eb;font-weight:700">' + sideTxt + '</td>' +
+        '<td>' + bdTxt + '</td>' +
         '<td style="' + verdictCls + '">' + esc(x.verdict) + '</td>' +
         '<td>' + esc(x.result || '待结算') + (x.resultScore ? ' ' + esc(x.resultScore) : '') + ' · ' + setTxt + '</td></tr>';
     }
     table += '</tbody></table></div>';
     const foot = '<p class="bh-muted">账本 ' + esc(o.version || '') + ' · 更新 ' + moment(o.updated) + '。' +
       esc(s.caveat || '') + '</p>' +
-      '<p class="bh-muted">数学：北单赔率池100%返还→Σ(1/SP)≈1→1/SP≈资金份额；换算赔率=SP北单×R竞彩；偏差=1/换算赔率−1/竞彩SP；偏差&gt;缺口即大热站对面。' +
-      '三盘是顺序链（竞彩资金趋势→365操盘→北单资金分布），不从三盘倒推；本板块仅第三环 aligns 观察，不构成完整三盘出手。</p>';
+      '<p class="bh-muted">逻辑（洋哥原文L184-201/L228-256）：三盘顺序链，切勿从三盘倒推。一盘竞彩独赢：隐含概率高方=大热门→站其对面给方向（竞彩独赢去水 pH=(1/H)/(1/H+1/A)）。' +
+      '二盘365操盘异常篮球被封缺位。三盘北单：100%返还池份额=1/SP归一，与一盘同侧=共振确认、异侧=分歧降档。' +
+      '<strong>2026-11-19 勘误：旧版用让分盘hdc+sfgg且要求让分线一致、北单缺失即跳过整场——三处框架错误已修。</strong>' +
+      '绝对大热门阈55%为观察档经验值，非洋哥原文硬阈；n&lt;40不进引擎。</p>';
     return head + stat + table + foot + '</details>';
   }
   function presetHTML() {
