@@ -931,7 +931,7 @@
    "kickoff": "11:00",
    "ko": 1795143600,
    "firstSeen": 1794896424,
-   "lastSeen": 1795009825,
+   "lastSeen": 1795018825,
    "pre": true,
    "home": "雅图湾人",
    "away": "皇家盐湖",
@@ -1067,7 +1067,7 @@
   }
  },
  "summary": {
-  "updatedAt": 1795010725,
+  "updatedAt": 1795068324,
   "srcUsed": "CVM公网 fundplate_hist.js(权威·cron15min)",
   "ruleV": "v3_ticketdiff_20261115",
   "total": 38,
