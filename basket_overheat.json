@@ -1,0 +1,300 @@
+{
+  "version": "basket_overheat_yangge_gap_1",
+  "updated": "2026-11-19T03:45:13.473Z",
+  "note": "篮球三盘资金过热核对(观察档)。缺口=100%−竞彩返还率(动态,≈15%);大热判定按洋哥L174原始公式,参照盘用竞彩替代被封的365(非洋哥原法)。仅同让分线可比;北单270胜负两项;结算只认verified赛果result字段。n<40不进引擎。",
+  "summary": {
+    "totalMatches": 7,
+    "sameLineMatches": 1,
+    "diffLineMatches": 6,
+    "hotFlagged": 0,
+    "settledN": 0,
+    "hit": 0,
+    "hitRate": null,
+    "se": null,
+    "significant": false,
+    "crossZero": false,
+    "caveat": "n<40观察档;参照盘=竞彩(365篮球被封)非洋哥原法;仅同线可比;第4步临场序列印证篮球做不到"
+  },
+  "items": [
+    {
+      "id": "2042852",
+      "day": "2026-11-18",
+      "league": "美国职业篮球联盟",
+      "home": "多伦多猛龙",
+      "away": "纽约尼克斯",
+      "capturedAt": "2026-11-17T18:16:08+08:00",
+      "jc": {
+        "home": 1.81,
+        "away": 1.6,
+        "line": 3.5
+      },
+      "bd": {
+        "home": 2.1,
+        "away": 1.9,
+        "line": "3.5",
+        "comparable": false
+      },
+      "metrics": {
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "sumBd": 1.0025,
+        "shareHome": 47.5,
+        "shareAway": 52.5,
+        "hotSide": "away",
+        "hotPct": 52.5,
+        "devHome": 0.82,
+        "devAway": -0.53,
+        "devMax": null,
+        "sameLine": true,
+        "lineJc": 3.5,
+        "lineBd": 3.5
+      },
+      "verdict": "受注均衡·不判大热",
+      "hotFlag": false,
+      "fadeSide": null,
+      "settle": null,
+      "result": "away",
+      "resultScore": "102-111"
+    },
+    {
+      "id": "2042854",
+      "day": "2026-11-18",
+      "league": "美国职业篮球联盟",
+      "home": "圣安东尼奥马刺",
+      "away": "底特律活塞",
+      "capturedAt": "2026-11-17T18:16:08+08:00",
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -10.5
+      },
+      "bd": {
+        "home": 2.07,
+        "away": 1.93,
+        "line": "-8.5",
+        "comparable": false
+      },
+      "metrics": {
+        "Rjc": 85,
+        "gap": 15,
+        "sumBd": 1.0012,
+        "shareHome": 48.3,
+        "shareAway": 51.8,
+        "hotSide": "away",
+        "hotPct": 51.8,
+        "devHome": -1.99,
+        "devAway": 2.13,
+        "devMax": null,
+        "sameLine": false,
+        "lineJc": -10.5,
+        "lineBd": -8.5
+      },
+      "verdict": "不可比",
+      "hotFlag": false,
+      "fadeSide": null,
+      "settle": null,
+      "result": "away",
+      "resultScore": "93-105"
+    },
+    {
+      "id": "2042855",
+      "day": "2026-11-18",
+      "league": "美国职业篮球联盟",
+      "home": "洛杉矶快船",
+      "away": "犹他爵士",
+      "capturedAt": "2026-11-17T18:16:08+08:00",
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -8.5
+      },
+      "bd": {
+        "home": 1.44,
+        "away": 3.25,
+        "line": "-5.5",
+        "comparable": false
+      },
+      "metrics": {
+        "Rjc": 85,
+        "gap": 15,
+        "sumBd": 1.0021,
+        "shareHome": 69.3,
+        "shareAway": 30.7,
+        "hotSide": "home",
+        "hotPct": 69.3,
+        "devHome": 22.88,
+        "devAway": -22.62,
+        "devMax": null,
+        "sameLine": false,
+        "lineJc": -8.5,
+        "lineBd": -5.5
+      },
+      "verdict": "不可比",
+      "hotFlag": false,
+      "fadeSide": null,
+      "settle": null,
+      "result": "away",
+      "resultScore": "107-132"
+    },
+    {
+      "id": "2042856",
+      "day": "2026-11-18",
+      "league": "美国职业篮球联盟",
+      "home": "洛杉矶湖人",
+      "away": "夏洛特黄蜂",
+      "capturedAt": "2026-11-17T18:16:08+08:00",
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -10.5
+      },
+      "bd": {
+        "home": 1.81,
+        "away": 2.22,
+        "line": "-8.5",
+        "comparable": false
+      },
+      "metrics": {
+        "Rjc": 85,
+        "gap": 15,
+        "sumBd": 1.0029,
+        "shareHome": 55.1,
+        "shareAway": 44.9,
+        "hotSide": "home",
+        "hotPct": 55.1,
+        "devHome": 6.17,
+        "devAway": -5.83,
+        "devMax": null,
+        "sameLine": false,
+        "lineJc": -10.5,
+        "lineBd": -8.5
+      },
+      "verdict": "不可比",
+      "hotFlag": false,
+      "fadeSide": null,
+      "settle": null,
+      "result": "away",
+      "resultScore": "118-114"
+    },
+    {
+      "id": "2042868",
+      "day": "2026-11-19",
+      "league": "美国职业篮球联盟",
+      "home": "丹佛掘金",
+      "away": "波士顿凯尔特人",
+      "capturedAt": "2026-11-19T09:45:02+08:00",
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": 3.5
+      },
+      "bd": {
+        "home": 2.19,
+        "away": 1.83,
+        "line": "2.5",
+        "comparable": false
+      },
+      "metrics": {
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "sumBd": 1.0031,
+        "shareHome": 45.5,
+        "shareAway": 54.5,
+        "hotSide": "away",
+        "hotPct": 54.5,
+        "devHome": -6.84,
+        "devAway": 7.2,
+        "devMax": null,
+        "sameLine": false,
+        "lineJc": 3.5,
+        "lineBd": 2.5
+      },
+      "verdict": "不可比",
+      "hotFlag": false,
+      "fadeSide": null,
+      "settle": null,
+      "result": null,
+      "resultScore": null
+    },
+    {
+      "id": "2042869",
+      "day": "2026-11-19",
+      "league": "美国职业篮球联盟",
+      "home": "萨克拉门托国王",
+      "away": "菲尼克斯太阳",
+      "capturedAt": "2026-11-19T09:45:02+08:00",
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": 7.5
+      },
+      "bd": {
+        "home": 2.51,
+        "away": 1.66,
+        "line": "6.5",
+        "comparable": false
+      },
+      "metrics": {
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "sumBd": 1.0008,
+        "shareHome": 39.8,
+        "shareAway": 60.2,
+        "hotSide": "away",
+        "hotPct": 60.2,
+        "devHome": -10.23,
+        "devAway": 10.33,
+        "devMax": null,
+        "sameLine": false,
+        "lineJc": 7.5,
+        "lineBd": 6.5
+      },
+      "verdict": "不可比",
+      "hotFlag": false,
+      "fadeSide": null,
+      "settle": null,
+      "result": null,
+      "resultScore": null
+    },
+    {
+      "id": "2042875",
+      "day": "2026-11-20",
+      "league": "美国职业篮球联盟",
+      "home": "圣安东尼奥马刺",
+      "away": "洛杉矶快船",
+      "capturedAt": "2026-11-19T11:15:02+08:00",
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -15.5
+      },
+      "bd": {
+        "home": 2.16,
+        "away": 1.86,
+        "line": "-16.5",
+        "comparable": false
+      },
+      "metrics": {
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "sumBd": 1.0006,
+        "shareHome": 46.3,
+        "shareAway": 53.7,
+        "hotSide": "away",
+        "hotPct": 53.7,
+        "devHome": -6.09,
+        "devAway": 6.16,
+        "devMax": null,
+        "sameLine": false,
+        "lineJc": -15.5,
+        "lineBd": -16.5
+      },
+      "verdict": "不可比",
+      "hotFlag": false,
+      "fadeSide": null,
+      "settle": null,
+      "result": null,
+      "resultScore": null
+    }
+  ]
+}
