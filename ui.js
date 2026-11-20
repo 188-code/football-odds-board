@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-21-linpailu-ruwei-v1';   // ★ 2026-11-21 临盘入围：数据齐(序列齐+明确方向)的观察场按正式场次置顶给方向，去"观察/未入围"标签；业绩统计仍不进(待账本回填)。前版 2026-11-21 末帧时刻纠偏；2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
+const UI_V = '2026-11-20-linpan-ledger-v1';   // ★ 2026-11-21 临账本v1：数据齐(序列齐+明确方向)的观察场赛前入独立临盘方向账本(独赢口径)，赛前不符合剔除、开赛冻结、赛后独赢结算，计入命中/ROI；与亚盘账本物理隔离。前版 2026-11-21 末帧时刻纠偏；2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9412,6 +9412,18 @@ function fundplateHistoryHTML(){
           + (s.turnT ? ' <span style="opacity:.45" title="信号拐点时刻(非抓取时间)">拐' + esc(String(s.turnT).slice(5, 16)) + '</span>' : '')
           + (extra || '') + '</div>';
       };
+      /* ★2026-11-20 临盘方向账本：按 tid 关联入账状态（入账/赛前剔除/赛后结算）。
+         账本由 _build_tri_trail.cjs 每轮 upsert、ui 启动 fetch('linpan_ledger.json') 填入 _LL_CACHE；
+         拉取失败或无此场时退回"入账待同步"，不影响展示。 */
+      var _llRowState = function(it){
+        var lk = 'T' + String(it.tid||'');
+        var e = (window._LL_CACHE && window._LL_CACHE.items && window._LL_CACHE.items[lk]) || null;
+        if (!e) return '已按正式场次给方向；入账状态待账本同步';
+        if (e.state === 'dropped') return '<b style="color:#fbbf24">赛前已剔除：' + esc(String(e.whyDrop||'临盘不符')) + '</b>（不计业绩）';
+        if (e.result === 'win') return '<b style="color:#ff7c7c">已结算 · ' + esc(String(e.pick||'')) + '独赢命中</b> ' + esc(String(e.hs)) + ':' + esc(String(e.as));
+        if (e.result === 'lose' || e.result === 'draw') return '<b style="color:#4ade80">已结算 · 未中</b> ' + esc(String(e.hs)) + ':' + esc(String(e.as));
+        return '已入账（赛前冻结方向）· 待赛后结算';
+      };
       var rows2 = wItems.map(function(it){
         var seg = it.seg || {};
         /* ★ 2026-11-20 观察区赛前冻结方向（watchDir）：bake断链期未入账本的场，
@@ -9427,7 +9439,7 @@ function fundplateHistoryHTML(){
           var meta = '<div style="font-size:10px;opacity:.6">冻结 ' + fzHHMM + ' UTC · 净Δ '
             + ((+wd.netAtFreeze) >= 0 ? '+' : '') + (+wd.netAtFreeze).toFixed(1) + 'pp · 同向' + wd.sameN
             + (wd.lead ? ' · 先动' + esc(String(wd.lead)) : '')
-            + (pr ? ' · <b style="color:#34d399">已入围·业绩待账本回填</b>' : ' · 只读观察·不进业绩/下注') + '</div>';
+            + (pr ? ' · <b style="color:#34d399">已入临盘方向账本</b>' : ' · 只读观察·未达入账门槛') + '</div>';
           if (wd.side === 'weak'){
             var coldSide = (it.strongIdx === 2) ? '主' : '客';
             dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':'rgba(229,69,69,.16)') + ';color:' + (pr?'#6ee7b7':'#ff8f8f') + ';font-weight:800;font-size:11px">🎯 ' + (pr?'入围方向':'观察方向') + '·站对面</span>'
@@ -9479,7 +9491,7 @@ function fundplateHistoryHTML(){
           + '<div style="font-size:10px;opacity:.55">' + (it.noJc ? '竞彩' + esc(it.noJc) + ' ' : '') + (it.noBd ? '北单' + esc(it.noBd) : '') + '</div></td>'
           + '<td style="padding:5px 7px;font-size:10.5px;line-height:1.5;max-width:170px;color:' + (it.promoted ? '#34d399' : '#fca5a5') + '">'
           + (it.promoted
-              ? '<b style="color:#34d399">✅ 已入围·序列齐+方向明确</b><div style="font-size:9.5px;opacity:.7">数据资格达标，按正式场次给方向；业绩统计待账本回填，暂不计命中/ROI</div>'
+              ? '<b style="color:#34d399">✅ 已入账·序列齐+方向明确</b><div style="font-size:9.5px;opacity:.75">' + _llRowState(it) + '</div>'
               : esc(String(it.watchWhy||'')))
           + '</td>'
           + '<td style="padding:5px 7px">' + seqHtml + '</td>'
@@ -9487,12 +9499,14 @@ function fundplateHistoryHTML(){
           + '</tr>';
       }).join('');
       return '<div style="margin-top:14px;padding:10px 12px;border:1px dashed rgba(125,211,252,.45);border-radius:10px">'
-        + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 临盘区 · 数据达标场次（已入围 ' + wItems.filter(function(x){return x.promoted;}).length + ' / 当前 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
+        + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 临盘区 · 数据达标场次（已入账 ' + wItems.filter(function(x){return x.promoted;}).length + ' / 当前 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
+        + '<div id="linpanLedgerStat" style="margin:4px 0 8px;padding:8px 10px;border-radius:8px;background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.3);font-size:11px;line-height:1.7;color:#dbe6f2">🎯 <b style="color:#6ee7b7">临盘方向账本（独赢口径）</b>：读取中…</div>'
         + '<div style="font-size:11px;line-height:1.7;color:#b9c7d8;margin-bottom:7px">'
-        + '<b style="color:#34d399">✅ 标「已入围」的场次 = 序列齐（≥2端完整开盘→临盘）+ 有明确方向，数据资格达标，按正式场次置顶给方向。业绩统计待账本回填，暂不计命中/ROI（避免污染历史统计）——数据正确就入围，不再拿账本冻结当理由。</b><br>'
+        + '<b style="color:#34d399">✅ 标「已入账」的场次 = 序列齐（≥2端完整开盘→临盘）+ 有明确方向，赛前冻结方向并按正式场次置顶给方向，计入独立临盘方向账本；赛前临盘方向翻转 / 序列由齐转不齐即剔除出业绩分母，开赛后冻结不再改、赛后按独赢比分结算一次。</b><br>'
+        + '<b style="color:#fbbf24">⚠ 该账本是独赢口径（weak 买弱方 / strong 买强方），与 fundplate_history（亚盘让球·押受让/让球方）物理隔离、绝不混算——两套结算语义不同，混算会把胜负判反。</b><br>'
         + '北单让球盘与独赢盘严格分开；缺联赛、时间冲突或队名有歧义时不猜配。某端为空不代表另一端也未采集。'
         + '<b style="color:#7ee2a8">各端「末MM-DD HH:MM」=该端最后抓取时刻（实时轮询，竞彩/北单每5分、365球探备源每5分）；「拐」=资金信号拐点时刻，不是抓取时间——务必分清。</b>'
-        + '方向赛前冻结、冻结后不改向、翻转只记录，赛后只做单场核对展示。比分仅在赛程身份核对通过后显示；暂不进行亚盘结算。</div>'
+        + '方向赛前冻结、冻结后不改向、翻转只记录；比分仅在赛程身份核对通过后显示。</div>'
         + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
         + '<thead><tr style="color:var(--mut);font-size:10.5px;text-align:left">'
         + '<th style="padding:4px 7px;font-weight:500">日期/开赛</th><th style="padding:4px 7px;font-weight:500">联赛</th>'
@@ -9622,6 +9636,7 @@ function _fpHistSet(k, v){
     const sc = document.getElementById('fundPlateContent');
     const st = sc ? sc.scrollTop : 0;
     host.innerHTML = fundplateHistoryHTML();
+    if (typeof loadLinpanLedgerStat === 'function') loadLinpanLedgerStat(); // ★2026-11-20 临盘账本：重渲染后刷新统计块+逐场状态
     if (sc){
       const maxTop = Math.max(0, sc.scrollHeight - sc.clientHeight);
       sc.scrollTop = Math.min(st, maxTop);
@@ -10134,6 +10149,7 @@ function openFundPlate(){
     +'<div id="fpHistHost">'+fundplateHistoryHTML()+'</div>';
   $('fundPlateContent').innerHTML=html;
   try { loadDirLedgerStat(); } catch(e){}   // ★ 2026-11-15 每次打开资金板都拉最新「赛前样本外业绩」
+  try { loadLinpanLedgerStat(); } catch(e){} // ★ 2026-11-20 临盘方向账本（独赢·赛前入账/剔除/赛后结算）
   $('fundPlateModal').classList.add('show');
 }
 function closeFundPlate(){ const _m=$('fundPlateModal'); if(_m)_m.classList.remove('show'); }
@@ -10719,6 +10735,47 @@ function loadHcLogStat(){
    首登冻结 pick/意见原文/盘口水位/票差/规则版本，算法改版不回写；
    结算用真实盘口+水位的 plStrong/plUnder，已结算不覆盖。
    ★ 与 fundplate_history 的「历史复盘」可重算回测分列，绝不可混算成绩。 */
+/* ★2026-11-20 临盘方向账本（独赢口径）：独立前向账本，赛前入账+赛前剔除+赛后独赢结算。
+   从 tri_trail 的 watchDir 方向入账，与 fundplate_history(亚盘让球)/dir_ledger(押受让) 物理隔离。
+   fetch 失败只降级文案，不影响看板；拉取到的 items 同时填入 window._LL_CACHE 供逐场状态显示。 */
+let _LL_FETCHED = false;
+function loadLinpanLedgerStat(){
+  const el = document.getElementById('linpanLedgerStat');
+  if (!el) return;
+  const paint = (d) => {
+    try { window._LL_CACHE = d || {items:{}}; } catch(_){}
+    const s = (d && d.summary) || {};
+    const a = s.all || {};
+    const pct = (h,n) => (n ? Math.round(h/n*1000)/10 + '%' : '—');
+    const signif = a.significant ? '<b style="color:#ff7c7c">显著(单侧p&lt;0.05)</b>'
+      : (a.n ? '<span style="opacity:.75">样本小/未显著</span>' : '');
+    const se = (a.se != null) ? ' ±' + a.se + 'pt' : '';
+    const upd = s.updatedAt ? String(s.updatedAt).replace('T',' ').slice(0,16) + ' UTC' : '—';
+    let html = '🎯 <b style="color:#6ee7b7">临盘方向账本</b>（独赢 · 赛前冻结 · 前向累积）'
+      + '<div style="margin-top:3px">入账 <b>' + (s.total||0) + '</b> 场 ｜ 在场 <b style="color:#6ee7b7">' + (s.active||0) + '</b>'
+      + ' ｜ 赛前剔除 <b style="color:#fbbf24">' + (s.dropped||0) + '</b>'
+      + ' ｜ 已结算 <b>' + (s.settled||0) + '</b> / 待结算 ' + (s.pending||0) + '</div>';
+    if (a.n) {
+      html += '<div style="margin-top:2px">命中 <b style="color:var(--red)">' + pct(a.w, a.w+a.l) + '</b>（' + a.w + '胜/' + a.l + '负' + (a.draw?('/'+a.draw+'平'):'') + '）'
+        + ' ｜ ROI <b style="color:' + ((a.roi>=0)?'var(--red)':'#4ade80') + '">' + (a.roi>0?'+':'') + (a.roi==null?'—':a.roi+'%') + '</b>'
+        + se + ' ｜ ' + signif + '</div>';
+      const bs = s.bySide || {};
+      const parts = [];
+      for (const k of ['weak','strong']) { const v = bs[k]; if (v && v.n) parts.push((k==='weak'?'买弱方':'买强方') + ' ' + v.n + '注 命中' + pct(v.w,v.w+v.l)); }
+      if (parts.length) html += '<div style="margin-top:2px;opacity:.85">按方向：' + parts.join(' ｜ ') + '</div>';
+    } else {
+      html += '<div style="margin-top:2px;opacity:.85">暂无已结算 —— 逐场赛前入账、赛前不符合即剔除、开赛冻结、赛后按独赢比分回填。账本从启用起前向累积，不事后回填历史。</div>';
+    }
+    html += '<div style="margin-top:2px;font-size:10px;opacity:.65">口径：weak=站对面买弱方独赢 / strong=买强方独赢；赔率取365收盘隐含概率反推；ROI 只在有赔率场计。'
+      + '与 fundplate_history(亚盘让球)/dir_ledger(押受让) <b>物理隔离不可混算</b>。SE=√(p(1−p)/n)。SE/显著仅在 n 够时参考。</div>'
+      + '<div style="margin-top:1px;font-size:9.8px;opacity:.55">账本更新 ' + upd + ' ｜ 权威写入：CVM 定时链(_build_tri_trail.cjs)；公网板为部署快照。</div>';
+    el.innerHTML = html;
+  };
+  if (_LL_FETCHED && window._LL_CACHE) { paint(window._LL_CACHE); return; }
+  fetch('linpan_ledger.json', { cache:'no-store' }).then(r=>r.json()).then(d=>{
+    _LL_FETCHED = true; paint(d);
+  }).catch(()=>{ el.innerHTML = '🎯 <b style="color:#6ee7b7">临盘方向账本</b>：读取中/暂不可用（权威账本由 CVM 定时链维护，公网板为部署快照）'; });
+}
 function loadDirLedgerStat(){
   const el = document.getElementById('dirLedgerStat');
   if (!el) return;
@@ -20022,7 +20079,8 @@ try{
    若 __TRI_TRAIL__ 已就绪则立即重绘一次，事件照旧兜底未就绪的时序。 */
 try{
   var _fpRedraw = function(){ try{ const host=document.getElementById('fpHistHost');
-    if(host && typeof fundplateHistoryHTML==='function') host.innerHTML=fundplateHistoryHTML(); }catch(e){ console.warn('tri-redraw',e); } };
+    if(host && typeof fundplateHistoryHTML==='function') host.innerHTML=fundplateHistoryHTML();
+    if(typeof loadLinpanLedgerStat==='function') loadLinpanLedgerStat(); }catch(e){ console.warn('tri-redraw',e); } };
   window.addEventListener('tri-trail-ready', _fpRedraw);
   if (window.__TRI_TRAIL__) setTimeout(_fpRedraw, 0);
 }catch(e){}
