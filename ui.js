@@ -1915,6 +1915,15 @@ function applyFreshTitan007(){
     for (const m of MATCHES){ m.t7 = null; m.t7only = false; }
     MATCHES = mergeTitan007(MATCHES);
     if (typeof render === 'function') render();
+    /* ★ 2026-11-21：球探热替换成功后同步底部状态栏，让用户直观看到「实时在更新」。
+       gqj2 567 封禁期前端快照 BAKE_READY=false、upd 长期显示「—」，实则由球探 15 分钟一轮持续接管
+       （1763 场、独立于 gqj2）。此处把球探更新时间/场数写进状态栏，消除「没在更新」的错觉。 */
+    try{
+      if (typeof setBaseUpd === 'function' && MATCHES.length){
+        const _u = t7LocalUpdated() ? ('更新 ' + String(t7LocalUpdated()).slice(11,19)) : '刚刚';
+        setBaseUpd(_u + ' · 全部 · 共' + MATCHES.length + '场 · 球探实时盘口(独立源,每15分) · 赔率点开单场拉最新');
+      }
+    }catch(e2){}
     return true;
   }catch(e){ try{ console.warn('applyFreshTitan007 err:', e && e.message); }catch(e2){} return false; }
 }
@@ -2435,6 +2444,15 @@ async function loadMatches(){
   }catch(e){
     // 实时拉取失败 → 尝试离线兜底数据
     if (await applyFallback()) return;
+    /* ★ 2026-11-21：gqj2 567 封禁期，快照 BAKE_READY=false 也会走到这里。若球探 t7 已带数据
+       （独立源、每 15 分钟热更新），就别显示吓人的红字「✕ 拉取失败」——数据其实鲜活且在持续更新。
+       只在真的连 t7 都没有时才显示错误。 */
+    if (typeof TITAN007 !== 'undefined' && window.TITAN007 && window.TITAN007.matches && window.TITAN007.matches.length){
+      restoreConnAfterFail();
+      try{ setBaseUpd((t7LocalUpdated()?('更新 '+String(t7LocalUpdated()).slice(11,19)):'刚刚')
+        +' · 全部 · 共'+window.TITAN007.matches.length+'场 · 球探实时(独立源,每15分更新) · gqj2 限流中已自动切换'); }catch(e2){}
+      return;
+    }
     // 兜底也没有 → 显示错误
     $('conn').className='pill err'; $('conn').textContent='✕ 拉取失败';
     let msg='数据拉取失败：'+e.message;
@@ -16327,6 +16345,18 @@ function render(){
   try{
     var _gridN = document.querySelectorAll('#grid .c').length;
     if (_gridN > 0){ var _b = document.getElementById('boot'); if (_b) _b.remove(); }
+  }catch(e){}
+  /* ★ 2026-11-21：状态栏兜底——gqj2 567 封禁期快照 BAKE_READY=false，loadMatches 失败路径
+     不写 upd，底部长期「—」。只要渲染出场次且 upd 仍空/为失败态，就据 t7 球探更新时间如实显示，
+     让用户看到「球探实时(独立源,每15分)」而非误以为没在更新。 */
+  try{
+    var _u = document.getElementById('upd');
+    if (_u && MATCHES.length && (!_u.textContent || _u.textContent === '—')){
+      var _tu = (typeof t7LocalUpdated === 'function') ? t7LocalUpdated() : '';
+      setBaseUpd((_tu ? ('更新 ' + String(_tu).slice(11,19)) : '刚刚')
+        + ' · 全部 · 共' + MATCHES.length + '场'
+        + ' · 球探实时盘口(独立源,每15分)' + (_tu ? '' : ''));
+    }
   }catch(e){}
 }
 function infoBlock(m){
