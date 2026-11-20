@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-21-linpan-ab-v1';   // ★ 2026-11-21 A+B门：A=末帧≤开赛前120分才有资格入临盘方向账本；B=已开赛/单端错过的真临盘强信号正式展示核对但不进业绩分母。前版临账本v1：数据齐(序列齐+明确方向)的观察场赛前入独立临盘方向账本(独赢口径)，赛前不符合剔除、开赛冻结、赛后独赢结算，计入命中/ROI；与亚盘账本物理隔离。前版 2026-11-21 末帧时刻纠偏；2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
+const UI_V = '2026-11-21-refreeze-v2';   // ★ 2026-11-21 A+B门：A=末帧≤开赛前120分才有资格入临盘方向账本；B=已开赛/单端错过的真临盘强信号正式展示核对但不进业绩分母。前版临账本v1：数据齐(序列齐+明确方向)的观察场赛前入独立临盘方向账本(独赢口径)，赛前不符合剔除、开赛冻结、赛后独赢结算，计入命中/ROI；与亚盘账本物理隔离。前版 2026-11-21 末帧时刻纠偏；2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9453,6 +9453,11 @@ function fundplateHistoryHTML(){
         var wd = it.watchDir;
         var pr = !!it.promoted;
         var dsp = !!it.displayOnly;
+        var reFr = (wd && wd.reFrozenAt) ? wd.reFrozenAt : null;
+        var flipTxt = reFr
+          ? '<div style="font-size:10px;color:#7dd3fc">🔄 赛前已按持续临盘重定方向（原 ' + esc(String(wd.reFrozenFrom || '旧档') || '旧档') + ' · '
+            + esc(String(wd.reFrozenReason || 'prekick')) + '）· 历史翻转 ' + ((wd.flips || []).length) + ' 次全留痕</div>'
+          : null;
         var lateTag = (it.late && it.late.fresh)
           ? ' · 真临盘末' + (it.late.gapMin != null ? it.late.gapMin + '分前' : '≤2h') + '/' + esc(String(it.late.end || '端'))
           : '';
@@ -9469,7 +9474,8 @@ function fundplateHistoryHTML(){
             var coldSide = (it.strongIdx === 2) ? '主' : '客';
             dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':(dsp?'rgba(251,191,36,.16)':'rgba(229,69,69,.16)')) + ';color:' + (pr?'#6ee7b7':(dsp?'#fcd34d':'#ff8f8f')) + ';font-weight:800;font-size:11px">🎯 ' + (pr?'入围方向':(dsp?'真临盘方向·展示核对':'观察方向')) + '·站对面</span>'
               + '<span style="font-size:11px;color:#e5c07b"> ' + coldSide + '队（弱方）独赢</span>' + nEndTag + meta;
-            if (wd.flips && wd.flips.length)
+            if (flipTxt) dirHtml += flipTxt;
+            else if (wd.flips && wd.flips.length)
               dirHtml += '<div style="font-size:10px;color:#f59e0b">⚠ 冻结后盘向翻转 ' + wd.flips.length + ' 次（首冻结保留·降为只观察）</div>';
             if (wd.chk)
               dirHtml += '<div style="font-size:11px"><b style="color:' + (wd.chk.hit ? '#7ee2a8' : '#ff9a9a') + '">' + (wd.chk.hit ? '✅ ' + (wd.chk.pick||'弱方') + '独赢命中' : '❌ 未中') + '</b> '
@@ -9479,7 +9485,8 @@ function fundplateHistoryHTML(){
             var hotSide = (it.strongIdx === 2) ? '客' : '主';
             dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':(dsp?'rgba(245,158,11,.2)':'rgba(245,158,11,.16)')) + ';color:' + (pr?'#6ee7b7':'#fcd34d') + ';font-weight:800;font-size:11px">🧭 ' + (pr?'入围方向':(dsp?'真临盘方向·展示核对':'观察方向')) + '·顺势买强队</span>'
               + '<span style="font-size:11px;color:#e5c07b"> ' + hotSide + '队（强方）独赢</span>' + nEndTag + meta;
-            if (wd.flips && wd.flips.length)
+            if (flipTxt) dirHtml += flipTxt;
+            else if (wd.flips && wd.flips.length)
               dirHtml += '<div style="font-size:10px;color:#f59e0b">⚠ 冻结后盘向翻转 ' + wd.flips.length + ' 次（首冻结保留·降为只观察）</div>';
             if (wd.chk)
               dirHtml += '<div style="font-size:11px"><b style="color:' + (wd.chk.hit ? '#7ee2a8' : '#ff9a9a') + '">' + (wd.chk.hit ? '✅ ' + (wd.chk.pick||'强方') + '独赢命中' : '❌ 未中') + '</b> '
