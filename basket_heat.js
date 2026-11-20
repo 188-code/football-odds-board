@@ -308,6 +308,18 @@
       '<p class="bh-muted">账本更新 ' + moment(new Date((num(s.updatedAt) || 0) * 1000).toISOString()) +
       ' · 规则 ' + esc(s.ruleV || '—') + ' · ' + esc(s.srcUsed || '') + '</p>';
   }
+  /* ★ 2026-11-20 快捷日期筛选条：一键切日，不用再从 18 号滑到 20 号。
+     全局共享 state.day（主列表/账本/过热三处联动）；点选后 delegated listener 重渲染。 */
+  function quickDayBar(daysSrc) {
+    const days = Array.from(new Set((daysSrc || []).filter(Boolean))).sort().reverse();
+    const cur = state.day || '';
+    const btn = (v, label) => '<button type="button" data-bh-quickday="' + esc(v) + '" style="cursor:pointer;margin:0 4px 4px 0;padding:3px 11px;border-radius:11px;font-size:11.5px;border:1px solid ' +
+      (v === cur ? '#2563eb;background:rgba(37,99,235,.20);color:#93c5fd;font-weight:700' : 'var(--line,#334155);background:transparent;color:var(--mut,#8b98a9)') +
+      '">' + esc(label) + '</button>';
+    return '<div data-basket-daybar style="margin:6px 0 2px;display:flex;flex-wrap:wrap;align-items:center">' +
+      '<span style="font-size:11px;color:var(--mut,#8b98a9);margin-right:4px">📅 日期</span>' +
+      btn('', '全部') + days.map(d => btn(d, d.slice(5))).join('') + '</div>';
+  }
   function dirLedgerTableHTML() {
     const led = state.ledger, items = object(led && led.items);
     const keys = Object.keys(items).filter(k => {
@@ -315,7 +327,9 @@
       return !state.day || text(e.day) === state.day;
     }).sort((a, b) => {
       const x = object(items[a]), y = object(items[b]);
-      return (num(x.kickTs) || 0) - (num(y.kickTs) || 0) || a.localeCompare(b);
+      const kx = num(x.kickTs) || 0, ky = num(y.kickTs) || 0;
+      // ★2026-11-20 默认最新日期优先（不用从最早一天滑下来）；选定某日后按当日时间正序
+      return (state.day ? kx - ky : ky - kx) || a.localeCompare(b);
     });
     if (!keys.length) return '<p class="bh-muted">当前筛选下无冻结方向条目。</p>';
     const rows = keys.map(k => {
@@ -329,7 +343,8 @@
         (settled ? res + (num(e.pl) !== null ? '（' + (e.pl > 0 ? '+' : '') + fmt(e.pl, 2) + '）' : '') : res) +
         '</td><td>' + esc(e.ruleV || '—') + '</td></tr>';
     }).join('');
-    return '<div class="bh-scroll" tabindex="0" aria-label="篮球方向账本横向滚动表"><table><thead><tr>' +
+    return quickDayBar(Object.values(items).map(e => text(object(e).day))) +
+      '<div class="bh-scroll" tabindex="0" aria-label="篮球方向账本横向滚动表"><table><thead><tr>' +
       '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>最终比分</th><th>结算</th><th>规则</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
@@ -340,42 +355,76 @@
     const o = state.overheat;
     if (!o) return '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥顺序链·观察档）· 尚未生成</summary>' +
       '<p class="bh-muted">basket_overheat.json 尚未生成；不虚构判定与命中率。</p></details>';
-    const s = o.summary || {}, items = o.items || [];
+    const s = o.summary || {};
+    const allItems = o.items || [];
+    // ★2026-11-20 过热表接入全局日期筛选（与主列表/账本联动）
+    const items = allItems.filter(x => !state.day || text(x.day) === state.day);
     const head = '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥顺序链口径·观察档）· ' +
       items.length + ' 场 · 其中 ' + (s.withNorth || 0) + ' 场有北单三盘确认</summary>' +
       '<p class="bh-missing">观察档，非投注信号，不计入方向账本/引擎/仓位。<strong>洋哥三盘是顺序链：一盘竞彩独赢资金趋势→二盘365操盘→三盘北单资金分布</strong>。' +
       '本板块一盘用竞彩独赢（篮球完全可得，站大热门对面给方向）；二盘365篮球被封<strong>缺位</strong>；三盘北单270让分胜负两项作近似共振确认（' +
       (s.resonanceN || 0) + ' 场共振）。北单缺失不吞一盘方向，只降档标"仅一盘"。第4步「临场盘水印证」篮球无连续序列做不到。</p>';
-    // 统计条
+    // 统计条（★2026-11-20 足球板视觉语言：绿=命中、红=未中、橙=中热、灰=正常）
     let stat = '<div style="margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(147,197,253,.08);border:1px solid rgba(147,197,253,.35);font-size:11.5px;line-height:1.7;color:#cfe3f7">';
-    stat += '有方向场次 <b>' + (s.totalMatches || 0) + '</b> · 北单三盘确认 <b>' + (s.withNorth || 0) +
-      '</b> · 仅一盘 <b>' + (s.noNorth || 0) + '</b> · 一盘+三盘共振 <b>' + (s.resonanceN || 0) +
-      '</b> · 明确大热门方向 <b>' + (s.hotFlagged || 0) + '</b> 场<br>';
+    stat += '有方向场次 <b>' + (s.totalMatches || 0) + '</b> · 北单三盘确认 <b style="color:#16a34a">' + (s.withNorth || 0) +
+      '</b> · 仅一盘 <b style="color:#f97316">' + (s.noNorth || 0) + '</b> · 一盘+三盘共振 <b style="color:#16a34a">' + (s.resonanceN || 0) +
+      '</b> · 明确大热门方向 <b style="color:#e54545">' + (s.hotFlagged || 0) + '</b> 场<br>';
     if (s.settledN > 0) {
-      stat += '站对面核对：命中 <b>' + s.hit + '/' + s.settledN + '</b>' +
-        (s.hitRate !== null ? ' = <b>' + s.hitRate + '% ± ' + (s.se === null ? '—' : s.se) + 'pt</b>' : '') +
+      stat += '站对面核对：命中 <b style="color:#16a34a;font-size:13px">' + s.hit + '/' + s.settledN + '</b>' +
+        (s.hitRate !== null ? ' = <b style="color:' + (s.hitRate >= 50 ? '#16a34a' : '#e54545') + ';font-size:13px">' + s.hitRate + '% ± ' + (s.se === null ? '—' : s.se) + 'pt</b>' : '') +
         (s.significant ? '（n≥40）' : '（n&lt;40样本不足）') + '</div>';
     } else {
       stat += '<b>暂无可核对场次</b>：方向未触及结算或从缺赛果 → 命中率留空，不用 0% 冒充战绩。</div>';
     }
+    // 快捷日期条
+    const daybar = quickDayBar(allItems.map(x => text(x.day)));
     // 逐场表：日期/对阵 | 竞彩独赢隐含(主/客) | 大热门→站对面 | 北单三盘 | 判定 | 赛果·结算
     let table = '<div class="bh-scroll" tabindex="0"><table style="font-size:11.5px"><thead><tr><th>日期/对阵</th><th>竞彩独赢(主/客)</th>' +
-      '<th>隐含(主/客)</th><th>方向(站对面)</th><th>北单三盘(份额/共振)</th><th>判定</th><th>赛果·结算</th></tr></thead><tbody>';
+      '<th>隐含(主/客)·热度</th><th>方向(站对面)</th><th>北单三盘(份额/共振)</th><th>判定</th><th>赛果·结算</th></tr></thead><tbody>';
     for (const x of items) {
       const m = x.metrics || {};
-      const verdictCls = x.hotFlag ? 'color:#d97706;font-weight:700' : 'color:var(--mut,#8b98a9)';
-      const setTxt = x.hotFlag ? (x.settle === 'hit' ? '✅命中' : x.settle === 'miss' ? '❌未中' : '待结算') : '—';
-      const sideTxt = x.fadeSide === 'home' ? '主(' + esc(x.home) + ')' : '客(' + esc(x.away) + ')';
-      const bdTxt = x.bd && m.shareHome !== null
-        ? fmt(m.shareHome, 0) + '/' + fmt(m.shareAway, 0) + '% · ' + esc(m.resonance || '')
-        : '缺·仅一盘';
+      // ★热度分档徽章（仿足球资金热度列：红=极端大热、橙=明确倾向、灰=趋势弱）
+      const hp = num(m.hotPct);
+      let heatC = '#64748b', heatBg = 'rgba(100,116,139,.12)', heatTag = '趋势弱';
+      if (hp !== null && hp >= 75) { heatC = '#dc2626'; heatBg = 'rgba(220,38,38,.16)'; heatTag = '🔥极端大热'; }
+      else if (hp !== null && hp >= 65) { heatC = '#e54545'; heatBg = 'rgba(229,69,69,.13)'; heatTag = '🔥大热'; }
+      else if (hp !== null && hp >= 55) { heatC = '#ea580c'; heatBg = 'rgba(234,88,12,.13)'; heatTag = '明确倾向'; }
+      // ★方向徽章（仿足球推荐方向 pill：🎯 站对面）
+      const sideTxt = x.fadeSide === 'home' ? '主·' + esc(x.home) : '客·' + esc(x.away);
+      const dirCell = '<span style="font-weight:800;color:#60a5fa;background:rgba(37,99,235,.16);border:1px solid #2563eb;border-radius:6px;padding:2px 7px;display:inline-block;white-space:nowrap">🎯 ' + sideTxt + '</span>';
+      // ★北单三盘徽章：共振绿✓ / 分歧橙⚠ / 缺灰
+      let bdTxt = '缺·仅一盘', bdCell = '<span style="color:var(--mut,#8b98a9)">' + bdTxt + '</span>';
+      if (x.bd && m.shareHome !== null) {
+        const isReso = text(m.resonance).indexOf('共振') >= 0;
+        bdTxt = fmt(m.shareHome, 0) + '/' + fmt(m.shareAway, 0) + '%';
+        bdCell = bdTxt + ' <span style="font-weight:700;color:' + (isReso ? '#16a34a' : '#ea580c') + '">' + (isReso ? '✓共振确认' : '⚠分歧降档') + '</span>';
+      }
+      const verdictCls = x.hotFlag ? 'color:' + heatC + ';font-weight:700' : 'color:var(--mut,#8b98a9)';
+      // ★结算格：绿✅中（按冻结独赢赔率给单位盈亏）/ 红❌未中 −1.00 / 灰⏳
+      let setCell;
+      if (x.hotFlag && x.settle === 'hit') {
+        const odds = x.mnl ? num(object(x.mnl)[x.fadeSide]) : null;
+        const pl = odds !== null ? odds - 1 : null;
+        setCell = '<span style="color:#16a34a;font-weight:800">✅ 中' + (pl !== null ? ' +' + fmt(pl, 2) : '') + '</span>';
+      } else if (x.hotFlag && x.settle === 'miss') {
+        setCell = '<span style="color:#e54545;font-weight:800">❌ 未中 −1.00</span>';
+      } else if (x.hotFlag) {
+        setCell = '<span style="color:var(--mut,#8b98a9)">⏳ 待结算</span>';
+      } else {
+        setCell = '<span style="color:var(--mut,#8b98a9)">— 趋势弱·不进统计</span>';
+      }
+      const resCell = x.result
+        ? '<b style="color:' + (x.result === 'home' ? '#e54545' : '#2563eb') + '">' + (x.result === 'home' ? '主胜' : '客胜') + '</b>' +
+          (x.resultScore ? ' <b>' + esc(x.resultScore) + '</b>' : '')
+        : '<span style="color:var(--mut,#8b98a9)">未完赛</span>';
       table += '<tr><td>' + esc(x.day) + '<br>' + esc(x.away) + '@' + esc(x.home) + '</td>' +
         '<td>' + esc(x.mnl ? x.mnl.home : '—') + ' / ' + esc(x.mnl ? x.mnl.away : '—') + '</td>' +
-        '<td>' + fmt(m.pH, 1) + '% / ' + fmt(m.pA, 1) + '%' + (m.hotPct ? '<br>大热门' + fmt(m.hotPct, 1) + '%' : '') + '</td>' +
-        '<td style="color:#2563eb;font-weight:700">' + sideTxt + '</td>' +
-        '<td>' + bdTxt + '</td>' +
+        '<td>' + fmt(m.pH, 1) + '% / ' + fmt(m.pA, 1) + '%' +
+        (hp !== null ? '<br><span style="font-weight:800;color:' + heatC + ';background:' + heatBg + ';border-radius:6px;padding:1px 7px;display:inline-block;margin-top:2px">' + heatTag + ' ' + fmt(hp, 1) + '%</span>' : '') + '</td>' +
+        '<td>' + dirCell + '</td>' +
+        '<td>' + bdCell + '</td>' +
         '<td style="' + verdictCls + '">' + esc(x.verdict) + '</td>' +
-        '<td>' + esc(x.result || '待结算') + (x.resultScore ? ' ' + esc(x.resultScore) : '') + ' · ' + setTxt + '</td></tr>';
+        '<td>' + resCell + '<br>' + setCell + '</td></tr>';
     }
     table += '</tbody></table></div>';
     const foot = '<p class="bh-muted">账本 ' + esc(o.version || '') + ' · 更新 ' + moment(o.updated) + '。' +
@@ -384,7 +433,7 @@
       '二盘365操盘异常篮球被封缺位。三盘北单：100%返还池份额=1/SP归一，与一盘同侧=共振确认、异侧=分歧降档。' +
       '<strong>2026-11-19 勘误：旧版用让分盘hdc+sfgg且要求让分线一致、北单缺失即跳过整场——三处框架错误已修。</strong>' +
       '绝对大热门阈55%为观察档经验值，非洋哥原文硬阈；n&lt;40不进引擎。</p>';
-    return head + stat + table + foot + '</details>';
+    return head + stat + daybar + table + foot + '</details>';
   }
   function presetHTML() {
     const p = state.preset;
@@ -665,7 +714,12 @@
     });
     modal.querySelector('#basketHeatKeyword').addEventListener('input', event => { state.keyword = event.target.value; render(); });
     modal.querySelector('#basketHeatSelling').addEventListener('change', event => { state.selling = event.target.checked; render(); });
-    modal.addEventListener('click', event => { if (event.target === modal) window.closeBasketHeat(); });
+    modal.addEventListener('click', event => {
+      // ★快捷日期条（主列表/账本/过热三表联动）：点 pill 即切日
+      const qb = event.target.closest('[data-bh-quickday]');
+      if (qb) { state.day = qb.getAttribute('data-bh-quickday') || ''; render(); return; }
+      if (event.target === modal) window.closeBasketHeat();
+    });
     modal.addEventListener('keydown', event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); window.closeBasketHeat(); }
       if (event.key === 'Tab') {
