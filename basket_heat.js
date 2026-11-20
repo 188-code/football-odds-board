@@ -286,13 +286,46 @@
         trailHTML(e) + '</div>';
     }).join('');
   }
+  /* ★ 2026-11-20 统计随日期筛选联动（用户要求：点全部按全部、点哪天显示哪天的结算/命中率）。
+     前端复算口径与服务端 _basket_dir_ledger.cjs finish()/feed() 完全一致：
+     n=已结算数(含走水)；hit=win/(win+lose)不含走水；roi=Σpl/n；se=100/√n。 */
+  function ledgerAgg(list) {
+    let n = 0, win = 0, lose = 0, push = 0, pl = 0;
+    for (const raw of list) {
+      const e = object(raw);
+      if (e.result === null || e.result === undefined) continue;
+      n++;
+      if (e.result === 'win') win++; else if (e.result === 'lose') lose++; else push++;
+      pl += num(e.pl) || 0;
+    }
+    const dec = win + lose, r10 = v => Math.round(v * 10) / 10;
+    const hit = dec ? r10(win / dec * 100) : null;
+    const roi = n ? r10(pl / n * 100) : null;
+    const se = n ? r10(100 / Math.sqrt(n)) : null;
+    return { n, win, lose, push, pl, hit, roi, se,
+      significant: !!(n >= 40 && roi !== null && Math.abs(roi) > se),
+      crossZero: !!(roi !== null && se !== null && Math.abs(roi) < se) };
+  }
   function dirLedgerSummaryHTML() {
-    const led = state.ledger, s = led && object(led.summary);
+    const led = state.ledger, items = object(led && led.items), s = led && object(led.summary);
     if (!s || !num(s.total)) return '<p data-basket-dir-summary>方向账本尚未生成；当前无赛前冻结方向可展示，不用 0 代替未知。</p>';
-    const a = object(s.all), settledN = num(s.settled) || 0, pendingN = num(s.pending) || 0;
+    const allEntries = Object.values(items).map(object);
+    // ★按当前日期筛选复算（无筛选=全部，直接用服务端权威 summary）
+    const entries = state.day ? allEntries.filter(e => text(e.day) === state.day) : allEntries;
+    let settledN, pendingN, totalN, preN, a, scoped;
+    if (state.day) {
+      const agg = ledgerAgg(entries);
+      settledN = agg.n; totalN = entries.length; pendingN = totalN - agg.n;
+      preN = entries.filter(e => e.pre === true).length;
+      a = agg; scoped = true;
+    } else {
+      settledN = num(s.settled) || 0; pendingN = num(s.pending) || 0;
+      totalN = num(s.total) || 0; preN = num(s.pre) || 0;
+      a = object(s.all); scoped = false;
+    }
     const cards = [
-      '<div class="bh-dir-card"><div class="rl">冻结方向</div><div class="rr">' + s.total + ' 条 / ' +
-        (num(s.pre) || 0) + ' 赛前</div></div>',
+      '<div class="bh-dir-card"><div class="rl">冻结方向' + (scoped ? ' · 📅 ' + esc(state.day) : '') + '</div><div class="rr">' + totalN + ' 条 / ' +
+        preN + ' 赛前</div></div>',
       '<div class="bh-dir-card"><div class="rl">已结算 / 待结算</div><div class="rr">' + settledN + ' / ' + pendingN + '</div></div>',
       '<div class="bh-dir-card"><div class="rl">方向命中率</div><div class="rr">' +
         (num(a.hit) !== null ? a.hit + '%（' + (num(a.win) || 0) + '/' + ((num(a.win) || 0) + (num(a.lose) || 0)) + '）' : '待结算') + '</div></div>',
@@ -300,10 +333,12 @@
         (num(a.roi) !== null ? (a.roi > 0 ? '+' : '') + a.roi + '% / ±' + (num(a.se) !== null ? a.se : '—') + 'pt' : '待结算') + '</div></div>',
     ].join('');
     const note = settledN === 0 ?
-      '当前全部待结算：无官方篮球赛果接口，方向只做赛前冻结；赛果到位后由账本回填，不会有事后造预测。' :
+      '当前筛选下全部待结算：无官方篮球赛果接口，方向只做赛前冻结；赛果到位后由账本回填，不会有事后造预测。' :
       (a.significant ? '样本显著。' : a.crossZero ? '|ROI|<SE 跨0，与零无差异。' : '样本偏小，不作结论。') +
-      ' 命中率=方向命中（不含走水）；ROI 按冻结赔率逐注累计。';
+      ' 命中率=方向命中（不含走水）；ROI 按冻结赔率逐注累计。' +
+      (scoped ? ' <b style="color:#93c5fd">📅 已按 ' + esc(state.day) + ' 筛选：以上为当日实时计算。</b>' : ' 当前显示全部日期汇总。');
     return '<div class="bh-dir-cards" data-basket-dir-summary>' + cards + '</div>' +
+      quickDayBar(allEntries.map(e => text(e.day))) +
       '<p class="bh-muted">' + esc(note) + '</p>' +
       '<p class="bh-muted">账本更新 ' + moment(new Date((num(s.updatedAt) || 0) * 1000).toISOString()) +
       ' · 规则 ' + esc(s.ruleV || '—') + ' · ' + esc(s.srcUsed || '') + '</p>';
@@ -359,25 +394,36 @@
     const allItems = o.items || [];
     // ★2026-11-20 过热表接入全局日期筛选（与主列表/账本联动）
     const items = allItems.filter(x => !state.day || text(x.day) === state.day);
+    // ★2026-11-20 统计条随日期联动：按筛选后 items 前端复算，口径与服务端 summarize() 一致
+    const fJudged = items.filter(x => x.hotFlag);
+    const fSettled = fJudged.filter(x => x.settle);
+    const fN = fSettled.length, fHit = fSettled.filter(x => x.settle === 'hit').length;
+    const fHitRate = fN ? +(100 * fHit / fN).toFixed(1) : null;
+    const fSe = fN ? +(Math.sqrt(fHitRate * (100 - fHitRate) / fN).toFixed(1)) : null;
+    const fWithNorth = items.filter(x => x.bd).length;
+    const fNoNorth = items.length - fWithNorth;
+    const fReson = items.filter(x => (x.metrics || {}).resonance === '三盘共振·确认').length;
     const head = '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥顺序链口径·观察档）· ' +
-      items.length + ' 场 · 其中 ' + (s.withNorth || 0) + ' 场有北单三盘确认</summary>' +
+      items.length + ' 场' + (state.day ? '（📅 ' + esc(state.day) + ' 当日）' : '') + '</summary>' +
       '<p class="bh-missing">观察档，非投注信号，不计入方向账本/引擎/仓位。<strong>洋哥三盘是顺序链：一盘竞彩独赢资金趋势→二盘365操盘→三盘北单资金分布</strong>。' +
       '本板块一盘用竞彩独赢（篮球完全可得，站大热门对面给方向）；二盘365篮球被封<strong>缺位</strong>；三盘北单270让分胜负两项作近似共振确认（' +
-      (s.resonanceN || 0) + ' 场共振）。北单缺失不吞一盘方向，只降档标"仅一盘"。第4步「临场盘水印证」篮球无连续序列做不到。</p>';
-    // 统计条（★2026-11-20 足球板视觉语言：绿=命中、红=未中、橙=中热、灰=正常）
-    let stat = '<div style="margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(147,197,253,.08);border:1px solid rgba(147,197,253,.35);font-size:11.5px;line-height:1.7;color:#cfe3f7">';
-    stat += '有方向场次 <b>' + (s.totalMatches || 0) + '</b> · 北单三盘确认 <b style="color:#16a34a">' + (s.withNorth || 0) +
-      '</b> · 仅一盘 <b style="color:#f97316">' + (s.noNorth || 0) + '</b> · 一盘+三盘共振 <b style="color:#16a34a">' + (s.resonanceN || 0) +
-      '</b> · 明确大热门方向 <b style="color:#e54545">' + (s.hotFlagged || 0) + '</b> 场<br>';
-    if (s.settledN > 0) {
-      stat += '站对面核对：命中 <b style="color:#16a34a;font-size:13px">' + s.hit + '/' + s.settledN + '</b>' +
-        (s.hitRate !== null ? ' = <b style="color:' + (s.hitRate >= 50 ? '#16a34a' : '#e54545') + ';font-size:13px">' + s.hitRate + '% ± ' + (s.se === null ? '—' : s.se) + 'pt</b>' : '') +
-        (s.significant ? '（n≥40）' : '（n&lt;40样本不足）') + '</div>';
-    } else {
-      stat += '<b>暂无可核对场次</b>：方向未触及结算或从缺赛果 → 命中率留空，不用 0% 冒充战绩。</div>';
-    }
-    // 快捷日期条
+      fReson + ' 场共振）。北单缺失不吞一盘方向，只降档标"仅一盘"。第4步「临场盘水印证」篮球无连续序列做不到。</p>';
+    // 快捷日期条（统计条上方：点哪天→下面数字立即变哪天）
     const daybar = quickDayBar(allItems.map(x => text(x.day)));
+    // 统计条（★2026-11-20 足球板视觉语言：绿=命中、红=未中、橙=中热、灰=正常；数字随日期筛选联动）
+    let stat = '<div style="margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(147,197,253,.08);border:1px solid rgba(147,197,253,.35);font-size:11.5px;line-height:1.7;color:#cfe3f7">';
+    stat += (state.day ? '<b style="color:#93c5fd">📅 ' + esc(state.day) + ' 当日</b>' : '全部日期') +
+      ' · 有方向场次 <b>' + items.length + '</b> · 北单三盘确认 <b style="color:#16a34a">' + fWithNorth +
+      '</b> · 仅一盘 <b style="color:#f97316">' + fNoNorth +
+      '</b> · 一盘+三盘共振 <b style="color:#16a34a">' + fReson +
+      '</b> · 明确大热门方向 <b style="color:#e54545">' + fJudged.length + '</b> 场<br>';
+    if (fN > 0) {
+      stat += '站对面核对：命中 <b style="color:#16a34a;font-size:13px">' + fHit + '/' + fN + '</b>' +
+        ' = <b style="color:' + (fHitRate >= 50 ? '#16a34a' : '#e54545') + ';font-size:13px">' + fHitRate + '% ± ' + fSe + 'pt</b>' +
+        (fN >= 40 ? '（n≥40）' : '（n&lt;40样本不足）') + '</div>';
+    } else {
+      stat += '<b>暂无可核对场次</b>：当前筛选下方向未触及结算或从缺赛果 → 命中率留空，不用 0% 冒充战绩。</div>';
+    }
     // 逐场表：日期/对阵 | 竞彩独赢隐含(主/客) | 大热门→站对面 | 北单三盘 | 判定 | 赛果·结算
     let table = '<div class="bh-scroll" tabindex="0"><table style="font-size:11.5px"><thead><tr><th>日期/对阵</th><th>竞彩独赢(主/客)</th>' +
       '<th>隐含(主/客)·热度</th><th>方向(站对面)</th><th>北单三盘(份额/共振)</th><th>判定</th><th>赛果·结算</th></tr></thead><tbody>';
@@ -433,7 +479,7 @@
       '二盘365操盘异常篮球被封缺位。三盘北单：100%返还池份额=1/SP归一，与一盘同侧=共振确认、异侧=分歧降档。' +
       '<strong>2026-11-19 勘误：旧版用让分盘hdc+sfgg且要求让分线一致、北单缺失即跳过整场——三处框架错误已修。</strong>' +
       '绝对大热门阈55%为观察档经验值，非洋哥原文硬阈；n&lt;40不进引擎。</p>';
-    return head + stat + daybar + table + foot + '</details>';
+    return head + daybar + stat + table + foot + '</details>';
   }
   function presetHTML() {
     const p = state.preset;
