@@ -106,8 +106,8 @@ function readB365Frames() {
       if (cur && Date.parse(cur.observed_at) >= obs) continue; // 取最临盘
       out[o.id] = {
         sid: o.sid || null,
-        b365: { mnl: { home: +b.home, away: +b.away },
-                hdc: q.b365.hdc || null, total: q.b365.total || null },
+        mnl: { home: +b.home, away: +b.away },
+        hdc: q.b365.hdc || null, total: q.b365.total || null,
         crown: q.crown || null,
         observed_at: o.observed_at || null,
       };
@@ -262,7 +262,7 @@ function evaluate(m, result, t7Results) {
   // 二盘（2026-11-20 补位）：球探转引 365 独赢 → 去水隐含 → 热方投票
   //   365是滚动变更帧：缺帧=近期未动盘，如实标"缺"，不编造。
   let p365H = null, p365A = null, hot365 = null, b365Agree = null, b365Obs = null;
-  if (m.b365 && m.b365.mnl) {
+  if (m.b365 && m.b365.mnl && m.b365.mnl.home) {
     const iH = 1 / m.b365.mnl.home, iA = 1 / m.b365.mnl.away, s = iH + iA;
     p365H = iH / s; p365A = iA / s;
     hot365 = p365H >= p365A ? 'home' : 'away';
@@ -284,15 +284,14 @@ function evaluate(m, result, t7Results) {
   let verdict;
   if (!strong) verdict = '一盘趋势弱(' + hotPct.toFixed(1) + '%)·方向参考';
   else if (heatScore === 3) verdict = '三端合流(竞彩+365+北单)·站对面(' + (fadeSide === 'home' ? '主' : '客') + ')【强置信·观察】';
-  else if (b365Agree === true && bdAgree === true) verdict = '两端合流(竞彩+365)·站对面(' + (fadeSide === 'home' ? '主' : '客') + ')';
   else if (b365Agree === false || bdAgree === false) {
     const dis = [];
     if (bdAgree === false) dis.push('北单分歧');
     if (b365Agree === false) dis.push('365分歧');
     verdict = '一盘大热' + (hot1 === 'home' ? '主' : '客') + '·' + dis.join('+') + '→降档';
   }
-  else if (resonance === '三盘共振·确认') verdict = '一盘大热' + (hot1 === 'home' ? '主' : '客') + '·三盘共振→站对面(' + (fadeSide === 'home' ? '主' : '客') + ')';
-  else if (resonance === '三盘分歧·降档') verdict = '一盘大热' + (hot1 === 'home' ? '主' : '客') + '·三盘分歧→站对面(' + (fadeSide === 'home' ? '主' : '客') + ')[降档]';
+  else if (b365Agree === true && bdAgree === null) verdict = '两端合流(竞彩+365)·站对面(' + (fadeSide === 'home' ? '主' : '客') + ')';
+  else if (bdAgree === true && b365Agree === null) verdict = '一盘大热' + (hot1 === 'home' ? '主' : '客') + '·北单共振→站对面(' + (fadeSide === 'home' ? '主' : '客') + ')';
   else verdict = '一盘大热' + (hot1 === 'home' ? '主' : '客') + '·仅一盘→站对面(' + (fadeSide === 'home' ? '主' : '客') + ')';
 
   // hotFlag：有一盘明确方向信号（供统计/结算）；趋势弱场次不计入严格命中统计
