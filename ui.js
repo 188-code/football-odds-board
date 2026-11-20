@@ -16319,6 +16319,15 @@ function render(){
   renderDrawTop();
   // 实时汇总：每次 render 后刷新 4 个汇总卡片
   try{ renderSummary(); }catch(e){ console.error('renderSummary err:', e); }
+  /* ★ 2026-11-21 启动遮罩兜底：__bootDone() 只在 applyFallback() 一条链里调用，
+     但 CVM 部署版常走 loadMatches() 实时链（bake 已解压、实时源拿到数据即渲染），
+     那条链成功后不调 __bootDone → 卡片都渲染好了、黑色 boot 遮罩却永久不移除，
+     用户看到"正在装配比赛列表"转圈 120s。此处只要渲染成功产出卡片就兜底移除遮罩，
+     两条链全覆盖，且不影响 applyFallback 里的正常调用（幂等：remove 不存在的节点无副作用）。 */
+  try{
+    var _gridN = document.querySelectorAll('#grid .c').length;
+    if (_gridN > 0){ var _b = document.getElementById('boot'); if (_b) _b.remove(); }
+  }catch(e){}
 }
 function infoBlock(m){
   if (!m.info || !m.info.summary) return '';
