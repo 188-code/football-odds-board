@@ -19959,14 +19959,14 @@ try{
     }catch(e){ console.warn('dg-battle-ready',e); }
   });
 }catch(e){}
-/* v3 三盘开盘→临盘序列走 gzip 异步解压：落地后历史板必须重绘，否则时序块要等下次筛选才出现。 */
+/* v3 三盘开盘→临盘序列走 gzip 异步解压：落地后历史板必须重绘，否则时序块要等下次筛选才出现。
+   ★2026-11-20 双保险：本地/快速环境下解压可能先于本监听器挂载完成（竞态），
+   若 __TRI_TRAIL__ 已就绪则立即重绘一次，事件照旧兜底未就绪的时序。 */
 try{
-  window.addEventListener('tri-trail-ready', function(){
-    try{
-      const host=document.getElementById('fpHistHost');
-      if(host && typeof fundplateHistoryHTML==='function') host.innerHTML=fundplateHistoryHTML();
-    }catch(e){ console.warn('tri-trail-ready',e); }
-  });
+  var _fpRedraw = function(){ try{ const host=document.getElementById('fpHistHost');
+    if(host && typeof fundplateHistoryHTML==='function') host.innerHTML=fundplateHistoryHTML(); }catch(e){ console.warn('tri-redraw',e); } };
+  window.addEventListener('tri-trail-ready', _fpRedraw);
+  if (window.__TRI_TRAIL__) setTimeout(_fpRedraw, 0);
 }catch(e){}
 /* 按钮：动态挂到「看板板块」栏，零改外壳 index.html */
 function _dgMountBtn(n){
