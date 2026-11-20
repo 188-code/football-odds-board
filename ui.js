@@ -9389,7 +9389,28 @@ function fundplateHistoryHTML(){
       };
       var rows2 = wItems.map(function(it){
         var seg = it.seg || {};
-        var resTxt = '<span style="opacity:.45">' + ((it.kickTs && it.kickTs < Date.now()) ? '已过开赛·比分待核' : '未开赛') + '</span>';
+        /* ★ 2026-11-20 观察区赛前冻结方向（watchDir）：bake断链期未入账本的场，
+           序列合格且未开赛时由构建端冻结方向（sidecar 只增不覆），此处只展示。
+           合流强队方→站对面买弱方独赢；背离只标观察；赛后核对单场展示不入统计。 */
+        var dirHtml = '';
+        var wd = it.watchDir;
+        if (wd){
+          var fzHHMM = wd.frozenAt ? String(wd.frozenAt).slice(11,16) : '';
+          if (wd.side === 'weak'){
+            var coldSide = (it.strongIdx === 2) ? '主' : '客';
+            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:rgba(229,69,69,.16);color:#ff8f8f;font-weight:800;font-size:11px">🎯 观察方向·站对面</span>'
+              + '<span style="font-size:11px;color:#e5c07b"> ' + coldSide + '队（弱方）独赢</span>'
+              + '<div style="font-size:10px;opacity:.6">冻结 ' + fzHHMM + ' UTC · 合流净Δ +' + (+wd.netAtFreeze).toFixed(1) + 'pp · 同向' + wd.sameN + (wd.lead ? ' · 先动' + esc(String(wd.lead)) : '') + '</div></div>';
+            if (wd.flips && wd.flips.length)
+              dirHtml += '<div style="font-size:10px;color:#f59e0b">⚠ 冻结后盘向翻转 ' + wd.flips.length + ' 次（首冻结保留·降为只观察）</div>';
+            if (wd.chk)
+              dirHtml += '<div style="font-size:11px"><b style="color:' + (wd.chk.hit ? '#7ee2a8' : '#ff9a9a') + '">' + (wd.chk.hit ? '✅ 弱方独赢命中' : '❌ 未中') + '</b> '
+                + '<b>' + wd.chk.hs + ':' + wd.chk.as + '</b> <span style="opacity:.5;font-size:10px">（单场核对·不入任何统计）</span></div>';
+          } else {
+            dirHtml = '<div style="font-size:10.5px;color:#f59e0b">⚠ 资金撤强队方·背离观察（无标定支持·不出方向）</div>';
+          }
+        }
+        var resTxt = dirHtml + '<span style="opacity:.45">' + ((it.kickTs && it.kickTs < Date.now()) ? '已过开赛·比分待核' : '未开赛') + '</span>';
         if (it.res){
           var vc = it.res.verdict === '受让赢盘' || it.res.verdict === '受让赢半' ? '#7ee2a8'
                  : (it.res.verdict === '走盘' ? '#94a3b8' : '#ff9a9a');
@@ -9423,7 +9444,7 @@ function fundplateHistoryHTML(){
         + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 观察区 · 在售但未入围资金过热判定的场次（当前筛选 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
         + '<div style="font-size:11px;line-height:1.7;color:#b9c7d8;margin-bottom:7px">本区补列原账本之外或尚未可靠匹配的场次。北单让球盘与独赢盘严格分开；缺联赛、时间冲突或队名有歧义时不猜配。'
         + '只展示已取得的赛前序列，某端为空不代表另一端也未采集。'
-        + '<b style="color:#fca5a5">不进账本、不出方向票、不参与任何命中/ROI 统计</b>。比分仅在赛程身份核对通过后显示；暂不进行亚盘结算。</div>'
+        + '<b style="color:#fca5a5">不进账本、不参与任何命中/ROI 统计</b>。★2026-11-20 起：未开赛且序列合流的场会冻结<b style="color:#ff8f8f">「观察方向·站对面」</b>（赛前冻结、冻结后不改向、翻转只记录），赛后只做单场核对展示。比分仅在赛程身份核对通过后显示；暂不进行亚盘结算。</div>'
         + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
         + '<thead><tr style="color:var(--mut);font-size:10.5px;text-align:left">'
         + '<th style="padding:4px 7px;font-weight:500">日期/开赛</th><th style="padding:4px 7px;font-weight:500">联赛</th>'
