@@ -8845,6 +8845,18 @@ function fundplateHistoryHTML(){
       var rd = String((e && e.recDir) || '');
       if (!t.ok && /^(买强队|买受让)/.test(rd))
         h += '<div style="margin-top:2px;color:#fca5a5">当时发了「' + esc(rd.slice(0, 18)) + '」，按 v3 序列护栏应判观察（意见原文按冻结铁律保留）</div>';
+      /* ★ 2026-11-20 数据补齐标注（维多利亚vs布拉干蒂诺RB 2910976 同款）：
+         首登时 365 逐帧尚未接入/该场已开赛被采集器跳过 → gen_index 按"开赛定格"写出
+         recDir="观察·三盘序列不齐·只观察(有效端不足2路)"；此后球探备源回补了 Bet365 全序列，
+         最新 __TRI_TRAIL__ 已 ok=true。冻结意见原文按铁律不追改、不追改方向、不进引擎，
+         只在此做中性复盘标注，消除"序列齐·三盘可判"与"推荐方向·序列不齐"并存的观感矛盾。 */
+      if (t.ok && t._live && /序列不齐|有效端不足|365缺/.test(rd)) {
+        var _euN2 = (t.eu && t.eu.n) || 0;
+        h += '<div style="margin-top:3px;color:#7dd3fc;font-size:9.5px;line-height:1.45;'
+          + 'background:rgba(125,211,252,.07);border:1px dashed rgba(125,211,252,.35);border-radius:5px;padding:2px 6px">'
+          + 'ℹ️ 赛前定格意见按冻结铁律保留（当时 365 缺帧）；此后备源已回补 365 ' + _euN2
+          + ' 帧，最新序列已判「序列齐·三盘可判」。<br>本标注仅说明数据补齐，<b>不追改方向、不构成新推荐</b>。</div>';
+      }
       /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向（只观察·非信号·非业绩·不下注指令） */
       var _tp = _twoPanObserve(e);
       if (_tp){
