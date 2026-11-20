@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-19-yangge-gapcheck-v1';   // ★ 2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
+const UI_V = '2026-11-21-linpailu-ruwei-v1';   // ★ 2026-11-21 临盘入围：数据齐(序列齐+明确方向)的观察场按正式场次置顶给方向，去"观察/未入围"标签；业绩统计仍不进(待账本回填)。前版 2026-11-21 末帧时刻纠偏；2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9374,6 +9374,9 @@ function fundplateHistoryHTML(){
         var ka = _kkey(a), kb = _kkey(b);
         var fa = ka <= _nowKey ? 1 : 0, fb = kb <= _nowKey ? 1 : 0;
         if (fa !== fb) return fa - fb;
+        // ★2026-11-21 已入围(promoted·数据齐有方向)置顶，其次按开赛时间
+        var pa = a.promoted ? 0 : 1, pb = b.promoted ? 0 : 1;
+        if (pa !== pb) return pa - pb;
         return fa ? (ka < kb ? 1 : -1) : (ka < kb ? -1 : 1);
       });
       /* ★2026-11-20 空壳折叠：同一场被拆成多条时（北单让球行/无tid独立组/异译名），
@@ -9416,16 +9419,18 @@ function fundplateHistoryHTML(){
            合流强队方→站对面买弱方独赢；背离只标观察；赛后核对单场展示不入统计。 */
         var dirHtml = '';
         var wd = it.watchDir;
+        var pr = !!it.promoted;
         if (wd){
           var fzHHMM = wd.frozenAt ? String(wd.frozenAt).slice(11,16) : '';
           var nEndTag = (wd.nEnds && wd.nEnds === 1)
             ? '<span style="font-size:9.5px;color:#93c5fd">（单端·' + esc(String((it.align&&it.align.nSrc)||1)) + '路序列）</span>' : '';
           var meta = '<div style="font-size:10px;opacity:.6">冻结 ' + fzHHMM + ' UTC · 净Δ '
             + ((+wd.netAtFreeze) >= 0 ? '+' : '') + (+wd.netAtFreeze).toFixed(1) + 'pp · 同向' + wd.sameN
-            + (wd.lead ? ' · 先动' + esc(String(wd.lead)) : '') + ' · 只读观察·不进业绩/下注</div>';
+            + (wd.lead ? ' · 先动' + esc(String(wd.lead)) : '')
+            + (pr ? ' · <b style="color:#34d399">已入围·业绩待账本回填</b>' : ' · 只读观察·不进业绩/下注') + '</div>';
           if (wd.side === 'weak'){
             var coldSide = (it.strongIdx === 2) ? '主' : '客';
-            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:rgba(229,69,69,.16);color:#ff8f8f;font-weight:800;font-size:11px">🎯 观察方向·站对面</span>'
+            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':'rgba(229,69,69,.16)') + ';color:' + (pr?'#6ee7b7':'#ff8f8f') + ';font-weight:800;font-size:11px">🎯 ' + (pr?'入围方向':'观察方向') + '·站对面</span>'
               + '<span style="font-size:11px;color:#e5c07b"> ' + coldSide + '队（弱方）独赢</span>' + nEndTag + meta;
             if (wd.flips && wd.flips.length)
               dirHtml += '<div style="font-size:10px;color:#f59e0b">⚠ 冻结后盘向翻转 ' + wd.flips.length + ' 次（首冻结保留·降为只观察）</div>';
@@ -9435,7 +9440,7 @@ function fundplateHistoryHTML(){
             dirHtml += '</div>';
           } else if (wd.side === 'strong'){
             var hotSide = (it.strongIdx === 2) ? '客' : '主';
-            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,.16);color:#fcd34d;font-weight:800;font-size:11px">🧭 观察方向·顺势买强队</span>'
+            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':'rgba(245,158,11,.16)') + ';color:' + (pr?'#6ee7b7':'#fcd34d') + ';font-weight:800;font-size:11px">🧭 ' + (pr?'入围方向':'观察方向') + '·顺势买强队</span>'
               + '<span style="font-size:11px;color:#e5c07b"> ' + hotSide + '队（强方）独赢</span>' + nEndTag + meta;
             if (wd.flips && wd.flips.length)
               dirHtml += '<div style="font-size:10px;color:#f59e0b">⚠ 冻结后盘向翻转 ' + wd.flips.length + ' 次（首冻结保留·降为只观察）</div>';
@@ -9472,22 +9477,26 @@ function fundplateHistoryHTML(){
           + '<td style="padding:5px 7px;font-size:11.5px">' + esc(String(it.league||'')) + '</td>'
           + '<td style="padding:5px 7px"><b>' + esc(String(it.home||'')) + '</b> vs <b>' + esc(String(it.away||'')) + '</b>'
           + '<div style="font-size:10px;opacity:.55">' + (it.noJc ? '竞彩' + esc(it.noJc) + ' ' : '') + (it.noBd ? '北单' + esc(it.noBd) : '') + '</div></td>'
-          + '<td style="padding:5px 7px;font-size:10.5px;color:#fca5a5;line-height:1.5;max-width:170px">' + esc(String(it.watchWhy||'')) + '</td>'
+          + '<td style="padding:5px 7px;font-size:10.5px;line-height:1.5;max-width:170px;color:' + (it.promoted ? '#34d399' : '#fca5a5') + '">'
+          + (it.promoted
+              ? '<b style="color:#34d399">✅ 已入围·序列齐+方向明确</b><div style="font-size:9.5px;opacity:.7">数据资格达标，按正式场次给方向；业绩统计待账本回填，暂不计命中/ROI</div>'
+              : esc(String(it.watchWhy||'')))
+          + '</td>'
           + '<td style="padding:5px 7px">' + seqHtml + '</td>'
           + '<td style="padding:5px 7px;white-space:nowrap;font-size:12px">' + resTxt + '</td>'
           + '</tr>';
       }).join('');
       return '<div style="margin-top:14px;padding:10px 12px;border:1px dashed rgba(125,211,252,.45);border-radius:10px">'
-        + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 观察区 · 在售但未入围资金过热判定的场次（当前筛选 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
-        + '<div style="font-size:11px;line-height:1.7;color:#b9c7d8;margin-bottom:7px">本区补列原账本之外或尚未可靠匹配的场次。北单让球盘与独赢盘严格分开；缺联赛、时间冲突或队名有歧义时不猜配。'
-        + '只展示已取得的赛前序列，某端为空不代表另一端也未采集。'
-        + '<b style="color:#7ee2a8">各端「末MM-DD HH:MM」=该端最后抓取时刻（实时轮询，竞彩/北单每5分、365球探备源每5分）；「拐」=资金信号拐点时刻，不是抓取时间——两者务必分清。</b>'
-        + '<b style="color:#fca5a5">未入围的唯一原因是账本登记链（依赖 gqj2）尚未收录该场，不是没抓、不是没分析；门控解封后下一轮烘焙自动收录。</b>'
-        + '本区不参与任何命中/ROI 统计。★2026-11-20 起：未开赛且序列合流的场会冻结<b style="color:#ff8f8f">「观察方向·站对面」</b>（赛前冻结、冻结后不改向、翻转只记录），赛后只做单场核对展示。比分仅在赛程身份核对通过后显示；暂不进行亚盘结算。</div>'
+        + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 临盘区 · 数据达标场次（已入围 ' + wItems.filter(function(x){return x.promoted;}).length + ' / 当前 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
+        + '<div style="font-size:11px;line-height:1.7;color:#b9c7d8;margin-bottom:7px">'
+        + '<b style="color:#34d399">✅ 标「已入围」的场次 = 序列齐（≥2端完整开盘→临盘）+ 有明确方向，数据资格达标，按正式场次置顶给方向。业绩统计待账本回填，暂不计命中/ROI（避免污染历史统计）——数据正确就入围，不再拿账本冻结当理由。</b><br>'
+        + '北单让球盘与独赢盘严格分开；缺联赛、时间冲突或队名有歧义时不猜配。某端为空不代表另一端也未采集。'
+        + '<b style="color:#7ee2a8">各端「末MM-DD HH:MM」=该端最后抓取时刻（实时轮询，竞彩/北单每5分、365球探备源每5分）；「拐」=资金信号拐点时刻，不是抓取时间——务必分清。</b>'
+        + '方向赛前冻结、冻结后不改向、翻转只记录，赛后只做单场核对展示。比分仅在赛程身份核对通过后显示；暂不进行亚盘结算。</div>'
         + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
         + '<thead><tr style="color:var(--mut);font-size:10.5px;text-align:left">'
         + '<th style="padding:4px 7px;font-weight:500">日期/开赛</th><th style="padding:4px 7px;font-weight:500">联赛</th>'
-        + '<th style="padding:4px 7px;font-weight:500">对阵</th><th style="padding:4px 7px;font-weight:500">未入围原因</th>'
+        + '<th style="padding:4px 7px;font-weight:500">对阵</th><th style="padding:4px 7px;font-weight:500">入围状态</th>'
         + '<th style="padding:4px 7px;font-weight:500">开盘→临盘序列（三/两盘）</th><th style="padding:4px 7px;font-weight:500">比分·亚盘结果</th>'
         + '</tr></thead><tbody>' + rows2 + '</tbody></table>'
         + (shellItems.length ? '<details style="margin-top:7px;font-size:11px;color:#8b98a9">'
