@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-21-lpinmain-v3';   // ★ 2026-11-21 临盘已入账场并入完整意见片区主表：tri_trail.promoted 场按日期筛选作为正式意见行插入 fundplate 主表顶部，给方向/序列/独赢结算；独赢与亚盘让球物理隔离不混算。前版 refreeze-v2： A+B门：A=末帧≤开赛前120分才有资格入临盘方向账本；B=已开赛/单端错过的真临盘强信号正式展示核对但不进业绩分母。前版临账本v1：数据齐(序列齐+明确方向)的观察场赛前入独立临盘方向账本(独赢口径)，赛前不符合剔除、开赛冻结、赛后独赢结算，计入命中/ROI；与亚盘账本物理隔离。前版 2026-11-21 末帧时刻纠偏；2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
+const UI_V = '2026-11-21-livewatch-v4';   // ★ 2026-11-21 临盘已入账场并入完整意见片区主表：tri_trail.promoted 场按日期筛选作为正式意见行插入 fundplate 主表顶部，给方向/序列/独赢结算；独赢与亚盘让球物理隔离不混算。前版 refreeze-v2： A+B门：A=末帧≤开赛前120分才有资格入临盘方向账本；B=已开赛/单端错过的真临盘强信号正式展示核对但不进业绩分母。前版临账本v1：数据齐(序列齐+明确方向)的观察场赛前入独立临盘方向账本(独赢口径)，赛前不符合剔除、开赛冻结、赛后独赢结算，计入命中/ROI；与亚盘账本物理隔离。前版 2026-11-21 末帧时刻纠偏；2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9135,13 +9135,122 @@ function fundplateHistoryHTML(){
     + '· <b style="color:#94a3b8">仅净超买口径</b> ' + _nOpLite + ' 场 → 早期条目（当时引擎未算四量、北单源已蒸发，<b>物理上补不回</b>），只显示净超买/缺口<br>'
     + '<span style="color:#b45309;font-weight:700">✅ 从 2026-11-05 起新登记的场次 100% 带完整四量，且开赛那一刻自动定格。</span>'
     + '</div></div>';
+  /* ★★ 2026-11-21 实时观察档（根治「数据抓到了却不入围/漏算」）：
+     背景：fundplate_history 登记只遍历冻结的 bake_pack.packs（gqj2 567 封禁后冻在 11-15），
+     导致 11-16 起新场次进不了快照（实测 11-22 有 137 场 watch/42 场三端齐却只登记 7 场）。
+     这里不改权威账本、不碰任何统计分母：把 __TRI_TRAIL__ 里有数据但未登记的场次单列一区，
+     用三盘序列 + 北单隐含(seg.bd.close/__BD_RAW__.pct) − 365 隐含(seg.eu.close) 给意见。
+     口径诚实：只作观察，不进账本业绩/命中率分母。 */
+  const _liveWatchHTML = function(){
+    var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+    var BD = (typeof window !== 'undefined' && window.__BD_RAW__) || [];
+    var hist = {};
+    (Array.isArray(H) ? H : (H.items || [])).forEach(function(e){ if (e && e.tid != null) hist[String(e.tid)] = 1; });
+    var dn = function(s){
+      var t = String(s == null ? '' : s);
+      try { if (typeof decodeName === 'function') t = decodeName(t) || t; } catch (_e) {}
+      return t.replace(/<[^>]*>/g, '').replace(/&#x?[0-9a-fA-F]+;/g, '')
+        .replace(/[\uE000-\uF8FF]/g, '').replace(/[\s·・\-（）()\[\].]/g, '').toLowerCase();
+    };
+    var bdByDay = {};
+    BD.forEach(function(r){ var d = String(r.date || '').replace(/-/g, '').slice(0, 8); (bdByDay[d] = bdByDay[d] || []).push(r); });
+    var pickBd = function(h, a, day){
+      var c = bdByDay[day] || [], xh = dn(h), xa = dn(a);
+      if (!xh || !xa) return null;
+      for (var i = 0; i < c.length; i++) {
+        var rh = dn(c[i].home), ra = dn(c[i].away);
+        if (rh && ra && (xh.indexOf(rh) >= 0 || rh.indexOf(xh) >= 0) && (xa.indexOf(ra) >= 0 || ra.indexOf(xa) >= 0)) return c[i];
+      }
+      return null;
+    };
+    var rows = [];
+    Object.keys(T).forEach(function(k){
+      var it = T[k];
+      if (!it || it.watch !== true) return;
+      if (hist[String(it.tid)]) return;                       // 已进账本的不重复显示
+      var day = String(it.day || '');
+      if (!day) return;
+      if (VIEW.day !== 'all' && day !== VIEW.day) return;
+      if (VIEW.day === 'all' && (VIEW.range === 'latest' || VIEW.range === '3d' || VIEW.range === '7d')) {
+        var n = VIEW.range === 'latest' ? 1 : (VIEW.range === '3d' ? 3 : 7);
+        if (_allDays.slice(0, n).indexOf(day) < 0) return;
+      }
+      var s = it.seg || {}, a = it.align || {};
+      var nSrc = Number(a.nSrc || [s.jc, s.bd, s.eu].filter(function(x){ return x && (x.n || 0) > 0; }).length || 0);
+      var same = Number(a.same || 0), dir = Number(a.dir || 0), ok = !!it.ok;
+      if (nSrc < 1) return;                                    // 一条数据都没有的不列
+      var bd = pickBd(it.home, it.away, day);
+      /* 北单隐含：优先 seg.bd.close（北单赔率序列），其次当日快照 pct */
+      var north = (s.bd && s.bd.close && s.bd.close.length === 3) ? s.bd.close
+                : ((bd && bd.pct && bd.pct.length === 3) ? bd.pct.map(Number) : null);
+      var euImp = (s.eu && s.eu.close && s.eu.close.length === 3) ? s.eu.close : null;
+      var netPt = null, heatSide = null;
+      if (north && euImp) {
+        var dev = [0,0,0], mx = -1e9, mi = 0;
+        for (var i2 = 0; i2 < 3; i2++){ dev[i2] = Number(north[i2]) - Number(euImp[i2]); if (dev[i2] > mx){ mx = dev[i2]; mi = i2; } }
+        netPt = Math.round(mx * 10) / 10; heatSide = ['W','D','L'][mi];
+      }
+      var rq = bd ? Number(bd.rq) : null;
+      var hcapTxt = (rq != null && isFinite(rq)) ? (Math.abs(rq) < 0.01 ? '平手' : ((rq < 0 ? '主让' : '客让') + Math.abs(rq).toFixed(2))) : '—';
+      /* 意见（与 _fundplate_backfill.cjs 同逻辑：三盘同向 > 资金口径 > 观察） */
+      var rec = '', tone = '#94a3b8';
+      if (ok && dir !== 0 && nSrc >= 2 && same >= 2) {
+        var stance = '顺势';
+        if (heatSide) stance = ((heatSide === 'W') !== (dir > 0)) ? '站对面·大热必死' : '顺资金';
+        rec = '买' + (dir > 0 ? '强队/主' : '受让/客') + '(' + stance + '·三盘同向' + same + '/' + nSrc + ')';
+        tone = '#34d399';
+      } else if (netPt != null && netPt >= 3 && (heatSide === 'W' || heatSide === 'L')) {
+        var buyHome = heatSide === 'L';
+        var dh = dir !== 0 ? ((dir > 0) === buyHome) : null;
+        rec = '买' + (buyHome ? '主/强队' : '受让/客') + '(资金口径·北单超买' + (netPt > 0 ? '+' : '') + netPt + 'pp'
+            + (dh === true ? '·序列印证' : (dh === false ? '·序列相左' : '·无序列')) + ')';
+        tone = '#fbbf24';
+      } else if (!ok) {
+        rec = '观察·序列不齐(' + String(it.why || '有效独立端不足').slice(0, 46) + ')';
+      } else {
+        rec = '观察·有效端 ' + nSrc + ' 路';
+      }
+      rows.push({ it: it, day: day, nSrc: nSrc, same: same, netPt: netPt, hcapTxt: hcapTxt, rec: rec, tone: tone,
+        bdHit: !!bd, kickTs: Number(it.kickTs || 0) });
+    });
+    if (!rows.length) return '';
+    rows.sort(function(x, y){ return (x.kickTs || 0) - (y.kickTs || 0); });
+    var LIMIT = 40, shown = rows.slice(0, LIMIT);
+    var body = shown.map(function(r){
+      var it = r.it, s = it.seg || {};
+      var segTxt = ['jc','bd','eu','rq'].map(function(k){
+        var x = s[k]; return (x && (x.n || 0) > 0) ? (k + (x.n || 0)) : '';
+      }).filter(Boolean).join(' ');
+      return '<tr style="border-bottom:1px solid rgba(148,163,184,.12)">'
+        + '<td style="padding:4px 6px;white-space:nowrap;opacity:.75">' + r.day.slice(4,6) + '-' + r.day.slice(6,8) + ' ' + esc(String(it.kickoff || '')) + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap;opacity:.75">' + esc(String(it.league || '')) + '</td>'
+        + '<td style="padding:4px 6px">' + esc(_fpName(it.tid, it.home, it.away)) + ' vs ' + esc(_fpName(it.tid, it.away, it.home)) + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap">' + esc(r.hcapTxt) + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap;font-size:10.5px;opacity:.8">' + esc(segTxt || '—') + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap;' + (r.netPt != null ? 'color:' + (r.netPt >= 0 ? '#f87171' : '#4ade80') : 'opacity:.4') + '">'
+          + (r.netPt == null ? '—' : ((r.netPt > 0 ? '+' : '') + r.netPt + 'pp')) + '</td>'
+        + '<td style="padding:4px 6px;color:' + r.tone + '">' + esc(r.rec) + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap;font-size:10px;opacity:.55">' + (r.bdHit ? '北单✓' : '无北单') + '</td>'
+        + '</tr>';
+    }).join('');
+    return '<div style="margin:0 0 10px;padding:8px 10px;border-radius:8px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.3)">'
+      + '<div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:4px">⚡ 实时观察档·未入账 '
+      + '<span style="font-weight:400;opacity:.8">（本次筛选 ' + rows.length + ' 场' + (rows.length > LIMIT ? '，先列最早 ' + LIMIT + ' 场' : '') + '）</span></div>'
+      + '<div style="font-size:10.5px;opacity:.75;line-height:1.6;margin-bottom:6px">'
+      + '三盘序列/北单资金已抓到、但未进正式账本（bake 冻结或未满足入账门槛）的场次。'
+      + '<b>只作观察，不进业绩/命中率分母</b>；意见口径：三盘同向 &gt; 北单隐含−365隐含超买≥3pp &gt; 观察。</div>'
+      + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      + '<thead><tr style="opacity:.55;font-size:10px;text-align:left"><th>日期</th><th>联赛</th><th>对阵</th><th>盘口</th><th>三盘</th><th>北单−365</th><th>意见</th><th>源</th></tr></thead>'
+      + '<tbody>' + body + '</tbody></table></div></div>';
+  };
+
   /* ★ 2026-11-07：后端 H.summary 是全账本固定值，筛选后不能继续当成本次筛选的业绩报。
      筛选态改报「当前筛选集合」的赛前命中率，并带 ±SE（100/√n）；全量态才显示后端 ROI。 */
   const _seTxt = dec.length ? ('±' + Math.round(100/Math.sqrt(dec.length)) + 'pt SE') : '样本不足';
   const _filteredKpi = _kpi('当前筛选·赛前结算', dec.length+' 注', '#7c3aed')
     + _kpi('受让方 / 让球方命中', (rate==null?'—':rate+'%')+' / '+(dec.length ? (Math.round(nLose/dec.length*1000)/10)+'%' : '—'))
     + _kpi('样本误差', _seTxt);
-  const sum = _covBox + _kpi('已登记', items.length+' 场')
+  const sum = _covBox + _liveWatchHTML() + _kpi('已登记', items.length+' 场')
     + (function(){ var _n=0; try{ var _X=(window.__TRI_TRAIL__&&window.__TRI_TRAIL__.items)||{}; Object.keys(_X).forEach(function(k){var it=_X[k]; if(!it||it.watch!==true||it.promoted!==true) return; if(VIEW.day!=='all'&&String(it.day||'')!==VIEW.day) return; _n++;}); }catch(e){} return _n ? _kpi('🎯 临盘已入账(独赢·单独计)', _n+' 场', '#34d399') : ''; })()
     + _kpi('赛前登记', nPre+' 场', '#16a34a')
     + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
