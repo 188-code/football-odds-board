@@ -9215,7 +9215,8 @@ function fundplateHistoryHTML(){
     });
     if (!rows.length) return '';
     rows.sort(function(x, y){ return (x.kickTs || 0) - (y.kickTs || 0); });
-    var LIMIT = 40, shown = rows.slice(0, LIMIT);
+    var LIMIT = 300, shown = rows.slice(0, LIMIT);
+    var nBuy = rows.filter(function(r){ return /^买/.test(r.rec); }).length;
     var body = shown.map(function(r){
       var it = r.it, s = it.seg || {};
       var segTxt = ['jc','bd','eu','rq'].map(function(k){
@@ -9235,9 +9236,11 @@ function fundplateHistoryHTML(){
     }).join('');
     return '<div style="margin:0 0 10px;padding:8px 10px;border-radius:8px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.3)">'
       + '<div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:4px">⚡ 实时观察档·未入账 '
-      + '<span style="font-weight:400;opacity:.8">（本次筛选 ' + rows.length + ' 场' + (rows.length > LIMIT ? '，先列最早 ' + LIMIT + ' 场' : '') + '）</span></div>'
+      + '<span style="font-weight:400;opacity:.8">（本次筛选 ' + rows.length + ' 场，其中有方向 ' + nBuy + ' 场'
+      + (rows.length > LIMIT ? '；先列最早 ' + LIMIT + ' 场' : '') + '）</span></div>'
       + '<div style="font-size:10.5px;opacity:.75;line-height:1.6;margin-bottom:6px">'
-      + '三盘序列/北单资金已抓到、但未进正式账本（bake 冻结或未满足入账门槛）的场次。'
+      + '三盘序列/北单资金<b>已抓到</b>、但未进正式账本的场次（根因：gqj2 567 封禁 → bake 冻结在 11-15，新场次无法登记入账）。'
+      + '每场都列：日期 / 联赛 / 对阵 / 盘口 / 三盘帧数 / 北单−365 资金偏差 / 意见。'
       + '<b>只作观察，不进业绩/命中率分母</b>；意见口径：三盘同向 &gt; 北单隐含−365隐含超买≥3pp &gt; 观察。</div>'
       + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
       + '<thead><tr style="opacity:.55;font-size:10px;text-align:left"><th>日期</th><th>联赛</th><th>对阵</th><th>盘口</th><th>三盘</th><th>北单−365</th><th>意见</th><th>源</th></tr></thead>'
