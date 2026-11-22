@@ -1,13 +1,13 @@
 {
   "version": "basket_overheat_seqchain_mnl_20261119",
-  "updated": "2026-11-22T21:15:16.895Z",
+  "updated": "2026-11-22T21:30:16.060Z",
   "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。展示集=统计集=版本集。",
   "summary": {
     "totalMatches": 43,
     "withNorth": 15,
     "noNorth": 28,
     "resonanceN": 11,
-    "withB365": 11,
+    "withB365": 12,
     "strongN": 2,
     "strongSettled": 0,
     "strongHit": 0,
@@ -2200,7 +2200,24 @@
         "away": 1.9,
         "line": "-2.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.56,
+          "away": 2.49
+        },
+        "hdc": {
+          "line": 4.5,
+          "home": 0.94,
+          "away": 0.89
+        },
+        "total": {
+          "line": 231.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T05:25:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -2211,12 +2228,12 @@
         "hotPct": 62.8,
         "fadeSide": "away",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 61.5,
+        "p365A": 38.5,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": false,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": 1.0025,
         "shareHome": 47.5,
         "shareAway": 52.5,
