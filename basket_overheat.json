@@ -1,13 +1,13 @@
 {
   "version": "basket_overheat_seqchain_mnl_20261119",
-  "updated": "2026-11-22T07:45:33.667Z",
+  "updated": "2026-11-22T08:00:25.180Z",
   "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。展示集=统计集=版本集。",
   "summary": {
     "totalMatches": 46,
     "withNorth": 15,
     "noNorth": 31,
     "resonanceN": 12,
-    "withB365": 0,
+    "withB365": 2,
     "strongN": 0,
     "strongSettled": 0,
     "strongHit": 0,
@@ -1820,7 +1820,24 @@
         "line": -1.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.67,
+          "away": 2.2
+        },
+        "hdc": {
+          "line": 2.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 165.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T16:00:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -1831,12 +1848,12 @@
         "hotPct": 51.5,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 56.8,
+        "p365A": 43.2,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2036,7 +2053,24 @@
         "line": 5.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.82,
+          "away": 1.42
+        },
+        "hdc": {
+          "line": -5.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 170.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T16:00:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.8,
@@ -2047,12 +2081,12 @@
         "hotPct": 68.9,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 33.5,
+        "p365A": 66.5,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2064,7 +2098,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
