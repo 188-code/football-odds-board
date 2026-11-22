@@ -1,14 +1,14 @@
 {
   "version": "basket_overheat_seqchain_mnl_20261119",
-  "updated": "2026-11-22T15:15:29.859Z",
+  "updated": "2026-11-22T15:30:29.475Z",
   "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。展示集=统计集=版本集。",
   "summary": {
     "totalMatches": 43,
     "withNorth": 15,
     "noNorth": 28,
     "resonanceN": 11,
-    "withB365": 8,
-    "strongN": 0,
+    "withB365": 9,
+    "strongN": 1,
     "strongSettled": 0,
     "strongHit": 0,
     "strongHitRate": null,
@@ -2370,7 +2370,24 @@
         "away": 1.54,
         "line": "8.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 4,
+          "away": 1.26
+        },
+        "hdc": {
+          "line": -9.5,
+          "home": 0.88,
+          "away": 0.94
+        },
+        "total": {
+          "line": 237.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T23:20:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -2381,12 +2398,12 @@
         "hotPct": 78.5,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 24,
+        "p365A": 76,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0052,
         "shareHome": 35.4,
         "shareAway": 64.6,
@@ -2398,10 +2415,10 @@
         "lineJc": 8.5,
         "lineBd": 8.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(主)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
+      "strongTier": true,
       "settle": null,
       "result": null,
       "resultScore": null,
