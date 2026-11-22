@@ -5802,7 +5802,7 @@
    "kickoff": "2026-11-22T11:00:00+08:00",
    "kickTs": 1795316400,
    "firstSeen": 1795271414,
-   "lastSeen": 1795311909,
+   "lastSeen": 1795312810,
    "pre": true,
    "home": "萨克拉门托国王",
    "away": "波士顿凯尔特人",
@@ -5853,7 +5853,7 @@
    "kickoff": "2026-11-22T11:00:00+08:00",
    "kickTs": 1795316400,
    "firstSeen": 1795271414,
-   "lastSeen": 1795311909,
+   "lastSeen": 1795312810,
    "pre": true,
    "home": "萨克拉门托国王",
    "away": "波士顿凯尔特人",
@@ -5895,7 +5895,7 @@
   }
  },
  "summary": {
-  "updatedAt": 1795311909,
+  "updatedAt": 1795312810,
   "srcUsed": "cloud_app basket_heat.json(离线兜底)(竞彩真实报价·赛前冻结)",
   "ruleV": "basket_odds_lean_observe_1",
   "total": 107,
