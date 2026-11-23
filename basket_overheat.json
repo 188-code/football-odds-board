@@ -1,27 +1,20 @@
 {
   "version": "basket_overheat_seqchain_mnl_20261119",
-  "updated": "2026-11-23T13:45:37.236Z",
-  "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。展示集=统计集=版本集。",
+  "updated": "2026-11-20T02:53:36.106Z",
+  "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);二盘365被封缺位;三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。旧版三处错误已修:ERR1用让分盘hdc+sfgg非独赢;ERR2要求让分线一致把多数场次判不可比;ERR3北单缺失就跳过整场。绝对大热阈HOT_MIN=55%为观察档经验值非洋哥原文(2026-11-20勘误:note旧写60%与代码0.55不符,以代码为准)。结算=站对面方向vs verified独赢赛果。n<40不进引擎。★★口径声明(2026-11-20复盘):一盘所称资金趋势实为竞彩SP去水隐含概率的【首登截面】——篮球无彩池销量数据,SP开售期内极少变动,非真实资金占比;定格时点距开赛0.7~21小时不等。★★2026-11-20修二处:①结算源增账本同源回填(basket_dir_ledger已核验finalScore按比分补回独赢赛果,修\"账本已结/板块待结\"分叉,根因_gen_basket_result旧版全量覆盖清条目,已改增量合并);②拆雷:不再拿:hdc让分赛果当独赢结算(让分胜负方向≠独赢胜负方向,混用会算反)。",
   "summary": {
-    "totalMatches": 36,
-    "withNorth": 15,
-    "noNorth": 21,
-    "resonanceN": 12,
-    "withB365": 1,
-    "strongN": 0,
-    "strongSettled": 0,
-    "strongHit": 0,
-    "strongHitRate": null,
-    "strongSe": null,
-    "t7SettledN": 0,
-    "hotFlagged": 33,
+    "totalMatches": 29,
+    "withNorth": 11,
+    "noNorth": 18,
+    "resonanceN": 9,
+    "hotFlagged": 26,
     "settledN": 24,
     "hit": 13,
     "hitRate": 54.2,
     "se": 10.2,
     "significant": false,
     "crossZero": false,
-    "caveat": "n<40观察档;一盘=竞彩独赢资金趋势(洋哥顺序链起点);二盘365自2026-11-20起用球探滚动帧补位(此前缺位,历史场无365=真实缺,不回补);三盘北单让分近似确认;强置信=三端合流(JC+365+北单同侧),前瞻口径无历史回测,不进引擎;第4步临场序列篮球做不到"
+    "caveat": "n<40观察档;一盘=竞彩独赢资金趋势(洋哥顺序链起点);二盘365篮球被封缺位;三盘北单让分近似确认;非完整三盘原法;第4步临场序列篮球做不到"
   },
   "items": [
     {
@@ -41,7 +34,6 @@
         "line": -7.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.87,
@@ -52,12 +44,6 @@
         "hotPct": 73.8,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -72,11 +58,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "miss",
       "result": "home",
-      "resultScore": "80-75",
-      "resSrc": "verified"
+      "resultScore": "80-75"
     },
     {
       "id": "2042848",
@@ -95,7 +79,6 @@
         "line": 3.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.91,
@@ -106,12 +89,6 @@
         "hotPct": 56.2,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -126,11 +103,9 @@
       "verdict": "一盘大热客·仅一盘→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "hit",
       "result": "home",
-      "resultScore": "91-77",
-      "resSrc": "verified"
+      "resultScore": "91-77"
     },
     {
       "id": "2042849",
@@ -149,7 +124,6 @@
         "line": -6.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -160,12 +134,6 @@
         "hotPct": 69.5,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -180,11 +148,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "86-89",
-      "resSrc": "verified"
+      "resultScore": "86-89"
     },
     {
       "id": "2042850",
@@ -203,7 +169,6 @@
         "line": 1.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -214,12 +179,6 @@
         "hotPct": 53.1,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -234,11 +193,9 @@
       "verdict": "一盘趋势弱(53.1%)·方向参考",
       "hotFlag": false,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": null,
       "result": "away",
-      "resultScore": "64-76",
-      "resSrc": "verified"
+      "resultScore": "64-76"
     },
     {
       "id": "2042851",
@@ -257,7 +214,6 @@
         "line": 8.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -268,12 +224,6 @@
         "hotPct": 77.1,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -288,11 +238,9 @@
       "verdict": "一盘大热客·仅一盘→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "hit",
       "result": "home",
-      "resultScore": "84-79",
-      "resSrc": "verified"
+      "resultScore": "84-79"
     },
     {
       "id": "2042852",
@@ -316,7 +264,6 @@
         "line": "3.5",
         "comparable": false
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.75,
@@ -327,12 +274,6 @@
         "hotPct": 58.9,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0025,
         "shareHome": 47.5,
         "shareAway": 52.5,
@@ -344,14 +285,12 @@
         "lineJc": 3.5,
         "lineBd": 3.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "一盘大热客·三盘共振→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "miss",
       "result": "away",
-      "resultScore": "102-111",
-      "resSrc": "verified"
+      "resultScore": "102-111"
     },
     {
       "id": "2042853",
@@ -370,7 +309,6 @@
         "line": -2.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.88,
@@ -381,12 +319,6 @@
         "hotPct": 57.3,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -401,11 +333,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "miss",
       "result": "home",
-      "resultScore": "106-105",
-      "resSrc": "verified"
+      "resultScore": "106-105"
     },
     {
       "id": "2042854",
@@ -429,7 +359,6 @@
         "line": "-8.5",
         "comparable": false
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -440,12 +369,6 @@
         "hotPct": 78.5,
         "fadeSide": "away",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": false,
-        "heatScore": 1,
         "sumBd": 1.0012,
         "shareHome": 48.3,
         "shareAway": 51.8,
@@ -457,14 +380,12 @@
         "lineJc": -10.5,
         "lineBd": -8.5
       },
-      "verdict": "一盘大热主·北单分歧→降档",
+      "verdict": "一盘大热主·三盘分歧→站对面(客)[降档]",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "93-105",
-      "resSrc": "verified"
+      "resultScore": "93-105"
     },
     {
       "id": "2042855",
@@ -488,7 +409,6 @@
         "line": "-5.5",
         "comparable": false
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -499,12 +419,6 @@
         "hotPct": 69.5,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0021,
         "shareHome": 69.3,
         "shareAway": 30.7,
@@ -516,14 +430,12 @@
         "lineJc": -8.5,
         "lineBd": -5.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "一盘大热主·三盘共振→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "107-132",
-      "resSrc": "verified"
+      "resultScore": "107-132"
     },
     {
       "id": "2042856",
@@ -547,7 +459,6 @@
         "line": "-8.5",
         "comparable": false
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.85,
@@ -558,12 +469,6 @@
         "hotPct": 75.8,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0029,
         "shareHome": 55.1,
         "shareAway": 44.9,
@@ -575,14 +480,12 @@
         "lineJc": -10.5,
         "lineBd": -8.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "一盘大热主·三盘共振→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "miss",
       "result": "home",
-      "resultScore": "118-114",
-      "resSrc": "verified"
+      "resultScore": "118-114"
     },
     {
       "id": "2042858",
@@ -601,7 +504,6 @@
         "line": 7.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -612,12 +514,6 @@
         "hotPct": 75.1,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -632,11 +528,9 @@
       "verdict": "一盘大热客·仅一盘→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "hit",
       "result": "home",
-      "resultScore": "83-79",
-      "resSrc": "verified"
+      "resultScore": "83-79"
     },
     {
       "id": "2042860",
@@ -659,7 +553,6 @@
         "away": 1.62,
         "line": "1.5"
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.75,
@@ -670,12 +563,6 @@
         "hotPct": 58.9,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0019,
         "shareHome": 38.4,
         "shareAway": 61.6,
@@ -687,14 +574,12 @@
         "lineJc": 2.5,
         "lineBd": 1.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "一盘大热客·三盘共振→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "miss",
       "result": "away",
-      "resultScore": "116-121",
-      "resSrc": "verified"
+      "resultScore": "116-121"
     },
     {
       "id": "2042861",
@@ -713,7 +598,6 @@
         "line": 8.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.84,
@@ -724,12 +608,6 @@
         "hotPct": 76.4,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -744,11 +622,9 @@
       "verdict": "一盘大热客·仅一盘→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "miss",
       "result": "away",
-      "resultScore": "104-119",
-      "resSrc": "verified"
+      "resultScore": "104-119"
     },
     {
       "id": "2042862",
@@ -771,7 +647,6 @@
         "away": 2.32,
         "line": "-5.5"
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -782,12 +657,6 @@
         "hotPct": 65.2,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0025,
         "shareHome": 57,
         "shareAway": 43,
@@ -799,14 +668,12 @@
         "lineJc": -5.5,
         "lineBd": -5.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "一盘大热主·三盘共振→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "121-124",
-      "resSrc": "verified"
+      "resultScore": "121-124"
     },
     {
       "id": "2042863",
@@ -829,7 +696,6 @@
         "away": 2.5,
         "line": "-2.5"
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.84,
@@ -840,12 +706,6 @@
         "hotPct": 55.8,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0024,
         "shareHome": 60.1,
         "shareAway": 39.9,
@@ -857,14 +717,12 @@
         "lineJc": -3.5,
         "lineBd": -2.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "一盘大热主·三盘共振→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "107-137",
-      "resSrc": "verified"
+      "resultScore": "107-137"
     },
     {
       "id": "2042864",
@@ -883,7 +741,6 @@
         "line": -7.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -894,12 +751,6 @@
         "hotPct": 71.3,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -914,11 +765,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "99-103",
-      "resSrc": "verified"
+      "resultScore": "99-103"
     },
     {
       "id": "2042865",
@@ -937,7 +786,6 @@
         "line": -7.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -948,12 +796,6 @@
         "hotPct": 71.3,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -968,11 +810,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "miss",
       "result": "home",
-      "resultScore": "116-94",
-      "resSrc": "verified"
+      "resultScore": "116-94"
     },
     {
       "id": "2042866",
@@ -995,7 +835,6 @@
         "away": 2.29,
         "line": "-7.5"
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -1006,12 +845,6 @@
         "hotPct": 74.4,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0017,
         "shareHome": 56.4,
         "shareAway": 43.6,
@@ -1023,14 +856,12 @@
         "lineJc": -7.5,
         "lineBd": -7.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "一盘大热主·三盘共振→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "112-117",
-      "resSrc": "verified"
+      "resultScore": "112-117"
     },
     {
       "id": "2042867",
@@ -1049,7 +880,6 @@
         "line": 7.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -1060,12 +890,6 @@
         "hotPct": 74.4,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1080,11 +904,9 @@
       "verdict": "一盘大热客·仅一盘→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "miss",
       "result": "away",
-      "resultScore": "109-122",
-      "resSrc": "verified"
+      "resultScore": "109-122"
     },
     {
       "id": "2042868",
@@ -1108,7 +930,6 @@
         "line": "2.5",
         "comparable": false
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.84,
@@ -1119,12 +940,6 @@
         "hotPct": 55.8,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0031,
         "shareHome": 45.5,
         "shareAway": 54.5,
@@ -1136,14 +951,12 @@
         "lineJc": 3.5,
         "lineBd": 2.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "一盘大热客·三盘共振→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "hit",
       "result": "home",
-      "resultScore": "105-101",
-      "resSrc": "verified"
+      "resultScore": "105-101"
     },
     {
       "id": "2042869",
@@ -1167,7 +980,6 @@
         "line": "6.5",
         "comparable": false
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.78,
@@ -1178,12 +990,6 @@
         "hotPct": 73.1,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
         "sumBd": 1.0008,
         "shareHome": 39.8,
         "shareAway": 60.2,
@@ -1195,14 +1001,12 @@
         "lineJc": 7.5,
         "lineBd": 6.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "一盘大热客·三盘共振→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "miss",
       "result": "away",
-      "resultScore": "107-128",
-      "resSrc": "verified"
+      "resultScore": "107-128"
     },
     {
       "id": "2042870",
@@ -1221,7 +1025,6 @@
         "line": -10.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.77,
@@ -1232,12 +1035,6 @@
         "hotPct": 80.7,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1252,11 +1049,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "97-109",
-      "resSrc": "verified"
+      "resultScore": "97-109"
     },
     {
       "id": "2042872",
@@ -1275,7 +1070,6 @@
         "line": -7.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.87,
@@ -1286,12 +1080,6 @@
         "hotPct": 73.8,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1306,11 +1094,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "miss",
       "result": "home",
-      "resultScore": "100-81",
-      "resSrc": "verified"
+      "resultScore": "100-81"
     },
     {
       "id": "2042873",
@@ -1329,7 +1115,6 @@
         "line": 4.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -1340,12 +1125,6 @@
         "hotPct": 65.2,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1360,11 +1139,9 @@
       "verdict": "一盘大热客·仅一盘→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": "hit",
       "result": "home",
-      "resultScore": "78-70",
-      "resSrc": "verified"
+      "resultScore": "78-70"
     },
     {
       "id": "2042874",
@@ -1383,7 +1160,6 @@
         "line": -11.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.77,
@@ -1394,12 +1170,6 @@
         "hotPct": 80.7,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1414,11 +1184,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": "miss",
       "result": "home",
-      "resultScore": "92-87",
-      "resSrc": "verified"
+      "resultScore": "92-87"
     },
     {
       "id": "2042875",
@@ -1442,7 +1210,6 @@
         "line": "-16.5",
         "comparable": false
       },
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -1453,12 +1220,6 @@
         "hotPct": 51.5,
         "fadeSide": "away",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": false,
-        "heatScore": 1,
         "sumBd": 1.0006,
         "shareHome": 46.3,
         "shareAway": 53.7,
@@ -1473,11 +1234,9 @@
       "verdict": "一盘趋势弱(51.5%)·方向参考",
       "hotFlag": false,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": null,
       "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "resultScore": null
     },
     {
       "id": "2042876",
@@ -1496,7 +1255,6 @@
         "line": -8.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.85,
@@ -1507,12 +1265,6 @@
         "hotPct": 75.8,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1527,11 +1279,9 @@
       "verdict": "一盘大热主·仅一盘→站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
       "settle": null,
       "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "resultScore": null
     },
     {
       "id": "2042877",
@@ -1550,7 +1300,6 @@
         "line": 10.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.77,
@@ -1561,12 +1310,6 @@
         "hotPct": 79.2,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1581,11 +1324,9 @@
       "verdict": "一盘大热客·仅一盘→站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": null,
       "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "resultScore": null
     },
     {
       "id": "2042878",
@@ -1604,7 +1345,6 @@
         "line": 2.5
       },
       "bd": null,
-      "b365": null,
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.75,
@@ -1615,12 +1355,6 @@
         "hotPct": 54.7,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1635,422 +1369,9 @@
       "verdict": "一盘趋势弱(54.7%)·方向参考",
       "hotFlag": false,
       "fadeSide": "home",
-      "strongTier": false,
       "settle": null,
       "result": null,
-      "resultScore": null,
-      "resSrc": null
-    },
-    {
-      "id": "2042983",
-      "day": "2026-11-24",
-      "league": "美国职业篮球联盟",
-      "home": "夏洛特黄蜂",
-      "away": "孟菲斯灰熊",
-      "capturedAt": "2026-11-23T14:30:04+08:00",
-      "mnl": {
-        "home": 2.48,
-        "away": 1.29
-      },
-      "jc": {
-        "home": 1.7,
-        "away": 1.7,
-        "line": 6.5
-      },
-      "bd": {
-        "home": 2.68,
-        "away": 1.59,
-        "line": "3.5"
-      },
-      "b365": null,
-      "metrics": {
-        "mnlFallback": false,
-        "Rjc": 84.86,
-        "gap": 15.14,
-        "pH": 34.2,
-        "pA": 65.8,
-        "hot1": "away",
-        "hotPct": 65.8,
-        "fadeSide": "home",
-        "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
-        "sumBd": 1.0021,
-        "shareHome": 37.2,
-        "shareAway": 62.8,
-        "hotBd": "away",
-        "devHome": 3.65,
-        "devAway": -3.4,
-        "upDev": -3.4,
-        "sameLine": false,
-        "lineJc": 6.5,
-        "lineBd": 3.5
-      },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
-      "hotFlag": true,
-      "fadeSide": "home",
-      "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
-    },
-    {
-      "id": "2042984",
-      "day": "2026-11-24",
-      "league": "美国职业篮球联盟",
-      "home": "费城76人",
-      "away": "波特兰开拓者",
-      "capturedAt": "2026-11-23T14:30:04+08:00",
-      "mnl": {
-        "home": 1.33,
-        "away": 2.34
-      },
-      "jc": {
-        "home": 1.65,
-        "away": 1.75,
-        "line": -5.5
-      },
-      "bd": {
-        "home": 1.51,
-        "away": 2.95,
-        "line": "-2.5"
-      },
-      "b365": null,
-      "metrics": {
-        "mnlFallback": false,
-        "Rjc": 84.8,
-        "gap": 15.2,
-        "pH": 63.8,
-        "pA": 36.2,
-        "hot1": "home",
-        "hotPct": 63.8,
-        "fadeSide": "away",
-        "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
-        "sumBd": 1.0012,
-        "shareHome": 66.1,
-        "shareAway": 33.9,
-        "hotBd": "home",
-        "devHome": 2.91,
-        "devAway": -2.76,
-        "upDev": 2.91,
-        "sameLine": false,
-        "lineJc": -5.5,
-        "lineBd": -2.5
-      },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
-      "hotFlag": true,
-      "fadeSide": "away",
-      "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
-    },
-    {
-      "id": "2042985",
-      "day": "2026-11-24",
-      "league": "美国职业篮球联盟",
-      "home": "印第安那步行者",
-      "away": "俄克拉荷马城雷霆",
-      "capturedAt": "2026-11-23T14:30:04+08:00",
-      "mnl": {
-        "home": 2.25,
-        "away": 1.36
-      },
-      "jc": {
-        "home": 1.7,
-        "away": 1.7,
-        "line": 4.5
-      },
-      "bd": null,
-      "b365": null,
-      "metrics": {
-        "mnlFallback": false,
-        "Rjc": 84.76,
-        "gap": 15.24,
-        "pH": 37.7,
-        "pA": 62.3,
-        "hot1": "away",
-        "hotPct": 62.3,
-        "fadeSide": "home",
-        "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
-        "sumBd": null,
-        "shareHome": null,
-        "shareAway": null,
-        "hotBd": null,
-        "devHome": null,
-        "devAway": null,
-        "upDev": null,
-        "sameLine": null,
-        "lineJc": null,
-        "lineBd": null
-      },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
-      "hotFlag": true,
-      "fadeSide": "home",
-      "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
-    },
-    {
-      "id": "2042986",
-      "day": "2026-11-24",
-      "league": "美国职业篮球联盟",
-      "home": "多伦多猛龙",
-      "away": "密尔沃基雄鹿",
-      "capturedAt": "2026-11-23T14:30:04+08:00",
-      "mnl": {
-        "home": 1.08,
-        "away": 3.95
-      },
-      "jc": {
-        "home": 1.7,
-        "away": 1.7,
-        "line": -9.5
-      },
-      "bd": {
-        "home": 2.02,
-        "away": 1.97,
-        "line": "-10.5"
-      },
-      "b365": null,
-      "metrics": {
-        "mnlFallback": false,
-        "Rjc": 84.81,
-        "gap": 15.19,
-        "pH": 78.5,
-        "pA": 21.5,
-        "hot1": "home",
-        "hotPct": 78.5,
-        "fadeSide": "away",
-        "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": false,
-        "heatScore": 1,
-        "sumBd": 1.0027,
-        "shareHome": 49.4,
-        "shareAway": 50.6,
-        "hotBd": "away",
-        "devHome": -34.22,
-        "devAway": 34.54,
-        "upDev": 34.54,
-        "sameLine": false,
-        "lineJc": -9.5,
-        "lineBd": -10.5
-      },
-      "verdict": "一盘大热主·北单分歧→降档",
-      "hotFlag": true,
-      "fadeSide": "away",
-      "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
-    },
-    {
-      "id": "2042987",
-      "day": "2026-11-24",
-      "league": "美国职业篮球联盟",
-      "home": "明尼苏达森林狼",
-      "away": "布鲁克林篮网",
-      "capturedAt": "2026-11-23T14:30:04+08:00",
-      "mnl": {
-        "home": 1.02,
-        "away": 5.05
-      },
-      "jc": {
-        "home": 1.65,
-        "away": 1.75,
-        "line": -11.5
-      },
-      "bd": {
-        "home": 1.65,
-        "away": 2.51,
-        "line": "-11.5"
-      },
-      "b365": null,
-      "metrics": {
-        "mnlFallback": false,
-        "Rjc": 84.86,
-        "gap": 15.14,
-        "pH": 83.2,
-        "pA": 16.8,
-        "hot1": "home",
-        "hotPct": 83.2,
-        "fadeSide": "away",
-        "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": true,
-        "heatScore": 2,
-        "sumBd": 1.0045,
-        "shareHome": 60.3,
-        "shareAway": 39.7,
-        "hotBd": "home",
-        "devHome": -26.62,
-        "devAway": 27.15,
-        "upDev": -26.62,
-        "sameLine": true,
-        "lineJc": -11.5,
-        "lineBd": -11.5
-      },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
-      "hotFlag": true,
-      "fadeSide": "away",
-      "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
-    },
-    {
-      "id": "2042988",
-      "day": "2026-11-24",
-      "league": "美国职业篮球联盟",
-      "home": "芝加哥公牛",
-      "away": "克利夫兰骑士",
-      "capturedAt": "2026-11-23T14:30:04+08:00",
-      "mnl": {
-        "home": 3.5,
-        "away": 1.12
-      },
-      "jc": {
-        "home": 1.75,
-        "away": 1.65,
-        "line": 9.5
-      },
-      "bd": null,
-      "b365": {
-        "mnl": {
-          "home": 3.65,
-          "away": 1.3
-        },
-        "hdc": {
-          "line": -8.5,
-          "home": 0.92,
-          "away": 0.9
-        },
-        "total": {
-          "line": 240.5,
-          "over": 0.91,
-          "under": 0.91
-        },
-        "crown": null,
-        "observed_at": "2026-11-23T21:35:01+08:00"
-      },
-      "metrics": {
-        "mnlFallback": false,
-        "Rjc": 84.85,
-        "gap": 15.15,
-        "pH": 24.2,
-        "pA": 75.8,
-        "hot1": "away",
-        "hotPct": 75.8,
-        "fadeSide": "home",
-        "resonance": "无北单·仅一盘",
-        "p365H": 26.3,
-        "p365A": 73.7,
-        "hot365": "away",
-        "b365Agree": true,
-        "bdAgree": null,
-        "heatScore": 2,
-        "sumBd": null,
-        "shareHome": null,
-        "shareAway": null,
-        "hotBd": null,
-        "devHome": null,
-        "devAway": null,
-        "upDev": null,
-        "sameLine": null,
-        "lineJc": null,
-        "lineBd": null
-      },
-      "verdict": "两端合流(竞彩+365)·站对面(主)",
-      "hotFlag": true,
-      "fadeSide": "home",
-      "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
-    },
-    {
-      "id": "2042989",
-      "day": "2026-11-24",
-      "league": "美国职业篮球联盟",
-      "home": "新奥尔良鹈鹕",
-      "away": "菲尼克斯太阳",
-      "capturedAt": "2026-11-23T14:30:04+08:00",
-      "mnl": {
-        "home": 2.25,
-        "away": 1.36
-      },
-      "jc": {
-        "home": 1.81,
-        "away": 1.6,
-        "line": 4.5
-      },
-      "bd": null,
-      "b365": null,
-      "metrics": {
-        "mnlFallback": false,
-        "Rjc": 84.76,
-        "gap": 15.24,
-        "pH": 37.7,
-        "pA": 62.3,
-        "hot1": "away",
-        "hotPct": 62.3,
-        "fadeSide": "home",
-        "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
-        "bdAgree": null,
-        "heatScore": 1,
-        "sumBd": null,
-        "shareHome": null,
-        "shareAway": null,
-        "hotBd": null,
-        "devHome": null,
-        "devAway": null,
-        "upDev": null,
-        "sameLine": null,
-        "lineJc": null,
-        "lineBd": null
-      },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
-      "hotFlag": true,
-      "fadeSide": "home",
-      "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "resultScore": null
     }
   ]
 }

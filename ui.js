@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-23-rqaxis-v4';   // ★ v4：三盘「不齐」口径根治——新增让球轴(竞彩hhad·线取goalLineValue + 北单rqspf + 365亚盘)三端对齐展示；独赢未开时行内直陈「已开让球/仅让球行」，不再把玩法未开写成抓取缺失；让球轴只展示观察、不进独赢强推分母。前版 v3：修临盘合并行队名/联赛空白。
+const UI_V = '2026-11-23-nethot-v6';   // ★ v6：用户质问「蒙扎vs佛罗伦/莱万特vs埃尔切 人家算正式过热+4 你算不出」——根治16号后主登记路径失效(hcapSrc=none/heatScore低)导致的极端过热场漏判：netPt>=25(全库前1.5%)加青色独立标签/KPI/置顶，明确「未通过留出验证」，不并入A强推分母。前版 v5：让球轴合流独立通道。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -8761,6 +8761,51 @@ function fundplateHistoryHTML(){
     var hs = (e && e.heatScore != null) ? +e.heatScore : 0;
     return (o.overGap === true) && hs >= 3;
   };
+  /* ★★ 2026-11-23 让球轴合流·独立通道（用户拍板「纳入，然后记得加个标签」）。
+     口径：tri_trail.rqAxis 三端同线同向(converge) 且 n===3 且非深盘。
+     标定（_eval_rqstrong_20261123.cjs，真实完场 + 沿用 recDir 冻结方向 + 逐注真实水位）：
+       严格口径已结算有方向 1 场 0%；放宽三端同线 4 场 25%/ROI-52.5%；两端同线 7 场 42.9%/ROI-19.6%；
+       训练/留出样本不足以成立 → 【未通过留出验证】。
+     ⇒ 纳入展示但【独立标签 + 独立 KPI + 独立置顶档】，绝不并入 A强推 63.6% 的业绩与分母，
+       方向仍沿用 e.recDir/e.recDirAlt（不新增任何序列方向，序列票铁律不动）。 */
+  const _rqStrongOf = function(e){
+    if (e && e.rqStrong && e.rqStrong.on === true) return e.rqStrong;
+    try{
+      var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
+      var ax = (T[String(e && e.tid)] || {}).rqAxis;
+      if (ax && ax.converge === true && (ax.n|0) === 3 && ax.lineOk === true && ax.grade !== '深盘')
+        return { on:true, tag:'让球轴合流', grade:ax.grade, line:ax.line, verified:false };
+    }catch(_e){}
+    return null;
+  };
+  /* 独立通道逐行标签：紫色=未验证独立档，与 A强推(橙)物理区分 */
+  const _rqTagHTML = function(rs){
+    if (!rs) return '';
+    return '<div style="margin-top:4px;font-size:10px;font-weight:800;color:#a78bfa;line-height:1.35">'
+      + '🏷 让球轴合流 · 独立通道'
+      + '<div style="font-size:9px;font-weight:400;opacity:.85">三端同线同向 · ' + esc(String(rs.grade||''))
+      + ' · <b>未通过留出验证</b> · 不并入 A强推 63.6% 业绩</div></div>';
+  };
+  /* ★★ 2026-11-23 极端净超买·独立通道（用户质问「人家算正式过热+4 你算不出」）：
+     净超买 netPt>=25（全库前1.5%）= 庄家视角最直接的过热强度信号。
+     标定：已结算仅 4 场(2胜0负2走水)，样本不足 →【未通过留出验证】，
+     只作过热强度提示，独立青色标签/KPI/置顶，绝不并入 A强推 63.6% 分母。 */
+  const _netHotOf = function(e){
+    if (e && e.netHot && e.netHot.on === true) return e.netHot;
+    try{
+      var np = (e && e.netPt != null) ? +e.netPt : null;
+      if (np != null && np >= 25) return { on:true, tag:'极端净超买', netPt:Math.round(np*10)/10,
+        side:(e && e.heatSide) || null, verified:false };
+    }catch(_e){}
+    return null;
+  };
+  const _netHotTagHTML = function(nh){
+    if (!nh) return '';
+    return '<div style="margin-top:4px;font-size:10px;font-weight:800;color:#22d3ee;line-height:1.35">'
+      + '📡 极端净超买 · 过热强度提示'
+      + '<div style="font-size:9px;font-weight:400;opacity:.85">北单净超买 ' + (+nh.netPt).toFixed(1)
+      + 'pp · 全库前1.5% · <b>未通过留出验证</b> · 不并入 A强推业绩</div></div>';
+  };
   /* ★ 2026-11-17：当前/未开赛场优先读最新 __TRI_TRAIL，冻结 e.trail 只用于历史复盘。
      事故：瑞士vs苏格兰(2981515) 11-16 10:53 首登冻结的 trail 只有 365 15帧、竞彩/北单皆空，
      但 D 盘竞彩/北单数据齐全；根因是北单凌晨场 phase 跨日误标导致构建器剔除赛前帧。
@@ -8896,7 +8941,9 @@ function fundplateHistoryHTML(){
           + (_ax.deep ? ' <span style="color:#fca5a5">深盘·铁律不给方向</span>' : '')
           + '<div style="margin-top:1px;font-size:9.5px;line-height:1.5">' + _legs + '</div>'
           + '<div style="margin-top:1px;font-size:9.5px;color:#8fa3b8">' + esc(_ax.note || '')
-          + ' · 让球轴只作展示/观察，不进独赢强推分母</div>'
+          + (_ax.converge && !_ax.deep
+              ? ' · <b style="color:#a78bfa">已纳入「让球轴合流·独立通道」(未验证)</b>，不进 A强推分母'
+              : ' · 让球轴只作展示/观察，不进独赢强推分母') + '</div>'
           + '</div>';
       }
       h += '<div style="margin-top:3px">' + (t.ok
@@ -9138,6 +9185,21 @@ function fundplateHistoryHTML(){
     return (r.indexOf('买强队')===0 && e.result==='lose') || (r.indexOf('买受让')===0 && e.result==='win');
   }).length;
   const _strongRate = _strongRows.length ? Math.round(_strongHit/_strongRows.length*1000)/10 : null;
+  /* ★★ 2026-11-23 让球轴合流·独立通道 KPI：与 A强推完全隔离，单独统计、单独标「未验证」。
+     方向沿用 recDirAlt/recDir 已冻结结论，push/pending/观察档剔除；不进 _strongRows 分母。 */
+  const _rqRows = items.filter(function(e){
+    if (!_rqStrongOf(e) || !_isPre(e) || !e.result || e.result==='push' || e.result==='pending') return false;
+    var r = String((e.recDirAlt && String(e.recDirAlt).trim()!=='') ? e.recDirAlt : (e.recDir||''));
+    return r.indexOf('买强队')===0 || r.indexOf('买受让')===0;
+  });
+  const _rqHit = _rqRows.filter(function(e){
+    var r = String((e.recDirAlt && String(e.recDirAlt).trim()!=='') ? e.recDirAlt : (e.recDir||''));
+    return (r.indexOf('买强队')===0 && e.result==='lose') || (r.indexOf('买受让')===0 && e.result==='win');
+  }).length;
+  const _rqRate = _rqRows.length ? Math.round(_rqHit/_rqRows.length*1000)/10 : null;
+  const _rqTagged = items.filter(function(e){ return !!_rqStrongOf(e); }).length;
+  /* ★ 2026-11-23 极端净超买·独立通道 KPI：只标过热强度，样本不足不报命中率口径，绝不进 _strongRows */
+  const _netHotTagged = items.filter(function(e){ return !!_netHotOf(e); }).length;
   const _kpi=(n,v,c)=>'<span style="display:inline-block;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:5px 10px;margin:0 6px 6px 0;font-size:11.5px">'
     +'<span style="opacity:.6">'+n+'</span> <b style="color:'+(c||'var(--txt)')+';font-size:14px">'+v+'</b></span>';
   /* ★★ 2026-11-01 双向真结算（用户："赛前预测的比赛赛果出了很多，你发现问题没有"）：
@@ -9381,6 +9443,11 @@ function fundplateHistoryHTML(){
            (_altV2.rate!=null && _altV2.rate>=50 ? '#16a34a' : '#dc2626'))
     + _kpi('🔥 真三盘合流·赛前(heatScore≥3 且破缺口)', (_strongRows.length ? (_strongHit+'/'+_strongRows.length+' 中 · '+_strongRate+'%') : '—'),
            (_strongRate!=null && _strongRate>=50 ? '#f59e0b' : '#dc2626'))
+    /* ★ 2026-11-23 独立通道：单独一格，紫标 + 明确「未验证」，绝不混进上面 A强推业绩 */
+    + (_rqTagged ? _kpi('🏷 让球轴合流·独立通道(未验证)',
+           _rqTagged+' 场' + (_rqRate!=null ? (' · 已结算 '+_rqHit+'/'+_rqRows.length+' 中 '+_rqRate+'%') : ' · 待结算'),
+           '#a78bfa') : '')
+    + (_netHotTagged ? _kpi('📡 极端净超买·过热提示(未验证)', _netHotTagged+' 场 · 全库前1.5%', '#22d3ee') : '')
     + (_isFiltered ? _filteredKpi
         : ((_preL ? _kpi('赛前·押受让方', (_preL.hit==null?'—':_preL.hit+'%')+' / '+_fpct(_preL.roi), (_preL.roi>0?'#16a34a':'#dc2626')) : '')
          + (_preU ? _kpi('赛前·押让球方', (_preU.hit==null?'—':_preU.hit+'%')+' / '+_fpct(_preU.roi), (_preU.roi>0?'#16a34a':'#dc2626')) : '')));
@@ -9396,6 +9463,13 @@ function fundplateHistoryHTML(){
   const rows = items.slice().sort(function(p,q){
       const sp=_strongPickOf(p).strong && _fpConverged(p), sq=_strongPickOf(q).strong && _fpConverged(q);
       if (sp !== sq) return sq ? 1 : -1;   // ★ 只有真三盘合流才置顶；v3 未合流场按时间正常排序
+      /* ★ 2026-11-23 让球轴合流独立通道：只作次级置顶（排在 A强推之后、普通场之前），
+         物理隔离，不抢 A强推首位、不进 A强推业绩。 */
+      const rp=!!_rqStrongOf(p), rq=!!_rqStrongOf(q);
+      if (rp !== rq) return rq ? 1 : -1;
+      /* ★ 2026-11-23 极端净超买独立通道：排在让球轴之后、普通场之前，不抢 A强推首位 */
+      const hp=!!_netHotOf(p), hq=!!_netHotOf(q);
+      if (hp !== hq) return hq ? 1 : -1;
       return (_cmp[VIEW.sort] || _cmp.kick_desc)(p,q);
     }).map(function(e){
       const _sp = _strongPickOf(e);   // 本行强推荐判定（置顶/高亮/标记共用）
@@ -9442,7 +9516,13 @@ function fundplateHistoryHTML(){
     const _hCol = _hg ? _hg.color : '#e54545';
     const _hTag = _hg ? (' <span style="font-size:10px;font-weight:700;color:'+_hg.color+'">'+_hg.tag+'</span>') : '';
     const _ri = _regInfo(e);
-    return '<tr style="border-top:1px solid var(--line);background:'+((_sp.strong&&_fpConverged(e))?'rgba(245,158,11,.14)':bg)+((_sp.strong&&_fpConverged(e))?';box-shadow:inset 3px 0 0 #f59e0b':'')+'">'
+    /* ★ 2026-11-23：独立通道行用紫色左边框（A强推=橙 #f59e0b），同排不同色不混读 */
+    const _rqRow = _rqStrongOf(e);
+    const _nhRow = _netHotOf(e);
+    const _rowHL = (_sp.strong&&_fpConverged(e)) ? 'rgba(245,158,11,.14);box-shadow:inset 3px 0 0 #f59e0b'
+      : (_rqRow ? 'rgba(167,139,250,.10);box-shadow:inset 3px 0 0 #a78bfa'
+      : (_nhRow ? 'rgba(34,211,238,.08);box-shadow:inset 3px 0 0 #22d3ee' : bg));
+    return '<tr style="border-top:1px solid var(--line);background:'+_rowHL+'">'
       +'<td style="padding:6px 7px;white-space:nowrap;opacity:.85">'+esc((e.day||'')+' '+(e.kickoff||''))+_ri.txt+'</td>'
       +'<td style="padding:6px 7px;font-size:12px">'+esc(lgD)+'<div style="font-size:10px;opacity:.55">'+esc(_hcTxt)+_hcSrc+(e.water!=null?(' · 水'+ (+e.water).toFixed(2)):'')+'</div></td>'
       +'<td style="padding:6px 7px"><b>'+esc(homeD)+'</b> vs <b>'+esc(awayD)+'</b></td>'
@@ -9475,10 +9555,13 @@ function fundplateHistoryHTML(){
             if (_fpConverged(e)){ _badge='🔥 正式强推·买受让（三盘合流）'; _col='#f59e0b'; }
             else { _badge='🎯 票差方向·买受让（未合流·吃水区·非强推）'; _col='#94a3b8'; }
           }
-          else if (_a.indexOf('买强队')===0){ _badge='可跟·买强队（边际·主流主场）'; _col='#34d399'; }
+          else           if (_a.indexOf('买强队')===0){ _badge='可跟·买强队（边际·主流主场）'; _col='#34d399'; }
           else { _badge='观望·新规律过滤'; _col='#94a3b8'; }
+          /* ★ 2026-11-23 让球轴合流·独立标签：紫色独立通道，压在方向徽章下方，
+             明确「未通过留出验证」，不与 A强推橙色徽章混读。 */
           return '<td style="padding:6px 7px;font-weight:700;white-space:normal;color:'+_col+'">'+_badge
-            + '<div style="font-size:9.5px;opacity:.65;margin-top:2px;color:#94a3b8;font-weight:400">'+esc(_a)+'</div></td>';
+            + '<div style="font-size:9.5px;opacity:.65;margin-top:2px;color:#94a3b8;font-weight:400">'+esc(_a)+'</div>'
+            + _rqTagHTML(_rqStrongOf(e)) + _netHotTagHTML(_netHotOf(e)) + '</td>';
         })()
       +'<td style="padding:6px 7px;white-space:nowrap;font-weight:700">'+esc(sc)+'</td>'
       +'<td style="padding:6px 7px;font-weight:800;color:'+rc+';white-space:nowrap">'+rs+margin
