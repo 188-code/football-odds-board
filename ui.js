@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-23-triconverge-v2';   // ★ 2026-11-23 三盘配对断链修复配套：临盘好场按「数据质量」并入完整意见主表（不再按新鲜度窗口挡），行内补独赢结算栏与动态命中 KPI，临盘区文案改为真实统计。前版 2026-11-21-livewatch-v4：临盘已入账场并入完整意见片区主表，独赢与亚盘让球物理隔离不混算。
+const UI_V = '2026-11-23-triconverge-v3';   // ★ v3：修「临盘·三盘合流(已并入主表)」整列只显示 VS、队名/联赛空白（账本区 item 不带 home/away，渲染只读 it.home 得空串）；tri_trail 构建改带名 + 前端按 tid 回查账本并 decodeName 还原。前版 v2：临盘好场按数据质量并入完整意见主表。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9449,7 +9449,11 @@ function fundplateHistoryHTML(){
   var _lpPromotedRows = '';
   try{
     var _TTp = (typeof window!=='undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
-    var _lpPromo = Object.keys(_TTp).map(function(k){return _TTp[k];}).filter(function(it){
+    /* ★★ 2026-11-23 保留 item 的 key(tid)：账本区 item 自身不带 tid 字段，
+       而队名/联赛要按 tid 回查 __FUNDPLATE_HISTORY__ 才能取到（用户："比赛队名呢"）。 */
+    var _lpKeyOf = function(k, o){ if(!o) return null; if(o.__k===k) return o;
+      var c=Object.assign({}, o); c.__k=k; return c; };
+    var _lpPromo = Object.keys(_TTp).map(function(k){ return _lpKeyOf(k, _TTp[k]); }).filter(function(it){
       if(!it) return false;
       /* ★★ 2026-11-23 用户第三次强调：「临盘区有好的比赛，纳入完整意见板块入围，三盘合流更好」。
          旧条件要求 displayOnly===true，而 displayOnly 又要求"末帧距开赛≤120分钟"——
@@ -9489,6 +9493,43 @@ function fundplateHistoryHTML(){
       return _lpTs(b)-_lpTs(a);
     });
     var _f3lp = function(a){ return Array.isArray(a)?a.map(function(v){return (+v).toFixed(1);}).join('/'):'—'; };
+    /* ★★ 2026-11-23 队名/联赛统一解码：账本区名字来自 fundplate_history（PUA 私有字体串），
+       必须走 decodeName/_fpName 还原，否则就是空白或字面 HTML；观察区名字是明文，decodeName 原样返回。 */
+    var _lpHistById = null;
+    var _lpDecTxt = function(v){
+      var s='';
+      try{ s = (typeof decodeName==='function') ? (decodeName(v)||'') : v; }catch(_e){ s=v; }
+      return String(s==null?'':s).replace(/<[^>]+>/g,'').replace(/&#x?[0-9a-fA-F]+;/g,'').trim();
+    };
+    var _lpBe = function(it){
+      if(!_lpHistById){
+        _lpHistById = {};
+        try{ (typeof allItems!=='undefined'?allItems:[]).forEach(function(e){ if(e && e.tid!=null) _lpHistById[String(e.tid)] = e; }); }catch(_e){}
+      }
+      return _lpHistById[String(it.__k || it.tid || '')] || null;
+    };
+    var _lpNm = function(it, side){
+      var raw = String(it[side] || it[side+'Zht'] || '');
+      var nm = _lpDecTxt(raw);
+      if (nm) return nm;
+      var be = _lpBe(it);
+      if (be){
+        try{ if (typeof _fpName==='function'){ var v=_fpName(be[side+'Id'], be[side], be[side+'Zht']); if(v) return v; } }catch(_e){}
+        var v2 = _lpDecTxt(be[side] || be[side+'Zht'] || '');
+        if (v2) return v2;
+      }
+      return '';
+    };
+    var _lpLg = function(it){
+      var nm = _lpDecTxt(it.league || '');
+      if (nm) return nm;
+      var be = _lpBe(it);
+      if (be){
+        try{ if (typeof _fpName==='function'){ var v=_fpName(null, be.league, ''); if(v) return v; } }catch(_e){}
+        return _lpDecTxt(be.league || '');
+      }
+      return '';
+    };
     var _lpSeqLine = function(it){
       var sg=it.seg||{}, LBL={jc:'竞彩',bd:'北单',eu:'365'}, parts=[];
       ['jc','bd','eu'].forEach(function(k){
@@ -9537,8 +9578,8 @@ function fundplateHistoryHTML(){
         return '<tr style="border-top:1px solid rgba(52,211,153,.4);background:rgba(52,211,153,.05)">'
           +'<td style="padding:6px 7px;white-space:nowrap">'+esc(String(it.day||''))+' '+esc(String(it.kickoff||''))
             +'<div style="font-size:9.5px;color:'+(_isRef?'#fbbf24':'#34d399')+';font-weight:700">'+(it.promoted===true?'🎯 临盘入账':(_fromLedger?'🎯 临盘·三盘合流(已并入主表)':'🎯 临盘·三盘合流'))+'</div></td>'
-          +'<td style="padding:6px 7px;font-size:11.5px">'+esc(String(it.league||''))+'</td>'
-          +'<td style="padding:6px 7px"><b>'+esc(String(it.home||''))+'</b> vs <b>'+esc(String(it.away||''))+'</b></td>'
+          +'<td style="padding:6px 7px;font-size:11.5px">'+esc(_lpLg(it)||'—')+'</td>'
+          +'<td style="padding:6px 7px"><b>'+esc(_lpNm(it,'home')||'待核')+'</b> vs <b>'+esc(_lpNm(it,'away')||'待核')+'</b></td>'
           +'<td style="padding:6px 7px;font-size:10.5px;color:'+dirCol+';font-weight:700">'+esc(dirTxt)+'</td>'
           +'<td style="padding:6px 7px;vertical-align:top"><b style="color:'+dirCol+'">🎯 '+esc(dirTxt)+'</b>'
             +'<div style="font-size:10px;opacity:.8;margin-top:2px">冻结净Δ <b>'+netTxt+'</b>'
