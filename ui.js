@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-23-rqaxis-v4';   // ★ v4：三盘「不齐」口径根治——新增让球轴(竞彩hhad·线取goalLineValue + 北单rqspf + 365亚盘)三端对齐展示；独赢未开时行内直陈「已开让球/仅让球行」，不再把玩法未开写成抓取缺失；让球轴只展示观察、不进独赢强推分母。前版 v3：修临盘合并行队名/联赛空白。
+const UI_V = '2026-11-23-triconverge-v3';   // ★ v3：修「临盘·三盘合流(已并入主表)」整列只显示 VS、队名/联赛空白（账本区 item 不带 home/away，渲染只读 it.home 得空串）；tri_trail 构建改带名 + 前端按 tid 回查账本并 decodeName 还原。前版 v2：临盘好场按数据质量并入完整意见主表。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -8779,9 +8779,6 @@ function fundplateHistoryHTML(){
     if (!it.seg) return it; // 已是账本扁平 trail
     var s = it.seg || {}, a = it.align || {};
     return { jc: s.jc || null, bd: s.bd || null, eu: s.eu || null, rq: s.rq || null,
-      /* ★ 2026-11-23：让球轴三端（竞彩hhad/北单rqspf/365亚盘）。独赢轴缺端时，
-         这几个字段负责如实说明「数据其实在，只是没开独赢」。 */
-      jcRq: s.jcRq || null, rqAxis: it.rqAxis || s.rqAxis || null,
       flags: it.flags || null, same: a.same || 0, nSrc: a.nSrc || 0,
       lead: a.lead || '', leadT: a.leadT || '', ok: !!it.ok, why: it.why || '',
       dir: a.dir || 0, converge: !!a.converge, rqFade: a.rqFade || null, _live: true };
@@ -8826,23 +8823,19 @@ function fundplateHistoryHTML(){
       var t = _flatTrail(live || (e && e.trail) || (e && e.op && e.op.trail) || T[String(e && e.tid)] || null);
       if (!t) return '';
       var f3 = function(a){ return Array.isArray(a) ? a.map(function(v){ return (+v).toFixed(1); }).join('/') : '—'; };
-      var line = function(lbl, s, extra, alt){
+      var line = function(lbl, s, extra){
         var hdr = '<span style="color:#7dd3fc;font-weight:700">' + lbl + '</span> ';
         /* ★ 2026-11-16：旧文案「缺·无开盘→临盘序列」把「北单没开独赢(只开让球行)」误报成
            数据缺失，用户据此质疑"北单竞彩都有数据怎么可能缺"。其实竞彩/365 帧都在，
            缺的只是【北单独赢 spf rq=0】这一路——北单对强弱悬殊场只开让球行，这是玩法特性，
-           不是漏采；该场已由「🔬 三盘资金·过热·挑战版」用洋哥盘级换算覆盖。按准确口径重写。
-           ★ 2026-11-23 再修：竞彩同理（强弱悬殊只开让球胜平负 hhad，不开胜平负 had），
-           旧文案写"无赛前帧/未开盘"让用户以为漏采。缺独赢时若让球盘有值，直接把让球值摆出来。 */
+           不是漏采；该场已由「🔬 三盘资金·过热·挑战版」用洋哥盘级换算覆盖。按准确口径重写。 */
         if (!s || !s.ok) {
           var _why = '序列不齐';
           if (s && !s.n && /仅让球行|无独赢/.test(String(s.src || '')))
             _why = '北单未开独赢·仅让球行（挑战版已覆盖）';
           else if (s && s.n === 1) _why = '仅1帧·建不起开盘→临盘';
-          else if (s && !s.n && alt) _why = '独赢未开';
           else if (s && !s.n) _why = '无赛前帧';
-          return '<div style="margin-top:2px">' + hdr + '<span style="color:#fbbf24">' + _why + '</span>'
-            + (alt || '') + '</div>';
+          return '<div style="margin-top:2px">' + hdr + '<span style="color:#fbbf24">' + _why + '</span></div>';
         }
         var d = +s.net || 0, col = d > 1 ? '#f59e0b' : (d < -1 ? '#38bdf8' : '#94a3b8');
         return '<div style="margin-top:2px">' + hdr + (s.n || 0) + '帧 ' + f3(s.open) + ' → ' + f3(s.close)
@@ -8856,54 +8849,17 @@ function fundplateHistoryHTML(){
         return h + '<b>三盘待接入·仅有必发来源登记</b><br>未见该场竞彩/北单赛前帧；不代表已确认未开售。<br>365现有 ' + ((t.eu&&t.eu.n)||0) + ' 帧，尚不足构建完整三盘。<br>本行不是三盘分析结论，不作强推依据。</div>';
       }
       h += '<div style="font-weight:800;color:#93c5fd;margin-bottom:3px">📈 三盘开盘→临盘（v3 序列·非单帧）</div>';
-      /* ★ 2026-11-23：独赢轴缺端时，把「让球盘其实有值」直接摆在行内，
-         不再让用户以为竞彩/北单没抓到数据。 */
-      var _ax = t.rqAxis || null;
-      var _jcAlt = '';
-      if ((!t.jc || !t.jc.ok) && t.jcRq && t.jcRq.n > 0)
-        _jcAlt = ' <span style="color:#fbbf24">· 已开让球' + (t.jcRq.line != null ? ' ' + (+t.jcRq.line) : '') + ' ' + f3(t.jcRq.close) + '（hhad）</span>';
-      var _bdAlt = '';
-      if ((!t.bd || !t.bd.ok) && t.rq && t.rq.n > 0)
-        _bdAlt = ' <span style="color:#fbbf24">· 仅让球行' + (t.rq.rq != null ? ' ' + (+t.rq.rq) : '') + ' ' + f3(t.rq.close) + '</span>';
-      h += line('①竞彩 had', t.jc, '', _jcAlt);
-      h += line('②北单独赢', t.bd, (t.flags && t.flags.rqOnly) ? ' <span style="color:#ff8a8a">[仅让球行·玩法不同]</span>' : '', _bdAlt);
+      h += line('①竞彩 had', t.jc);
+      h += line('②北单独赢', t.bd, (t.flags && t.flags.rqOnly) ? ' <span style="color:#ff8a8a">[仅让球行·玩法不同]</span>' : '');
       h += line('③365开盘价', t.eu, (t.eu && isFinite(+t.eu.hcapMove) && +t.eu.hcapMove !== 0)
                 ? ' <span style="opacity:.7">初盘' + (+t.eu.hcapMove > 0 ? '升' : '降') + Math.abs(+t.eu.hcapMove).toFixed(2) + '</span>' : '');
       h += '<div style="margin-top:3px;opacity:.85">同向 <b>' + (t.same || 0) + '/' + (t.nSrc || 0) + '</b>'
          + (t.lead ? ' · 先动 ' + esc(String(t.lead)) : '')
          + (t.rq && t.rq.n ? ' · <span style="opacity:.7">让球行 ' + f3(t.rq.open) + '→' + f3(t.rq.close) + '（玩法不同·不进独赢对齐）</span>' : '')
          + '</div>';
-      /* ★★ 2026-11-23 让球轴三端对齐（只展示/观察：不改 ok、不改 align、不进方向与门槛）。
-         用户的疑问「竞彩/北单/365 都有，为什么还说不齐」就在这里回答：
-         独赢轴缺端 ≠ 数据缺失；让球轴常常是三端齐全的。 */
-      if (_ax && _ax.n >= 2) {
-        var _nm = { jc: '竞彩', bd: '北单', eu: '365' };
-        var _legs = (_ax.legs || []).map(function(l){
-          var _lg = Math.abs(+l.line);
-          var _homeGive = (l.k === 'eu') ? (+l.line > 0) : (+l.line < 0); // 365:+主让 / 北单·竞彩:-主让
-          var _lnTxt = _lg === 0 ? '平手' : ((_homeGive ? '主让' : '客让') + _lg.toFixed(2).replace(/\.00$/, ''));
-          var val = (l.k === 'eu') ? ('水 ' + (+l.w0).toFixed(2) + '→' + (+l.w1).toFixed(2)) : f3(l.close);
-          var dc = l.dir > 0 ? '#f59e0b' : (l.dir < 0 ? '#38bdf8' : '#94a3b8');
-          return '<span style="color:' + dc + ';font-weight:700">' + (_nm[l.k] || l.k) + ' ' + _lnTxt + '</span> <span style="opacity:.75">' + val + '</span>';
-        }).join(' · ');
-        var _cls = _ax.converge ? '3/3 同线同向'
-          : (_ax.n === 3 ? (_ax.lineOk ? '3/3 同线·方向分歧' : '3/3 但让球线不同') : '仅 ' + _ax.n + ' 端');
-        var _col = _ax.converge ? '#34d399' : (_ax.ready ? '#fbbf24' : '#94a3b8');
-        h += '<div style="margin-top:4px;padding-top:3px;border-top:1px dotted rgba(148,163,184,.4)">'
-          + '<span style="color:#a78bfa;font-weight:800">让球轴（竞彩hhad+北单rqspf+365亚盘）</span> '
-          + '<b style="color:' + _col + '">' + esc(_cls) + '</b>'
-          + (_ax.grade ? ' <span style="opacity:.85">' + esc(_ax.grade) + '</span>' : '')
-          + (_ax.deep ? ' <span style="color:#fca5a5">深盘·铁律不给方向</span>' : '')
-          + '<div style="margin-top:1px;font-size:9.5px;line-height:1.5">' + _legs + '</div>'
-          + '<div style="margin-top:1px;font-size:9.5px;color:#8fa3b8">' + esc(_ax.note || '')
-          + ' · 让球轴只作展示/观察，不进独赢强推分母</div>'
-          + '</div>';
-      }
       h += '<div style="margin-top:3px">' + (t.ok
         ? '<span style="color:#34d399">序列齐·三盘可判</span>'
         : '<span style="color:#ff8a8a;font-weight:800">⚠ ' + esc(t.why || '序列不齐') + ' → v3 护栏：只观察</span>') + '</div>';
-      if (!t.ok && _ax && _ax.converge)
-        h += '<div style="margin-top:2px;font-size:9.5px;color:#a5b4fc">ℹ️ 让球轴三端已齐——「不齐」说的只是<b>独赢轴</b>（竞彩/北单未开独赢）。深盘不给方向是铁律，不是漏数据。</div>';
       var rd = String((e && e.recDir) || '');
       if (!t.ok && /^(买强队|买受让)/.test(rd))
         h += '<div style="margin-top:2px;color:#fca5a5">当时发了「' + esc(rd.slice(0, 18)) + '」，按 v3 序列护栏应判观察（意见原文按冻结铁律保留）</div>';
