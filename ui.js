@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-23-triconverge-v1';   // ★ 2026-11-23 三盘配对断链修复配套：临盘好场按「数据质量」并入完整意见主表（不再按新鲜度窗口挡），行内补独赢结算栏与动态命中 KPI，临盘区文案改为真实统计。前版 2026-11-21-livewatch-v4：临盘已入账场并入完整意见片区主表，独赢与亚盘让球物理隔离不混算。
+const UI_V = '2026-11-21-livewatch-v4';   // ★ 2026-11-21 临盘已入账场并入完整意见片区主表：tri_trail.promoted 场按日期筛选作为正式意见行插入 fundplate 主表顶部，给方向/序列/独赢结算；独赢与亚盘让球物理隔离不混算。前版 refreeze-v2： A+B门：A=末帧≤开赛前120分才有资格入临盘方向账本；B=已开赛/单端错过的真临盘强信号正式展示核对但不进业绩分母。前版临账本v1：数据齐(序列齐+明确方向)的观察场赛前入独立临盘方向账本(独赢口径)，赛前不符合剔除、开赛冻结、赛后独赢结算，计入命中/ROI；与亚盘账本物理隔离。前版 2026-11-21 末帧时刻纠偏；2026-11-19 历史复盘表新增「🔍 洋哥动态缺口核对」只读观察列：缺口=100%−365返还率(动态)、偏差>缺口判大热站对面(买受让)、弃用固定15%；与旧15%口径并列命中率对照，方便核对哪个更准；不进引擎/方向/仓位/推送。前版 2026-11-18 新增「📋 两盘评分卡v1」只读观察标签：账本复盘+实时板两盘场方向位加 A级/B级/观察（三条硬门槛 G1净超买/G2票型/G3·365确认，G4控赔定档）；不进 recDir/票权重/推送。回测可发档8场7中87.5%，观察档5场1中20%（n小·事后归因·无独立留出）。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9284,32 +9284,7 @@ function fundplateHistoryHTML(){
     + _kpi('受让方 / 让球方命中', (rate==null?'—':rate+'%')+' / '+(dec.length ? (Math.round(nLose/dec.length*1000)/10)+'%' : '—'))
     + _kpi('样本误差', _seTxt);
   const sum = _covBox + _peakBox + _liveWatchHTML() + _kpi('已登记', items.length+' 场')
-    + (function(){
-        var _p=0,_tri=0,_triWin=0,_triLose=0;
-        try{
-          var _X=(window.__TRI_TRAIL__&&window.__TRI_TRAIL__.items)||{};
-          Object.keys(_X).forEach(function(k){
-            var it=_X[k]; if(!it||it.watch!==true) return;
-            if(VIEW.day!=='all'&&String(it.day||'')!==VIEW.day) return;
-            if(it.promoted===true) _p++;
-            var _n=(it.align&&it.align.nSrc)||0;
-            var _cv=!!(it.align&&it.align.converge);
-            var _og=!!(it.yg365&&it.yg365.overGap===true);
-            if(_n>=2 && (_cv||_og) && it.watchDir && it.watchDir.side){
-              _tri++;
-              if(it.res && it.res.hs!=null && it.res.as!=null && it.res.verified!==false && it.res.hs!=it.res.as){
-                var _sh = it.strongIdx!==2;
-                var _ph = it.watchDir.side==='strong' ? _sh : !_sh;
-                var _w = _ph ? (+it.res.hs>+it.res.as) : (+it.res.as>+it.res.hs);
-                if(_w) _triWin++; else _triLose++;
-              }
-            }
-          });
-        }catch(e){}
-        var _rate = (_triWin+_triLose) ? Math.round(_triWin/(_triWin+_triLose)*1000)/10 : null;
-        return (_p?_kpi('🎯 临盘已入账(独赢·单独计)', _p+' 场', '#34d399'):'')
-          + (_tri?_kpi('🔥 临盘·三盘合流(已入完整意见)', _tri+' 场' + (_rate!=null?(' · 独赢 '+_triWin+'/'+(_triWin+_triLose)+' 中 '+_rate+'%'):' · 待结算'), (_rate!=null&&_rate>=50?'#f59e0b':'#dc2626')):'');
-      })()
+    + (function(){ var _n=0; try{ var _X=(window.__TRI_TRAIL__&&window.__TRI_TRAIL__.items)||{}; Object.keys(_X).forEach(function(k){var it=_X[k]; if(!it||it.watch!==true||it.promoted!==true) return; if(VIEW.day!=='all'&&String(it.day||'')!==VIEW.day) return; _n++;}); }catch(e){} return _n ? _kpi('🎯 临盘已入账(独赢·单独计)', _n+' 场', '#34d399') : ''; })()
     + _kpi('赛前登记', nPre+' 场', '#16a34a')
     + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
     + _kpi('赛前已结算', (dec.length+nPush)+' 场（待结算 '+nPend+'）')
@@ -9433,25 +9408,7 @@ function fundplateHistoryHTML(){
   var _lpPromotedRows = '';
   try{
     var _TTp = (typeof window!=='undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
-    var _lpPromo = Object.keys(_TTp).map(function(k){return _TTp[k];}).filter(function(it){
-      if(!it || it.watch!==true) return false;
-      if(it.promoted===true) return true;
-      /* ★★ 2026-11-23 用户第三次强调：「临盘区有好的比赛，纳入完整意见板块入围，三盘合流更好」。
-         旧条件要求 displayOnly===true，而 displayOnly 又要求"末帧距开赛≤120分钟"——
-         结果大量"序列齐 + 破缺口/三盘同向 + 有方向"的好场被挡在门外（实测 0 场）。
-         现改为按【数据质量】入围，不再按"新鲜度窗口"：
-           ① 两端以上有符号序列 且（三盘同向 converge 或 破缺口 overGap）→ 三盘合流优先，置顶
-           ② A门真临盘 displayOnly（单端也认）→ 展示核对
-         全部带独赢方向 + 比分 + 结算；独赢口径与主表亚盘让球物理隔离、单列标注。 */
-      var _n=(it.align&&it.align.nSrc)||0;
-      var _cv=!!(it.align&&it.align.converge);
-      var _og=!!(it.yg365&&it.yg365.overGap===true);
-      var _side=it.watchDir && it.watchDir.side;
-      if(!_side || (_side!=='weak' && _side!=='strong')) return false;
-      if(_n>=2 && (_cv || _og)) return true;
-      if(it.displayOnly===true && _n>=1) return true;
-      return false;
-    });
+    var _lpPromo = Object.keys(_TTp).map(function(k){return _TTp[k];}).filter(function(it){ return it && it.watch===true && it.promoted===true; });
     if (VIEW.day!=='all') _lpPromo = _lpPromo.filter(function(it){ return String(it.day||'')===VIEW.day; });
     else if (VIEW.range!=='all'){
       var _nl=VIEW.range==='latest'?1:(VIEW.range==='3d'?3:7), _kl={};
@@ -9459,13 +9416,7 @@ function fundplateHistoryHTML(){
       _lpPromo = _lpPromo.filter(function(it){ return _kl[String(it.day||'')]; });
     }
     var _lpTs = function(it){ try{var d=String(it.day||''),t=String(it.kickoff||'');return new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8),+t.slice(0,2),+t.slice(3,5)).getTime()||0;}catch(e){return 0;} };
-    _lpPromo.sort(function(a,b){
-      var ra = !a.promoted, rb = !b.promoted;
-      if (ra !== rb) return ra ? -1 : 1;       // 三盘合流参考场排最前
-      var ca = (a.align&&a.align.converge)?1:0, cb=(b.align&&b.align.converge)?1:0;
-      if (ca !== cb) return cb - ca;
-      return _lpTs(b)-_lpTs(a);
-    });
+    _lpPromo.sort(function(a,b){ return _lpTs(b)-_lpTs(a); });
     var _f3lp = function(a){ return Array.isArray(a)?a.map(function(v){return (+v).toFixed(1);}).join('/'):'—'; };
     var _lpSeqLine = function(it){
       var sg=it.seg||{}, LBL={jc:'竞彩',bd:'北单',eu:'365'}, parts=[];
@@ -9490,24 +9441,11 @@ function fundplateHistoryHTML(){
           if (le.result==='win'){ settle='✅独赢命中 '+pick; settleCol='#ff7c7c'; }
           else if (le.result==='lose'||le.result==='draw'){ settle='❌未中 '+pick; settleCol='#4ade80'; }
           else if (it.res){ settle='已赛完·独赢结算待回填'; }
-        } else if (it.res && it.res.hs != null && it.res.as != null && it.res.verified !== false){
-          /* ★ 2026-11-23 补「结算一栏」：账本 sidecar 没赶上时，直接用已核验比分按独赢口径现算，
-             不与亚盘让球混算（独赢平局=走水退本）。 */
-          var _strongIsHome = it.strongIdx !== 2;
-          var _pickHome = side === 'strong' ? _strongIsHome : !_strongIsHome;
-          var _hs3 = +it.res.hs, _as3 = +it.res.as;
-          if (_hs3 === _as3){ settle='➖独赢走水·平局退本'; settleCol='#fbbf24'; }
-          else {
-            var _win3 = _pickHome ? _hs3 > _as3 : _as3 > _hs3;
-            settle = (_win3 ? '✅独赢命中 ' : '❌未中 ') + (_pickHome ? '【主】' : '【客】') + ' ' + _hs3 + ':' + _as3;
-            settleCol = _win3 ? '#ff7c7c' : '#4ade80';
-          }
         } else if (it.res){ settle='已赛完·账本同步中'; }
         var netTxt = (net==null||!isFinite(+net))?'—':(((+net)>=0?'+':'')+(+net).toFixed(1)+'pp');
-        var _isRef = !it.promoted;
         return '<tr style="border-top:1px solid rgba(52,211,153,.4);background:rgba(52,211,153,.05)">'
           +'<td style="padding:6px 7px;white-space:nowrap">'+esc(String(it.day||''))+' '+esc(String(it.kickoff||''))
-            +'<div style="font-size:9.5px;color:'+(_isRef?'#fbbf24':'#34d399')+';font-weight:700">'+(_isRef?'🎯 临盘·三盘合流':'🎯 临盘入账')+'</div></td>'
+            +'<div style="font-size:9.5px;color:#34d399;font-weight:700">🎯 临盘入账</div></td>'
           +'<td style="padding:6px 7px;font-size:11.5px">'+esc(String(it.league||''))+'</td>'
           +'<td style="padding:6px 7px"><b>'+esc(String(it.home||''))+'</b> vs <b>'+esc(String(it.away||''))+'</b></td>'
           +'<td style="padding:6px 7px;font-size:10.5px;color:'+dirCol+';font-weight:700">'+esc(dirTxt)+'</td>'
@@ -9515,7 +9453,7 @@ function fundplateHistoryHTML(){
             +'<div style="font-size:10px;opacity:.8;margin-top:2px">冻结净Δ <b>'+netTxt+'</b>'
             +' · 同向 '+((wd.sameN)||0)+'/'+((it.align&&it.align.nSrc)||0)+(wd.lead?(' · 先动'+esc(String(wd.lead))):'')+'</div>'
             +'<div style="font-size:9.5px;opacity:.65;line-height:1.5;margin-top:2px">'+_lpSeqLine(it)+'</div></td>'
-          +'<td style="padding:6px 7px;font-size:10px;color:'+(_isRef?'#fbbf24':'#34d399')+';font-weight:700;white-space:normal">'+(_isRef?('三盘合流·'+(it.align&&it.align.converge?'三端同向':'破缺口')+'·'+((it.align&&it.align.nSrc)||0)+'端序列齐·独赢口径'):'A门真临盘·序列齐·赛前冻结方向')+'</td>'
+          +'<td style="padding:6px 7px;font-size:10px;color:#34d399;font-weight:700;white-space:normal">A门真临盘·序列齐·赛前冻结方向</td>'
           +'<td style="padding:6px 7px;white-space:nowrap;font-weight:700">'+sc+'</td>'
           +'<td style="padding:6px 7px;font-weight:800;color:'+settleCol+';white-space:nowrap;font-size:10.5px">'+settle
             +'<div style="font-size:9px;opacity:.7;font-weight:400">独赢口径·不并入亚盘让球统计</div></td>'
@@ -9523,8 +9461,8 @@ function fundplateHistoryHTML(){
           +'</tr>';
       }).join('');
       _lpPromotedRows = '<tr style="background:rgba(52,211,153,.16)"><td colspan="9" style="padding:6px 8px;font-weight:800;color:#6ee7b7;font-size:11.5px">'
-        +'🎯 临盘方向账本 · 已并入完整意见（独赢口径 · '+_lpPromo.length+' 场 / 当前筛选）'
-        +'<span style="font-weight:400;opacity:.85;margin-left:8px">已入账=A门真临盘(末帧≤120分)+序列齐+方向明确并赛前冻结；「临盘·三盘合流」=两端以上序列齐且三端同向/破缺口的好场（排最前）。独赢结算与下方亚盘让球主表物理隔离，不并入上方亚盘统计</span></td></tr>'+_lpBody;
+        +'🎯 临盘方向账本 · 已入账场次（独赢口径 · '+_lpPromo.length+' 场 / 当前筛选）'
+        +'<span style="font-weight:400;opacity:.85;margin-left:8px">已入账=赛前真临盘(末帧≤120分)+序列齐+方向明确；独赢结算与下方亚盘让球主表物理隔离，不并入上方统计</span></td></tr>'+_lpBody;
     }
   }catch(_e){ try{ console.warn('lpPromotedRows',_e); }catch(__e){} }
   let h = '<div style="margin:16px 0 4px;padding:12px 14px;background:linear-gradient(135deg,#141b26,#111823);border:1px solid var(--line);border-radius:12px;color:#dbe6f2">';
@@ -9809,28 +9747,13 @@ function fundplateHistoryHTML(){
          112 场全是"展示核对·不入账"——既无命中率也无结算，还占据完整意见板块主视觉。
          按用户"折叠降级、回到16号前单板块"的明确要求：默认收起、标注实验性质，数据保留可展开追溯，
          不再干扰主表（fundplate_history 亚盘让球·62.4%已结算口径）的视觉与统计。 */
-      /* ★★ 2026-11-23 用户第三次反馈：临盘区"0 入账/0 结算/没命中率"。
-         根因不是算法，是三盘配对断链导致临盘场根本没数据（已修 _build_tri_trail 的
-         365 byNo±1天 / 队名兜底 / 北单 2帧放宽 / linpan 不再因时间流逝 drop）。
-         本块改为【真实动态统计】：入账数、已结算数、独赢命中率全部现算，
-         不再写死"0 场"自我否定。 */
-      var _wProm = wItems.filter(function(x){return x.promoted;}).length;
-      var _wSettled = 0, _wHit = 0;
-      wItems.forEach(function(it){
-        if(!it.res || it.res.hs==null || it.res.as==null || it.res.verified===false) return;
-        if(!it.watchDir || !it.watchDir.side || it.res.hs==it.res.as) return;
-        var _sh = it.strongIdx!==2, _ph = it.watchDir.side==='strong'?_sh:!_sh;
-        _wSettled++;
-        if(_ph ? (+it.res.hs>+it.res.as) : (+it.res.as>+it.res.hs)) _wHit++;
-      });
-      var _wRate = _wSettled ? Math.round(_wHit/_wSettled*1000)/10 : null;
       return '<details style="margin-top:14px;padding:8px 12px;border:1px dashed rgba(125,211,252,.3);border-radius:10px">'
-        + '<summary style="cursor:pointer;font-weight:700;color:#8b98a9;font-size:12px;padding:2px 0">📡 临盘区 · 独赢口径明细（默认折叠 · 入账 '+_wProm+' / 已结算 '+_wSettled+' 场' + (_wRate!=null?(' / 独赢命中 '+_wRate+'%'):'') + ' · 点击展开追溯）</summary>'
-        + '<div style="font-size:10.5px;color:#94a3b8;margin:6px 0 4px">好场已按「三盘合流优先」并入上方完整意见板块主表顶部（带方向/比分/独赢结算）；本区是同一批场的明细追溯视图，独赢口径与主表亚盘让球物理隔离。</div>'
-        + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 临盘区 · 数据达标场次（已入账 ' + _wProm + ' / 展示核对 ' + wItems.filter(function(x){return x.displayOnly;}).length + ' / 当前 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
+        + '<summary style="cursor:pointer;font-weight:700;color:#8b98a9;font-size:12px;padding:2px 0">📡 临盘区 · 独立实验板块（默认折叠 · 独赢口径 · 0 入账 / 0 结算 · 不进业绩 · 点击展开追溯）</summary>'
+        + '<div style="font-size:10.5px;color:#94a3b8;margin:6px 0 4px">⚠ 本区为 11-20 新增实验，与 16 号前那套已结算 62.4% 的「完整意见快照覆盖板块」不是一套口径；全库 0 场真正入账、命中率暂无法计算。主表业绩请看上方完整意见板块。</div>'
+        + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 临盘区 · 数据达标场次（已入账 ' + wItems.filter(function(x){return x.promoted;}).length + ' / 展示核对 ' + wItems.filter(function(x){return x.displayOnly;}).length + ' / 当前 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
         + '<div id="linpanLedgerStat" style="margin:4px 0 8px;padding:8px 10px;border-radius:8px;background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.3);font-size:11px;line-height:1.7;color:#dbe6f2">🎯 <b style="color:#6ee7b7">临盘方向账本（独赢口径）</b>：读取中…</div>'
         + '<div style="font-size:11px;line-height:1.7;color:#b9c7d8;margin-bottom:7px">'
-        + '<b style="color:#34d399">✅ 标「已入账」的场次 = A门真临盘（至少一端末帧≤开赛前120分钟）+ 序列齐（≥2端）+ 有明确方向 + 未开赛，赛前冻结方向并按正式场次置顶给方向，计入独立临盘方向账本；赛前方向翻转 / 序列由齐转不齐 / 临盘端消失才剔除（时间自然流逝不算），开赛后冻结不再改、赛后按独赢比分结算一次。</b><br>'
+        + '<b style="color:#34d399">✅ 标「已入账」的场次 = A门真临盘（至少一端末帧≤开赛前120分钟）+ 序列齐（≥2端）+ 有明确方向 + 未开赛，赛前冻结方向并按正式场次置顶给方向，计入独立临盘方向账本；赛前临盘方向翻转 / 序列由齐转不齐 / 末帧变旧即剔除出业绩分母，开赛后冻结不再改、赛后按独赢比分结算一次。</b><br>'
         + '<b style="color:#fbbf24">⚡ 标「真临盘方向·展示核对」的场次 = B门：已抓到真临盘且有方向，但因已开赛 / 单端 / 冻结时还没临盘帧错过赛前入账窗口；按正式方向展示并单场核对，绝不补进业绩分母（守住不事后回填铁律）。</b><br>'
         + '<b style="color:#fbbf24">⚠ 该账本是独赢口径（weak 买弱方 / strong 买强方），与 fundplate_history（亚盘让球·押受让/让球方）物理隔离、绝不混算——两套结算语义不同，混算会把胜负判反。</b><br>'
         + '北单让球盘与独赢盘严格分开；缺联赛、时间冲突或队名有歧义时不猜配。某端为空不代表另一端也未采集。'
