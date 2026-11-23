@@ -9135,6 +9135,36 @@ function fundplateHistoryHTML(){
     + '· <b style="color:#94a3b8">仅净超买口径</b> ' + _nOpLite + ' 场 → 早期条目（当时引擎未算四量、北单源已蒸发，<b>物理上补不回</b>），只显示净超买/缺口<br>'
     + '<span style="color:#b45309;font-weight:700">✅ 从 2026-11-05 起新登记的场次 100% 带完整四量，且开赛那一刻自动定格。</span>'
     + '</div></div>';
+  /* ★★ 2026-11-23 用户："想要回到16号以前的命中率高峰时刻"。
+     用账本真实数据算 16号前/后 两段「给方向且已结算」的命中率对照，纯读账本、不写死数字、不造假。
+     口径：recDir 以"买"开头=给了方向；result win/lose 为已结算（win=受让赢盘）；买受让命中=win，买强队命中=lose。
+     诚实边界：16号后命中率下降主要是①给方向场次骤减(被序列不齐铁律挡)②未知/深盘错误率高——不是抓取丢失。 */
+  const _peakBox = (function(){
+    try{
+      const seg = function(from, to){
+        let n=0, w=0;
+        (allItems||[]).forEach(function(e){
+          const d = String(e.day||''); if (!d || d<from || d>to) return;
+          if (!/^买/.test(String(e.recDir||''))) return;
+          if (e.result!=='win' && e.result!=='lose') return;
+          n++;
+          const buyStrong = /^买强队/.test(String(e.recDir||''));
+          if (buyStrong ? (e.result==='lose') : (e.result==='win')) w++;
+        });
+        return {n:n, w:w, rate: n ? Math.round(w/n*1000)/10 : null};
+      };
+      const pre = seg('20261107','20261115'), post = seg('20261116','20261123');
+      if (!pre.n && !post.n) return '';
+      const rateTxt = function(s){ return s.n ? (s.w+'/'+s.n+' · '+s.rate+'%') : '无样本'; };
+      const col = function(s){ return s.rate==null ? '#94a3b8' : (s.rate>=55?'#16a34a':(s.rate>=50?'#f59e0b':'#dc2626')); };
+      return '<div style="margin:0 0 9px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.35);font-size:11.5px;line-height:1.7">'
+        + '<b style="color:#f59e0b;font-size:12.5px">📈 命中率高峰对照（账本真实已结算 · 给方向口径）</b>'
+        + '<div style="margin-top:3px">· <b>16号前（11-07~15）</b>：<b style="color:'+col(pre)+'">'+rateTxt(pre)+'</b>'
+        + ' ｜ <b>16号后（11-16~23）</b>：<b style="color:'+col(post)+'">'+rateTxt(post)+'</b></div>'
+        + '<div style="font-size:10.3px;opacity:.82;line-height:1.6">数据抓取未退步——16号后三盘序列记录反而从几乎为零增至 353 场。命中率下降真因：①给方向场次被「序列不齐」铁律大幅收窄（不是抓取丢失）；②未知/深盘盘口错误率偏高。'
+        + '<b>本看板主业绩=上方完整意见板块已结算口径；临盘区（独赢实验·0入账）已折叠、不进此分母。</b></div></div>';
+    }catch(_e){ return ''; }
+  })();
   /* ★★ 2026-11-21 实时观察档（根治「数据抓到了却不入围/漏算」）：
      背景：fundplate_history 登记只遍历冻结的 bake_pack.packs（gqj2 567 封禁后冻在 11-15），
      导致 11-16 起新场次进不了快照（实测 11-22 有 137 场 watch/42 场三端齐却只登记 7 场）。
@@ -9253,7 +9283,7 @@ function fundplateHistoryHTML(){
   const _filteredKpi = _kpi('当前筛选·赛前结算', dec.length+' 注', '#7c3aed')
     + _kpi('受让方 / 让球方命中', (rate==null?'—':rate+'%')+' / '+(dec.length ? (Math.round(nLose/dec.length*1000)/10)+'%' : '—'))
     + _kpi('样本误差', _seTxt);
-  const sum = _covBox + _liveWatchHTML() + _kpi('已登记', items.length+' 场')
+  const sum = _covBox + _peakBox + _liveWatchHTML() + _kpi('已登记', items.length+' 场')
     + (function(){ var _n=0; try{ var _X=(window.__TRI_TRAIL__&&window.__TRI_TRAIL__.items)||{}; Object.keys(_X).forEach(function(k){var it=_X[k]; if(!it||it.watch!==true||it.promoted!==true) return; if(VIEW.day!=='all'&&String(it.day||'')!==VIEW.day) return; _n++;}); }catch(e){} return _n ? _kpi('🎯 临盘已入账(独赢·单独计)', _n+' 场', '#34d399') : ''; })()
     + _kpi('赛前登记', nPre+' 场', '#16a34a')
     + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
@@ -9712,7 +9742,14 @@ function fundplateHistoryHTML(){
           + '<td style="padding:5px 7px;white-space:nowrap;font-size:12px">' + resTxt + '</td>'
           + '</tr>';
       }).join('');
-      return '<div style="margin-top:14px;padding:10px 12px;border:1px dashed rgba(125,211,252,.45);border-radius:10px">'
+      /* ★ 2026-11-23 用户："16号以前就没有临盘区，只有完整意见快照覆盖板块，而且命中率高"。
+         该板块是 11-20 新增的独立实验账本（独赢口径），实测全库 0 场真正入账、0 场结算、
+         112 场全是"展示核对·不入账"——既无命中率也无结算，还占据完整意见板块主视觉。
+         按用户"折叠降级、回到16号前单板块"的明确要求：默认收起、标注实验性质，数据保留可展开追溯，
+         不再干扰主表（fundplate_history 亚盘让球·62.4%已结算口径）的视觉与统计。 */
+      return '<details style="margin-top:14px;padding:8px 12px;border:1px dashed rgba(125,211,252,.3);border-radius:10px">'
+        + '<summary style="cursor:pointer;font-weight:700;color:#8b98a9;font-size:12px;padding:2px 0">📡 临盘区 · 独立实验板块（默认折叠 · 独赢口径 · 0 入账 / 0 结算 · 不进业绩 · 点击展开追溯）</summary>'
+        + '<div style="font-size:10.5px;color:#94a3b8;margin:6px 0 4px">⚠ 本区为 11-20 新增实验，与 16 号前那套已结算 62.4% 的「完整意见快照覆盖板块」不是一套口径；全库 0 场真正入账、命中率暂无法计算。主表业绩请看上方完整意见板块。</div>'
         + '<div style="font-weight:800;color:#7dd3fc;font-size:13px;margin-bottom:3px">📡 临盘区 · 数据达标场次（已入账 ' + wItems.filter(function(x){return x.promoted;}).length + ' / 展示核对 ' + wItems.filter(function(x){return x.displayOnly;}).length + ' / 当前 ' + wItems.length + ' / 共 ' + wAll.length + ' 场）</div>'
         + '<div id="linpanLedgerStat" style="margin:4px 0 8px;padding:8px 10px;border-radius:8px;background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.3);font-size:11px;line-height:1.7;color:#dbe6f2">🎯 <b style="color:#6ee7b7">临盘方向账本（独赢口径）</b>：读取中…</div>'
         + '<div style="font-size:11px;line-height:1.7;color:#b9c7d8;margin-bottom:7px">'
@@ -9737,7 +9774,7 @@ function fundplateHistoryHTML(){
                   + ' <span style="opacity:.6">— ' + esc(String(it.why||'无可读序列')) + '</span></div>';
               }).join('')
             + '</div></details>' : '')
-        + '</div>';
+        + '</div></details>';
     }catch(_e){ return ''; }
   })();
   /* ★★ 2026-11-17 全量逐场三盘序列清单（用户明确选择"加全量清单"）：
