@@ -1,25 +1,25 @@
 {
   "version": "basket_overheat_seqchain_mnl_20261119",
-  "updated": "2026-11-23T23:00:17.944Z",
+  "updated": "2026-11-23T23:15:17.059Z",
   "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。展示集=统计集=版本集。",
   "summary": {
-    "totalMatches": 36,
-    "withNorth": 15,
-    "noNorth": 21,
-    "resonanceN": 12,
-    "withB365": 5,
-    "strongN": 2,
-    "strongSettled": 0,
-    "strongHit": 0,
-    "strongHitRate": null,
-    "strongSe": null,
-    "t7SettledN": 0,
-    "hotFlagged": 33,
-    "settledN": 24,
-    "hit": 13,
-    "hitRate": 54.2,
-    "se": 10.2,
-    "significant": false,
+    "totalMatches": 83,
+    "withNorth": 26,
+    "noNorth": 57,
+    "resonanceN": 22,
+    "withB365": 34,
+    "strongN": 12,
+    "strongSettled": 10,
+    "strongHit": 2,
+    "strongHitRate": 20,
+    "strongSe": 12.6,
+    "t7SettledN": 10,
+    "hotFlagged": 71,
+    "settledN": 51,
+    "hit": 20,
+    "hitRate": 39.2,
+    "se": 6.8,
+    "significant": true,
     "crossZero": false,
     "caveat": "n<40观察档;一盘=竞彩独赢资金趋势(洋哥顺序链起点);二盘365自2026-11-20起用球探滚动帧补位(此前缺位,历史场无365=真实缺,不回补);三盘北单让分近似确认;强置信=三端合流(JC+365+北单同侧),前瞻口径无历史回测,不进引擎;第4步临场序列篮球做不到"
   },
@@ -583,6 +583,60 @@
       "result": "home",
       "resultScore": "118-114",
       "resSrc": "verified"
+    },
+    {
+      "id": "2042857",
+      "day": "2026-11-18",
+      "league": "澳大利亚篮球联赛",
+      "home": "新西兰破坏者",
+      "away": "东南墨尔本凤凰",
+      "capturedAt": "2026-11-18T11:45:03+08:00",
+      "mnl": {
+        "home": 1.86,
+        "away": 1.56
+      },
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": 1.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.84,
+        "gap": 15.16,
+        "pH": 45.6,
+        "pA": 54.4,
+        "hot1": "away",
+        "hotPct": 54.4,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘趋势弱(54.4%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
     },
     {
       "id": "2042858",
@@ -1259,6 +1313,60 @@
       "resSrc": "verified"
     },
     {
+      "id": "2042871",
+      "day": "2026-11-19",
+      "league": "澳大利亚篮球联赛",
+      "home": "伊拉瓦拉老鹰",
+      "away": "阿德莱德36人",
+      "capturedAt": "2026-11-19T15:45:03+08:00",
+      "mnl": {
+        "home": 2.18,
+        "away": 1.39
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 4.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.88,
+        "gap": 15.12,
+        "pH": 38.9,
+        "pA": 61.1,
+        "hot1": "away",
+        "hotPct": 61.1,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
       "id": "2042872",
       "day": "2026-11-20",
       "league": "欧洲篮球联赛",
@@ -1528,10 +1636,10 @@
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "126-98",
+      "resSrc": "verified"
     },
     {
       "id": "2042877",
@@ -1582,10 +1690,10 @@
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "settle": "miss",
+      "result": "away",
+      "resultScore": "114-124",
+      "resSrc": "verified"
     },
     {
       "id": "2042878",
@@ -1637,9 +1745,2976 @@
       "fadeSide": "home",
       "strongTier": false,
       "settle": null,
+      "result": "away",
+      "resultScore": "99-102",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042887",
+      "day": "2026-11-20",
+      "league": "澳大利亚篮球联赛",
+      "home": "凯恩斯毒蛇",
+      "away": "珀斯野猫",
+      "capturedAt": "2026-11-20T14:30:02+08:00",
+      "mnl": {
+        "home": 1.6,
+        "away": 1.81
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -1.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "pH": 53.1,
+        "pA": 46.9,
+        "hot1": "home",
+        "hotPct": 53.1,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘趋势弱(53.1%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
       "result": null,
       "resultScore": null,
       "resSrc": null
+    },
+    {
+      "id": "2042888",
+      "day": "2026-11-21",
+      "league": "欧洲篮球联赛",
+      "home": "伊斯坦布尔埃菲斯",
+      "away": "阿斯维尔",
+      "capturedAt": "2026-11-20T11:15:03+08:00",
+      "mnl": {
+        "home": 1.15,
+        "away": 3.24
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -7.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.29,
+          "away": 3.5
+        },
+        "hdc": {
+          "line": 7.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 177.5,
+          "over": 0.8,
+          "under": 0.95
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.87,
+        "gap": 15.13,
+        "pH": 73.8,
+        "pA": 26.2,
+        "hot1": "home",
+        "hotPct": 73.8,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 73.1,
+        "p365A": 26.9,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "98-75",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042889",
+      "day": "2026-11-21",
+      "league": "德国篮球联赛",
+      "home": "维尔茨堡",
+      "away": "费希塔",
+      "capturedAt": "2026-11-20T11:15:03+08:00",
+      "mnl": {
+        "home": 1.31,
+        "away": 2.41
+      },
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": -5.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.87,
+        "gap": 15.13,
+        "pH": 64.8,
+        "pA": 35.2,
+        "hot1": "home",
+        "hotPct": 64.8,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042890",
+      "day": "2026-11-21",
+      "league": "欧洲篮球联赛",
+      "home": "奥林匹亚科斯",
+      "away": "皇家马德里",
+      "capturedAt": "2026-11-20T21:00:04+08:00",
+      "mnl": {
+        "home": 1.56,
+        "away": 1.86
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -2.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.84,
+        "gap": 15.16,
+        "pH": 54.4,
+        "pA": 45.6,
+        "hot1": "home",
+        "hotPct": 54.4,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘趋势弱(54.4%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042891",
+      "day": "2026-11-21",
+      "league": "欧洲篮球联赛",
+      "home": "巴塞罗那",
+      "away": "贝尔格莱德红星",
+      "capturedAt": "2026-11-20T21:00:04+08:00",
+      "mnl": {
+        "home": 1.39,
+        "away": 2.18
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -4.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.88,
+        "gap": 15.12,
+        "pH": 61.1,
+        "pA": 38.9,
+        "hot1": "home",
+        "hotPct": 61.1,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042892",
+      "day": "2026-11-21",
+      "league": "欧洲篮球联赛",
+      "home": "贝尔格莱德游击",
+      "away": "贝西克塔斯",
+      "capturedAt": "2026-11-20T11:15:03+08:00",
+      "mnl": {
+        "home": 1.37,
+        "away": 2.23
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -5.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.86,
+        "gap": 15.14,
+        "pH": 61.9,
+        "pA": 38.1,
+        "hot1": "home",
+        "hotPct": 61.9,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042893",
+      "day": "2026-11-21",
+      "league": "美国职业篮球联盟",
+      "home": "亚特兰大老鹰",
+      "away": "夏洛特黄蜂",
+      "capturedAt": "2026-11-20T21:30:03+08:00",
+      "mnl": {
+        "home": 1.16,
+        "away": 3.15
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -7.5
+      },
+      "bd": {
+        "home": 1.55,
+        "away": 2.79,
+        "line": "-5.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 1.43,
+          "away": 2.9
+        },
+        "hdc": {
+          "line": 6.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 219.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T21:35:02+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.78,
+        "gap": 15.22,
+        "pH": 73.1,
+        "pA": 26.9,
+        "hot1": "home",
+        "hotPct": 73.1,
+        "fadeSide": "away",
+        "resonance": "三盘共振·确认",
+        "p365H": 67,
+        "p365A": 33,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.0036,
+        "shareHome": 64.3,
+        "shareAway": 35.7,
+        "hotBd": "home",
+        "devHome": -10.11,
+        "devAway": 10.53,
+        "upDev": -10.11,
+        "sameLine": false,
+        "lineJc": -7.5,
+        "lineBd": -5.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": true,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "111-97",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042894",
+      "day": "2026-11-21",
+      "league": "美国职业篮球联盟",
+      "home": "底特律活塞",
+      "away": "多伦多猛龙",
+      "capturedAt": "2026-11-20T20:00:03+08:00",
+      "mnl": {
+        "home": 1.12,
+        "away": 3.5
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -7.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.34,
+          "away": 3.35
+        },
+        "hdc": {
+          "line": 7.5,
+          "home": 0.9,
+          "away": 0.92
+        },
+        "total": {
+          "line": 216.5,
+          "over": 0.97,
+          "under": 0.86
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.85,
+        "gap": 15.15,
+        "pH": 75.8,
+        "pA": 24.2,
+        "hot1": "home",
+        "hotPct": 75.8,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 71.4,
+        "p365A": 28.6,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "hit",
+      "result": "away",
+      "resultScore": "102-105",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042895",
+      "day": "2026-11-21",
+      "league": "美国职业篮球联盟",
+      "home": "克利夫兰骑士",
+      "away": "印第安那步行者",
+      "capturedAt": "2026-11-20T22:15:03+08:00",
+      "mnl": {
+        "home": 1.14,
+        "away": 3.32
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -7.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.34,
+          "away": 3.35
+        },
+        "hdc": {
+          "line": 7.5,
+          "home": 0.94,
+          "away": 0.89
+        },
+        "total": {
+          "line": 234.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.86,
+        "gap": 15.14,
+        "pH": 74.4,
+        "pA": 25.6,
+        "hot1": "home",
+        "hotPct": 74.4,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 71.4,
+        "p365A": 28.6,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "128-119",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042896",
+      "day": "2026-11-21",
+      "league": "美国职业篮球联盟",
+      "home": "布鲁克林篮网",
+      "away": "奥兰多魔术",
+      "capturedAt": "2026-11-20T20:45:02+08:00",
+      "mnl": {
+        "home": 2.95,
+        "away": 1.19
+      },
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": 7.5
+      },
+      "bd": {
+        "home": 2.65,
+        "away": 1.6,
+        "line": "5.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 2.85,
+          "away": 1.43
+        },
+        "hdc": {
+          "line": -5.5,
+          "home": 0.94,
+          "away": 0.88
+        },
+        "total": {
+          "line": 223.5,
+          "over": 0.92,
+          "under": 0.9
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.79,
+        "gap": 15.21,
+        "pH": 28.7,
+        "pA": 71.3,
+        "hot1": "away",
+        "hotPct": 71.3,
+        "fadeSide": "home",
+        "resonance": "三盘共振·确认",
+        "p365H": 33.4,
+        "p365A": 66.6,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.0024,
+        "shareHome": 37.6,
+        "shareAway": 62.4,
+        "hotBd": "away",
+        "devHome": 10.6,
+        "devAway": -10.33,
+        "upDev": -10.33,
+        "sameLine": false,
+        "lineJc": 7.5,
+        "lineBd": 5.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(主)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": true,
+      "settle": "miss",
+      "result": "away",
+      "resultScore": "111-113",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042897",
+      "day": "2026-11-21",
+      "league": "美国职业篮球联盟",
+      "home": "芝加哥公牛",
+      "away": "华盛顿奇才",
+      "capturedAt": "2026-11-20T14:15:04+08:00",
+      "mnl": {
+        "home": 1.52,
+        "away": 1.92
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -3.5
+      },
+      "bd": {
+        "home": 1.97,
+        "away": 2.02,
+        "line": "-3.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 1.7,
+          "away": 2.21
+        },
+        "hdc": {
+          "line": 3.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 240.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.84,
+        "gap": 15.16,
+        "pH": 55.8,
+        "pA": 44.2,
+        "hot1": "home",
+        "hotPct": 55.8,
+        "fadeSide": "away",
+        "resonance": "三盘共振·确认",
+        "p365H": 56.5,
+        "p365A": 43.5,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.0027,
+        "shareHome": 50.6,
+        "shareAway": 49.4,
+        "hotBd": "home",
+        "devHome": -5.96,
+        "devAway": 6.27,
+        "upDev": -5.96,
+        "sameLine": true,
+        "lineJc": -3.5,
+        "lineBd": -3.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": true,
+      "settle": "hit",
+      "result": "away",
+      "resultScore": "94-98",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042898",
+      "day": "2026-11-21",
+      "league": "美国职业篮球联盟",
+      "home": "俄克拉荷马城雷霆",
+      "away": "新奥尔良鹈鹕",
+      "capturedAt": "2026-11-20T21:45:03+08:00",
+      "mnl": {
+        "home": 1.02,
+        "away": 5.05
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -12.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.17,
+          "away": 5.25
+        },
+        "hdc": {
+          "line": 11.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 228.5,
+          "over": 0.88,
+          "under": 0.94
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.86,
+        "gap": 15.14,
+        "pH": 83.2,
+        "pA": 16.8,
+        "hot1": "home",
+        "hotPct": 83.2,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 81.8,
+        "p365A": 18.2,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "126-120",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042899",
+      "day": "2026-11-21",
+      "league": "美国职业篮球联盟",
+      "home": "犹他爵士",
+      "away": "菲尼克斯太阳",
+      "capturedAt": "2026-11-20T21:30:03+08:00",
+      "mnl": {
+        "home": 2.48,
+        "away": 1.29
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 6.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 2.48,
+          "away": 1.57
+        },
+        "hdc": {
+          "line": -4.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 227.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.86,
+        "gap": 15.14,
+        "pH": 34.2,
+        "pA": 65.8,
+        "hot1": "away",
+        "hotPct": 65.8,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": 38.8,
+        "p365A": 61.2,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "away",
+      "resultScore": "101-111",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042901",
+      "day": "2026-11-21",
+      "league": "美国职业篮球联盟",
+      "home": "丹佛掘金",
+      "away": "休斯敦火箭",
+      "capturedAt": "2026-11-20T17:30:03+08:00",
+      "mnl": {
+        "home": 1.65,
+        "away": 1.75
+      },
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": -1.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.81,
+          "away": 2.04
+        },
+        "hdc": {
+          "line": 1.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 225.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "pH": 51.5,
+        "pA": 48.5,
+        "hot1": "home",
+        "hotPct": 51.5,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 53,
+        "p365A": 47,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘趋势弱(51.5%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": "home",
+      "resultScore": "133-124",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042950",
+      "day": "2026-11-21",
+      "league": "澳大利亚篮球联赛",
+      "home": "塔斯马尼亚跳蚁",
+      "away": "伊拉瓦拉老鹰",
+      "capturedAt": "2026-11-21T11:30:03+08:00",
+      "mnl": {
+        "home": 1.33,
+        "away": 2.34
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -5.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.47,
+          "away": 2.7
+        },
+        "hdc": {
+          "line": 5.5,
+          "home": 1,
+          "away": 0.82
+        },
+        "total": {
+          "line": 191.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T13:35:02+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.8,
+        "gap": 15.2,
+        "pH": 63.8,
+        "pA": 36.2,
+        "hot1": "home",
+        "hotPct": 63.8,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 64.7,
+        "p365A": 35.3,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "95-82",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042951",
+      "day": "2026-11-21",
+      "league": "澳大利亚篮球联赛",
+      "home": "墨尔本联",
+      "away": "新西兰破坏者",
+      "capturedAt": "2026-11-21T16:00:03+08:00",
+      "mnl": {
+        "home": 1.16,
+        "away": 3.15
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -6.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.78,
+        "gap": 15.22,
+        "pH": 73.1,
+        "pA": 26.9,
+        "hot1": "home",
+        "hotPct": 73.1,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042952",
+      "day": "2026-11-21",
+      "league": "德国篮球联赛",
+      "home": "耶拿科学城",
+      "away": "罗斯托克海狼",
+      "capturedAt": "2026-11-21T11:15:03+08:00",
+      "mnl": {
+        "home": 3.4,
+        "away": 1.13
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 7.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.81,
+        "gap": 15.19,
+        "pH": 24.9,
+        "pA": 75.1,
+        "hot1": "away",
+        "hotPct": 75.1,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042953",
+      "day": "2026-11-22",
+      "league": "西班牙篮球联赛",
+      "home": "布尔戈斯",
+      "away": "马拉加",
+      "capturedAt": "2026-11-21T19:45:03+08:00",
+      "mnl": {
+        "home": 2.78,
+        "away": 1.22
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 6.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.79,
+        "gap": 15.21,
+        "pH": 30.5,
+        "pA": 69.5,
+        "hot1": "away",
+        "hotPct": 69.5,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042954",
+      "day": "2026-11-22",
+      "league": "德国篮球联赛",
+      "home": "不伦瑞克雄狮",
+      "away": "班堡",
+      "capturedAt": "2026-11-21T22:30:05+08:00",
+      "mnl": {
+        "home": 2.78,
+        "away": 1.22
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 6.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 2.55,
+          "away": 1.5
+        },
+        "hdc": {
+          "line": -4.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 176.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T16:50:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.79,
+        "gap": 15.21,
+        "pH": 30.5,
+        "pA": 69.5,
+        "hot1": "away",
+        "hotPct": 69.5,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": 37,
+        "p365A": 63,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": "hit",
+      "result": "home",
+      "resultScore": "68-67",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042955",
+      "day": "2026-11-22",
+      "league": "美国职业篮球联盟",
+      "home": "费城76人",
+      "away": "密尔沃基雄鹿",
+      "capturedAt": "2026-11-21T19:30:03+08:00",
+      "mnl": {
+        "home": 1.02,
+        "away": 5.05
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -11.5
+      },
+      "bd": {
+        "home": 1.9,
+        "away": 2.1,
+        "line": "-11.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 1.15,
+          "away": 5.75
+        },
+        "hdc": {
+          "line": 12.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 228.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T20:25:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.86,
+        "gap": 15.14,
+        "pH": 83.2,
+        "pA": 16.8,
+        "hot1": "home",
+        "hotPct": 83.2,
+        "fadeSide": "away",
+        "resonance": "三盘共振·确认",
+        "p365H": 83.3,
+        "p365A": 16.7,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.0025,
+        "shareHome": 52.5,
+        "shareAway": 47.5,
+        "hotBd": "home",
+        "devHome": -36.02,
+        "devAway": 36.31,
+        "upDev": -36.02,
+        "sameLine": true,
+        "lineJc": -11.5,
+        "lineBd": -11.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": true,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "132-129",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042956",
+      "day": "2026-11-22",
+      "league": "西班牙篮球联赛",
+      "home": "曼雷萨",
+      "away": "安道尔BC",
+      "capturedAt": "2026-11-21T11:15:03+08:00",
+      "mnl": {
+        "home": 1.21,
+        "away": 2.84
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -6.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.85,
+        "gap": 15.15,
+        "pH": 70.1,
+        "pA": 29.9,
+        "hot1": "home",
+        "hotPct": 70.1,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042957",
+      "day": "2026-11-22",
+      "league": "德国篮球联赛",
+      "home": "特里尔角斗士",
+      "away": "开姆尼茨",
+      "capturedAt": "2026-11-21T11:15:03+08:00",
+      "mnl": {
+        "home": 1.025,
+        "away": 4.9
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -10.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.77,
+        "gap": 15.23,
+        "pH": 82.7,
+        "pA": 17.3,
+        "hot1": "home",
+        "hotPct": 82.7,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042958",
+      "day": "2026-11-22",
+      "league": "德国篮球联赛",
+      "home": "奥尔登堡",
+      "away": "法兰克福",
+      "capturedAt": "2026-11-21T11:15:03+08:00",
+      "mnl": {
+        "home": 1.75,
+        "away": 1.65
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": 1.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "pH": 48.5,
+        "pA": 51.5,
+        "hot1": "away",
+        "hotPct": 51.5,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘趋势弱(51.5%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042959",
+      "day": "2026-11-22",
+      "league": "西班牙篮球联赛",
+      "home": "穆尔西亚天主大学",
+      "away": "萨拉戈萨",
+      "capturedAt": "2026-11-21T11:15:03+08:00",
+      "mnl": {
+        "home": 1.17,
+        "away": 3.08
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -6.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.79,
+        "gap": 15.21,
+        "pH": 72.5,
+        "pA": 27.5,
+        "hot1": "home",
+        "hotPct": 72.5,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042960",
+      "day": "2026-11-22",
+      "league": "美国职业篮球联盟",
+      "home": "纽约尼克斯",
+      "away": "波特兰开拓者",
+      "capturedAt": "2026-11-21T20:00:03+08:00",
+      "mnl": {
+        "home": 1.22,
+        "away": 2.78
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -6.5
+      },
+      "bd": {
+        "home": 1.91,
+        "away": 2.09,
+        "line": "-5.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 1.48,
+          "away": 2.75
+        },
+        "hdc": {
+          "line": 5.5,
+          "home": 0.94,
+          "away": 0.89
+        },
+        "total": {
+          "line": 216.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T21:10:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.79,
+        "gap": 15.21,
+        "pH": 69.5,
+        "pA": 30.5,
+        "hot1": "home",
+        "hotPct": 69.5,
+        "fadeSide": "away",
+        "resonance": "三盘共振·确认",
+        "p365H": 65,
+        "p365A": 35,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.002,
+        "shareHome": 52.3,
+        "shareAway": 47.8,
+        "hotBd": "home",
+        "devHome": -20.22,
+        "devAway": 20.46,
+        "upDev": -20.22,
+        "sameLine": false,
+        "lineJc": -6.5,
+        "lineBd": -5.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": true,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "97-96",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042961",
+      "day": "2026-11-22",
+      "league": "美国职业篮球联盟",
+      "home": "达拉斯独行侠",
+      "away": "洛杉矶快船",
+      "capturedAt": "2026-11-21T19:15:02+08:00",
+      "mnl": {
+        "home": 1.22,
+        "away": 2.78
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -7.5
+      },
+      "bd": {
+        "home": 1.66,
+        "away": 2.49,
+        "line": "-5.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 1.48,
+          "away": 2.75
+        },
+        "hdc": {
+          "line": 5.5,
+          "home": 0.92,
+          "away": 0.9
+        },
+        "total": {
+          "line": 230.5,
+          "over": 0.9,
+          "under": 0.92
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T21:25:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.79,
+        "gap": 15.21,
+        "pH": 69.5,
+        "pA": 30.5,
+        "hot1": "home",
+        "hotPct": 69.5,
+        "fadeSide": "away",
+        "resonance": "三盘共振·确认",
+        "p365H": 65,
+        "p365A": 35,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.004,
+        "shareHome": 60,
+        "shareAway": 40,
+        "hotBd": "home",
+        "devHome": -10.92,
+        "devAway": 11.39,
+        "upDev": -10.92,
+        "sameLine": false,
+        "lineJc": -7.5,
+        "lineBd": -5.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": true,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "110-100",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042963",
+      "day": "2026-11-22",
+      "league": "美国职业篮球联盟",
+      "home": "明尼苏达森林狼",
+      "away": "孟菲斯灰熊",
+      "capturedAt": "2026-11-21T17:45:04+08:00",
+      "mnl": {
+        "home": 1.33,
+        "away": 2.34
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -5.5
+      },
+      "bd": {
+        "home": 1.85,
+        "away": 2.16,
+        "line": "-5.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 1.45,
+          "away": 2.8
+        },
+        "hdc": {
+          "line": 5.5,
+          "home": 0.88,
+          "away": 0.94
+        },
+        "total": {
+          "line": 227.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T13:55:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.8,
+        "gap": 15.2,
+        "pH": 63.8,
+        "pA": 36.2,
+        "hot1": "home",
+        "hotPct": 63.8,
+        "fadeSide": "away",
+        "resonance": "三盘共振·确认",
+        "p365H": 65.9,
+        "p365A": 34.1,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.0035,
+        "shareHome": 53.9,
+        "shareAway": 46.1,
+        "hotBd": "home",
+        "devHome": -11.45,
+        "devAway": 11.86,
+        "upDev": -11.45,
+        "sameLine": true,
+        "lineJc": -5.5,
+        "lineBd": -5.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": true,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "104-95",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042965",
+      "day": "2026-11-22",
+      "league": "澳大利亚篮球联赛",
+      "home": "东南墨尔本凤凰",
+      "away": "凯恩斯毒蛇",
+      "capturedAt": "2026-11-22T11:15:04+08:00",
+      "mnl": {
+        "home": 1.53,
+        "away": 1.9
+      },
+      "jc": {
+        "home": 1.6,
+        "away": 1.81,
+        "line": -2.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.7,
+          "away": 2.18
+        },
+        "hdc": {
+          "line": 2.5,
+          "home": 0.85,
+          "away": 0.95
+        },
+        "total": {
+          "line": 200.5,
+          "over": 0.89,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T11:50:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.75,
+        "gap": 15.25,
+        "pH": 55.4,
+        "pA": 44.6,
+        "hot1": "home",
+        "hotPct": 55.4,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 56.2,
+        "p365A": 43.8,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "hit",
+      "result": "away",
+      "resultScore": "89-91",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042966",
+      "day": "2026-11-22",
+      "league": "西班牙篮球联赛",
+      "home": "毕尔巴鄂",
+      "away": "巴斯克尼亚",
+      "capturedAt": "2026-11-22T18:30:03+08:00",
+      "mnl": {
+        "home": 1.6,
+        "away": 1.81
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -1.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "pH": 53.1,
+        "pA": 46.9,
+        "hot1": "home",
+        "hotPct": 53.1,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘趋势弱(53.1%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042967",
+      "day": "2026-11-22",
+      "league": "西班牙篮球联赛",
+      "home": "奥布拉多伊罗",
+      "away": "赫罗纳",
+      "capturedAt": "2026-11-22T18:30:03+08:00",
+      "mnl": {
+        "home": 1.36,
+        "away": 2.25
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -4.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.76,
+        "gap": 15.24,
+        "pH": 62.3,
+        "pA": 37.7,
+        "hot1": "home",
+        "hotPct": 62.3,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042968",
+      "day": "2026-11-22",
+      "league": "西班牙篮球联赛",
+      "home": "拉科鲁尼亚",
+      "away": "列伊达",
+      "capturedAt": "2026-11-22T18:45:03+08:00",
+      "mnl": {
+        "home": 1.28,
+        "away": 2.51
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -5.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.54,
+          "away": 2.45
+        },
+        "hdc": {
+          "line": 4.5,
+          "home": 0.91,
+          "away": 0.83
+        },
+        "total": {
+          "line": 194.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T19:25:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.77,
+        "gap": 15.23,
+        "pH": 66.2,
+        "pA": 33.8,
+        "hot1": "home",
+        "hotPct": 66.2,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 61.4,
+        "p365A": 38.6,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "113-100",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042969",
+      "day": "2026-11-22",
+      "league": "德国篮球联赛",
+      "home": "路德维希堡",
+      "away": "中部德国人",
+      "capturedAt": "2026-11-22T11:15:04+08:00",
+      "mnl": {
+        "home": 1.65,
+        "away": 1.75
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -1.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.67,
+          "away": 2.2
+        },
+        "hdc": {
+          "line": 2.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 165.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T16:00:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "pH": 51.5,
+        "pA": 48.5,
+        "hot1": "home",
+        "hotPct": 51.5,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 56.8,
+        "p365A": 43.2,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘趋势弱(51.5%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": "home",
+      "resultScore": "94-87",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042970",
+      "day": "2026-11-22",
+      "league": "德国篮球联赛",
+      "home": "汉堡塔楼",
+      "away": "哈根凤凰",
+      "capturedAt": "2026-11-22T11:15:04+08:00",
+      "mnl": {
+        "home": 1.23,
+        "away": 2.73
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -6.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.8,
+        "gap": 15.2,
+        "pH": 68.9,
+        "pA": 31.1,
+        "hot1": "home",
+        "hotPct": 68.9,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042971",
+      "day": "2026-11-23",
+      "league": "西班牙篮球联赛",
+      "home": "巴伦西亚",
+      "away": "卢戈",
+      "capturedAt": "2026-11-22T11:15:04+08:00",
+      "mnl": {
+        "home": 1.015,
+        "away": 5.15
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -11.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.08,
+          "away": 7.5
+        },
+        "hdc": {
+          "line": 13.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 199.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T17:10:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.79,
+        "gap": 15.21,
+        "pH": 83.5,
+        "pA": 16.5,
+        "hot1": "home",
+        "hotPct": 83.5,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 87.4,
+        "p365A": 12.6,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "129-111",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042972",
+      "day": "2026-11-23",
+      "league": "西班牙篮球联赛",
+      "home": "特内里费",
+      "away": "巴塞罗那",
+      "capturedAt": "2026-11-22T22:00:03+08:00",
+      "mnl": {
+        "home": 1.87,
+        "away": 1.55
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 2.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 2.2,
+          "away": 1.67
+        },
+        "hdc": {
+          "line": -2.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 176.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T21:25:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.75,
+        "gap": 15.25,
+        "pH": 45.3,
+        "pA": 54.7,
+        "hot1": "away",
+        "hotPct": 54.7,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": 43.2,
+        "p365A": 56.8,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘趋势弱(54.7%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": null,
+      "result": "home",
+      "resultScore": "91-80",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042973",
+      "day": "2026-11-23",
+      "league": "德国篮球联赛",
+      "home": "柏林阿尔巴",
+      "away": "拜仁慕尼黑",
+      "capturedAt": "2026-11-22T16:15:03+08:00",
+      "mnl": {
+        "home": 2.83,
+        "away": 1.21
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 6.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 2.82,
+          "away": 1.42
+        },
+        "hdc": {
+          "line": -5.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 170.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T16:00:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.76,
+        "gap": 15.24,
+        "pH": 30,
+        "pA": 70,
+        "hot1": "away",
+        "hotPct": 70,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": 33.5,
+        "p365A": 66.5,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "away",
+      "resultScore": "77-87",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042974",
+      "day": "2026-11-23",
+      "league": "德国篮球联赛",
+      "home": "波恩",
+      "away": "乌尔姆",
+      "capturedAt": "2026-11-22T11:15:04+08:00",
+      "mnl": {
+        "home": 1.15,
+        "away": 3.24
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -7.5
+      },
+      "bd": null,
+      "b365": null,
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.87,
+        "gap": 15.13,
+        "pH": 73.8,
+        "pA": 26.2,
+        "hot1": "home",
+        "hotPct": 73.8,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": null,
+        "heatScore": 1,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": null,
+      "result": null,
+      "resultScore": null,
+      "resSrc": null
+    },
+    {
+      "id": "2042975",
+      "day": "2026-11-23",
+      "league": "西班牙篮球联赛",
+      "home": "皇家马德里",
+      "away": "约文图特",
+      "capturedAt": "2026-11-22T11:15:04+08:00",
+      "mnl": {
+        "home": 1.015,
+        "away": 5.15
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": -11.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.11,
+          "away": 6.5
+        },
+        "hdc": {
+          "line": 11.5,
+          "home": 0.83,
+          "away": 0.91
+        },
+        "total": {
+          "line": 182.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T21:25:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.79,
+        "gap": 15.21,
+        "pH": 83.5,
+        "pA": 16.5,
+        "hot1": "home",
+        "hotPct": 83.5,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 85.4,
+        "p365A": 14.6,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "hit",
+      "result": "away",
+      "resultScore": "87-88",
+      "resSrc": "球探完场比分"
+    },
+    {
+      "id": "2042976",
+      "day": "2026-11-23",
+      "league": "美国职业篮球联盟",
+      "home": "亚特兰大老鹰",
+      "away": "底特律活塞",
+      "capturedAt": "2026-11-22T11:15:04+08:00",
+      "mnl": {
+        "home": 1.87,
+        "away": 1.55
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 1.5
+      },
+      "bd": {
+        "home": 1.84,
+        "away": 2.18,
+        "line": "2.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 2.09,
+          "away": 1.78
+        },
+        "hdc": {
+          "line": -2.5,
+          "home": 0.87,
+          "away": 0.95
+        },
+        "total": {
+          "line": 224.5,
+          "over": 0.92,
+          "under": 0.9
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T19:20:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.75,
+        "gap": 15.25,
+        "pH": 45.3,
+        "pA": 54.7,
+        "hot1": "away",
+        "hotPct": 54.7,
+        "fadeSide": "home",
+        "resonance": "三盘分歧·降档",
+        "p365H": 46,
+        "p365A": 54,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": false,
+        "heatScore": 2,
+        "sumBd": 1.0022,
+        "shareHome": 54.2,
+        "shareAway": 45.8,
+        "hotBd": "home",
+        "devHome": 10.65,
+        "devAway": -10.39,
+        "upDev": 10.65,
+        "sameLine": false,
+        "lineJc": 1.5,
+        "lineBd": 2.5
+      },
+      "verdict": "一盘趋势弱(54.7%)·方向参考",
+      "hotFlag": false,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": null,
+      "result": "home",
+      "resultScore": "107-97",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042977",
+      "day": "2026-11-23",
+      "league": "美国职业篮球联盟",
+      "home": "迈阿密热火",
+      "away": "俄克拉荷马城雷霆",
+      "capturedAt": "2026-11-22T23:00:04+08:00",
+      "mnl": {
+        "home": 1.33,
+        "away": 2.34
+      },
+      "jc": {
+        "home": 1.65,
+        "away": 1.75,
+        "line": -6.5
+      },
+      "bd": {
+        "home": 1.57,
+        "away": 2.74,
+        "line": "-2.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 1.56,
+          "away": 2.49
+        },
+        "hdc": {
+          "line": 4.5,
+          "home": 0.94,
+          "away": 0.89
+        },
+        "total": {
+          "line": 231.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T05:25:02+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.8,
+        "gap": 15.2,
+        "pH": 63.8,
+        "pA": 36.2,
+        "hot1": "home",
+        "hotPct": 63.8,
+        "fadeSide": "away",
+        "resonance": "三盘共振·确认",
+        "p365H": 61.5,
+        "p365A": 38.5,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.0019,
+        "shareHome": 63.6,
+        "shareAway": 36.4,
+        "hotBd": "home",
+        "devHome": -0.08,
+        "devAway": 0.3,
+        "upDev": -0.08,
+        "sameLine": false,
+        "lineJc": -6.5,
+        "lineBd": -2.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": true,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "123-113",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042978",
+      "day": "2026-11-23",
+      "league": "美国职业篮球联盟",
+      "home": "华盛顿奇才",
+      "away": "奥兰多魔术",
+      "capturedAt": "2026-11-22T18:15:03+08:00",
+      "mnl": {
+        "home": 2.13,
+        "away": 1.41
+      },
+      "jc": {
+        "home": 1.7,
+        "away": 1.7,
+        "line": 4.5
+      },
+      "bd": {
+        "home": 2.03,
+        "away": 1.96,
+        "line": "5.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 2.75,
+          "away": 1.48
+        },
+        "hdc": {
+          "line": -4.5,
+          "home": 0.94,
+          "away": 0.88
+        },
+        "total": {
+          "line": 219.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T01:15:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.84,
+        "gap": 15.16,
+        "pH": 39.8,
+        "pA": 60.2,
+        "hot1": "away",
+        "hotPct": 60.2,
+        "fadeSide": "home",
+        "resonance": "三盘共振·确认",
+        "p365H": 35,
+        "p365A": 65,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.0028,
+        "shareHome": 49.1,
+        "shareAway": 50.9,
+        "hotBd": "away",
+        "devHome": 11.12,
+        "devAway": -10.78,
+        "upDev": -10.78,
+        "sameLine": false,
+        "lineJc": 4.5,
+        "lineBd": 5.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(主)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": true,
+      "settle": "hit",
+      "result": "home",
+      "resultScore": "116-96",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042979",
+      "day": "2026-11-23",
+      "league": "美国职业篮球联盟",
+      "home": "犹他爵士",
+      "away": "达拉斯独行侠",
+      "capturedAt": "2026-11-22T23:00:04+08:00",
+      "mnl": {
+        "home": 1.92,
+        "away": 1.52
+      },
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": 2.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.92,
+          "away": 1.9
+        },
+        "hdc": {
+          "line": -1.5,
+          "home": 0.85,
+          "away": 0.98
+        },
+        "total": {
+          "line": 224.5,
+          "over": 0.87,
+          "under": 0.95
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T00:35:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.84,
+        "gap": 15.16,
+        "pH": 44.2,
+        "pA": 55.8,
+        "hot1": "away",
+        "hotPct": 55.8,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": 49.7,
+        "p365A": 50.3,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "away",
+      "resultScore": "114-116",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042980",
+      "day": "2026-11-23",
+      "league": "美国职业篮球联盟",
+      "home": "芝加哥公牛",
+      "away": "丹佛掘金",
+      "capturedAt": "2026-11-22T19:15:04+08:00",
+      "mnl": {
+        "home": 3.95,
+        "away": 1.08
+      },
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": 8.5
+      },
+      "bd": {
+        "home": 2.34,
+        "away": 1.74,
+        "line": "8.5"
+      },
+      "b365": {
+        "mnl": {
+          "home": 4,
+          "away": 1.26
+        },
+        "hdc": {
+          "line": -9.5,
+          "home": 0.88,
+          "away": 0.94
+        },
+        "total": {
+          "line": 237.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T23:20:02+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.81,
+        "gap": 15.19,
+        "pH": 21.5,
+        "pA": 78.5,
+        "hot1": "away",
+        "hotPct": 78.5,
+        "fadeSide": "home",
+        "resonance": "三盘共振·确认",
+        "p365H": 24,
+        "p365A": 76,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": true,
+        "heatScore": 3,
+        "sumBd": 1.0021,
+        "shareHome": 42.6,
+        "shareAway": 57.4,
+        "hotBd": "away",
+        "devHome": 25.07,
+        "devAway": -24.83,
+        "upDev": -24.83,
+        "sameLine": true,
+        "lineJc": 8.5,
+        "lineBd": 8.5
+      },
+      "verdict": "三端合流(竞彩+365+北单)·站对面(主)【强置信·观察】",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": true,
+      "settle": "miss",
+      "result": "away",
+      "resultScore": "145-151",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042981",
+      "day": "2026-11-23",
+      "league": "美国职业篮球联盟",
+      "home": "纽约尼克斯",
+      "away": "印第安那步行者",
+      "capturedAt": "2026-11-22T12:30:04+08:00",
+      "mnl": {
+        "home": 1.08,
+        "away": 3.95
+      },
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": -9.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 1.26,
+          "away": 4
+        },
+        "hdc": {
+          "line": 9.5,
+          "home": 0.94,
+          "away": 0.88
+        },
+        "total": {
+          "line": 215.5,
+          "over": 0.95,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T19:20:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.81,
+        "gap": 15.19,
+        "pH": 78.5,
+        "pA": 21.5,
+        "hot1": "home",
+        "hotPct": 78.5,
+        "fadeSide": "away",
+        "resonance": "无北单·仅一盘",
+        "p365H": 76,
+        "p365A": 24,
+        "hot365": "home",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
+      "hotFlag": true,
+      "fadeSide": "away",
+      "strongTier": false,
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "113-106",
+      "resSrc": "verified"
+    },
+    {
+      "id": "2042982",
+      "day": "2026-11-23",
+      "league": "美国职业篮球联盟",
+      "home": "金州勇士",
+      "away": "波士顿凯尔特人",
+      "capturedAt": "2026-11-22T11:15:04+08:00",
+      "mnl": {
+        "home": 3.95,
+        "away": 1.08
+      },
+      "jc": {
+        "home": 1.75,
+        "away": 1.65,
+        "line": 9.5
+      },
+      "bd": null,
+      "b365": {
+        "mnl": {
+          "home": 3.8,
+          "away": 1.28
+        },
+        "hdc": {
+          "line": -8.5,
+          "home": 0.9,
+          "away": 0.92
+        },
+        "total": {
+          "line": 210.5,
+          "over": 0.9,
+          "under": 0.92
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T23:10:01+08:00"
+      },
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.81,
+        "gap": 15.19,
+        "pH": 21.5,
+        "pA": 78.5,
+        "hot1": "away",
+        "hotPct": 78.5,
+        "fadeSide": "home",
+        "resonance": "无北单·仅一盘",
+        "p365H": 25.2,
+        "p365A": 74.8,
+        "hot365": "away",
+        "b365Agree": true,
+        "bdAgree": null,
+        "heatScore": 2,
+        "sumBd": null,
+        "shareHome": null,
+        "shareAway": null,
+        "hotBd": null,
+        "devHome": null,
+        "devAway": null,
+        "upDev": null,
+        "sameLine": null,
+        "lineJc": null,
+        "lineBd": null
+      },
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
+      "hotFlag": true,
+      "fadeSide": "home",
+      "strongTier": false,
+      "settle": "hit",
+      "result": "home",
+      "resultScore": "88-87",
+      "resSrc": "verified"
     },
     {
       "id": "2042983",
