@@ -760,7 +760,7 @@
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-labelledby', 'basketHeatTitle');
     modal.setAttribute('aria-hidden', 'true');
-    modal.innerHTML = '<div class="mbox"><div class="bh-head"><h2 id="basketHeatTitle">篮球版三盘资金过热板块 · 仅观察</h2>' +
+    modal.innerHTML = '<div class="mbox"><div class="bh-head"><h2 id="basketHeatTitle">篮球专用3盘看板 · 仅观察</h2>' +
       '<div><button type="button" id="basketHeatRefresh">刷新篮球数据</button> <button type="button" id="basketHeatClose" aria-label="关闭篮球观察板块">关闭</button></div></div>' +
       '<div id="basketHeatModeNotice" class="bh-mode-warning" data-basket-mode-notice role="status" hidden></div>' +
       '<p>独立于足球；一盘→二盘→三盘仅作数据观察。尚无经篮球留出标定的强推 / 下注信号，报价不等于真实资金。</p>' +
