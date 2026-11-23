@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-23-nethot-v6';   // ★ v6：用户质问「蒙扎vs佛罗伦/莱万特vs埃尔切 人家算正式过热+4 你算不出」——根治16号后主登记路径失效(hcapSrc=none/heatScore低)导致的极端过热场漏判：netPt>=25(全库前1.5%)加青色独立标签/KPI/置顶，明确「未通过留出验证」，不并入A强推分母。前版 v5：让球轴合流独立通道。
+const UI_V = '2026-11-23-review-v7';   // ★ v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -8759,7 +8759,14 @@ function fundplateHistoryHTML(){
   const _fpConverged = function(e){
     var o = (e && e.op && typeof e.op === 'object') ? e.op : {};
     var hs = (e && e.heatScore != null) ? +e.heatScore : 0;
-    return (o.overGap === true) && hs >= 3;
+    if (!((o.overGap === true) && hs >= 3)) return false;
+    /* ★★ 2026-11-23 逐场复盘根治（_review_tri_20261123 / 严格拆半口径）：
+       overGap 用的是「三项最大偏差 diffMax > 缺口」(不看方向)，与 op.over(强队侧净超买)不是一回事。
+       实测合流强推 31 场里 over>0 的 23 场 58.7%/ROI+34.3%；over<=0 的 8 场只有 37.5%/ROI−12.5%
+       （冷门方被买爆被误当破缺口）。训练(≤11-18)/留出(≥11-19)两段同向，剔除属收紧零/负edge噪声，
+       不新增投注假设、不改任何冻结 recDir。over 缺失的历史老场保留(避免误伤早期样本)。 */
+    if (o.over != null && +o.over <= 0) return false;
+    return true;
   };
   /* ★★ 2026-11-23 让球轴合流·独立通道（用户拍板「纳入，然后记得加个标签」）。
      口径：tri_trail.rqAxis 三端同线同向(converge) 且 n===3 且非深盘。
