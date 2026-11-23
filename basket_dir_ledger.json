@@ -5433,11 +5433,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T22:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "ESPN NBA scoreboard event=401910031 date=2026-11-23T00:00Z 奥兰多魔术96@华盛顿奇才116 | calc:116-96 → home",
+   "settledAt": 1795401009,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795357813,
@@ -5452,7 +5452,8 @@
      "dB": -2.1573782806704633,
      "obs": "2026-11-22T22:15:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-96"
   },
   "2042978:hdc": {
    "id": "2042978",
@@ -5484,11 +5485,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T22:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "ESPN NBA scoreboard event=401910031 date=2026-11-23T00:00Z 奥兰多魔术96@华盛顿奇才116 | calc:116+4.5=120.5 vs 96 → home",
+   "settledAt": 1795401009,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795357813,
@@ -5503,7 +5504,8 @@
      "dB": 0,
      "obs": "2026-11-22T22:15:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-96"
   },
   "2042978:hilo": {
    "id": "2042978",
@@ -5530,11 +5532,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T22:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "ESPN NBA scoreboard event=401910031 date=2026-11-23T00:00Z 奥兰多魔术96@华盛顿奇才116 | calc:116+96=212 vs 221.5 → under",
+   "settledAt": 1795401009,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795357813,
@@ -5575,7 +5577,8 @@
      "dB": null,
      "obs": "2026-11-22T22:45:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-96"
   },
   "2042979:mnl": {
    "id": "2042979",
@@ -5607,11 +5610,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T22:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.52,
+   "settleSrc": "ESPN NBA scoreboard event=401910033 date=2026-11-23T00:00Z 达拉斯独行侠116@犹他爵士114 | calc:114-116 → away",
+   "settledAt": 1795401009,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795357813,
@@ -5652,7 +5655,8 @@
      "dB": 5.813953488372093,
      "obs": "2026-11-22T23:00:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "114-116"
   },
   "2042979:hdc": {
    "id": "2042979",
@@ -5679,11 +5683,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T22:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "ESPN NBA scoreboard event=401910033 date=2026-11-23T00:00Z 达拉斯独行侠116@犹他爵士114 | calc:114+2.5=116.5 vs 116 → home",
+   "settledAt": 1795401009,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795357813,
@@ -5711,7 +5715,8 @@
      "dB": 4.549767120924603,
      "obs": "2026-11-22T23:00:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "114-116"
   },
   "2042979:hilo": {
    "id": "2042979",
@@ -5738,11 +5743,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T22:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.66,
+   "settleSrc": "ESPN NBA scoreboard event=401910033 date=2026-11-23T00:00Z 达拉斯独行侠116@犹他爵士114 | calc:114+116=230 vs 224.5 → over",
+   "settledAt": 1795401009,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795357813,
@@ -5770,7 +5775,8 @@
      "dB": null,
      "obs": "2026-11-22T22:30:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "114-116"
   },
   "2042980:mnl": {
    "id": "2042980",
@@ -6278,22 +6284,22 @@
   }
  },
  "summary": {
-  "updatedAt": 1795400109,
+  "updatedAt": 1795401009,
   "srcUsed": "cloud_app basket_heat.json(离线兜底)(竞彩真实报价·赛前冻结)",
   "ruleV": "basket_odds_lean_observe_1",
   "total": 112,
-  "settled": 76,
-  "pending": 36,
+  "settled": 82,
+  "pending": 30,
   "pre": 112,
   "post": 0,
   "all": {
-   "n": 76,
-   "win": 39,
-   "lose": 37,
+   "n": 82,
+   "win": 42,
+   "lose": 40,
    "push": 0,
-   "hit": 51.3,
-   "roi": -20.2,
-   "se": 11.5,
+   "hit": 51.2,
+   "roi": -20.1,
+   "se": 11,
    "significant": true,
    "crossZero": false
   },
@@ -6310,48 +6316,48 @@
     "crossZero": false
    },
    "让分主胜": {
-    "n": 17,
-    "win": 7,
+    "n": 18,
+    "win": 8,
     "lose": 10,
     "push": 0,
-    "hit": 41.2,
-    "roi": -30.6,
-    "se": 24.3,
+    "hit": 44.4,
+    "roi": -25,
+    "se": 23.6,
     "significant": false,
     "crossZero": false
    },
    "大分": {
-    "n": 25,
-    "win": 12,
-    "lose": 13,
+    "n": 27,
+    "win": 13,
+    "lose": 14,
     "push": 0,
-    "hit": 48,
-    "roi": -20.3,
-    "se": 20,
+    "hit": 48.1,
+    "roi": -20.1,
+    "se": 19.2,
     "significant": false,
     "crossZero": false
    },
    "客胜": {
-    "n": 11,
-    "win": 6,
-    "lose": 5,
+    "n": 13,
+    "win": 7,
+    "lose": 6,
     "push": 0,
-    "hit": 54.5,
-    "roi": -28.1,
-    "se": 30.2,
+    "hit": 53.8,
+    "roi": -27.5,
+    "se": 27.7,
     "significant": false,
     "crossZero": true
    },
    "让分客胜": {
-    "n": 9,
+    "n": 10,
     "win": 8,
-    "lose": 1,
+    "lose": 2,
     "push": 0,
-    "hit": 88.9,
-    "roi": 45,
-    "se": 33.3,
+    "hit": 80,
+    "roi": 30.5,
+    "se": 31.6,
     "significant": false,
-    "crossZero": false
+    "crossZero": true
    },
    "小分": {
     "n": 1,
@@ -6367,35 +6373,35 @@
   },
   "byMarket": {
    "mnl": {
-    "n": 24,
-    "win": 11,
-    "lose": 13,
+    "n": 26,
+    "win": 12,
+    "lose": 14,
     "push": 0,
-    "hit": 45.8,
-    "roi": -40.8,
-    "se": 20.4,
+    "hit": 46.2,
+    "roi": -39.5,
+    "se": 19.6,
     "significant": false,
     "crossZero": false
    },
    "hdc": {
-    "n": 26,
-    "win": 15,
-    "lose": 11,
+    "n": 28,
+    "win": 16,
+    "lose": 12,
     "push": 0,
-    "hit": 57.7,
-    "roi": -4.4,
-    "se": 19.6,
+    "hit": 57.1,
+    "roi": -5.2,
+    "se": 18.9,
     "significant": false,
     "crossZero": true
    },
    "hilo": {
-    "n": 26,
-    "win": 13,
-    "lose": 13,
+    "n": 28,
+    "win": 14,
+    "lose": 14,
     "push": 0,
     "hit": 50,
     "roi": -17,
-    "se": 19.6,
+    "se": 18.9,
     "significant": false,
     "crossZero": true
    }
@@ -6424,26 +6430,26 @@
     "crossZero": false
    },
    "2026-11-23": {
-    "n": 6,
-    "win": 4,
-    "lose": 2,
+    "n": 12,
+    "win": 7,
+    "lose": 5,
     "push": 0,
-    "hit": 66.7,
-    "roi": 6.8,
-    "se": 40.8,
+    "hit": 58.3,
+    "roi": -5.9,
+    "se": 28.9,
     "significant": false,
     "crossZero": true
    }
   },
   "byRuleV": {
    "basket_odds_lean_observe_1": {
-    "n": 76,
-    "win": 39,
-    "lose": 37,
+    "n": 82,
+    "win": 42,
+    "lose": 40,
     "push": 0,
-    "hit": 51.3,
-    "roi": -20.2,
-    "se": 11.5,
+    "hit": 51.2,
+    "roi": -20.1,
+    "se": 11,
     "significant": true,
     "crossZero": false
    }
