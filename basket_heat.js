@@ -508,14 +508,14 @@
     if (candItems.length) {
       candHTML = '<div style="margin:10px 0;padding:9px 11px;border-radius:7px;background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.35)">' +
         '<b style="color:#a78bfa">让分独赢观察候选 ' + candItems.length + ' 场</b>' +
-        '<span style="color:#c4b5fd">（竞彩 mnl 未开售但 D盘 jc hdc + 北单 sfgg + 365 齐；只取365独赢强方对面作候选，按真实让分线单独核对）</span>' +
+        '<span style="color:#c4b5fd">（竞彩 mnl 未开售但 D盘 jc hdc + 北单 sfgg + 365独赢齐、同线且强方≥55%/≤45%；只取强方对面作候选，按真实让分线单独核对）</span>' +
         '<div class="bh-scroll" tabindex="0" style="margin-top:7px"><table style="font-size:11.5px"><thead><tr>' +
         '<th>日期/对阵</th><th>竞彩 hdc</th><th>365 独赢</th><th>北单 sfgg</th><th>候选方向</th><th>让分线核对</th><th>说明</th></tr></thead><tbody>';
       for (const x of candItems) {
         const m = x.metrics || {};
         const sideTxt = m.candidateSide === 'home' ? '主·' + text(x.home) : m.candidateSide === 'away' ? '客·' + text(x.away) : '—';
         const setTxt = m.settleByLine === 'hitByLine'
-          ? '<span style="color:#16a34a;font-weight:800">✅ 受让/让分方向赢盘</span>'
+          ? '<span style="color:#16a34a;font-weight:800">✅ 候选方向赢盘</span>'
           : m.settleByLine === 'missByLine'
             ? '<span style="color:#e54545;font-weight:800">❌ 候选方向未赢盘</span>'
             : '<span style="color:var(--mut,#8b98a9)">⏳ 待赛果</span>';

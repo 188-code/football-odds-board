@@ -1,13 +1,13 @@
 {
-  "version": "basket_overheat_seqchain_mnl_20261124hdcobs",
-  "updated": "2026-11-24T00:30:14.827Z",
-  "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。★★2026-11-24修:①D盘快照eu帧按竞彩id读入,不再丢365;②竞彩mnl未开售但jc hdc+bd sfgg+365齐的场单列_hdcCandidate观察候选,方向只取365独赢强方对面并按真实让分线记settleByLine,hotFlag=false不进统计/引擎/账本/投注方向;③候选只复现外部精选错位线索,n<40且训练/留出未验证。展示集=统计集=版本集。",
+  "version": "basket_overheat_seqchain_mnl_20261124hdcobs2",
+  "updated": "2026-11-24T00:45:13.840Z",
+  "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。★★2026-11-24修:①D盘快照eu帧按竞彩id读入,不再丢365;②竞彩mnl未开售但jc hdc+bd sfgg+365独赢齐、且竞彩/北单让分线一致的场单列_hdcCandidate观察候选,方向只取365独赢强方(≥55%/≤45%)对面并按真实让分线记settleByLine,hotFlag=false不进统计/引擎/账本/投注方向;③二次复核修正:无365独赢不得候选、主统计集严格排除候选、D盘快照按账本kickTs过滤赛后帧;④候选只复现外部精选错位线索,n<40且训练/留出未验证。展示集=统计集=版本集。",
   "summary": {
-    "totalMatches": 86,
-    "withNorth": 27,
+    "totalMatches": 84,
+    "withNorth": 25,
     "noNorth": 59,
-    "resonanceN": 20,
-    "withB365": 37,
+    "resonanceN": 21,
+    "withB365": 35,
     "strongN": 11,
     "strongSettled": 9,
     "strongHit": 1,
@@ -15,7 +15,7 @@
     "strongSe": 10.5,
     "t7SettledN": 0,
     "hotFlagged": 71,
-    "candidateN": 3,
+    "candidateN": 2,
     "candidateWith365": 2,
     "candidateSettledN": 2,
     "candidateHitN": 1,
@@ -26,7 +26,7 @@
     "se": 6.8,
     "significant": true,
     "crossZero": false,
-    "caveat": "n<40观察档;一盘=竞彩独赢资金趋势(洋哥顺序链起点);二盘365自2026-11-20起用球探滚动帧补位(此前缺位,历史场无365=真实缺,不回补);三盘北单让分近似确认;强置信=三端合流(JC+365+北单同侧),前瞻口径无历史回测,不进引擎;第4步临场序列篮球做不到;★★2026-11-24新增hdc观察候选:竞彩mnl未开售但D盘jc hdc+bd sfgg+365齐时单列,方向仅取365独赢强方对面,按真实让分线记settleByLine,不写hotFlag/不进stats/不进引擎/不给投注方向"
+    "caveat": "n<40观察档;一盘=竞彩独赢资金趋势(洋哥顺序链起点);二盘365自2026-11-20起用球探滚动帧补位(此前缺位,历史场无365=真实缺,不回补);三盘北单让分近似确认;强置信=三端合流(JC+365+北单同侧),前瞻口径无历史回测,不进引擎;第4步临场序列篮球做不到;★★2026-11-24新增并二次修正hdc观察候选:竞彩mnl未开售但D盘jc hdc+bd sfgg+365独赢齐、同线且365强方≥55%/≤45%时单列,方向仅取强方对面,按真实让分线记settleByLine,不写hotFlag/不进stats/不进引擎/不给投注方向;主汇总已排除候选,D盘快照按kickTs过滤赛后帧"
   },
   "items": [
     {
@@ -704,9 +704,10 @@
       "home": "迈阿密热火",
       "away": "密尔沃基雄鹿",
       "capturedAt": "2026-11-18T21:45:02+08:00",
-      "_hdcCandidate": true,
-      "directionEligible": false,
-      "mnl": null,
+      "mnl": {
+        "home": 1.65,
+        "away": 1.75
+      },
       "jc": {
         "home": 1.65,
         "away": 1.75,
@@ -717,29 +718,42 @@
         "away": 2.32,
         "line": -12.5
       },
-      "eu": null,
       "b365": null,
-      "fadeSide": null,
-      "verdict": "让分独赢候选·观察（365独赢强方+浅让分；竞彩hdc/北单同线）·不进引擎/账本/ROI",
+      "metrics": {
+        "mnlFallback": false,
+        "Rjc": 84.93,
+        "gap": 15.07,
+        "pH": 51.5,
+        "pA": 48.5,
+        "hot1": "home",
+        "hotPct": 51.5,
+        "fadeSide": "away",
+        "resonance": "三盘共振·确认",
+        "p365H": null,
+        "p365A": null,
+        "hot365": null,
+        "b365Agree": null,
+        "bdAgree": true,
+        "heatScore": 2,
+        "sumBd": 1.0025,
+        "shareHome": 57,
+        "shareAway": 43,
+        "hotBd": "home",
+        "devHome": 6.68,
+        "devAway": -6.39,
+        "upDev": 6.68,
+        "sameLine": true,
+        "lineJc": -12.5,
+        "lineBd": -12.5
+      },
+      "verdict": "一盘趋势弱(51.5%)·方向参考",
       "hotFlag": false,
+      "fadeSide": "away",
       "strongTier": false,
       "settle": null,
       "result": null,
       "resultScore": null,
-      "resSrc": null,
-      "settleByLine": null,
-      "metrics": {
-        "hdcHomeProb": 51.5,
-        "bdHomeProb": 57,
-        "p365MnlHome": null,
-        "hot365": null,
-        "lineJc": -12.5,
-        "lineBd": -12.5,
-        "lineAligned": true,
-        "candidateSide": null,
-        "settleByLine": null,
-        "note": "候选通道仅复现外部精选的错位线索；n<40且训练/留出未验证，不给投注方向"
-      }
+      "resSrc": null
     },
     {
       "id": "2042860",
@@ -2664,8 +2678,8 @@
         "line": -14.5
       },
       "bd": {
-        "home": 1.66,
-        "away": 2.49,
+        "home": 2.05,
+        "away": 1.95,
         "line": -14.5
       },
       "eu": {
@@ -2699,7 +2713,7 @@
         "observed_at": "2026-11-21T02:00:01+08:00"
       },
       "fadeSide": "away",
-      "verdict": "让分独赢候选·观察（365独赢强方+浅让分；竞彩hdc/北单同线）·不进引擎/账本/ROI",
+      "verdict": "让分独赢候选·观察（365独赢强方≥55%/≤45% + 竞彩/北单同线）·不进引擎/账本/ROI",
       "hotFlag": false,
       "strongTier": false,
       "settle": null,
@@ -2709,7 +2723,7 @@
       "settleByLine": "hitByLine",
       "metrics": {
         "hdcHomeProb": 51.5,
-        "bdHomeProb": 60,
+        "bdHomeProb": 48.8,
         "p365MnlHome": 87.2,
         "hot365": "home",
         "lineJc": -14.5,
@@ -2717,7 +2731,7 @@
         "lineAligned": true,
         "candidateSide": "away",
         "settleByLine": "hitByLine",
-        "note": "候选通道仅复现外部精选的错位线索；n<40且训练/留出未验证，不给投注方向"
+        "note": "观察候选只复现外部精选的错位线索；强方阈≥55%/≤45%，n<40且训练/留出未验证，不给投注方向"
       }
     },
     {
@@ -3552,7 +3566,7 @@
         "line": -16.5
       },
       "bd": {
-        "home": 1.82,
+        "home": 1.83,
         "away": 2.2,
         "line": -16.5
       },
@@ -3587,7 +3601,7 @@
         "observed_at": "2026-11-21T16:20:01+08:00"
       },
       "fadeSide": "away",
-      "verdict": "让分独赢候选·观察（365独赢强方+浅让分；竞彩hdc/北单同线）·不进引擎/账本/ROI",
+      "verdict": "让分独赢候选·观察（365独赢强方≥55%/≤45% + 竞彩/北单同线）·不进引擎/账本/ROI",
       "hotFlag": false,
       "strongTier": false,
       "settle": null,
@@ -3597,7 +3611,7 @@
       "settleByLine": "missByLine",
       "metrics": {
         "hdcHomeProb": 50,
-        "bdHomeProb": 54.7,
+        "bdHomeProb": 54.6,
         "p365MnlHome": 90.1,
         "hot365": "home",
         "lineJc": -16.5,
@@ -3605,7 +3619,7 @@
         "lineAligned": true,
         "candidateSide": "away",
         "settleByLine": "missByLine",
-        "note": "候选通道仅复现外部精选的错位线索；n<40且训练/留出未验证，不给投注方向"
+        "note": "观察候选只复现外部精选的错位线索；强方阈≥55%/≤45%，n<40且训练/留出未验证，不给投注方向"
       }
     },
     {
