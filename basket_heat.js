@@ -407,16 +407,26 @@
       let lineTag = '';
       if (x.settledByLine === 'hitByLine') lineTag = '<br><small style="color:#16a34a">让分赢盘✓</small>';
       else if (x.settledByLine === 'missByLine') lineTag = '<br><small style="color:#94a3b8">让分未赢盘(参考)</small>';
+      // ★ 2026-11-25 锁死状态：赛前随新帧更新结论；过开赛时刻后赛后帧被硬挡、结论锁死。
+      //   locked=有真开赛时刻(已上护栏)；kickTs 缺失的场次诚实标"未锁"不冒充。
+      const nowS = Date.now() / 1000;
+      const kick = Number(x.kickTs);
+      let lockTag;
+      if (!x.locked || !Number.isFinite(kick)) lockTag = '<br><small style="color:#f59e0b">⚠ 无开赛时刻·未锁</small>';
+      else if (nowS < kick) lockTag = '<br><small style="color:#2563eb">🔄 赛前·随盘口更新</small>';
+      else lockTag = '<br><small style="color:#64748b">🔒 开赛后·已锁死</small>';
       const odds = object(x.odds) || {};
       return '<tr><td>' + badge(x.tier) + '</td><td>' + esc(x.day) + '</td><td>' + esc(x.home) + ' vs ' + esc(x.away) +
         '</td><td>' + esc(x.direction || '') + '</td><td>' + esc(x.blendP) + '%<br><small>' + esc(x.nSrc) + '源·共振' + esc(x.agree) + '</small></td>' +
         '<td>' + (x.line !== null && x.line !== undefined ? '让 ' + esc(x.line) : '—') + '<br><small>' + esc(x.lineSrc || '') + '</small>' + lineTag + '</td>' +
-        '<td>' + st + '</td><td><small>' + srcs + '</small></td></tr>';
+        '<td>' + st + lockTag + '</td><td><small>' + srcs + '</small></td></tr>';
     }).join('');
     const head = '<details class="bh-reference" id="basketHeatTiers" open><summary>精选 / 优选 / 强推 分档（跟强队·D盘真实临盘价）· ' +
       items.length + ' 场' + (state.day ? '（📅 ' + esc(state.day) + ' 当日）' : '') + '</summary>' +
       '<p class="bh-missing">档位=信号强度分级：强推（强队隐含≥70%或≥65%且≥2源共振）/ 精选（≥60%且≥2源）/ 优选（≥55%且≥2源）。' +
       '方向=跟隐含概率高方（真实365/竞彩/北单临盘价，赛前&lt;开赛硬过滤）。' +
+      '<strong style="color:#2563eb">数据是活的：赛前每15分钟随新盘口帧重算、结论会变；一过开赛时刻，赛后帧被硬挡、方向/强度锁死不再变（结算另按核验赛果填）。</strong>' +
+      '（⚠ 无开赛时刻的场次无法上此护栏，标「未锁」不冒充。）' +
       '<strong>25场实证：跟强队72% vs 站对面28%，旧「站对面」口径已否。</strong>ROI edge 未验证（n=25&lt;40、z≈0），' +
       '本表仅复现参考软件分档能力，<strong>不进方向账本/ROI/引擎，不构成投注建议</strong>。</p>' +
       '<p class="bh-muted">版本 ' + esc(t.version) + ' · 更新 ' + moment(t.updated) + ' · 全库 ' + esc(s.total) +
