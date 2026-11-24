@@ -776,7 +776,7 @@
       await loadTiers(scriptURL || window.location.href);
       try { render(); } catch (error) { state.data = previous; if (previous) render(); throw error; }
       notice.className = 'bh-notice';
-      notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '只手动刷新，无自动定时。';
+      notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '主画面手动刷新；精选/优选/强推分档每15分钟自动跟进。';
     } catch (error) {
       notice.className = 'bh-notice bh-error';
       notice.textContent = '篮球数据读取失败：' + (error && error.name === 'AbortError' ? '请求超过 15 秒' : text(error && error.message) || '未知错误') +
@@ -862,7 +862,7 @@
       '<div id="basketHeatModeNotice" class="bh-mode-warning" data-basket-mode-notice role="status" hidden></div>' +
       '<p>独立于足球。下方「精选/优选/强推」按 D盘真实临盘价 + 跟强队方向分级（复现参考软件分档）；' +
       '旧「三盘资金过热」按洋哥顺序链站对面口径保留仅供对照。两表均为观察档，未过 n≥40 / ROI 验证，不构成投注建议。</p>' +
-      '<div id="basketHeatNotice" class="bh-notice" role="status" aria-live="polite">尚未读取；首次打开时读取同源 basket_heat.json，无自动定时。</div>' +
+      '<div id="basketHeatNotice" class="bh-notice" role="status" aria-live="polite">尚未读取；首次打开时读取同源 basket_heat.json，分档每15分钟自动跟进。</div>' +
       '<div id="basketHeatSummary" class="bh-summary"><p>总场数 / 结果生成时间：尚未读取，不用 0 代替未知。</p><p>胜率、ROI：尚未建立 / 待前向样本。</p></div>' +
       '<div id="basketHeatSourceStatus" class="bh-statuses"></div>' +
       '<details class="bh-dir" id="basketHeatDir" open><summary>方向观察账本 · 赛前冻结 + 逐场复盘（观察档，非投注建议）</summary>' +
@@ -904,6 +904,7 @@
       observer = new MutationObserver(mountButton);
       observer.observe(document.body, { childList: true, subtree: true });
     }
+    startTierWatch();
   }
   window.openBasketHeat = function () {
     init();
@@ -919,6 +920,30 @@
     modal.setAttribute('aria-hidden', 'true');
     if (state.focus && state.focus.isConnected) state.focus.focus();
   };
+  /* ★ 2026-11-24 分档自动跟进：精选/优选/强推由本机每15分钟重算后推上线，
+     前端每15分钟自检一次 basket_tiers.json（cache:no-store），updated 变化才重渲分档表。
+     只更新分档表槽位，不动主画面/筛选/焦点；弹窗未打开时不发请求。 */
+  function startTierWatch() {
+    if (window.__bkTierWatch) return;
+    window.__bkTierWatch = true;
+    setInterval(async () => {
+      if (!modal || !modal.classList.contains('show')) return;
+      const before = state.tiers && state.tiers.updated;
+      try {
+        const url = new URL('basket_tiers.json', scriptURL || window.location.href);
+        if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) return;
+        const r = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d || !Array.isArray(d.items) || !d.summary) return;
+        state.tiers = d;
+        if (d.updated !== before) {
+          const slot = modal.querySelector('#basketHeatTierSlot');
+          if (slot) slot.innerHTML = tierHTML();
+        }
+      } catch (_) { /* 自检失败不影响已有分档画面，下一轮重试 */ }
+    }, 15 * 60 * 1000);
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 })();

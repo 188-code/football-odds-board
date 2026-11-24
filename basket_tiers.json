@@ -1,12 +1,12 @@
 {
   "version": "basket_tier_follow_strong_20261124",
-  "updated": "2026-11-24T07:57:50.145Z",
+  "updated": "2026-11-24T15:09:15.575Z",
   "summary": {
-    "total": 59,
+    "total": 64,
     "byTier": {
-      "强推": 33,
+      "强推": 36,
       "精选": 13,
-      "优选": 13
+      "优选": 15
     },
     "byDay": {
       "2026-11-23": 10,
@@ -14,14 +14,15 @@
       "2026-11-22": 12,
       "2026-11-20": 7,
       "2026-11-18": 8,
+      "2026-11-25": 5,
       "2026-11-24": 7,
       "2026-11-19": 1
     },
-    "withLine": 59,
+    "withLine": 64,
     "settledByLine": 28,
     "tierStat": {
       "强推": {
-        "n": 33,
+        "n": 36,
         "mnl": {
           "n": 16,
           "hit": 13,
@@ -47,7 +48,7 @@
         }
       },
       "优选": {
-        "n": 13,
+        "n": 15,
         "mnl": {
           "n": 4,
           "hit": 4,
@@ -549,6 +550,54 @@
       "direction": "跟强队(客 帕纳辛纳科斯)"
     },
     {
+      "id": "2043028",
+      "day": "2026-11-25",
+      "league": "欧洲篮球联赛",
+      "home": "贝尔格莱德红星",
+      "away": "博洛尼亚",
+      "kickTs": null,
+      "tier": "强推",
+      "hot": "home",
+      "hotName": "贝尔格莱德红星",
+      "strongP": 76.3,
+      "blendP": 76.9,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.24,
+        "jcMnl": {
+          "home": 1.09,
+          "away": 3.82
+        },
+        "euMnl": {
+          "home": 1.24,
+          "away": 4
+        },
+        "bd": null
+      },
+      "line": -10.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-24T15:54:16+08:00",
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 76.3,
+          "hot": "home"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 77.8,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 贝尔格莱德红星)"
+    },
+    {
       "id": "2042987",
       "day": "2026-11-24",
       "league": "美国职业篮球联盟",
@@ -936,6 +985,63 @@
       "direction": "跟强队(客 丹佛掘金)"
     },
     {
+      "id": "2043033",
+      "day": "2026-11-25",
+      "league": "美国职业篮球联盟",
+      "home": "华盛顿奇才",
+      "away": "波士顿凯尔特人",
+      "kickTs": null,
+      "tier": "强推",
+      "hot": "away",
+      "hotName": "波士顿凯尔特人",
+      "strongP": 78.7,
+      "blendP": 74,
+      "nSrc": 3,
+      "agree": 2,
+      "disagree": 1,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.22,
+        "jcMnl": {
+          "home": 3.7,
+          "away": 1.1
+        },
+        "euMnl": {
+          "home": 4.5,
+          "away": 1.22
+        },
+        "bd": {
+          "home": 1.86,
+          "away": 2.16,
+          "line": "10.5"
+        }
+      },
+      "line": 9.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-24T14:38:52+08:00",
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 21.3,
+          "hot": "away"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 22.9,
+          "hot": "away"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 53.7,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(客 波士顿凯尔特人)"
+    },
+    {
       "id": "2042974",
       "day": "2026-11-23",
       "league": "德国篮球联赛",
@@ -1222,6 +1328,63 @@
         }
       ],
       "direction": "跟强队(主 穆尔西亚天主大学)"
+    },
+    {
+      "id": "2043034",
+      "day": "2026-11-25",
+      "league": "美国职业篮球联盟",
+      "home": "丹佛掘金",
+      "away": "达拉斯独行侠",
+      "kickTs": null,
+      "tier": "强推",
+      "hot": "home",
+      "hotName": "丹佛掘金",
+      "strongP": 71.9,
+      "blendP": 71.6,
+      "nSrc": 3,
+      "agree": 2,
+      "disagree": 1,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.33,
+        "jcMnl": {
+          "home": 1.12,
+          "away": 3.5
+        },
+        "euMnl": {
+          "home": 1.33,
+          "away": 3.4
+        },
+        "bd": {
+          "home": 2.65,
+          "away": 1.6,
+          "line": "-8.5"
+        }
+      },
+      "line": -8.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-24T22:36:24+08:00",
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 71.9,
+          "hot": "home"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 75.8,
+          "hot": "home"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 37.6,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(主 丹佛掘金)"
     },
     {
       "id": "2042956",
@@ -2483,6 +2646,54 @@
       "direction": "跟强队(主 费城76人)"
     },
     {
+      "id": "2043031",
+      "day": "2026-11-25",
+      "league": "欧洲篮球联赛",
+      "home": "巴塞罗那",
+      "away": "费内巴切",
+      "kickTs": null,
+      "tier": "优选",
+      "hot": "away",
+      "hotName": "费内巴切",
+      "strongP": 57.4,
+      "blendP": 58.2,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.65,
+        "jcMnl": {
+          "home": 2.09,
+          "away": 1.43
+        },
+        "euMnl": {
+          "home": 2.22,
+          "away": 1.65
+        },
+        "bd": null
+      },
+      "line": 3.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-24T21:35:37+08:00",
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 42.6,
+          "hot": "away"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 40.6,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 费内巴切)"
+    },
+    {
       "id": "2042853",
       "day": "2026-11-18",
       "league": "美国职业篮球联盟",
@@ -2521,6 +2732,63 @@
         }
       ],
       "direction": "跟强队(主 明尼苏达森林狼)"
+    },
+    {
+      "id": "2043032",
+      "day": "2026-11-25",
+      "league": "美国职业篮球联盟",
+      "home": "奥兰多魔术",
+      "away": "底特律活塞",
+      "kickTs": null,
+      "tier": "优选",
+      "hot": "away",
+      "hotName": "底特律活塞",
+      "strongP": 55.9,
+      "blendP": 57,
+      "nSrc": 3,
+      "agree": 3,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.72,
+        "jcMnl": {
+          "home": 1.99,
+          "away": 1.48
+        },
+        "euMnl": {
+          "home": 2.18,
+          "away": 1.72
+        },
+        "bd": {
+          "home": 2.46,
+          "away": 1.68,
+          "line": "1.5"
+        }
+      },
+      "line": 2.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-24T22:21:15+08:00",
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 44.1,
+          "hot": "away"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 42.7,
+          "hot": "away"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 40.6,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 底特律活塞)"
     },
     {
       "id": "2042891",
