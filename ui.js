@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-24-convdiag-v9';   // ★ v8：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
+const UI_V = '2026-11-24-convdiag-v10';   // ★ v8：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -627,6 +627,27 @@ async function softRefreshData(ts, shellChanged){
         (document.head || document.getElementsByTagName('head')[0]).appendChild(el);
       }catch(e){ res(); }
     });
+    /* ★ 2026-11-24 修「页面开着诊断区不跟进新入围」：三盘资金账本(fundplate_hist.js)此前只在
+       整页重载时更新，软刷新只重拉 bake_data.js → 页面一直开着时诊断区停在打开那一刻，
+       后端每15分钟算出的新入围不反映。这里同步重拉账本外链，覆盖 window.__FUNDPLATE_HISTORY__，
+       再就地重渲 #fpHistHost（若资金板正开着），实现开着 tab 也跟进最新入围判定。 */
+    await new Promise((res) => {
+      try{
+        const el2 = document.createElement('script');
+        el2.src = 'fundplate_hist.js?_r=' + Date.now();
+        el2.async = true;
+        el2.onload = res; el2.onerror = res;
+        (document.head || document.getElementsByTagName('head')[0]).appendChild(el2);
+      }catch(e){ res(); }
+    });
+    // 账本更新后：若资金板弹窗正开着，就地重渲历史块（含诊断区）
+    try{
+      const _m = $('fundPlateModal');
+      if (_m && _m.classList.contains('show') && typeof fundplateHistoryHTML === 'function'){
+        const _host = $('fpHistHost');
+        if (_host) _host.innerHTML = fundplateHistoryHTML();
+      }
+    }catch(e){}
     // 等待新数据落地（generated 变化），最多 7s
     let g = (window.__BAKE_RAW__ && window.__BAKE_RAW__.generated) || 0;
     for (let i=0;i<140 && g === oldGen;i++){ await new Promise(r=>setTimeout(r,50)); g=(window.__BAKE_RAW__&&window.__BAKE_RAW__.generated)||0; }
