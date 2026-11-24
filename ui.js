@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-24-convdiag-v8';   // ★ v8：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
+const UI_V = '2026-11-24-convdiag-v9';   // ★ v8：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9438,12 +9438,20 @@ function fundplateHistoryHTML(){
           else if (neg >= 2) point += ' · ' + neg + '端同向撤离强队';
         }
         // 实时入围判定：为什么进/不进方向账本
+        // ★ 2026-11-24 修复判定顺序 bug：原先把 nSrc<2 排在真实理由前，把 83 场
+        //   "两独赢端信号不一致"(数据齐、只是三端没同向) 错误标成 "单端不足" → 用户误以为数据缺失。
+        //   现改为先读 recDir 真实理由，nSrc<2 仅作无其他理由时的兜底。
         let verdict, vcol;
-        if (/^买/.test(String(e.recDir || ''))) { verdict = '✅ 已入围·给方向'; vcol = '#34d399'; }
+        const _rd = String(e.recDir || '');
+        if (/^买/.test(_rd)) { verdict = '✅ 已入围·给方向'; vcol = '#34d399'; }
+        else if (/两独赢端信号不一致|信号不一致/.test(_rd)) { verdict = '⛔ 三端齐但信号未同向·只观察'; vcol = '#93c5fd'; }
+        else if (/翻转|被买爆/.test(_rd)) { verdict = '⛔ 翻转(冷门被买爆)·不追高'; vcol = '#fbbf24'; }
+        else if (/干净独赢端不足|剔除错配/.test(_rd)) { verdict = '⛔ 脏端剔除后独赢不足·不入围'; vcol = '#fbbf24'; }
+        else if (/无真实盘口|不判强弱/.test(_rd)) { verdict = '⛔ 无真实盘口·不判'; vcol = '#94a3b8'; }
+        else if (/势均力敌/.test(_rd)) { verdict = '⛔ 势均力敌(票差不足)·不下注'; vcol = '#93c5fd'; }
+        else if (/三盘序列不齐|序列不齐|独赢数据缺失|仅.*单端|旧快照缺op|数据不足/.test(_rd)) { verdict = '⛔ 数据/序列不足·不入围'; vcol = '#f87171'; }
         else if (nSrc < 2) { verdict = '⛔ 单端不足(' + nSrc + '/2)·不入围'; vcol = '#f87171'; }
-        else if (/干净独赢端不足|剔除错配/.test(String(e.recDir || ''))) { verdict = '⛔ 脏端剔除后独赢不足·不入围'; vcol = '#fbbf24'; }
-        else if (/无真实盘口|不判强弱/.test(String(e.recDir || ''))) { verdict = '⛔ 无真实盘口·不判'; vcol = '#94a3b8'; }
-        else { verdict = '⛔ ' + String(e.recDir || '信号不一致').replace(/^观察·?/, '').slice(0, 16); vcol = '#fbbf24'; }
+        else { verdict = '⛔ ' + _rd.replace(/^观察·?/, '').slice(0, 16); vcol = '#fbbf24'; }
         // 数据新鲜度：最后一次序列帧时刻距开赛
         const t1 = t.bd && t.bd.t1 || t.jc && t.jc.t1 || t.eu && t.eu.t1 || '';
         rows.push({ e:e, day:day, nSrc:nSrc, same:same, jn:jn, bn:bn, en:en, point:point, verdict:verdict, vcol:vcol, t1:t1 });
@@ -9480,6 +9488,7 @@ function fundplateHistoryHTML(){
         + '<div style="padding:0 10px 10px">'
         + '<div style="font-size:10.5px;opacity:.85;line-height:1.65;margin:6px 0 8px">'
         + '逐场显示竞彩/北单/365 的<b>开盘→临盘资金分量</b>（正=该侧占比上升）、<b>客观资金指向</b>（以资金异动最大的盘为主）、<b>实时入围判定</b>（逐场说清为什么给/不给方向）。数据来自 <code>__FUNDPLATE_HISTORY__</code>，每次刷新链重建自动更新。'
+        + '<br><b style="color:#93c5fd">为什么多数场"不入围"</b>（本区 ' + rows.length + ' 场异动的真实构成）：约 1/6 已给方向；<b>最大一堆是"三端齐但信号未同向"</b>——竞彩/北单/365 三盘数据都在、但资金方向没形成 2 端以上共振，按铁律不能硬凑方向；其余是翻转(冷门被买爆不追高)、脏端剔除、真·序列/单端数据不足。所以"不入围"绝大多数是<b>数据齐但信号不够格</b>，不是漏采，更不是死观察——每场的具体原因看"入围判定"列。'
         + '<br><b style="color:#fbbf24">为什么资金指向不等于下注方向</b>：严格训练/留出验证——净资金变化方向在留出段是 <b>49.4% / 50.0%（≈抛硬币）</b>，无论用 net 还是 dStrong、无论是否剔除脏端。按项目铁律（训练/留出同向+n≥40+ROI/z达标）不构成下注方向，故本区<b style="color:#f87171">只给资金分析、不给买受让/买强队建议</b>。'
         + '<br><b style="color:#93c5fd">蒙扎(tid 2993871)已复核</b>：此前因北单补登帧 o.date 销售周标签污染分组（4天478帧并进一条），已在本地修复；修复后 bd 临盘 [20.25,24.27,55.47] 与真实快照 20.2/23.7/56.1 吻合。修复上线前方向口径不变。'
         + '</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
