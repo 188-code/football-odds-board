@@ -8,7 +8,7 @@
   const SOURCES = { jc: '竞彩篮球', eu: 'Bet365（公开转引）', bd: '北单胜负过关' };
   const STATES = { ok: '成功', partial: '部分成功', error: '失败', blocked: '停用 / 访问受限', pending: '等待', cached_sample: '已导入缓存快照（非实时采集成功）', not_connected: '未接入' };
   const IMPORT_NOTICE = '真实抓取快照导入·非实时·采集时刻未核，不计赛前意见';
-  const state = { data: null, ledger: null, preset: null, overheat: null, day: '', market: 'mnl', keyword: '', selling: false, loading: false, focus: null };
+  const state = { data: null, ledger: null, preset: null, overheat: null, tiers: null, day: '', market: 'mnl', keyword: '', selling: false, loading: false, focus: null };
   let modal;
   let observer;
   const scriptURL = document.currentScript && document.currentScript.src;
@@ -383,6 +383,58 @@
       '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>最终比分</th><th>结算</th><th>规则</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
+  /* ★★ 2026-11-24 精选/优选/强推分档（跟强队·真实临盘价）
+     读 basket_tiers.json：跟隐含概率高方，档位按信号强度+共振源数分级。
+     观察档，不进方向账本/ROI/引擎。 */
+  function tierHTML() {
+    const t = state.tiers;
+    const none = '<details class="bh-reference" id="basketHeatTiers"><summary>精选 / 优选 / 强推 分档（跟强队·真实临盘）· 尚未生成</summary>' +
+      '<p class="bh-muted">basket_tiers.json 尚未生成；运行 _basket_tier_engine.cjs 后显示。</p></details>';
+    if (!t || !Array.isArray(t.items)) return none;
+    const s = t.summary || {};
+    const all = t.items;
+    const items = all.filter(x => !state.day || text(x.day) === state.day);
+    const rankBadge = { 强推: '#e11d48', 精选: '#2563eb', 优选: '#16a34a' };
+    const badge = tier => '<span style="display:inline-block;padding:1px 8px;border-radius:10px;color:#fff;font-weight:800;background:' +
+      (rankBadge[tier] || '#64748b') + '">' + esc(tier) + '</span>';
+    const ts = object(s.tierStat);
+    const rows = items.map(x => {
+      const srcs = list(x.sources).map(v => esc(v.src) + ' ' + esc(v.homeP) + '%→' + (v.hot === 'home' ? '主' : '客')).join(' · ');
+      // 主结算=独赢跟强队；让分线只作参考徽章（强队赢球≠赢盘）
+      let st = '未结算';
+      if (x.mnlWin === 'hit') st = '<span style="color:#16a34a;font-weight:700">独赢命中 ✓</span>';
+      else if (x.mnlWin === 'miss') st = '<span style="color:#e54545;font-weight:700">独赢未中 ✗</span>';
+      let lineTag = '';
+      if (x.settledByLine === 'hitByLine') lineTag = '<br><small style="color:#16a34a">让分赢盘✓</small>';
+      else if (x.settledByLine === 'missByLine') lineTag = '<br><small style="color:#94a3b8">让分未赢盘(参考)</small>';
+      const odds = object(x.odds) || {};
+      return '<tr><td>' + badge(x.tier) + '</td><td>' + esc(x.day) + '</td><td>' + esc(x.home) + ' vs ' + esc(x.away) +
+        '</td><td>' + esc(x.direction || '') + '</td><td>' + esc(x.blendP) + '%<br><small>' + esc(x.nSrc) + '源·共振' + esc(x.agree) + '</small></td>' +
+        '<td>' + (x.line !== null && x.line !== undefined ? '让 ' + esc(x.line) : '—') + '<br><small>' + esc(x.lineSrc || '') + '</small>' + lineTag + '</td>' +
+        '<td>' + st + '</td><td><small>' + srcs + '</small></td></tr>';
+    }).join('');
+    const head = '<details class="bh-reference" id="basketHeatTiers" open><summary>精选 / 优选 / 强推 分档（跟强队·D盘真实临盘价）· ' +
+      items.length + ' 场' + (state.day ? '（📅 ' + esc(state.day) + ' 当日）' : '') + '</summary>' +
+      '<p class="bh-missing">档位=信号强度分级：强推（强队隐含≥70%或≥65%且≥2源共振）/ 精选（≥60%且≥2源）/ 优选（≥55%且≥2源）。' +
+      '方向=跟隐含概率高方（真实365/竞彩/北单临盘价，赛前&lt;开赛硬过滤）。' +
+      '<strong>25场实证：跟强队72% vs 站对面28%，旧「站对面」口径已否。</strong>ROI edge 未验证（n=25&lt;40、z≈0），' +
+      '本表仅复现参考软件分档能力，<strong>不进方向账本/ROI/引擎，不构成投注建议</strong>。</p>' +
+      '<p class="bh-muted">版本 ' + esc(t.version) + ' · 更新 ' + moment(t.updated) + ' · 全库 ' + esc(s.total) +
+      ' 场（强推 ' + esc((s.byTier || {}).强推 || 0) + ' / 精选 ' + esc((s.byTier || {}).精选 || 0) +
+      ' / 优选 ' + esc((s.byTier || {}).优选 || 0) + '）。结算主口径=独赢跟强队是否赢球；让分线仅参考（强队赢球≠赢盘）。</p>' +
+      '<p style="color:#c4b5fd">分档区分度（独赢命中）：' +
+      ['强推', '精选', '优选'].map(k => {
+        const v = object(ts[k]).mnl || {};
+        return esc(k) + ' ' + esc(v.hit || 0) + '/' + esc(v.n || 0) + (v.rate !== null && v.rate !== undefined ? '=' + esc(v.rate) + '%' : '');
+      }).join(' · ') + '　<span style="color:#94a3b8">（让分线另算：强推 ' +
+      esc((object(ts['强推']).byLine || {}).rate === null || (object(ts['强推']).byLine || {}).rate === undefined ? '—' : object(ts['强推']).byLine.rate + '%') +
+      '，深盘打不住属正常）</span></p>' +
+      '<div class="bh-scroll" tabindex="0" aria-label="篮球精选优选强推分档表"><table><thead><tr>' +
+      '<th>档位</th><th>日期</th><th>对阵</th><th>方向（跟强队）</th><th>强度 / 共振</th><th>让分线</th><th>结算</th><th>三盘信号源</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div></details>';
+    return head;
+  }
+
   /* ★★ 2026-11-19 框架重构：洋哥三盘=顺序链，一盘竞彩独赢资金趋势就能给方向。
      旧版错用让分盘hdc+sfgg+要求让分线一致→大量不可比；北单缺失就跳过→丢方向。
      新版：一盘竞彩独赢(mnl)定方向(站大热门对面)，二盘365缺位标注，三盘北单共振确认。 */
@@ -630,6 +682,8 @@
     modal.querySelector('#basketHeatDirTable').innerHTML = dirLedgerTableHTML();
     const presetSlot = modal.querySelector('#basketHeatPresetSlot');
     if (presetSlot) presetSlot.innerHTML = presetHTML();
+    const tierSlot = modal.querySelector('#basketHeatTierSlot');
+    if (tierSlot) tierSlot.innerHTML = tierHTML();
     const overheatSlot = modal.querySelector('#basketHeatOverheatSlot');
     if (overheatSlot) overheatSlot.innerHTML = overheatHTML();
     modal.querySelector('#basketHeatRows').innerHTML = filtered.length ? filtered.map(rowHTML).join('') :
@@ -688,6 +742,16 @@
       if (d && typeof d === 'object' && Array.isArray(d.items) && d.summary && typeof d.summary === 'object') state.overheat = d;
     } catch (_) { /* 过热核对账本缺失不影响观察板主画面 */ }
   }
+  async function loadTiers(baseURL) {
+    try {
+      const url = new URL('basket_tiers.json', baseURL);
+      if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) return;
+      const response = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
+      if (!response.ok) return;
+      const d = await response.json();
+      if (d && typeof d === 'object' && Array.isArray(d.items) && d.summary && typeof d.summary === 'object') state.tiers = d;
+    } catch (_) { /* 分档 JSON 缺失不影响观察板主画面 */ }
+  }
   async function refresh() {
     if (state.loading) return;
     state.loading = true;
@@ -709,6 +773,7 @@
       await loadLedger(scriptURL || window.location.href);
       await loadPreset(scriptURL || window.location.href);
       await loadOverheat(scriptURL || window.location.href);
+      await loadTiers(scriptURL || window.location.href);
       try { render(); } catch (error) { state.data = previous; if (previous) render(); throw error; }
       notice.className = 'bh-notice';
       notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '只手动刷新，无自动定时。';
@@ -795,7 +860,8 @@
     modal.innerHTML = '<div class="mbox"><div class="bh-head"><h2 id="basketHeatTitle">篮球看板 · 仅观察</h2>' +
       '<div><button type="button" id="basketHeatRefresh">刷新篮球数据</button> <button type="button" id="basketHeatClose" aria-label="关闭篮球观察板块">关闭</button></div></div>' +
       '<div id="basketHeatModeNotice" class="bh-mode-warning" data-basket-mode-notice role="status" hidden></div>' +
-      '<p>独立于足球；一盘→二盘→三盘仅作数据观察。尚无经篮球留出标定的强推 / 下注信号，报价不等于真实资金。</p>' +
+      '<p>独立于足球。下方「精选/优选/强推」按 D盘真实临盘价 + 跟强队方向分级（复现参考软件分档）；' +
+      '旧「三盘资金过热」按洋哥顺序链站对面口径保留仅供对照。两表均为观察档，未过 n≥40 / ROI 验证，不构成投注建议。</p>' +
       '<div id="basketHeatNotice" class="bh-notice" role="status" aria-live="polite">尚未读取；首次打开时读取同源 basket_heat.json，无自动定时。</div>' +
       '<div id="basketHeatSummary" class="bh-summary"><p>总场数 / 结果生成时间：尚未读取，不用 0 代替未知。</p><p>胜率、ROI：尚未建立 / 待前向样本。</p></div>' +
       '<div id="basketHeatSourceStatus" class="bh-statuses"></div>' +
@@ -804,6 +870,7 @@
       '<div id="basketHeatDirSummary" class="bh-summary"></div>' +
       '<div id="basketHeatDirTable"></div></details>' +
       '<div id="basketHeatPresetSlot"></div>' +
+      '<div id="basketHeatTierSlot"></div>' +
       '<div id="basketHeatOverheatSlot"></div>' +
       '<div class="bh-filters"><label>独立日期 <select id="basketHeatDay" data-basket-filter="day"><option value="">全部日期</option></select></label>' +
       '<label>市场 <select id="basketHeatMarket" data-basket-filter="market"><option value="mnl">mnl · 胜负 / 独赢</option><option value="hdc">hdc · 让分胜负</option><option value="hilo">hilo · 大小分</option></select></label>' +
