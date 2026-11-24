@@ -9104,7 +9104,19 @@ function fundplateHistoryHTML(){
   const nWin = dec.filter(e=> e.result==='win').length;
   const nLose = dec.filter(e=> e.result==='lose').length;
   const nPush = items.filter(e=> e.result==='push' && _isPre(e)).length;
-  const nPend = items.length - decAll.length - items.filter(e=> e.result==='push').length;
+  /* ★2026-11-24：旧口径把所有无 result 的行都叫“待结算”，里面混着未来场和观察档，
+     用户看到“过了一夜还没结算”其实是口径错。这里拆三段：真待赛果源 / 观察档不入结算 / 未开赛。 */
+  const pendingAll = items.filter(e=> !e.result || e.result==='pending');
+  const isObserveRow = function(e){
+    if (e && e.noStat === true) return true;
+    const a = String((e && (e.recDirAlt || e.recDir)) || '');
+    return a.indexOf('观察') === 0 || a.indexOf('只观察') >= 0;
+  };
+  const _kickNow = Date.now();
+  const pendingObserve = pendingAll.filter(isObserveRow);
+  const pendingFuture = pendingAll.filter(e=> !isObserveRow(e) && (_kickTsH(e)||0) > _kickNow);
+  const pendingReal = pendingAll.filter(e=> !isObserveRow(e) && ((_kickTsH(e)||0) <= _kickNow));
+  const nPend = pendingReal.length;
   const rate = dec.length ? Math.round(nWin/dec.length*1000)/10 : null;
   const roi = (dec.length+nPush) ? Math.round((nWin*0.9 - nLose)/(dec.length+nPush)*1000)/10 : null;
   const nStrong = items.filter(e=> { const _np = _fpNetPt(e); return _np != null && _np >= 8; }).length;
@@ -9441,7 +9453,8 @@ function fundplateHistoryHTML(){
       })()
     + _kpi('赛前登记', nPre+' 场', '#16a34a')
     + (nPost ? _kpi('赛后补登·不计成绩', nPost+' 场', '#b45309') : '')
-    + _kpi('赛前已结算', (dec.length+nPush)+' 场（待结算 '+nPend+'）')
+    + _kpi('赛前已结算', (dec.length+nPush)+' 场（真待赛果 '+nPend+'）')
+    + _kpi('未结算拆分', '观察 '+pendingObserve.length+' / 未开 '+pendingFuture.length, '#64748b')
     + _kpi('🎯 逐场票差方向·赛前(全部买方向)', (_altRows.length ? (_altHit+'/'+_altRows.length+' 中 · '+_altRate+'%') : '—'),
            (_altRate!=null && _altRate>=50 ? '#16a34a' : '#dc2626'))
     + _kpi('其中 · v3 现行(11-15 票差)', (_altV3.n ? (_altV3.hit+'/'+_altV3.n+' 中 · '+_altV3.rate+'%') : '无样本'),
@@ -9500,7 +9513,11 @@ function fundplateHistoryHTML(){
        旧逻辑按"已证伪的反买下盘"视角上色（受让方赢盘=绿/让球方赢盘=红）→ 误导。
        现改为按本板真实方向"顺买过热强队"计：让球方(强队)赢盘=✅赢、受让方赢盘=❌输。
        过热方"可打出可不打出"——这是统计边(64.7%命中 / 35.3%不中)，不是单场预测，不冒充实测。 */
-    let rs='待结算 ⏳', rc='#94a3b8', bg='transparent';
+    const _obsRow = isObserveRow(e);
+    const _kickH = _kickTsH(e);
+    const _futureRow = !_obsRow && _kickH != null && _kickH > Date.now();
+    let rs = _obsRow ? '观察档·不入结算' : (_futureRow ? '未开赛' : '待赛果源回填 ⏳');
+    let rc='#94a3b8', bg='transparent';
     if (e.result==='lose'){ rs='统计视角·顺买强队 ✅赢盘 '+(e.underMargin); rc='#16a34a'; bg='rgba(22,163,74,.10)'; }
     else if (e.result==='push'){ rs='统计视角·走盘 0'; rc='#b45309'; bg='rgba(180,83,9,.10)'; }
     else if (e.result==='win'){ rs='统计视角·顺买强队 ❌输盘 '+(e.underMargin>0?'+'+e.underMargin:e.underMargin); rc='#dc2626'; bg='rgba(220,38,38,.10)'; }
