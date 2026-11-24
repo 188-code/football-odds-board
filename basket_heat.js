@@ -394,23 +394,27 @@
     const allItems = o.items || [];
     // ★2026-11-20 过热表接入全局日期筛选（与主列表/账本联动）
     const items = allItems.filter(x => !state.day || text(x.day) === state.day);
-    // ★2026-11-20 统计条随日期联动：按筛选后 items 前端复算，口径与服务端 summarize() 一致
-    const fJudged = items.filter(x => x.hotFlag);
+    // ★2026-11-24 让分独赢观察候选与 mnl 主口径完全分表：候选不进任何统计/方向账本/ROI
+    const candItems = items.filter(x => x._hdcCandidate === true);
+    const mnlItems = items.filter(x => !x._hdcCandidate);
+    // ★2026-11-20 统计条随日期联动：按筛选后 mnlItems 前端复算，口径与服务端 summarize() 一致
+    const fJudged = mnlItems.filter(x => x.hotFlag);
     const fSettled = fJudged.filter(x => x.settle);
     const fN = fSettled.length, fHit = fSettled.filter(x => x.settle === 'hit').length;
     const fHitRate = fN ? +(100 * fHit / fN).toFixed(1) : null;
     const fSe = fN ? +(Math.sqrt(fHitRate * (100 - fHitRate) / fN).toFixed(1)) : null;
-    const fWithNorth = items.filter(x => x.bd).length;
-    const fNoNorth = items.length - fWithNorth;
-    const fReson = items.filter(x => (x.metrics || {}).resonance === '三盘共振·确认').length;
+    const fWithNorth = mnlItems.filter(x => x.bd).length;
+    const fNoNorth = mnlItems.length - fWithNorth;
+    const fReson = mnlItems.filter(x => (x.metrics || {}).resonance === '三盘共振·确认').length;
     // ★2026-11-20 二盘补位统计（前端复算，口径与服务端 summarize 一致）
-    const fB365 = items.filter(x => x.b365 && x.b365.mnl).length;
-    const fStrong = items.filter(x => x.strongTier).length;
-    const fStrongSet = items.filter(x => x.strongTier && x.settle);
+    const fB365 = mnlItems.filter(x => x.b365 && x.b365.mnl).length;
+    const fStrong = mnlItems.filter(x => x.strongTier).length;
+    const fStrongSet = mnlItems.filter(x => x.strongTier && x.settle);
     const fSN = fStrongSet.length, fSHit = fStrongSet.filter(x => x.settle === 'hit').length;
     const fStrongRate = fSN ? +(100 * fSHit / fSN).toFixed(1) : null;
     const head = '<details class="bh-reference" id="basketHeatOverheat"><summary>三盘资金过热核对（洋哥顺序链口径·观察档）· ' +
-      items.length + ' 场' + (state.day ? '（📅 ' + esc(state.day) + ' 当日）' : '') + '</summary>' +
+      mnlItems.length + ' 场' + (state.day ? '（📅 ' + esc(state.day) + ' 当日）' : '') +
+      '（另 ' + candItems.length + ' 场让分独赢候选·不进统计）' + '</summary>' +
       '<p class="bh-missing">观察档，非投注信号，不计入方向账本/引擎/仓位。<strong>洋哥三盘是顺序链：一盘竞彩独赢资金趋势→二盘365操盘→三盘北单资金分布</strong>。' +
       '本板块一盘用竞彩独赢（篮球完全可得，站大热门对面给方向）；<strong>二盘365自2026-11-20起用球探滚动帧补位</strong>（此前被567封死长期缺位，历史场无365=真实缺不回补）；' +
       '三盘北单270让分胜负两项作近似共振确认。<strong>强置信口径=三端合流：竞彩+365+北单同侧（heatScore=3/3）</strong>；北单缺失不吞一盘方向，只降档标"仅一盘"。第4步「临场盘水印证」篮球无连续序列做不到。</p>';
@@ -419,7 +423,8 @@
     // 统计条（★2026-11-20 足球板视觉语言：绿=命中、红=未中、橙=中热、灰=正常；数字随日期筛选联动）
     let stat = '<div style="margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(147,197,253,.08);border:1px solid rgba(147,197,253,.35);font-size:11.5px;line-height:1.7;color:#cfe3f7">';
     stat += (state.day ? '<b style="color:#93c5fd">📅 ' + esc(state.day) + ' 当日</b>' : '全部日期') +
-      ' · 有方向场次 <b>' + items.length + '</b> · 二盘365有帧 <b style="color:#38bdf8">' + fB365 +
+      ' · 有方向场次 <b>' + mnlItems.length + '</b> · 让分候选(观察) <b style="color:#a78bfa">' + candItems.length + '</b>' +
+      ' · 二盘365有帧 <b style="color:#38bdf8">' + fB365 +
       '</b> · 北单三盘确认 <b style="color:#16a34a">' + fWithNorth +
       '</b> · 仅一盘 <b style="color:#f97316">' + fNoNorth +
       '</b> · <b style="color:#eab308">三端合流(强置信) ' + fStrong + '</b> 场' +
@@ -435,7 +440,7 @@
     // 逐场表：日期/对阵 | 竞彩独赢隐含(主/客) | 二盘365 | 方向(站对面) | 北单三盘 | 判定 | 赛果·结算
     let table = '<div class="bh-scroll" tabindex="0"><table style="font-size:11.5px"><thead><tr><th>日期/对阵</th><th>竞彩独赢(主/客)</th>' +
       '<th>隐含(主/客)·热度</th><th>二盘365</th><th>方向(站对面)</th><th>北单三盘(份额/共振)</th><th>判定</th><th>赛果·结算</th></tr></thead><tbody>';
-    for (const x of items) {
+    for (const x of mnlItems) {
       const m = x.metrics || {};
       // ★热度分档徽章（仿足球资金热度列：红=极端大热、橙=明确倾向、灰=趋势弱）
       const hp = num(m.hotPct);
@@ -498,6 +503,33 @@
         '<td>' + resCell + '<br>' + setCell + '</td></tr>';
     }
     table += '</tbody></table></div>';
+    // ★2026-11-24 让分独赢候选单独展示：只复现外部精选错位线索，永不混入主表统计
+    let candHTML = '';
+    if (candItems.length) {
+      candHTML = '<div style="margin:10px 0;padding:9px 11px;border-radius:7px;background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.35)">' +
+        '<b style="color:#a78bfa">让分独赢观察候选 ' + candItems.length + ' 场</b>' +
+        '<span style="color:#c4b5fd">（竞彩 mnl 未开售但 D盘 jc hdc + 北单 sfgg + 365 齐；只取365独赢强方对面作候选，按真实让分线单独核对）</span>' +
+        '<div class="bh-scroll" tabindex="0" style="margin-top:7px"><table style="font-size:11.5px"><thead><tr>' +
+        '<th>日期/对阵</th><th>竞彩 hdc</th><th>365 独赢</th><th>北单 sfgg</th><th>候选方向</th><th>让分线核对</th><th>说明</th></tr></thead><tbody>';
+      for (const x of candItems) {
+        const m = x.metrics || {};
+        const sideTxt = m.candidateSide === 'home' ? '主·' + text(x.home) : m.candidateSide === 'away' ? '客·' + text(x.away) : '—';
+        const setTxt = m.settleByLine === 'hitByLine'
+          ? '<span style="color:#16a34a;font-weight:800">✅ 受让/让分方向赢盘</span>'
+          : m.settleByLine === 'missByLine'
+            ? '<span style="color:#e54545;font-weight:800">❌ 候选方向未赢盘</span>'
+            : '<span style="color:var(--mut,#8b98a9)">⏳ 待赛果</span>';
+        candHTML += '<tr><td>' + esc(x.day) + '<br>' + esc(x.away) + '@' + esc(x.home) + '</td>' +
+          '<td>' + esc(x.jc ? x.jc.home : '—') + ' / ' + esc(x.jc ? x.jc.away : '—') + '<br>线 ' + esc(m.lineJc) + '</td>' +
+          '<td>' + (x.eu && x.eu.mnl ? esc(x.eu.mnl.home) + ' / ' + esc(x.eu.mnl.away) + '<br>隐含主 ' + fmt(m.p365MnlHome, 1) + '%' : '缺') + '</td>' +
+          '<td>' + esc(x.bd ? x.bd.home : '—') + ' / ' + esc(x.bd ? x.bd.away : '—') + '<br>线 ' + esc(m.lineBd) + '</td>' +
+          '<td><span style="font-weight:800;color:#a78bfa">候选 ' + esc(sideTxt) + '</span></td>' +
+          '<td>' + setTxt + (x.resultScore ? '<br><span style="color:#8b98a9">' + esc(x.resultScore) + '</span>' : '') + '</td>' +
+          '<td>' + esc(m.note || '观察档') + '</td></tr>';
+      }
+      candHTML += '</tbody></table></div>' +
+        '<p class="bh-muted" style="color:#c4b5fd">候选不写 hotFlag、不进命中率/ROI/方向账本/引擎/仓位。外部软件“精选”可能用了这一错位，但本站 n&lt;40 且训练/留出未验证，只作复盘样本。</p></div>';
+    }
     const foot = '<p class="bh-muted">账本 ' + esc(o.version || '') + ' · 更新 ' + moment(o.updated) + '。' +
       esc(s.caveat || '') + '</p>' +
       '<p class="bh-muted">逻辑（洋哥原文L184-201/L228-256）：三盘顺序链，切勿从三盘倒推。一盘竞彩独赢：隐含概率高方=大热门→站其对面给方向（竞彩独赢去水 pH=(1/H)/(1/H+1/A)）。' +
@@ -505,7 +537,7 @@
       '三盘北单：100%返还池份额=1/SP归一，与一盘同侧=共振确认、异侧=分歧降档。' +
       '<strong>强置信⭐=三端合流 heatScore 3/3（竞彩+365+北单同侧）——前瞻口径：365篮球无历史源无法回测，历史战绩不含强置信档，n&lt;40不进引擎、不下注信号。</strong>' +
       '绝对大热门阈55%为观察档经验值，非洋哥原文硬阈。</p>';
-    return head + daybar + stat + table + foot + '</details>';
+    return head + daybar + stat + table + candHTML + foot + '</details>';
   }
   function presetHTML() {
     const p = state.preset;
