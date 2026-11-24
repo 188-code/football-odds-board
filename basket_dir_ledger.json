@@ -4908,7 +4908,7 @@
    "kickoff": "2026-11-24T09:30:00+08:00",
    "kickTs": 1795483800,
    "firstSeen": 1795444214,
-   "lastSeen": 1795482910,
+   "lastSeen": 1795483685,
    "pre": true,
    "home": "休斯敦火箭",
    "away": "洛杉矶快船",
@@ -4959,7 +4959,7 @@
    "kickoff": "2026-11-24T09:30:00+08:00",
    "kickTs": 1795483800,
    "firstSeen": 1795444214,
-   "lastSeen": 1795482910,
+   "lastSeen": 1795483685,
    "pre": true,
    "home": "休斯敦火箭",
    "away": "洛杉矶快船",
@@ -5005,7 +5005,7 @@
    "kickoff": "2026-11-24T11:00:00+08:00",
    "kickTs": 1795489200,
    "firstSeen": 1795444214,
-   "lastSeen": 1795482910,
+   "lastSeen": 1795483812,
    "pre": true,
    "home": "萨克拉门托国王",
    "away": "圣安东尼奥马刺",
@@ -5051,7 +5051,7 @@
    "kickoff": "2026-11-24T11:00:00+08:00",
    "kickTs": 1795489200,
    "firstSeen": 1795444214,
-   "lastSeen": 1795482910,
+   "lastSeen": 1795483812,
    "pre": true,
    "home": "萨克拉门托国王",
    "away": "圣安东尼奥马刺",
@@ -5102,7 +5102,7 @@
    "kickoff": "2026-11-24T11:00:00+08:00",
    "kickTs": 1795489200,
    "firstSeen": 1795444214,
-   "lastSeen": 1795482910,
+   "lastSeen": 1795483812,
    "pre": true,
    "home": "洛杉矶湖人",
    "away": "犹他爵士",
@@ -5153,7 +5153,7 @@
    "kickoff": "2026-11-24T11:00:00+08:00",
    "kickTs": 1795489200,
    "firstSeen": 1795444214,
-   "lastSeen": 1795482910,
+   "lastSeen": 1795483812,
    "pre": true,
    "home": "洛杉矶湖人",
    "away": "犹他爵士",
@@ -8790,11 +8790,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-20T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.65,
+   "settleSrc": "球探完场比分 results_t7 sid=723035 奥林匹亚科斯-皇家马德里 89-70 | 队名严格配对(日期±2天/开赛±18h) | calc:89-70 → home",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -8837,7 +8837,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "89-70"
   },
   "2042890:hdc": {
    "id": "2042890",
@@ -8864,11 +8865,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-20T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=723035 奥林匹亚科斯-皇家马德里 89-70 | 队名严格配对(日期±2天/开赛±18h) | calc:89-1.5=87.5 vs 70 → home",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -8924,7 +8925,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "89-70"
   },
   "2042890:hilo": {
    "id": "2042890",
@@ -8951,11 +8953,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-20T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=723035 奥林匹亚科斯-皇家马德里 89-70 | 队名严格配对(日期±2天/开赛±18h) | calc:89+70=159 vs 173.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -9050,7 +9052,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "89-70"
   },
   "2042891:mnl": {
    "id": "2042891",
@@ -9077,11 +9080,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-20T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=723036 巴塞罗那-贝尔格莱德红星 83-85 | 队名严格配对(日期±2天/开赛±18h) | calc:83-85 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -9137,7 +9140,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "83-85"
   },
   "2042891:hdc": {
    "id": "2042891",
@@ -9164,11 +9168,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-20T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=723036 巴塞罗那-贝尔格莱德红星 83-85 | 队名严格配对(日期±2天/开赛±18h) | calc:83-2.5=80.5 vs 85 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -9289,7 +9293,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "83-85"
   },
   "2042891:hilo": {
    "id": "2042891",
@@ -9316,11 +9321,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-20T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=723036 巴塞罗那-贝尔格莱德红星 83-85 | 队名严格配对(日期±2天/开赛±18h) | calc:83+85=168 vs 171.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -9389,7 +9394,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "83-85"
   },
   "2042892:mnl": {
    "id": "2042892",
@@ -12706,11 +12712,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.3,
+   "settleSrc": "球探完场比分 results_t7 sid=722283 塔斯马尼亚跳蚁-伊拉瓦拉老鹰 95-82 | 队名严格配对(日期±2天/开赛±18h) | calc:95-82 → home",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -12740,7 +12746,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "95-82"
   },
   "2042950:hdc": {
    "id": "2042950",
@@ -12767,11 +12774,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "球探完场比分 results_t7 sid=722283 塔斯马尼亚跳蚁-伊拉瓦拉老鹰 95-82 | 队名严格配对(日期±2天/开赛±18h) | calc:95-5.5=89.5 vs 82 → home",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -12788,7 +12795,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "95-82"
   },
   "2042950:hilo": {
    "id": "2042950",
@@ -12815,11 +12823,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=722283 塔斯马尼亚跳蚁-伊拉瓦拉老鹰 95-82 | 队名严格配对(日期±2天/开赛±18h) | calc:95+82=177 vs 191.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -12901,7 +12909,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "95-82"
   },
   "2042951:mnl": {
    "id": "2042951",
@@ -12928,11 +12937,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.22,
+   "settleSrc": "球探完场比分 results_t7 sid=722284 墨尔本联-新西兰破坏者 94-91 | 队名严格配对(日期±2天/开赛±18h) | calc:94-91 → home",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -12975,7 +12984,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "94-91"
   },
   "2042951:hdc": {
    "id": "2042951",
@@ -13002,11 +13012,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=722284 墨尔本联-新西兰破坏者 94-91 | 队名严格配对(日期±2天/开赛±18h) | calc:94-6.5=87.5 vs 91 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -13114,7 +13124,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "94-91"
   },
   "2042951:hilo": {
    "id": "2042951",
@@ -13141,11 +13152,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=722284 墨尔本联-新西兰破坏者 94-91 | 队名严格配对(日期±2天/开赛±18h) | calc:94+91=185 vs 187.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -13240,7 +13251,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "94-91"
   },
   "2042952:mnl": {
    "id": "2042952",
@@ -14393,11 +14405,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=733770 特里尔角斗士-开姆尼茨 73-88 | 队名严格配对(日期±2天/开赛±18h) | calc:73-88 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14414,7 +14426,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "73-88"
   },
   "2042957:hdc": {
    "id": "2042957",
@@ -14441,11 +14454,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=733770 特里尔角斗士-开姆尼茨 73-88 | 队名严格配对(日期±2天/开赛±18h) | calc:73-10.5=62.5 vs 88 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14488,7 +14501,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "73-88"
   },
   "2042957:hilo": {
    "id": "2042957",
@@ -14515,11 +14529,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=733770 特里尔角斗士-开姆尼茨 73-88 | 队名严格配对(日期±2天/开赛±18h) | calc:73+88=161 vs 182.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14588,7 +14602,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "73-88"
   },
   "2042958:mnl": {
    "id": "2042958",
@@ -14615,11 +14630,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.65,
+   "settleSrc": "球探完场比分 results_t7 sid=733769 EWE奥尔登堡-法兰克福 72-82 | 队名严格配对(日期±2天/开赛±18h) | calc:72-82 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14636,7 +14651,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "72-82"
   },
   "2042958:hdc": {
    "id": "2042958",
@@ -14663,11 +14679,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=733769 EWE奥尔登堡-法兰克福 72-82 | 队名严格配对(日期±2天/开赛±18h) | calc:72+1.5=73.5 vs 82 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14684,7 +14700,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "72-82"
   },
   "2042958:hilo": {
    "id": "2042958",
@@ -14711,11 +14728,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=733769 EWE奥尔登堡-法兰克福 72-82 | 队名严格配对(日期±2天/开赛±18h) | calc:72+82=154 vs 163.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14732,7 +14749,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "72-82"
   },
   "2042959:mnl": {
    "id": "2042959",
@@ -14759,11 +14777,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=729618 穆尔西亚-萨拉戈萨 72-73 | 队名严格配对(日期±2天/开赛±18h) | calc:72-73 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14780,7 +14798,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "72-73"
   },
   "2042959:hdc": {
    "id": "2042959",
@@ -14807,11 +14826,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=729618 穆尔西亚-萨拉戈萨 72-73 | 队名严格配对(日期±2天/开赛±18h) | calc:72-6.5=65.5 vs 73 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14841,7 +14860,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "72-73"
   },
   "2042959:hilo": {
    "id": "2042959",
@@ -14868,11 +14888,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-21T11:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=729618 穆尔西亚-萨拉戈萨 72-73 | 队名严格配对(日期±2天/开赛±18h) | calc:72+73=145 vs 180.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -14915,7 +14935,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "72-73"
   },
   "2042960:mnl": {
    "id": "2042960",
@@ -18147,11 +18168,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T11:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=729623 特内里费-巴塞罗那 91-80 | 队名严格配对(日期±2天/开赛±18h) | calc:91-80 → home",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -18181,7 +18202,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "91-80"
   },
   "2042972:hdc": {
    "id": "2042972",
@@ -18208,11 +18230,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T11:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "球探完场比分 results_t7 sid=729623 特内里费-巴塞罗那 91-80 | 队名严格配对(日期±2天/开赛±18h) | calc:91+1.5=92.5 vs 80 → home",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -18255,7 +18277,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "91-80"
   },
   "2042972:hilo": {
    "id": "2042972",
@@ -18282,11 +18305,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T11:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=729623 特内里费-巴塞罗那 91-80 | 队名严格配对(日期±2天/开赛±18h) | calc:91+80=171 vs 177.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -18316,7 +18339,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "91-80"
   },
   "2042973:mnl": {
    "id": "2042973",
@@ -18774,11 +18798,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T11:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=729624 皇家马德里-约文图特 87-88 | 队名严格配对(日期±2天/开赛±18h) | calc:87-88 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -18795,7 +18819,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "87-88"
   },
   "2042975:hdc": {
    "id": "2042975",
@@ -18822,11 +18847,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T11:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=729624 皇家马德里-约文图特 87-88 | 队名严格配对(日期±2天/开赛±18h) | calc:87-11.5=75.5 vs 88 → away",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -18908,7 +18933,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "87-88"
   },
   "2042975:hilo": {
    "id": "2042975",
@@ -18935,11 +18961,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-22T11:15:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=729624 皇家马德里-约文图特 87-88 | 队名严格配对(日期±2天/开赛±18h) | calc:87+88=175 vs 183.5 → under",
+   "settledAt": 1795483685,
+   "verified": true,
    "backfill": true,
    "backfillSrc": "raw_jc_presale",
    "dirTrail": [
@@ -18969,7 +18995,8 @@
      "dB": null,
      "obs": ""
     }
-   ]
+   ],
+   "finalScore": "87-88"
   },
   "2042976:mnl": {
    "id": "2042976",
@@ -21289,78 +21316,78 @@
   }
  },
  "summary": {
-  "updatedAt": 1795482910,
+  "updatedAt": 1795483812,
   "srcUsed": "cloud_app basket_heat.json(离线兜底)(竞彩真实报价·赛前冻结)",
   "ruleV": "basket_odds_lean_observe_1",
   "total": 264,
-  "settled": 118,
-  "pending": 146,
+  "settled": 145,
+  "pending": 119,
   "pre": 264,
   "post": 0,
   "all": {
-   "n": 118,
-   "win": 60,
-   "lose": 58,
+   "n": 145,
+   "win": 66,
+   "lose": 79,
    "push": 0,
-   "hit": 50.8,
-   "roi": -22.4,
-   "se": 9.2,
+   "hit": 45.5,
+   "roi": -30.5,
+   "se": 8.3,
    "significant": true,
    "crossZero": false
   },
   "byPick": {
    "主胜": {
-    "n": 23,
-    "win": 16,
-    "lose": 7,
+    "n": 30,
+    "win": 19,
+    "lose": 11,
     "push": 0,
-    "hit": 69.6,
-    "roi": -12.9,
-    "se": 20.9,
+    "hit": 63.3,
+    "roi": -19.3,
+    "se": 18.3,
     "significant": false,
-    "crossZero": true
+    "crossZero": false
    },
    "让分主胜": {
-    "n": 32,
-    "win": 16,
-    "lose": 16,
-    "push": 0,
-    "hit": 50,
-    "roi": -15.9,
-    "se": 17.7,
-    "significant": false,
-    "crossZero": true
-   },
-   "大分": {
     "n": 40,
-    "win": 16,
-    "lose": 24,
+    "win": 18,
+    "lose": 22,
     "push": 0,
-    "hit": 40,
-    "roi": -32.9,
+    "hit": 45,
+    "roi": -24.3,
     "se": 15.8,
     "significant": true,
     "crossZero": false
    },
-   "客胜": {
-    "n": 13,
-    "win": 6,
-    "lose": 7,
+   "大分": {
+    "n": 49,
+    "win": 16,
+    "lose": 33,
     "push": 0,
-    "hit": 46.2,
-    "roi": -38.7,
-    "se": 27.7,
+    "hit": 32.7,
+    "roi": -45.2,
+    "se": 14.3,
+    "significant": true,
+    "crossZero": false
+   },
+   "客胜": {
+    "n": 15,
+    "win": 7,
+    "lose": 8,
+    "push": 0,
+    "hit": 46.7,
+    "roi": -35.9,
+    "se": 25.8,
     "significant": false,
     "crossZero": false
    },
    "让分客胜": {
-    "n": 9,
+    "n": 10,
     "win": 5,
-    "lose": 4,
+    "lose": 5,
     "push": 0,
-    "hit": 55.6,
-    "roi": -8.9,
-    "se": 33.3,
+    "hit": 50,
+    "roi": -18,
+    "se": 31.6,
     "significant": false,
     "crossZero": true
    },
@@ -21378,35 +21405,35 @@
   },
   "byMarket": {
    "mnl": {
-    "n": 36,
-    "win": 22,
-    "lose": 14,
+    "n": 45,
+    "win": 26,
+    "lose": 19,
     "push": 0,
-    "hit": 61.1,
-    "roi": -22.2,
-    "se": 16.7,
-    "significant": false,
+    "hit": 57.8,
+    "roi": -24.8,
+    "se": 14.9,
+    "significant": true,
     "crossZero": false
    },
    "hdc": {
-    "n": 41,
-    "win": 21,
-    "lose": 20,
+    "n": 50,
+    "win": 23,
+    "lose": 27,
     "push": 0,
-    "hit": 51.2,
-    "roi": -14.4,
-    "se": 15.6,
-    "significant": false,
-    "crossZero": true
+    "hit": 46,
+    "roi": -23,
+    "se": 14.1,
+    "significant": true,
+    "crossZero": false
    },
    "hilo": {
-    "n": 41,
+    "n": 50,
     "win": 17,
-    "lose": 24,
+    "lose": 33,
     "push": 0,
-    "hit": 41.5,
-    "roi": -30.5,
-    "se": 15.6,
+    "hit": 34,
+    "roi": -43,
+    "se": 14.1,
     "significant": true,
     "crossZero": false
    }
@@ -21446,48 +21473,48 @@
     "crossZero": true
    },
    "2026-11-21": {
-    "n": 26,
-    "win": 13,
-    "lose": 13,
+    "n": 38,
+    "win": 17,
+    "lose": 21,
     "push": 0,
-    "hit": 50,
-    "roi": -24.5,
-    "se": 19.6,
+    "hit": 44.7,
+    "roi": -32.9,
+    "se": 16.2,
     "significant": false,
     "crossZero": false
    },
    "2026-11-22": {
-    "n": 16,
-    "win": 9,
-    "lose": 7,
+    "n": 25,
+    "win": 10,
+    "lose": 15,
     "push": 0,
-    "hit": 56.3,
-    "roi": -17.3,
-    "se": 25,
+    "hit": 40,
+    "roi": -40.5,
+    "se": 20,
     "significant": false,
-    "crossZero": true
+    "crossZero": false
    },
    "2026-11-23": {
-    "n": 21,
-    "win": 11,
-    "lose": 10,
+    "n": 27,
+    "win": 12,
+    "lose": 15,
     "push": 0,
-    "hit": 52.4,
-    "roi": -17.6,
-    "se": 21.8,
+    "hit": 44.4,
+    "roi": -29.6,
+    "se": 19.2,
     "significant": false,
-    "crossZero": true
+    "crossZero": false
    }
   },
   "byRuleV": {
    "basket_odds_lean_observe_1": {
-    "n": 118,
-    "win": 60,
-    "lose": 58,
+    "n": 145,
+    "win": 66,
+    "lose": 79,
     "push": 0,
-    "hit": 50.8,
-    "roi": -22.4,
-    "se": 9.2,
+    "hit": 45.5,
+    "roi": -30.5,
+    "se": 8.3,
     "significant": true,
     "crossZero": false
    }
