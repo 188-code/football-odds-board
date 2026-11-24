@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_follow_strong_20261124",
-  "updated": "2026-11-24T18:12:35.170Z",
+  "updated": "2026-11-24T19:13:33.504Z",
   "summary": {
     "total": 64,
     "byTier": {
@@ -1131,8 +1131,8 @@
           "away": 1.22
         },
         "bd": {
-          "home": 1.93,
-          "away": 2.06,
+          "home": 1.95,
+          "away": 2.04,
           "line": "10.5"
         }
       },
@@ -1155,7 +1155,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 51.6,
+          "homeP": 51.1,
           "hot": "home"
         }
       ],
@@ -1339,38 +1339,38 @@
       "tier": "强推",
       "hot": "home",
       "hotName": "丹佛掘金",
-      "strongP": 72.6,
-      "blendP": 70.8,
+      "strongP": 73.3,
+      "blendP": 71,
       "nSrc": 3,
       "agree": 2,
       "disagree": 1,
       "mainSrc": "365独赢",
       "odds": {
-        "strong": 1.32,
+        "strong": 1.31,
         "jcMnl": {
           "home": 1.12,
           "away": 3.5
         },
         "euMnl": {
-          "home": 1.32,
-          "away": 3.5
+          "home": 1.31,
+          "away": 3.6
         },
         "bd": {
-          "home": 2.23,
-          "away": 1.8,
+          "home": 2.19,
+          "away": 1.83,
           "line": "-8.5"
         }
       },
       "line": -8.5,
       "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-24T23:52:18+08:00",
+      "capturedAt": "2026-11-25T03:08:45+08:00",
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
       "sources": [
         {
           "src": "365独赢",
-          "homeP": 72.6,
+          "homeP": 73.3,
           "hot": "home"
         },
         {
@@ -1380,7 +1380,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 44.7,
+          "homeP": 45.5,
           "hot": "away"
         }
       ],
@@ -2831,63 +2831,6 @@
       "direction": "跟强队(客 纽约尼克斯)"
     },
     {
-      "id": "2043032",
-      "day": "2026-11-25",
-      "league": "美国职业篮球联盟",
-      "home": "奥兰多魔术",
-      "away": "底特律活塞",
-      "kickTs": null,
-      "tier": "优选",
-      "hot": "away",
-      "hotName": "底特律活塞",
-      "strongP": 55.4,
-      "blendP": 56.4,
-      "nSrc": 3,
-      "agree": 3,
-      "disagree": 0,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.74,
-        "jcMnl": {
-          "home": 1.99,
-          "away": 1.48
-        },
-        "euMnl": {
-          "home": 2.16,
-          "away": 1.74
-        },
-        "bd": {
-          "home": 2.34,
-          "away": 1.74,
-          "line": "1.5"
-        }
-      },
-      "line": 2.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T00:22:33+08:00",
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 44.6,
-          "hot": "away"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 42.7,
-          "hot": "away"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 42.6,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 底特律活塞)"
-    },
-    {
       "id": "2042848",
       "day": "2026-11-18",
       "league": "欧洲篮球联赛",
@@ -2926,6 +2869,63 @@
         }
       ],
       "direction": "跟强队(客 贝尔格莱德红星)"
+    },
+    {
+      "id": "2043032",
+      "day": "2026-11-25",
+      "league": "美国职业篮球联盟",
+      "home": "奥兰多魔术",
+      "away": "底特律活塞",
+      "kickTs": null,
+      "tier": "优选",
+      "hot": "away",
+      "hotName": "底特律活塞",
+      "strongP": 54.6,
+      "blendP": 55.9,
+      "nSrc": 3,
+      "agree": 3,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.76,
+        "jcMnl": {
+          "home": 1.99,
+          "away": 1.48
+        },
+        "euMnl": {
+          "home": 2.12,
+          "away": 1.76
+        },
+        "bd": {
+          "home": 2.3,
+          "away": 1.76,
+          "line": "1.5"
+        }
+      },
+      "line": 2.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T03:08:45+08:00",
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 45.4,
+          "hot": "away"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 42.7,
+          "hot": "away"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 43.3,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 底特律活塞)"
     },
     {
       "id": "2042878",
