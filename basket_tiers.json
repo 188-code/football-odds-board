@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_follow_strong_20261124",
-  "updated": "2026-11-24T20:14:31.652Z",
+  "updated": "2026-11-24T21:15:33.855Z",
   "summary": {
     "total": 64,
     "byTier": {
@@ -995,7 +995,7 @@
       "hot": "away",
       "hotName": "波士顿凯尔特人",
       "strongP": 78.7,
-      "blendP": 73.8,
+      "blendP": 73.9,
       "nSrc": 3,
       "agree": 2,
       "disagree": 1,
@@ -1011,8 +1011,8 @@
           "away": 1.22
         },
         "bd": {
-          "home": 1.89,
-          "away": 2.12,
+          "home": 1.87,
+          "away": 2.14,
           "line": "10.5"
         }
       },
@@ -1035,7 +1035,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 52.9,
+          "homeP": 53.4,
           "hot": "home"
         }
       ],
@@ -1340,7 +1340,7 @@
       "hot": "home",
       "hotName": "丹佛掘金",
       "strongP": 72.6,
-      "blendP": 70.5,
+      "blendP": 70.6,
       "nSrc": 3,
       "agree": 2,
       "disagree": 1,
@@ -1356,8 +1356,8 @@
           "away": 3.5
         },
         "bd": {
-          "home": 2.16,
-          "away": 1.86,
+          "home": 2.18,
+          "away": 1.84,
           "line": "-8.5"
         }
       },
@@ -1380,7 +1380,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 46.3,
+          "homeP": 45.8,
           "hot": "away"
         }
       ],
@@ -2871,6 +2871,63 @@
       "direction": "跟强队(客 贝尔格莱德红星)"
     },
     {
+      "id": "2043032",
+      "day": "2026-11-25",
+      "league": "美国职业篮球联盟",
+      "home": "奥兰多魔术",
+      "away": "底特律活塞",
+      "kickTs": null,
+      "tier": "优选",
+      "hot": "away",
+      "hotName": "底特律活塞",
+      "strongP": 54.6,
+      "blendP": 55.8,
+      "nSrc": 3,
+      "agree": 3,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.76,
+        "jcMnl": {
+          "home": 1.99,
+          "away": 1.48
+        },
+        "euMnl": {
+          "home": 2.12,
+          "away": 1.76
+        },
+        "bd": {
+          "home": 2.26,
+          "away": 1.78,
+          "line": "1.5"
+        }
+      },
+      "line": 2.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T03:08:45+08:00",
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 45.4,
+          "hot": "away"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 42.7,
+          "hot": "away"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 44.1,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 底特律活塞)"
+    },
+    {
       "id": "2042878",
       "day": "2026-11-20",
       "league": "美国职业篮球联盟",
@@ -2909,63 +2966,6 @@
         }
       ],
       "direction": "跟强队(客 纽约尼克斯)"
-    },
-    {
-      "id": "2043032",
-      "day": "2026-11-25",
-      "league": "美国职业篮球联盟",
-      "home": "奥兰多魔术",
-      "away": "底特律活塞",
-      "kickTs": null,
-      "tier": "优选",
-      "hot": "away",
-      "hotName": "底特律活塞",
-      "strongP": 54.6,
-      "blendP": 55.7,
-      "nSrc": 3,
-      "agree": 3,
-      "disagree": 0,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.76,
-        "jcMnl": {
-          "home": 1.99,
-          "away": 1.48
-        },
-        "euMnl": {
-          "home": 2.12,
-          "away": 1.76
-        },
-        "bd": {
-          "home": 2.24,
-          "away": 1.8,
-          "line": "1.5"
-        }
-      },
-      "line": 2.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T03:08:45+08:00",
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 45.4,
-          "hot": "away"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 42.7,
-          "hot": "away"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 44.6,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 底特律活塞)"
     },
     {
       "id": "2042979",
