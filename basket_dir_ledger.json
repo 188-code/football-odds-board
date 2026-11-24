@@ -4351,11 +4351,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-23T22:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.08,
+   "settleSrc": "球探完场比分 results_t7 sid=728370 多伦多猛龙-密尔沃基雄鹿 88-87 | 队名严格配对(日期±2天/开赛±18h) | calc:88-87 → home",
+   "settledAt": 1795487409,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795444214,
@@ -4370,7 +4370,8 @@
      "dB": 0,
      "obs": "2026-11-23T22:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "88-87"
   },
   "2042986:hdc": {
    "id": "2042986",
@@ -4402,11 +4403,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-23T22:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=728370 多伦多猛龙-密尔沃基雄鹿 88-87 | 队名严格配对(日期±2天/开赛±18h) | calc:88-9.5=78.5 vs 87 → away",
+   "settledAt": 1795487409,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795444214,
@@ -4421,7 +4422,8 @@
      "dB": 0,
      "obs": "2026-11-23T22:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "88-87"
   },
   "2042986:hilo": {
    "id": "2042986",
@@ -4448,11 +4450,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-23T22:15:03+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=728370 多伦多猛龙-密尔沃基雄鹿 88-87 | 队名严格配对(日期±2天/开赛±18h) | calc:88+87=175 vs 224.5 → under",
+   "settledAt": 1795487409,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795444214,
@@ -4467,7 +4469,8 @@
      "dB": null,
      "obs": "2026-11-23T22:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "88-87"
   },
   "2042987:mnl": {
    "id": "2042987",
@@ -5011,7 +5014,7 @@
    "kickoff": "2026-11-24T11:00:00+08:00",
    "kickTs": 1795489200,
    "firstSeen": 1795444214,
-   "lastSeen": 1795486509,
+   "lastSeen": 1795487409,
    "pre": true,
    "home": "萨克拉门托国王",
    "away": "圣安东尼奥马刺",
@@ -5057,7 +5060,7 @@
    "kickoff": "2026-11-24T11:00:00+08:00",
    "kickTs": 1795489200,
    "firstSeen": 1795444214,
-   "lastSeen": 1795486509,
+   "lastSeen": 1795487409,
    "pre": true,
    "home": "萨克拉门托国王",
    "away": "圣安东尼奥马刺",
@@ -5108,7 +5111,7 @@
    "kickoff": "2026-11-24T11:00:00+08:00",
    "kickTs": 1795489200,
    "firstSeen": 1795444214,
-   "lastSeen": 1795486509,
+   "lastSeen": 1795487409,
    "pre": true,
    "home": "洛杉矶湖人",
    "away": "犹他爵士",
@@ -5159,7 +5162,7 @@
    "kickoff": "2026-11-24T11:00:00+08:00",
    "kickTs": 1795489200,
    "firstSeen": 1795444214,
-   "lastSeen": 1795486509,
+   "lastSeen": 1795487409,
    "pre": true,
    "home": "洛杉矶湖人",
    "away": "犹他爵士",
@@ -21322,56 +21325,56 @@
   }
  },
  "summary": {
-  "updatedAt": 1795486509,
+  "updatedAt": 1795487409,
   "srcUsed": "cloud_app basket_heat.json(离线兜底)(竞彩真实报价·赛前冻结)",
   "ruleV": "basket_odds_lean_observe_1",
   "total": 264,
-  "settled": 151,
-  "pending": 113,
+  "settled": 154,
+  "pending": 110,
   "pre": 264,
   "post": 0,
   "all": {
-   "n": 151,
-   "win": 67,
-   "lose": 84,
+   "n": 154,
+   "win": 68,
+   "lose": 86,
    "push": 0,
-   "hit": 44.4,
-   "roi": -32.4,
+   "hit": 44.2,
+   "roi": -33,
    "se": 8.1,
    "significant": true,
    "crossZero": false
   },
   "byPick": {
    "主胜": {
-    "n": 31,
-    "win": 19,
+    "n": 32,
+    "win": 20,
     "lose": 12,
     "push": 0,
-    "hit": 61.3,
-    "roi": -21.9,
-    "se": 18,
+    "hit": 62.5,
+    "roi": -21,
+    "se": 17.7,
     "significant": false,
     "crossZero": false
    },
    "让分主胜": {
-    "n": 42,
+    "n": 43,
     "win": 18,
-    "lose": 24,
+    "lose": 25,
     "push": 0,
-    "hit": 42.9,
-    "roi": -27.9,
-    "se": 15.4,
+    "hit": 41.9,
+    "roi": -29.5,
+    "se": 15.2,
     "significant": true,
     "crossZero": false
    },
    "大分": {
-    "n": 51,
+    "n": 52,
     "win": 16,
-    "lose": 35,
+    "lose": 36,
     "push": 0,
-    "hit": 31.4,
-    "roi": -47.4,
-    "se": 14,
+    "hit": 30.8,
+    "roi": -48.4,
+    "se": 13.9,
     "significant": true,
     "crossZero": false
    },
@@ -21411,35 +21414,35 @@
   },
   "byMarket": {
    "mnl": {
-    "n": 47,
-    "win": 27,
+    "n": 48,
+    "win": 28,
     "lose": 20,
     "push": 0,
-    "hit": 57.4,
-    "roi": -25.3,
-    "se": 14.6,
+    "hit": 58.3,
+    "roi": -24.6,
+    "se": 14.4,
     "significant": true,
     "crossZero": false
    },
    "hdc": {
-    "n": 52,
+    "n": 53,
     "win": 23,
-    "lose": 29,
+    "lose": 30,
     "push": 0,
-    "hit": 44.2,
-    "roi": -26,
-    "se": 13.9,
+    "hit": 43.4,
+    "roi": -27.4,
+    "se": 13.7,
     "significant": true,
     "crossZero": false
    },
    "hilo": {
-    "n": 52,
+    "n": 53,
     "win": 17,
-    "lose": 35,
+    "lose": 36,
     "push": 0,
-    "hit": 32.7,
-    "roi": -45.2,
-    "se": 13.9,
+    "hit": 32.1,
+    "roi": -46.2,
+    "se": 13.7,
     "significant": true,
     "crossZero": false
    }
@@ -21468,13 +21471,13 @@
     "crossZero": false
    },
    "2026-11-24": {
-    "n": 6,
-    "win": 1,
-    "lose": 5,
+    "n": 9,
+    "win": 2,
+    "lose": 7,
     "push": 0,
-    "hit": 16.7,
-    "roi": -78.5,
-    "se": 40.8,
+    "hit": 22.2,
+    "roi": -73.7,
+    "se": 33.3,
     "significant": false,
     "crossZero": false
    },
@@ -21525,12 +21528,12 @@
   },
   "byRuleV": {
    "basket_odds_lean_observe_1": {
-    "n": 151,
-    "win": 67,
-    "lose": 84,
+    "n": 154,
+    "win": 68,
+    "lose": 86,
     "push": 0,
-    "hit": 44.4,
-    "roi": -32.4,
+    "hit": 44.2,
+    "roi": -33,
     "se": 8.1,
     "significant": true,
     "crossZero": false
