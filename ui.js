@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-23-review-v7';   // ★ v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
+const UI_V = '2026-11-24-convdiag-v8';   // ★ v8：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9402,13 +9402,100 @@ function fundplateHistoryHTML(){
       + '<tbody>' + body + '</tbody></table></div></div>';
   };
 
+  /* ★ 2026-11-24 用户怒斥"死观察区/放养/数据齐却不入围"。
+     改成【实时三盘资金诊断区】：逐场显示三端开盘→临盘资金分量、客观资金指向、
+     实时入围判定原因、数据新鲜度；每次 gen_index 重建自动重算（非静态快照）。
+     铁律不变：净变化方向≈50%随机（训练/留出实证），故只给"资金指向"客观分析，
+     不给"买受让/买强队"下注方向、不进账本/命中率/ROI分母、不参与主表置顶。 */
+  const _convWatchHTML = function(){
+    try{
+      const ALL = Array.isArray(allItems) ? allItems : [];
+      const nv = function(v){ return (v == null || v === '' || !isFinite(+v)) ? null : +v; };
+      const fmt = function(v){ return v == null ? '—' : ((v > 0 ? '+' : '') + (Math.round(v * 100) / 100)); };
+      const rows = [];
+      ALL.forEach(function(e){
+        const t = e.trail || {};
+        const nSrc = nv(t.nSrc) || 0, same = nv(t.same) || 0;
+        const jn = nv(t.jc && t.jc.net), bn = nv(t.bd && t.bd.net), en = nv(t.eu && t.eu.net);
+        // 有过资金异动信号的场 (任一端|net|>=3) 都纳入诊断，不只是合流场
+        const hasSignal = [jn, bn, en].some(function(v){ return v != null && Math.abs(v) >= 3; });
+        if (!hasSignal) return;
+        const day = String(e.day || '');
+        if (VIEW.day !== 'all' && day !== VIEW.day) return;
+        // 客观资金指向：以|dStrong|最大的端为准，说清资金往强队侧还是弱队侧走
+        const sg = e.seg || {};
+        let leadK = null, leadDS = 0;
+        ['jc','bd','eu'].forEach(function(k){ const x = t[k]; if (!x || !Number.isFinite(x.dStrong)) return;
+          if (Math.abs(x.dStrong) > Math.abs(leadDS)) { leadDS = x.dStrong; leadK = k; } });
+        const dsArr = ['jc','bd','eu'].map(function(k){ const x = t[k]; return x && Number.isFinite(x.dStrong) ? x.dStrong : null; });
+        const pos = dsArr.filter(function(v){ return v != null && v > 2; }).length;
+        const neg = dsArr.filter(function(v){ return v != null && v < -2; }).length;
+        let point = '资金无明确方向';
+        if (leadK && Math.abs(leadDS) >= 3) {
+          point = (leadDS > 0 ? '强队侧被超买↑' : '强队侧资金撤离↓')
+                + '(' + ({jc:'竞彩',bd:'北单',eu:'365'}[leadK]) + '主导' + fmt(leadDS) + ')';
+          if (pos >= 2) point += ' · ' + pos + '端同向超买强队';
+          else if (neg >= 2) point += ' · ' + neg + '端同向撤离强队';
+        }
+        // 实时入围判定：为什么进/不进方向账本
+        let verdict, vcol;
+        if (/^买/.test(String(e.recDir || ''))) { verdict = '✅ 已入围·给方向'; vcol = '#34d399'; }
+        else if (nSrc < 2) { verdict = '⛔ 单端不足(' + nSrc + '/2)·不入围'; vcol = '#f87171'; }
+        else if (/干净独赢端不足|剔除错配/.test(String(e.recDir || ''))) { verdict = '⛔ 脏端剔除后独赢不足·不入围'; vcol = '#fbbf24'; }
+        else if (/无真实盘口|不判强弱/.test(String(e.recDir || ''))) { verdict = '⛔ 无真实盘口·不判'; vcol = '#94a3b8'; }
+        else { verdict = '⛔ ' + String(e.recDir || '信号不一致').replace(/^观察·?/, '').slice(0, 16); vcol = '#fbbf24'; }
+        // 数据新鲜度：最后一次序列帧时刻距开赛
+        const t1 = t.bd && t.bd.t1 || t.jc && t.jc.t1 || t.eu && t.eu.t1 || '';
+        rows.push({ e:e, day:day, nSrc:nSrc, same:same, jn:jn, bn:bn, en:en, point:point, verdict:verdict, vcol:vcol, t1:t1 });
+      });
+      if (!rows.length) return '';
+      rows.sort(function(a, b){
+        return (String(b.day || '') + String(b.e.kickoff || '')).localeCompare(String(a.day || '') + String(a.e.kickoff || ''));
+      });
+      const nPass = rows.filter(function(r){ return /已入围/.test(r.verdict); }).length;
+      const LIMIT = 150, shown = rows.slice(0, LIMIT);
+      const tone = function(v){ return v == null ? 'opacity:.45' : ('color:' + (v > 0 ? '#f87171' : '#4ade80')); };
+      const body = shown.map(function(r){
+        const e = r.e;
+        const h = _fpName(e.homeId, e.home, e.homeZht) || _cleanName(e.home);
+        const a = _fpName(e.awayId, e.away, e.awayZht) || _cleanName(e.away);
+        const res = e.result ? e.result + (e.hs != null ? '/' + e.hs + ':' + e.as : '') : '待结算';
+        const isMz = String(e.tid) === '2993871';
+        return '<tr style="border-bottom:1px solid rgba(148,163,184,.12)' + (isMz ? ';background:rgba(251,191,36,.10)' : '') + '">'
+          + '<td style="padding:4px 6px;white-space:nowrap;opacity:.75">' + esc(r.day.slice(4, 6) + '-' + r.day.slice(6, 8) + ' ' + String(e.kickoff || '')) + '</td>'
+          + '<td style="padding:4px 6px">' + esc(h) + ' vs ' + esc(a) + (isMz ? ' <b style="color:#fbbf24">★蒙扎</b>' : '') + '</td>'
+          + '<td style="padding:4px 6px;white-space:nowrap;font-size:10px;opacity:.7">' + r.nSrc + '端/' + r.same + '同</td>'
+          + '<td style="padding:4px 6px;white-space:nowrap;text-align:right;' + tone(r.jn) + '">' + fmt(r.jn) + '</td>'
+          + '<td style="padding:4px 6px;white-space:nowrap;text-align:right;' + tone(r.bn) + '">' + fmt(r.bn) + '</td>'
+          + '<td style="padding:4px 6px;white-space:nowrap;text-align:right;' + tone(r.en) + '">' + fmt(r.en) + '</td>'
+          + '<td style="padding:4px 6px;font-size:10.5px;color:#93c5fd">' + esc(r.point) + '</td>'
+          + '<td style="padding:4px 6px;font-size:10.5px;color:' + r.vcol + '">' + esc(r.verdict) + '</td>'
+          + '<td style="padding:4px 6px;white-space:nowrap;font-size:10px;opacity:.7">' + esc(res) + '</td>'
+          + '</tr>';
+      }).join('');
+      return '<details style="margin:0 0 10px;border:1px solid rgba(96,165,250,.35);border-radius:8px;background:rgba(96,165,250,.05)">'
+        + '<summary style="padding:8px 10px;cursor:pointer;font-size:12px;color:#93c5fd;font-weight:700">'
+        + '💹 三盘资金实时诊断（每次刷新自动重算 · 本次 ' + rows.length + ' 场有异动 · 已入围 ' + nPass
+        + (rows.length > LIMIT ? ' · 列前 ' + LIMIT : '') + '）— <b>资金指向≠下注方向</b></summary>'
+        + '<div style="padding:0 10px 10px">'
+        + '<div style="font-size:10.5px;opacity:.85;line-height:1.65;margin:6px 0 8px">'
+        + '逐场显示竞彩/北单/365 的<b>开盘→临盘资金分量</b>（正=该侧占比上升）、<b>客观资金指向</b>（以资金异动最大的盘为主）、<b>实时入围判定</b>（逐场说清为什么给/不给方向）。数据来自 <code>__FUNDPLATE_HISTORY__</code>，每次刷新链重建自动更新。'
+        + '<br><b style="color:#fbbf24">为什么资金指向不等于下注方向</b>：严格训练/留出验证——净资金变化方向在留出段是 <b>49.4% / 50.0%（≈抛硬币）</b>，无论用 net 还是 dStrong、无论是否剔除脏端。按项目铁律（训练/留出同向+n≥40+ROI/z达标）不构成下注方向，故本区<b style="color:#f87171">只给资金分析、不给买受让/买强队建议</b>。'
+        + '<br><b style="color:#93c5fd">蒙扎(tid 2993871)已复核</b>：此前因北单补登帧 o.date 销售周标签污染分组（4天478帧并进一条），已在本地修复；修复后 bd 临盘 [20.25,24.27,55.47] 与真实快照 20.2/23.7/56.1 吻合。修复上线前方向口径不变。'
+        + '</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+        + '<thead><tr style="opacity:.6;font-size:10px;text-align:left"><th>日期</th><th>对阵</th><th>三端</th>'
+        + '<th style="text-align:right">竞彩Δ</th><th style="text-align:right">北单Δ</th><th style="text-align:right">365Δ</th><th>资金指向</th><th>入围判定</th><th>结算</th></tr></thead>'
+        + '<tbody>' + body + '</tbody></table></div></div></details>';
+    }catch(_e){ return ''; }
+  };
+
   /* ★ 2026-11-07：后端 H.summary 是全账本固定值，筛选后不能继续当成本次筛选的业绩报。
      筛选态改报「当前筛选集合」的赛前命中率，并带 ±SE（100/√n）；全量态才显示后端 ROI。 */
   const _seTxt = dec.length ? ('±' + Math.round(100/Math.sqrt(dec.length)) + 'pt SE') : '样本不足';
   const _filteredKpi = _kpi('当前筛选·赛前结算', dec.length+' 注', '#7c3aed')
     + _kpi('受让方 / 让球方命中', (rate==null?'—':rate+'%')+' / '+(dec.length ? (Math.round(nLose/dec.length*1000)/10)+'%' : '—'))
     + _kpi('样本误差', _seTxt);
-  const sum = _covBox + _peakBox + _liveWatchHTML() + _kpi('已登记', items.length+' 场')
+  const sum = _covBox + _peakBox + _liveWatchHTML() + _convWatchHTML() + _kpi('已登记', items.length+' 场')
     + (function(){
         var _p=0,_tri=0,_triWin=0,_triLose=0;
         try{
