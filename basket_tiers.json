@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_follow_strong_20261124",
-  "updated": "2026-11-24T17:11:29.518Z",
+  "updated": "2026-11-24T18:12:35.170Z",
   "summary": {
     "total": 64,
     "byTier": {
@@ -985,63 +985,6 @@
       "direction": "跟强队(客 丹佛掘金)"
     },
     {
-      "id": "2043033",
-      "day": "2026-11-25",
-      "league": "美国职业篮球联盟",
-      "home": "华盛顿奇才",
-      "away": "波士顿凯尔特人",
-      "kickTs": null,
-      "tier": "强推",
-      "hot": "away",
-      "hotName": "波士顿凯尔特人",
-      "strongP": 78.7,
-      "blendP": 73.8,
-      "nSrc": 3,
-      "agree": 3,
-      "disagree": 0,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.22,
-        "jcMnl": {
-          "home": 3.7,
-          "away": 1.1
-        },
-        "euMnl": {
-          "home": 4.5,
-          "away": 1.22
-        },
-        "bd": {
-          "home": 2.11,
-          "away": 1.89,
-          "line": "10.5"
-        }
-      },
-      "line": 9.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T00:22:34+08:00",
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 21.3,
-          "hot": "away"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 22.9,
-          "hot": "away"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 47.2,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 波士顿凯尔特人)"
-    },
-    {
       "id": "2042974",
       "day": "2026-11-23",
       "league": "德国篮球联赛",
@@ -1160,6 +1103,63 @@
         }
       ],
       "direction": "跟强队(主 迪拜)"
+    },
+    {
+      "id": "2043033",
+      "day": "2026-11-25",
+      "league": "美国职业篮球联盟",
+      "home": "华盛顿奇才",
+      "away": "波士顿凯尔特人",
+      "kickTs": null,
+      "tier": "强推",
+      "hot": "away",
+      "hotName": "波士顿凯尔特人",
+      "strongP": 78.7,
+      "blendP": 73.6,
+      "nSrc": 3,
+      "agree": 2,
+      "disagree": 1,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.22,
+        "jcMnl": {
+          "home": 3.7,
+          "away": 1.1
+        },
+        "euMnl": {
+          "home": 4.5,
+          "away": 1.22
+        },
+        "bd": {
+          "home": 1.93,
+          "away": 2.06,
+          "line": "10.5"
+        }
+      },
+      "line": 9.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T00:22:34+08:00",
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 21.3,
+          "hot": "away"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 22.9,
+          "hot": "away"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 51.6,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(客 波士顿凯尔特人)"
     },
     {
       "id": "2042951",
@@ -1340,7 +1340,7 @@
       "hot": "home",
       "hotName": "丹佛掘金",
       "strongP": 72.6,
-      "blendP": 70.9,
+      "blendP": 70.8,
       "nSrc": 3,
       "agree": 2,
       "disagree": 1,
@@ -1356,8 +1356,8 @@
           "away": 3.5
         },
         "bd": {
-          "home": 2.26,
-          "away": 1.79,
+          "home": 2.23,
+          "away": 1.8,
           "line": "-8.5"
         }
       },
@@ -1380,7 +1380,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 44.2,
+          "homeP": 44.7,
           "hot": "away"
         }
       ],
@@ -2857,8 +2857,8 @@
           "away": 1.74
         },
         "bd": {
-          "home": 2.36,
-          "away": 1.73,
+          "home": 2.34,
+          "away": 1.74,
           "line": "1.5"
         }
       },
@@ -2881,7 +2881,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 42.3,
+          "homeP": 42.6,
           "hot": "away"
         }
       ],
