@@ -1991,11 +1991,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.44,
+   "settleSrc": "过热板 resSrc=verified · 奥兰多魔术 116-121 费城76人 | 116-121 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2010,7 +2010,8 @@
      "dB": 5.777963971512346,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-121"
   },
   "2042860:hdc": {
    "id": "2042860",
@@ -2037,11 +2038,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.65,
+   "settleSrc": "过热板 resSrc=verified · 奥兰多魔术 116-121 费城76人 | 116+3.5=119.5 vs 121 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2069,7 +2070,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-121"
   },
   "2042860:hilo": {
    "id": "2042860",
@@ -2101,11 +2103,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "过热板 resSrc=verified · 奥兰多魔术 116-121 费城76人 | 116+121=237 vs 222.5 → 大",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2120,7 +2122,8 @@
      "dB": 0,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-121"
   },
   "2042861:mnl": {
    "id": "2042861",
@@ -2152,11 +2155,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.15,
+   "settleSrc": "过热板 resSrc=verified · 印第安那步行者 104-119 休斯敦火箭 | 104-119 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2184,7 +2187,8 @@
      "dB": 5.177082371765285,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "104-119"
   },
   "2042861:hdc": {
    "id": "2042861",
@@ -2211,11 +2215,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.65,
+   "settleSrc": "过热板 resSrc=verified · 印第安那步行者 104-119 休斯敦火箭 | 104+8.5=112.5 vs 119 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2243,7 +2247,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "104-119"
   },
   "2042861:hilo": {
    "id": "2042861",
@@ -2270,11 +2275,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 印第安那步行者 104-119 休斯敦火箭 | 104+119=223 vs 228.5 → 小",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2302,7 +2307,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "104-119"
   },
   "2042862:mnl": {
    "id": "2042862",
@@ -2334,11 +2340,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 克利夫兰骑士 121-124 孟菲斯灰熊 | 121-124 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2353,7 +2359,8 @@
      "dB": -1.4804237275787224,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "121-124"
   },
   "2042862:hdc": {
    "id": "2042862",
@@ -2380,11 +2387,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 克利夫兰骑士 121-124 孟菲斯灰熊 | 121-5.5=115.5 vs 124 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2412,7 +2419,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "121-124"
   },
   "2042862:hilo": {
    "id": "2042862",
@@ -2439,11 +2447,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.62,
+   "settleSrc": "过热板 resSrc=verified · 克利夫兰骑士 121-124 孟菲斯灰熊 | 121+124=245 vs 237.5 → 大",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2471,7 +2479,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "121-124"
   },
   "2042863:mnl": {
    "id": "2042863",
@@ -2503,11 +2512,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 布鲁克林篮网 107-137 芝加哥公牛 | 107-137 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2522,7 +2531,8 @@
      "dB": 0,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "107-137"
   },
   "2042863:hdc": {
    "id": "2042863",
@@ -2554,11 +2564,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 布鲁克林篮网 107-137 芝加哥公牛 | 107-2.5=104.5 vs 137 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2586,7 +2596,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "107-137"
   },
   "2042863:hilo": {
    "id": "2042863",
@@ -2613,11 +2624,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.66,
+   "settleSrc": "过热板 resSrc=verified · 布鲁克林篮网 107-137 芝加哥公牛 | 107+137=244 vs 238.5 → 大",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2645,7 +2656,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "107-137"
   },
   "2042864:mnl": {
    "id": "2042864",
@@ -2677,11 +2689,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 多伦多猛龙 99-103 华盛顿奇才 | 99-103 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2709,7 +2721,8 @@
      "dB": 1.8298082204064203,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "99-103"
   },
   "2042864:hdc": {
    "id": "2042864",
@@ -2741,11 +2754,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.65,
+   "settleSrc": "过热板 resSrc=verified · 多伦多猛龙 99-103 华盛顿奇才 | 99-7.5=91.5 vs 103 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2760,7 +2773,8 @@
      "dB": 1.4705882352941124,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "99-103"
   },
   "2042864:hilo": {
    "id": "2042864",
@@ -2787,11 +2801,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 多伦多猛龙 99-103 华盛顿奇才 | 99+103=202 vs 229.5 → 小",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2819,7 +2833,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "99-103"
   },
   "2042865:mnl": {
    "id": "2042865",
@@ -2851,11 +2866,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.22,
+   "settleSrc": "过热板 resSrc=verified · 达拉斯独行侠 116-94 金州勇士 | 116-94 → 主胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2883,7 +2898,8 @@
      "dB": -5.473545278642739,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-94"
   },
   "2042865:hdc": {
    "id": "2042865",
@@ -2910,11 +2926,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.6,
+   "settleSrc": "过热板 resSrc=verified · 达拉斯独行侠 116-94 金州勇士 | 116-7.5=108.5 vs 94 → 主",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -2942,7 +2958,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-94"
   },
   "2042865:hilo": {
    "id": "2042865",
@@ -2969,11 +2986,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 达拉斯独行侠 116-94 金州勇士 | 116+94=210 vs 222.5 → 小",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3001,7 +3018,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "116-94"
   },
   "2042866:mnl": {
    "id": "2042866",
@@ -3033,11 +3051,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 俄克拉荷马城雷霆 112-117 亚特兰大老鹰 | 112-117 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3052,7 +3070,8 @@
      "dB": -1.353615015658649,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "112-117"
   },
   "2042866:hdc": {
    "id": "2042866",
@@ -3079,11 +3098,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 俄克拉荷马城雷霆 112-117 亚特兰大老鹰 | 112-8.5=103.5 vs 117 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3111,7 +3130,8 @@
      "dB": 0,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "112-117"
   },
   "2042866:hilo": {
    "id": "2042866",
@@ -3138,11 +3158,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.62,
+   "settleSrc": "过热板 resSrc=verified · 俄克拉荷马城雷霆 112-117 亚特兰大老鹰 | 112+117=229 vs 228.5 → 大",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3170,7 +3190,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "112-117"
   },
   "2042867:mnl": {
    "id": "2042867",
@@ -3202,11 +3223,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.16,
+   "settleSrc": "过热板 resSrc=verified · 新奥尔良鹈鹕 109-122 底特律活塞 | 109-122 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3234,7 +3255,8 @@
      "dB": 3.183423236065086,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "109-122"
   },
   "2042867:hdc": {
    "id": "2042867",
@@ -3261,11 +3283,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.6,
+   "settleSrc": "过热板 resSrc=verified · 新奥尔良鹈鹕 109-122 底特律活塞 | 109+7.5=116.5 vs 122 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3293,7 +3315,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "109-122"
   },
   "2042867:hilo": {
    "id": "2042867",
@@ -3325,11 +3348,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.66,
+   "settleSrc": "过热板 resSrc=verified · 新奥尔良鹈鹕 109-122 底特律活塞 | 109+122=231 vs 228.5 → 大",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3357,7 +3380,8 @@
      "dB": 1.176470588235301,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "109-122"
   },
   "2042868:mnl": {
    "id": "2042868",
@@ -3389,11 +3413,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 丹佛掘金 105-101 波士顿凯尔特人 | 105-101 → 主胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3408,7 +3432,8 @@
      "dB": 1.1355909152726662,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "105-101"
   },
   "2042868:hdc": {
    "id": "2042868",
@@ -3435,11 +3460,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "过热板 resSrc=verified · 丹佛掘金 105-101 波士顿凯尔特人 | 105+4.5=109.5 vs 101 → 主",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3467,7 +3492,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "105-101"
   },
   "2042868:hilo": {
    "id": "2042868",
@@ -3494,11 +3520,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 丹佛掘金 105-101 波士顿凯尔特人 | 105+101=206 vs 223.5 → 小",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3526,7 +3552,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "105-101"
   },
   "2042869:mnl": {
    "id": "2042869",
@@ -3558,11 +3585,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.12,
+   "settleSrc": "过热板 resSrc=verified · 萨克拉门托国王 107-128 菲尼克斯太阳 | 107-128 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3590,7 +3617,8 @@
      "dB": 1.829808220406437,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "107-128"
   },
   "2042869:hdc": {
    "id": "2042869",
@@ -3617,11 +3645,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.6,
+   "settleSrc": "过热板 resSrc=verified · 萨克拉门托国王 107-128 菲尼克斯太阳 | 107+7.5=114.5 vs 128 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3649,7 +3677,8 @@
      "dB": null,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "107-128"
   },
   "2042869:hilo": {
    "id": "2042869",
@@ -3676,11 +3705,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "win",
+   "pl": 0.7,
+   "settleSrc": "过热板 resSrc=verified · 萨克拉门托国王 107-128 菲尼克斯太阳 | 107+128=235 vs 229.5 → 大",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3708,7 +3737,8 @@
      "dB": 1.1764705882352955,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "107-128"
   },
   "2042870:mnl": {
    "id": "2042870",
@@ -3740,11 +3770,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 洛杉矶湖人 97-109 犹他爵士 | 97-109 → 客胜",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3759,7 +3789,8 @@
      "dB": 0.8263387338148215,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "97-109"
   },
   "2042870:hdc": {
    "id": "2042870",
@@ -3791,11 +3822,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 洛杉矶湖人 97-109 犹他爵士 | 97-10.5=86.5 vs 109 → 客",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3810,7 +3841,8 @@
      "dB": 0,
      "obs": "2026-11-18T18:30:04+08:00"
     }
-   ]
+   ],
+   "finalScore": "97-109"
   },
   "2042870:hilo": {
    "id": "2042870",
@@ -3837,11 +3869,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-18T18:30:04+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1.0,
+   "settleSrc": "过热板 resSrc=verified · 洛杉矶湖人 97-109 犹他爵士 | 97+109=206 vs 231.5 → 小",
+   "settledAt": 1795606258,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1794998951,
@@ -3869,7 +3901,8 @@
      "dB": 0,
      "obs": "2026-11-18T23:15:03+08:00"
     }
-   ]
+   ],
+   "finalScore": "97-109"
   },
   "2042983:mnl": {
    "id": "2042983",
@@ -21347,7 +21380,7 @@
    "kickoff": "2026-11-26T00:00:00+08:00",
    "kickTs": 1795622400,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "迪拜",
    "away": "贝尔格莱德游击",
@@ -21398,7 +21431,7 @@
    "kickoff": "2026-11-26T00:00:00+08:00",
    "kickTs": 1795622400,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "迪拜",
    "away": "贝尔格莱德游击",
@@ -21449,7 +21482,7 @@
    "kickoff": "2026-11-26T00:00:00+08:00",
    "kickTs": 1795622400,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "迪拜",
    "away": "贝尔格莱德游击",
@@ -21500,7 +21533,7 @@
    "kickoff": "2026-11-26T03:30:00+08:00",
    "kickTs": 1795635000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "巴斯克尼亚",
    "away": "伊斯坦布尔埃菲斯",
@@ -21542,19 +21575,6 @@
      "dA": 0,
      "dB": 0,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "客胜",
-     "side": "b",
-     "a": 2.09,
-     "b": 1.43,
-     "pa": 0.40625,
-     "pb": 0.59375,
-     "line": null,
-     "dA": -1.6163793103448343,
-     "dB": 1.6163793103448287,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -21564,7 +21584,7 @@
    "kickoff": "2026-11-26T03:30:00+08:00",
    "kickTs": 1795635000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "巴斯克尼亚",
    "away": "伊斯坦布尔埃菲斯",
@@ -21606,19 +21626,6 @@
      "dA": 0,
      "dB": 0,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "让分客胜",
-     "side": "b",
-     "a": 1.81,
-     "b": 1.6,
-     "pa": 0.4692082111436951,
-     "pb": 0.5307917888563051,
-     "line": 2.5,
-     "dA": -1.6085906503363667,
-     "dB": 1.6085906503363945,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -21628,7 +21635,7 @@
    "kickoff": "2026-11-26T03:30:00+08:00",
    "kickTs": 1795635000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "巴斯克尼亚",
    "away": "伊斯坦布尔埃菲斯",
@@ -21679,7 +21686,7 @@
    "kickoff": "2026-11-26T06:00:00+08:00",
    "kickTs": 1795644000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "费城76人",
    "away": "迈阿密热火",
@@ -21730,7 +21737,7 @@
    "kickoff": "2026-11-26T06:00:00+08:00",
    "kickTs": 1795644000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "费城76人",
    "away": "迈阿密热火",
@@ -21781,7 +21788,7 @@
    "kickoff": "2026-11-26T06:00:00+08:00",
    "kickTs": 1795644000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "费城76人",
    "away": "迈阿密热火",
@@ -21818,19 +21825,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795605311,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.7,
-     "b": 1.7,
-     "pa": 0.5,
-     "pb": 0.5,
-     "line": 238.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T19:00:02+08:00"
     }
    ]
   },
@@ -21840,7 +21834,7 @@
    "kickoff": "2026-11-26T08:00:00+08:00",
    "kickTs": 1795651200,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "夏洛特黄蜂",
    "away": "芝加哥公牛",
@@ -21891,7 +21885,7 @@
    "kickoff": "2026-11-26T08:00:00+08:00",
    "kickTs": 1795651200,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "夏洛特黄蜂",
    "away": "芝加哥公牛",
@@ -21942,7 +21936,7 @@
    "kickoff": "2026-11-26T08:00:00+08:00",
    "kickTs": 1795651200,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "夏洛特黄蜂",
    "away": "芝加哥公牛",
@@ -21979,19 +21973,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.66,
-     "b": 1.74,
-     "pa": 0.511764705882353,
-     "pb": 0.48823529411764705,
-     "line": 225.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22001,7 +21982,7 @@
    "kickoff": "2026-11-26T08:30:00+08:00",
    "kickTs": 1795653000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "纽约尼克斯",
    "away": "克利夫兰骑士",
@@ -22052,7 +22033,7 @@
    "kickoff": "2026-11-26T08:30:00+08:00",
    "kickTs": 1795653000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "纽约尼克斯",
    "away": "克利夫兰骑士",
@@ -22098,7 +22079,7 @@
    "kickoff": "2026-11-26T08:30:00+08:00",
    "kickTs": 1795653000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "纽约尼克斯",
    "away": "克利夫兰骑士",
@@ -22135,32 +22116,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.7,
-     "b": 1.7,
-     "pa": 0.5,
-     "pb": 0.5,
-     "line": 219.5,
-     "dA": -1.176470588235301,
-     "dB": 1.1764705882352955,
-     "obs": "2026-11-25T18:45:02+08:00"
-    },
-    {
-     "t": 1795605311,
-     "pick": "小分",
-     "side": "b",
-     "a": 1.74,
-     "b": 1.66,
-     "pa": 0.48823529411764705,
-     "pb": 0.511764705882353,
-     "line": 219.5,
-     "dA": -2.3529411764705968,
-     "dB": 2.3529411764705968,
-     "obs": "2026-11-25T19:00:02+08:00"
     }
    ]
   },
@@ -22170,7 +22125,7 @@
    "kickoff": "2026-11-26T08:30:00+08:00",
    "kickTs": 1795653000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "俄克拉荷马城雷霆",
    "away": "明尼苏达森林狼",
@@ -22221,7 +22176,7 @@
    "kickoff": "2026-11-26T08:30:00+08:00",
    "kickTs": 1795653000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "俄克拉荷马城雷霆",
    "away": "明尼苏达森林狼",
@@ -22258,19 +22213,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "让分主胜",
-     "side": "a",
-     "a": 1.7,
-     "b": 1.7,
-     "pa": 0.5,
-     "pb": 0.5,
-     "line": 1.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22280,7 +22222,7 @@
    "kickoff": "2026-11-26T08:30:00+08:00",
    "kickTs": 1795653000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "俄克拉荷马城雷霆",
    "away": "明尼苏达森林狼",
@@ -22317,19 +22259,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.66,
-     "b": 1.74,
-     "pa": 0.511764705882353,
-     "pb": 0.48823529411764705,
-     "line": 224.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22339,7 +22268,7 @@
    "kickoff": "2026-11-26T09:00:00+08:00",
    "kickTs": 1795654800,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "密尔沃基雄鹿",
    "away": "布鲁克林篮网",
@@ -22381,19 +22310,6 @@
      "dA": 0,
      "dB": 0,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "主胜",
-     "side": "a",
-     "a": 1.55,
-     "b": 1.87,
-     "pa": 0.5467836257309943,
-     "pb": 0.45321637426900585,
-     "line": null,
-     "dA": 1.5991836874689191,
-     "dB": -1.5991836874689247,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22403,7 +22319,7 @@
    "kickoff": "2026-11-26T09:00:00+08:00",
    "kickTs": 1795654800,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "密尔沃基雄鹿",
    "away": "布鲁克林篮网",
@@ -22445,19 +22361,6 @@
      "dA": 1.4705882352941124,
      "dB": -1.4705882352941235,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "让分主胜",
-     "side": "a",
-     "a": 1.7,
-     "b": 1.7,
-     "pa": 0.5,
-     "pb": 0.5,
-     "line": -2.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22467,7 +22370,7 @@
    "kickoff": "2026-11-26T09:00:00+08:00",
    "kickTs": 1795654800,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "密尔沃基雄鹿",
    "away": "布鲁克林篮网",
@@ -22504,19 +22407,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.7,
-     "b": 1.7,
-     "pa": 0.5,
-     "pb": 0.5,
-     "line": 234.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22526,7 +22416,7 @@
    "kickoff": "2026-11-26T09:00:00+08:00",
    "kickTs": 1795654800,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "孟菲斯灰熊",
    "away": "洛杉矶快船",
@@ -22568,32 +22458,6 @@
      "dA": 0,
      "dB": 0,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "主胜",
-     "side": "a",
-     "a": 1.22,
-     "b": 2.78,
-     "pa": 0.6950000000000001,
-     "pb": 0.30500000000000005,
-     "line": null,
-     "dA": 1.633676092544989,
-     "dB": -1.6336760925449834,
-     "obs": "2026-11-25T18:45:02+08:00"
-    },
-    {
-     "t": 1795605311,
-     "pick": "主胜",
-     "side": "a",
-     "a": 1.19,
-     "b": 2.95,
-     "pa": 0.7125603864734299,
-     "pb": 0.28743961352657,
-     "line": null,
-     "dA": 3.3897147398879723,
-     "dB": -3.3897147398879888,
-     "obs": "2026-11-25T19:00:02+08:00"
     }
    ]
   },
@@ -22603,7 +22467,7 @@
    "kickoff": "2026-11-26T09:00:00+08:00",
    "kickTs": 1795654800,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "孟菲斯灰熊",
    "away": "洛杉矶快船",
@@ -22640,19 +22504,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "让分主胜",
-     "side": "a",
-     "a": 1.65,
-     "b": 1.75,
-     "pa": 0.5147058823529411,
-     "pb": 0.48529411764705876,
-     "line": -7.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22662,7 +22513,7 @@
    "kickoff": "2026-11-26T09:00:00+08:00",
    "kickTs": 1795654800,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "孟菲斯灰熊",
    "away": "洛杉矶快船",
@@ -22704,19 +22555,6 @@
      "dA": 2.35294117647058,
      "dB": -2.352941176470591,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.7,
-     "b": 1.7,
-     "pa": 0.5,
-     "pb": 0.5,
-     "line": 231.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22726,7 +22564,7 @@
    "kickoff": "2026-11-26T09:30:00+08:00",
    "kickTs": 1795656600,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "休斯敦火箭",
    "away": "菲尼克斯太阳",
@@ -22768,19 +22606,6 @@
      "dA": 0,
      "dB": 0,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "主胜",
-     "side": "a",
-     "a": 1.08,
-     "b": 3.95,
-     "pa": 0.7852882703777335,
-     "pb": 0.2147117296222664,
-     "line": null,
-     "dA": 1.4454937044400151,
-     "dB": -1.4454937044400236,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22790,7 +22615,7 @@
    "kickoff": "2026-11-26T09:30:00+08:00",
    "kickTs": 1795656600,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "休斯敦火箭",
    "away": "菲尼克斯太阳",
@@ -22832,19 +22657,6 @@
      "dA": 1.6085906503363945,
      "dB": -1.6085906503363667,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "让分主胜",
-     "side": "a",
-     "a": 1.65,
-     "b": 1.75,
-     "pa": 0.5147058823529411,
-     "pb": 0.48529411764705876,
-     "line": -9.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22854,7 +22666,7 @@
    "kickoff": "2026-11-26T09:30:00+08:00",
    "kickTs": 1795656600,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "休斯敦火箭",
    "away": "菲尼克斯太阳",
@@ -22891,19 +22703,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.66,
-     "b": 1.74,
-     "pa": 0.511764705882353,
-     "pb": 0.48823529411764705,
-     "line": 225.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -22913,7 +22712,7 @@
    "kickoff": "2026-11-26T11:00:00+08:00",
    "kickTs": 1795662000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "金州勇士",
    "away": "萨克拉门托国王",
@@ -22964,7 +22763,7 @@
    "kickoff": "2026-11-26T11:00:00+08:00",
    "kickTs": 1795662000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "金州勇士",
    "away": "萨克拉门托国王",
@@ -23015,7 +22814,7 @@
    "kickoff": "2026-11-26T11:00:00+08:00",
    "kickTs": 1795662000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "金州勇士",
    "away": "萨克拉门托国王",
@@ -23066,7 +22865,7 @@
    "kickoff": "2026-11-26T11:00:00+08:00",
    "kickTs": 1795662000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "波特兰开拓者",
    "away": "圣安东尼奥马刺",
@@ -23108,19 +22907,6 @@
      "dA": -1.5084396871140382,
      "dB": 1.508439687114027,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "客胜",
-     "side": "b",
-     "a": 2.15,
-     "b": 1.4,
-     "pa": 0.39436619718309857,
-     "pb": 0.6056338028169014,
-     "line": null,
-     "dA": -3.2146771116613237,
-     "dB": 3.2146771116613126,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -23130,7 +22916,7 @@
    "kickoff": "2026-11-26T11:00:00+08:00",
    "kickTs": 1795662000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "波特兰开拓者",
    "away": "圣安东尼奥马刺",
@@ -23167,19 +22953,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "让分主胜",
-     "side": "a",
-     "a": 1.7,
-     "b": 1.7,
-     "pa": 0.5,
-     "pb": 0.5,
-     "line": 4.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -23189,7 +22962,7 @@
    "kickoff": "2026-11-26T11:00:00+08:00",
    "kickTs": 1795662000,
    "firstSeen": 1795588959,
-   "lastSeen": 1795605312,
+   "lastSeen": 1795588983,
    "pre": true,
    "home": "波特兰开拓者",
    "away": "圣安东尼奥马刺",
@@ -23226,19 +22999,6 @@
      "dA": null,
      "dB": null,
      "obs": "2026-11-25T14:30:04+08:00"
-    },
-    {
-     "t": 1795604413,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.7,
-     "b": 1.7,
-     "pa": 0.5,
-     "pb": 0.5,
-     "line": 228.5,
-     "dA": null,
-     "dB": null,
-     "obs": "2026-11-25T18:45:02+08:00"
     }
    ]
   },
@@ -25579,7 +25339,7 @@
   }
  },
  "summary": {
-  "updatedAt": 1795605312,
+  "updatedAt": 1795588983,
   "srcUsed": "CVM公网 basket_heat.json(权威·cron15min)(竞彩真实报价·赛前冻结)",
   "ruleV": "basket_odds_lean_observe_1",
   "total": 321,
@@ -25805,5 +25565,6 @@
    }
   },
   "note": "篮球方向观察账本：只收严格赛前、竞彩真实完整报价的场次，按玩法独立成条。方向=去水隐含概率倾向方，是赔率观察方向，不是资金流向，也不是有 edge 的下注建议。首登冻结方向/赔率/Δpp/规则版本，后续轮次与算法改版不回写。结算只在 result 为空时回填一次，且只认 basket_result.json 中 verified=true 的显式赛果；当前无官方篮球赛果接口，故全部待结算。SE=100/√n(pt)；n<40 样本偏小，|ROI|<SE 跨0。足球 dir_ledger 的方向规则与业绩不可混入本账本。"
- }
+ },
+ "updatedAt": 1795606258
 }

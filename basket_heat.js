@@ -440,10 +440,19 @@
       const dirTag = (x.lineSpread >= 15)
         ? '<br><small style="color:#e11d48">独赢分歧' + esc(x.lineSpread) + 'pp降档</small>'
         : '';
+      // ★v4：深盘高危降级场不显示"跟强队"误导文案，改写为"不建议出注"
+      const dirCell = x.deepOddsRisk
+        ? '<span style="color:#e11d48;font-weight:700">⚠ 深盘高危·不建议出注</span><br><small style="color:#94a3b8">强赔' + esc(x.strongOdds) + ' ≤1.25 · 原' + esc(x.direction || '') + '</small>' + dirTag
+        : esc(x.direction || '') + dirTag;
+      // ★v4：过热反向参考列（外部软件逻辑，仅对照，不进我方方向/账本）
+      const of = x.overheatFade || null;
+      const fadeCell = of
+        ? '<span style="color:#7c3aed">' + esc(of.text || '') + '</span><br><small>heat=' + esc(of.heatScore === null || of.heatScore === undefined ? '?' : of.heatScore) + (of.sameAsOurs ? ' · 同侧' : ' · 与我方相反') + '</small>'
+        : '<small style="color:#94a3b8">无过热信号</small>';
       return '<tr><td>' + badge(x.tier) + '</td><td>' + esc(x.day) + '</td><td>' + esc(x.home) + ' vs ' + esc(x.away) +
-        '</td><td>' + esc(x.direction || '') + dirTag + '</td><td>' + esc(x.blendP) + '%<br><small>' + esc(x.nSrc) + '源·共振' + esc(x.agree) + '</small></td>' +
+        '</td><td>' + dirCell + '</td><td>' + esc(x.blendP) + '%<br><small>' + esc(x.nSrc) + '源·共振' + esc(x.agree) + '</small></td>' +
         '<td>' + (x.line !== null && x.line !== undefined ? '让 ' + esc(x.line) : '—') + '<br><small>' + esc(x.lineSrc || '') + '</small>' + lineTag + '</td>' +
-        '<td>' + st + lockTag + '</td><td><small>' + srcs + '</small></td></tr>';
+        '<td>' + st + lockTag + '</td><td><small>' + srcs + '</small></td><td>' + fadeCell + '</td></tr>';
     }).join('');
     const head = '<details class="bh-reference" id="basketHeatTiers" open><summary>精选 / 优选 / 强推 分档（跟强队·D盘真实临盘价）· ' +
       items.length + ' 场' + (state.day ? '（📅 ' + esc(state.day) + ' 当日）' : '') + '</summary>' +
@@ -454,11 +463,13 @@
       '<strong style="color:#2563eb">数据是活的：赛前每15分钟随新盘口帧重算、结论会变；一过开赛时刻，赛后帧被硬挡、方向/强度锁死不再变（结算另按核验赛果填）。</strong>' +
       '（⚠ 无开赛时刻的场次无法上此护栏，标「未锁」不冒充。）' +
       '<strong style="color:#7c3aed">★方向纠偏(2026-11-25)：v2「深盘站对面」过度拟合已撤销。全量43场跟强队 28/43=65.1% vs 深翻 58.1%；深盘19场跟强队 57.9% vs 站对面 42.1%；阈值敏感性 thr1.15~1.32 命中 50%~73.7% 剧烈波动(n=19)=过拟合，故统一跟强队、不再按单场翻盘。凯尔特人场假分歧31.2pp 系北单让分盘homeP=53 混入独赢21.8/22.9，真实独赢分歧仅1.1pp，已修。</strong> ' +
+      '<strong style="color:#e11d48">★过热参照改造 v4（2026-11-25，用户确认以外部软件过热精选为参照）：①强方赔率≤1.25 的深盘一律降为「观察·不建议出注」——全场最确定亏损区(n=43 ROI−34.8% z−4.11)，场次照常展示不漏、只摘掉误导性强推光环。②新增「过热反向参考」列=外部软件「过热站对面」方向，仅并列对照，不进我方方向/账本/ROI。③不整体翻盘：过热反向全量+32.6%但 z=1.62 不显著、北单共振分支留出−72.4%、去掉最赚5场仅+6.9%靠尾部，按「不靠单场/不稳阈值」铁律拒绝翻盘；改以前瞻账本逐场追踪两套方向、用后续真实场次积累证据。</strong> ' +
       'ROI edge 样本未达 n≥40 铁律，' +
       '<strong>本表仅复现参考软件分档能力，不进方向账本/ROI/引擎，不构成投注建议</strong>。</p>' +
       '<p class="bh-muted">版本 ' + esc(t.version) + ' · 更新 ' + moment(t.updated) + ' · 全库 ' + esc(s.total) +
       ' 场（强推 ' + esc((s.byTier || {}).强推 || 0) + ' / 精选 ' + esc((s.byTier || {}).精选 || 0) +
-      ' / 优选 ' + esc((s.byTier || {}).优选 || 0) + '）。结算主口径=本表推荐方(pickSide)独赢是否赢球；让分线仅参考。' +
+      ' / 优选 ' + esc((s.byTier || {}).优选 || 0) + ' / 观察 ' + esc((s.byTier || {}).观察 || 0) +
+      '，其中深盘高危降级 ' + esc(s.deepOddsGuard || 0) + ' 场、过热反向参考 ' + esc(s.withOverheatFade || 0) + ' 场）。结算主口径=本表推荐方(pickSide)独赢是否赢球；让分线仅参考。' +
       '<strong style="color:#a78bfa">外部参考软件的「主让N·推荐X队方向」是让分受让口径，与本表独赢方向不完全同源；已结算场次在让分列显示「实际赢盘方」供对照。</strong></p>' +
       '<p style="color:#c4b5fd">分档区分度（独赢命中）：' +
       ['强推', '精选', '优选'].map(k => {
@@ -468,9 +479,36 @@
       esc((object(ts['强推']).byLine || {}).rate === null || (object(ts['强推']).byLine || {}).rate === undefined ? '—' : object(ts['强推']).byLine.rate + '%') +
       '，深盘打不住属正常）</span></p>' +
       '<div class="bh-scroll" tabindex="0" aria-label="篮球精选优选强推分档表"><table><thead><tr>' +
-      '<th>档位</th><th>日期</th><th>对阵</th><th>方向（跟强队）</th><th>强度 / 共振</th><th>让分线</th><th>结算</th><th>三盘信号源</th>' +
+      '<th>档位</th><th>日期</th><th>对阵</th><th>方向（跟强队）</th><th>强度 / 共振</th><th>让分线</th><th>结算</th><th>三盘信号源</th><th>过热反向参考</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div></details>';
     return head;
+  }
+
+  /* ★v4 前瞻账本：我方方向 vs 外部过热反向 两套 ROI 逐日滚动对照 */
+  function overheatWatchHTML() {
+    const w = state.overheatWatch;
+    if (!w) return '<details class="bh-reference" id="basketHeatWatch"><summary>过热反向·前瞻对照（观察档）· 尚未生成</summary>' +
+      '<p class="bh-muted">overheat_watch.json 尚未生成；运行 _basket_overheat_watch.cjs 后显示。</p></details>';
+    const s = w.summary || {};
+    const pct = v => (v === null || v === undefined) ? '—' : (v > 0 ? '+' : '') + esc(v) + '%';
+    const col = v => (v === null || v === undefined) ? '#94a3b8' : (v > 0 ? '#16a34a' : '#e54545');
+    const ours = s.ours || {}, fade = s.fade || {}, nd = s.nonDeep || {};
+    const ndO = nd.ours || {}, ndF = nd.fade || {};
+    const dayRows = (s.byDay || []).map(d =>
+      '<tr><td>' + esc(d.day) + '</td>' +
+      '<td style="color:' + col(d.ours.roi) + '">' + pct(d.ours.roi) + ' <small>(' + esc(d.ours.hit) + '/' + esc(d.ours.n) + ')</small></td>' +
+      '<td style="color:' + col(d.fade.roi) + '">' + pct(d.fade.roi) + ' <small>(' + esc(d.fade.hit) + '/' + esc(d.fade.n) + ')</small></td></tr>').join('');
+    return '<details class="bh-reference" id="basketHeatWatch"><summary>过热反向·前瞻对照（我方跟强队 vs 外部过热站对面）· ' +
+      esc(s.total || 0) + ' 场已结算 · 观察档非投注建议</summary>' +
+      '<p class="bh-missing">两套方向按<strong>真实独赢赔率</strong>滚动结算，用后续真实场次积累证据，不靠历史尾部拍板。' +
+      '★当前：我方跟强队 <strong style="color:' + col(ours.roi) + '">' + pct(ours.roi) + '</strong>（' + esc(ours.hit) + '/' + esc(ours.n) + '），' +
+      '外部过热反向 <strong style="color:' + col(fade.roi) + '">' + pct(fade.roi) + '</strong>（' + esc(fade.hit) + '/' + esc(fade.n) + '）。' +
+      '<strong style="color:#e11d48">注意：fade 的逐日 ROI 大幅跳动（有单日 −50%）：样本不足以定 edge，仅追踪不下结论。</strong></p>' +
+      '<p class="bh-muted">剔除深盘高危区（强赔≤1.25）后：我方 <span style="color:' + col(ndO.roi) + '">' + pct(ndO.roi) + '</span>（n=' + esc(ndO.n) + '），' +
+      '过热反向 <span style="color:' + col(ndF.roi) + '">' + pct(ndF.roi) + '</span>（n=' + esc(ndF.n) + '）——fade 的账面优势几乎全在深盘尾部爆冷，稳定性存疑。</p>' +
+      '<div class="bh-scroll"><table style="font-size:12px"><thead><tr><th>日期</th><th>我方跟强队 ROI（命中/场）</th><th>过热反向 ROI（命中/场）</th></tr></thead><tbody>' +
+      dayRows + '</tbody></table></div>' +
+      '<p class="bh-muted">版本 ' + esc(w.version) + ' · 更新 ' + moment(w.updated) + '。本账本只观察、不进方向账本/ROI 引擎。</p></details>';
   }
 
   /* ★★ 2026-11-19 框架重构：洋哥三盘=顺序链，一盘竞彩独赢资金趋势就能给方向。
@@ -768,6 +806,8 @@
     if (tierSlot) tierSlot.innerHTML = tierHTML();
     const overheatSlot = modal.querySelector('#basketHeatOverheatSlot');
     if (overheatSlot) overheatSlot.innerHTML = overheatHTML();
+    const watchSlot = modal.querySelector('#basketHeatWatchSlot');
+    if (watchSlot) watchSlot.innerHTML = overheatWatchHTML();
     modal.querySelector('#basketHeatRows').innerHTML = filtered.length ? filtered.map(rowHTML).join('') :
       '<div class="bh-empty" data-basket-empty><strong>' + (rows.length ? '当前独立筛选下 0 场' : '0 场：没有可信竞彩篮球名单，不能构造三盘齐全画面') +
       '</strong><p>' + (rows.length ? '请调整日期、关键词或在售条件；不会修改足球筛选。' : 'Bet365 候选赛程不等于已取得本场报价；缺竞彩身份时不补造比赛。请查看上方逐源错误。') + '</p></div>';
@@ -834,6 +874,17 @@
       if (d && typeof d === 'object' && Array.isArray(d.items) && d.summary && typeof d.summary === 'object') state.tiers = d;
     } catch (_) { /* 分档 JSON 缺失不影响观察板主画面 */ }
   }
+  // ★v4 前瞻账本：两套方向（我方跟强队 vs 外部过热反向）按真实赔率滚动结算
+  async function loadOverheatWatch(baseURL) {
+    try {
+      const url = new URL('overheat_watch.json', baseURL);
+      if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) return;
+      const response = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
+      if (!response.ok) return;
+      const d = await response.json();
+      if (d && typeof d === 'object' && Array.isArray(d.rows) && d.summary && typeof d.summary === 'object') state.overheatWatch = d;
+    } catch (_) { /* 前瞻账本缺失不影响主画面 */ }
+  }
   async function refresh() {
     if (state.loading) return;
     state.loading = true;
@@ -856,6 +907,7 @@
       await loadPreset(scriptURL || window.location.href);
       await loadOverheat(scriptURL || window.location.href);
       await loadTiers(scriptURL || window.location.href);
+      await loadOverheatWatch(scriptURL || window.location.href);
       try { render(); } catch (error) { state.data = previous; if (previous) render(); throw error; }
       notice.className = 'bh-notice';
       notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '主画面手动刷新；精选/优选/强推分档与三盘资金过热表每15分钟自动跟进。';
@@ -959,6 +1011,7 @@
       '<div id="basketHeatPresetSlot"></div>' +
       '<div id="basketHeatTierSlot"></div>' +
       '<div id="basketHeatOverheatSlot"></div>' +
+      '<div id="basketHeatWatchSlot"></div>' +
       '<div class="bh-filters"><label>独立日期 <select id="basketHeatDay" data-basket-filter="day"><option value="">全部日期</option></select></label>' +
       '<label>市场 <select id="basketHeatMarket" data-basket-filter="market"><option value="mnl">mnl · 胜负 / 独赢</option><option value="hdc">hdc · 让分胜负</option><option value="hilo">hilo · 大小分</option></select></label>' +
       '<label>关键词 <input type="search" id="basketHeatKeyword" data-basket-filter="keyword" placeholder="队名 / 联赛 / 篮球 ID"></label>' +
@@ -1015,7 +1068,8 @@
     window.__bkTierWatch = true;
     const WATCH = [
       { key: 'tiers', file: 'basket_tiers.json', slot: '#basketHeatTierSlot', draw: tierHTML },
-      { key: 'overheat', file: 'basket_overheat.json', slot: '#basketHeatOverheatSlot', draw: overheatHTML }
+      { key: 'overheat', file: 'basket_overheat.json', slot: '#basketHeatOverheatSlot', draw: overheatHTML },
+      { key: 'overheatWatch', file: 'overheat_watch.json', slot: '#basketHeatWatchSlot', draw: overheatWatchHTML }
     ];
     setInterval(async () => {
       if (!modal || !modal.classList.contains('show')) return;
@@ -1027,7 +1081,8 @@
           const r = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
           if (!r.ok) continue;
           const d = await r.json();
-          if (!d || !Array.isArray(d.items) || !d.summary) continue;
+          // ★v4 通用校验：前瞻账本用 rows、其余用 items；两者都要有 summary
+          if (!d || !d.summary || !(Array.isArray(d.items) || Array.isArray(d.rows))) continue;
           state[cfg.key] = d;
           if (d.updated !== before) {
             const slot = modal.querySelector(cfg.slot);
