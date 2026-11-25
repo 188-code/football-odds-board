@@ -1,0 +1,1391 @@
+{
+ "2042852:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910002 date=2026-11-18T00:30Z 纽约尼克斯111@多伦多猛龙102 | calc:102-111 → away",
+  "score": "102-111",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042852:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910002 date=2026-11-18T00:30Z 纽约尼克斯111@多伦多猛龙102 | calc:102+3.5=105.5 vs 111 → away",
+  "score": "102-111",
+  "line": 3.5,
+  "pick": "让分客胜"
+ },
+ "2042852:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910002 date=2026-11-18T00:30Z 纽约尼克斯111@多伦多猛龙102 | calc:102+111=213 vs 216.5 → under",
+  "score": "102-111",
+  "line": 216.5,
+  "pick": "小分"
+ },
+ "2042853:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910003 date=2026-11-18T01:00Z 波特兰开拓者105@明尼苏达森林狼106 | calc:106-105 → home",
+  "score": "106-105",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042853:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910003 date=2026-11-18T01:00Z 波特兰开拓者105@明尼苏达森林狼106 | calc:106-2.5=103.5 vs 105 → away",
+  "score": "106-105",
+  "line": -2.5,
+  "pick": "让分客胜"
+ },
+ "2042853:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910003 date=2026-11-18T01:00Z 波特兰开拓者105@明尼苏达森林狼106 | calc:106+105=211 vs 227.5 → under",
+  "score": "106-105",
+  "line": 227.5,
+  "pick": "大分"
+ },
+ "2042854:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910004 date=2026-11-18T01:00Z 底特律活塞105@圣安东尼奥马刺93 | calc:93-105 → away",
+  "score": "93-105",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042854:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910004 date=2026-11-18T01:00Z 底特律活塞105@圣安东尼奥马刺93 | calc:93-10.5=82.5 vs 105 → away",
+  "score": "93-105",
+  "line": -10.5,
+  "pick": "让分主胜"
+ },
+ "2042854:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910004 date=2026-11-18T01:00Z 底特律活塞105@圣安东尼奥马刺93 | calc:93+105=198 vs 225.5 → under",
+  "score": "93-105",
+  "line": 225.5,
+  "pick": "大分"
+ },
+ "2042855:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910006 date=2026-11-18T03:30Z 犹他爵士132@洛杉矶快船107 | calc:107-132 → away",
+  "score": "107-132",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042855:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910006 date=2026-11-18T03:30Z 犹他爵士132@洛杉矶快船107 | calc:107-8.5=98.5 vs 132 → away",
+  "score": "107-132",
+  "line": -8.5,
+  "pick": "让分主胜"
+ },
+ "2042855:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910006 date=2026-11-18T03:30Z 犹他爵士132@洛杉矶快船107 | calc:107+132=239 vs 225.5 → over",
+  "score": "107-132",
+  "line": 225.5,
+  "pick": "大分"
+ },
+ "2042856:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910005 date=2026-11-18T04:00Z 夏洛特黄蜂114@洛杉矶湖人118 | calc:118-114 → home",
+  "score": "118-114",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042856:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910005 date=2026-11-18T04:00Z 夏洛特黄蜂114@洛杉矶湖人118 | calc:118-10.5=107.5 vs 114 → away",
+  "score": "118-114",
+  "line": -10.5,
+  "pick": "让分主胜"
+ },
+ "2042856:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910005 date=2026-11-18T04:00Z 夏洛特黄蜂114@洛杉矶湖人118 | calc:118+114=232 vs 223.5 → over",
+  "score": "118-114",
+  "line": 223.5,
+  "pick": "大分"
+ },
+ "2042858:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "EuroLeague J12 · 懂球帝竞彩赛果(周三302,SP主胜3.40)/腾讯新闻(20261119A02KEP00) · 贝西克塔斯83-79皇家马德里 | calc:83-79 → home",
+  "score": "83-79",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042858:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "EuroLeague J12 · 懂球帝竞彩赛果(周三302,SP主胜3.40)/腾讯新闻(20261119A02KEP00) · 贝西克塔斯83-79皇家马德里 | calc:83+8.5=91.5 vs 79 → home",
+  "score": "83-79",
+  "line": 8.5,
+  "pick": "让分客胜"
+ },
+ "2042858:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "EuroLeague J12 · 懂球帝竞彩赛果(周三302,SP主胜3.40)/腾讯新闻(20261119A02KEP00) · 贝西克塔斯83-79皇家马德里 | calc:83+79=162 vs 182.5 → under",
+  "score": "83-79",
+  "line": 182.5,
+  "pick": "大分"
+ },
+ "2042872:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "EuroLeague J13 · Sportando/3StepsBasket(MUNBAS-261119) · 拜仁慕尼黑100-81巴斯克尼亚 | calc:100-81 → home | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "100-81",
+  "line": null,
+  "pick": null
+ },
+ "2042872:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "EuroLeague J13 · Sportando/3StepsBasket(MUNBAS-261119) · 拜仁慕尼黑100-81巴斯克尼亚 | calc:100-5.5=94.5 vs 81 → home | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "100-81",
+  "line": -5.5,
+  "pick": null
+ },
+ "2042872:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "EuroLeague J13 · Sportando/3StepsBasket(MUNBAS-261119) · 拜仁慕尼黑100-81巴斯克尼亚 | calc:100+81=181 vs 177.5 → over | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "100-81",
+  "line": 177.5,
+  "pick": null
+ },
+ "2042873:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "EuroLeague J13 · Sportando/Fanatik(2645125) · 米兰78-70费内巴切 | calc:78-70 → home | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "78-70",
+  "line": null,
+  "pick": null
+ },
+ "2042873:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "EuroLeague J13 · Sportando/Fanatik(2645125) · 米兰78-70费内巴切 | calc:78+4.5=82.5 vs 70 → home | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "78-70",
+  "line": 4.5,
+  "pick": null
+ },
+ "2042873:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "EuroLeague J13 · Sportando/Fanatik(2645125) · 米兰78-70费内巴切 | calc:78+70=148 vs 165.5 → under | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "78-70",
+  "line": 165.5,
+  "pick": null
+ },
+ "2042874:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "EuroLeague J13 · 瓦伦西亚官网/Sportando/球迷屋(2046113273641) · 巴伦西亚92-87博洛尼亚 | calc:92-87 → home | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "92-87",
+  "line": null,
+  "pick": null
+ },
+ "2042874:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "EuroLeague J13 · 瓦伦西亚官网/Sportando/球迷屋(2046113273641) · 巴伦西亚92-87博洛尼亚 | calc:92-9.5=82.5 vs 87 → away | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "92-87",
+  "line": -9.5,
+  "pick": null
+ },
+ "2042874:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "EuroLeague J13 · 瓦伦西亚官网/Sportando/球迷屋(2046113273641) · 巴伦西亚92-87博洛尼亚 | calc:92+87=179 vs 184.5 → under | 线取自D盘快照流水首登帧(账本无条目回退)",
+  "score": "92-87",
+  "line": 184.5,
+  "pick": null
+ },
+ "2042875:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910022 date=2026-11-20T01:00Z 洛杉矶快船112@圣安东尼奥马刺124 | calc:124-15.5=108.5 vs 112 → away",
+  "score": "124-112",
+  "line": -15.5,
+  "pick": "让分主胜"
+ },
+ "2042875:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910022 date=2026-11-20T01:00Z 洛杉矶快船112@圣安东尼奥马刺124 | calc:124+112=236 vs 225.5 → over",
+  "score": "124-112",
+  "line": 225.5,
+  "pick": "大分"
+ },
+ "2042876:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910019 date=2026-11-20T01:00Z 金州勇士98@孟菲斯灰熊126 | calc:126-98 → home",
+  "score": "126-98",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042876:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910019 date=2026-11-20T01:00Z 金州勇士98@孟菲斯灰熊126 | calc:126-4.5=121.5 vs 98 → home",
+  "score": "126-98",
+  "line": -4.5,
+  "pick": "让分主胜"
+ },
+ "2042876:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910019 date=2026-11-20T01:00Z 金州勇士98@孟菲斯灰熊126 | calc:126+98=224 vs 225.5 → under",
+  "score": "126-98",
+  "line": 225.5,
+  "pick": "大分"
+ },
+ "2042877:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910020 date=2026-11-20T01:00Z 波特兰开拓者124@密尔沃基雄鹿114 | calc:114-124 → away",
+  "score": "114-124",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042877:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910020 date=2026-11-20T01:00Z 波特兰开拓者124@密尔沃基雄鹿114 | calc:114+9.5=123.5 vs 124 → away",
+  "score": "114-124",
+  "line": 9.5,
+  "pick": "让分主胜"
+ },
+ "2042877:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910020 date=2026-11-20T01:00Z 波特兰开拓者124@密尔沃基雄鹿114 | calc:114+124=238 vs 224.5 → over",
+  "score": "114-124",
+  "line": 224.5,
+  "pick": "大分"
+ },
+ "2042878:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910021 date=2026-11-20T01:00Z 纽约尼克斯102@明尼苏达森林狼99 | calc:99-102 → away",
+  "score": "99-102",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042878:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910021 date=2026-11-20T01:00Z 纽约尼克斯102@明尼苏达森林狼99 | calc:99-1.5=97.5 vs 102 → away",
+  "score": "99-102",
+  "line": -1.5,
+  "pick": "让分客胜"
+ },
+ "2042878:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910021 date=2026-11-20T01:00Z 纽约尼克斯102@明尼苏达森林狼99 | calc:99+102=201 vs 215.5 → under",
+  "score": "99-102",
+  "line": 215.5,
+  "pick": "大分"
+ },
+ "2042893:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401909305 date=2026-11-21T00:00Z 夏洛特黄蜂97@亚特兰大老鹰111 | calc:111-97 → home",
+  "score": "111-97",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042893:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401909305 date=2026-11-21T00:00Z 夏洛特黄蜂97@亚特兰大老鹰111 | calc:111-6.5=104.5 vs 97 → home",
+  "score": "111-97",
+  "line": -6.5,
+  "pick": "让分主胜"
+ },
+ "2042893:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401909305 date=2026-11-21T00:00Z 夏洛特黄蜂97@亚特兰大老鹰111 | calc:111+97=208 vs 218.5 → under",
+  "score": "111-97",
+  "line": 218.5,
+  "pick": "大分"
+ },
+ "2042894:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909308 date=2026-11-21T00:30Z 多伦多猛龙105@底特律活塞102 | calc:102-105 → away",
+  "score": "102-105",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042894:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909308 date=2026-11-21T00:30Z 多伦多猛龙105@底特律活塞102 | calc:102-7.5=94.5 vs 105 → away",
+  "score": "102-105",
+  "line": -7.5,
+  "pick": "让分主胜"
+ },
+ "2042894:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401909308 date=2026-11-21T00:30Z 多伦多猛龙105@底特律活塞102 | calc:102+105=207 vs 216.5 → under",
+  "score": "102-105",
+  "line": 216.5,
+  "pick": "大分"
+ },
+ "2042895:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401909307 date=2026-11-21T00:30Z 印第安那步行者119@克利夫兰骑士128 | calc:128-119 → home",
+  "score": "128-119",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042895:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401909307 date=2026-11-21T00:30Z 印第安那步行者119@克利夫兰骑士128 | calc:128-6.5=121.5 vs 119 → home",
+  "score": "128-119",
+  "line": -6.5,
+  "pick": "让分主胜"
+ },
+ "2042895:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401909307 date=2026-11-21T00:30Z 印第安那步行者119@克利夫兰骑士128 | calc:128+119=247 vs 233.5 → over",
+  "score": "128-119",
+  "line": 233.5,
+  "pick": "大分"
+ },
+ "2042896:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909306 date=2026-11-21T00:30Z 奥兰多魔术113@布鲁克林篮网111 | calc:111-113 → away",
+  "score": "111-113",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042896:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401909306 date=2026-11-21T00:30Z 奥兰多魔术113@布鲁克林篮网111 | calc:111+4.5=115.5 vs 113 → home",
+  "score": "111-113",
+  "line": 4.5,
+  "pick": "让分客胜"
+ },
+ "2042896:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401909306 date=2026-11-21T00:30Z 奥兰多魔术113@布鲁克林篮网111 | calc:111+113=224 vs 223.5 → over",
+  "score": "111-113",
+  "line": 223.5,
+  "pick": "大分"
+ },
+ "2042897:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909309 date=2026-11-21T01:00Z 华盛顿奇才98@芝加哥公牛94 | calc:94-98 → away",
+  "score": "94-98",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042897:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909309 date=2026-11-21T01:00Z 华盛顿奇才98@芝加哥公牛94 | calc:94-2.5=91.5 vs 98 → away",
+  "score": "94-98",
+  "line": -2.5,
+  "pick": "让分主胜"
+ },
+ "2042897:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401909309 date=2026-11-21T01:00Z 华盛顿奇才98@芝加哥公牛94 | calc:94+98=192 vs 240.5 → under",
+  "score": "94-98",
+  "line": 240.5,
+  "pick": "大分"
+ },
+ "2042898:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401909310 date=2026-11-21T01:00Z 新奥尔良鹈鹕120@俄克拉荷马城雷霆126 | calc:126-120 → home",
+  "score": "126-120",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042898:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909310 date=2026-11-21T01:00Z 新奥尔良鹈鹕120@俄克拉荷马城雷霆126 | calc:126-11.5=114.5 vs 120 → away",
+  "score": "126-120",
+  "line": -11.5,
+  "pick": "让分主胜"
+ },
+ "2042898:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401909310 date=2026-11-21T01:00Z 新奥尔良鹈鹕120@俄克拉荷马城雷霆126 | calc:126+120=246 vs 229.5 → over",
+  "score": "126-120",
+  "line": 229.5,
+  "pick": "大分"
+ },
+ "2042899:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909311 date=2026-11-21T02:30Z 菲尼克斯太阳111@犹他爵士101 | calc:101-111 → away",
+  "score": "101-111",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042899:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909311 date=2026-11-21T02:30Z 菲尼克斯太阳111@犹他爵士101 | calc:101+3.5=104.5 vs 111 → away",
+  "score": "101-111",
+  "line": 3.5,
+  "pick": "让分客胜"
+ },
+ "2042899:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401909311 date=2026-11-21T02:30Z 菲尼克斯太阳111@犹他爵士101 | calc:101+111=212 vs 225.5 → under",
+  "score": "101-111",
+  "line": 225.5,
+  "pick": "大分"
+ },
+ "2042900:hdc": {
+  "verified": true,
+  "result": "away",
+  "score": "106-104",
+  "line": -14.5,
+  "pick": "让分主胜",
+  "src": "ESPN 20261120 Kings@Lakers 106:104 | calc:106-14.5=91.5 vs 104 → away(受让赢盘)"
+ },
+ "2042900:hilo": {
+  "verified": true,
+  "result": "under",
+  "score": "106-104",
+  "line": 231.5,
+  "pick": "大分",
+  "src": "ESPN 20261120 total 210 vs 231.5 → under"
+ },
+ "2042901:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401909312 date=2026-11-21T03:00Z 休斯敦火箭124@丹佛掘金133 | calc:133-124 → home",
+  "score": "133-124",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042901:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401909312 date=2026-11-21T03:00Z 休斯敦火箭124@丹佛掘金133 | calc:133-1.5=131.5 vs 124 → home",
+  "score": "133-124",
+  "line": -1.5,
+  "pick": "让分客胜"
+ },
+ "2042901:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401909312 date=2026-11-21T03:00Z 休斯敦火箭124@丹佛掘金133 | calc:133+124=257 vs 223.5 → over",
+  "score": "133-124",
+  "line": 223.5,
+  "pick": "大分"
+ },
+ "2042955:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910023 date=2026-11-21T18:00Z 密尔沃基雄鹿129@费城76人132 | calc:132-129 → home",
+  "score": "132-129",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042955:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910023 date=2026-11-21T18:00Z 密尔沃基雄鹿129@费城76人132 | calc:132-10.5=121.5 vs 129 → away",
+  "score": "132-129",
+  "line": -10.5,
+  "pick": "让分主胜"
+ },
+ "2042955:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910023 date=2026-11-21T18:00Z 密尔沃基雄鹿129@费城76人132 | calc:132+129=261 vs 228.5 → over",
+  "score": "132-129",
+  "line": 228.5,
+  "pick": "大分"
+ },
+ "2042960:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910024 date=2026-11-22T00:30Z 波特兰开拓者96@纽约尼克斯97 | calc:97-96 → home",
+  "score": "97-96",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042960:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910024 date=2026-11-22T00:30Z 波特兰开拓者96@纽约尼克斯97 | calc:97-5.5=91.5 vs 96 → away",
+  "score": "97-96",
+  "line": -5.5,
+  "pick": "让分主胜"
+ },
+ "2042960:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910024 date=2026-11-22T00:30Z 波特兰开拓者96@纽约尼克斯97 | calc:97+96=193 vs 217.5 → under",
+  "score": "97-96",
+  "line": 217.5,
+  "pick": "大分"
+ },
+ "2042961:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910025 date=2026-11-22T01:00Z 洛杉矶快船100@达拉斯独行侠110 | calc:110-100 → home",
+  "score": "110-100",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042961:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910025 date=2026-11-22T01:00Z 洛杉矶快船100@达拉斯独行侠110 | calc:110-5.5=104.5 vs 100 → home",
+  "score": "110-100",
+  "line": -5.5,
+  "pick": "让分主胜"
+ },
+ "2042961:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910025 date=2026-11-22T01:00Z 洛杉矶快船100@达拉斯独行侠110 | calc:110+100=210 vs 228.5 → under",
+  "score": "110-100",
+  "line": 228.5,
+  "pick": "大分"
+ },
+ "2042962:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910027 date=2026-11-22T01:00Z 新奥尔良鹈鹕91@圣安东尼奥马刺114 | calc:114-15.5=98.5 vs 91 → home",
+  "score": "114-91",
+  "line": -15.5,
+  "pick": "让分主胜"
+ },
+ "2042962:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910027 date=2026-11-22T01:00Z 新奥尔良鹈鹕91@圣安东尼奥马刺114 | calc:114+91=205 vs 227.5 → under",
+  "score": "114-91",
+  "line": 227.5,
+  "pick": "大分"
+ },
+ "2042963:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910026 date=2026-11-22T01:00Z 孟菲斯灰熊95@明尼苏达森林狼104 | calc:104-95 → home",
+  "score": "104-95",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042963:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910026 date=2026-11-22T01:00Z 孟菲斯灰熊95@明尼苏达森林狼104 | calc:104-5.5=98.5 vs 95 → home",
+  "score": "104-95",
+  "line": -5.5,
+  "pick": "让分主胜"
+ },
+ "2042963:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910026 date=2026-11-22T01:00Z 孟菲斯灰熊95@明尼苏达森林狼104 | calc:104+95=199 vs 227.5 → under",
+  "score": "104-95",
+  "line": 227.5,
+  "pick": "大分"
+ },
+ "2042964:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910028 date=2026-11-22T03:00Z 波士顿凯尔特人96@萨克拉门托国王97 | calc:97+13.5=110.5 vs 96 → home",
+  "score": "97-96",
+  "line": 13.5,
+  "pick": "让分主胜"
+ },
+ "2042964:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910028 date=2026-11-22T03:00Z 波士顿凯尔特人96@萨克拉门托国王97 | calc:97+96=193 vs 215.5 → under",
+  "score": "97-96",
+  "line": 215.5,
+  "pick": "大分"
+ },
+ "2042976:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910029 date=2026-11-22T20:30Z 底特律活塞97@亚特兰大老鹰107 | calc:107-97 → home",
+  "score": "107-97",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042976:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910029 date=2026-11-22T20:30Z 底特律活塞97@亚特兰大老鹰107 | calc:107+1.5=108.5 vs 97 → home",
+  "score": "107-97",
+  "line": 1.5,
+  "pick": "让分客胜"
+ },
+ "2042976:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910029 date=2026-11-22T20:30Z 底特律活塞97@亚特兰大老鹰107 | calc:107+97=204 vs 225.5 → under",
+  "score": "107-97",
+  "line": 225.5,
+  "pick": "大分"
+ },
+ "2042977:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910030 date=2026-11-22T23:00Z 俄克拉荷马城雷霆113@迈阿密热火123 | calc:123-113 → home",
+  "score": "123-113",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042977:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910030 date=2026-11-22T23:00Z 俄克拉荷马城雷霆113@迈阿密热火123 | calc:123-1.5=121.5 vs 113 → home",
+  "score": "123-113",
+  "line": -1.5,
+  "pick": "让分主胜"
+ },
+ "2042977:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910030 date=2026-11-22T23:00Z 俄克拉荷马城雷霆113@迈阿密热火123 | calc:123+113=236 vs 231.5 → over",
+  "score": "123-113",
+  "line": 231.5,
+  "pick": "大分"
+ },
+ "2042978:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910031 date=2026-11-23T00:00Z 奥兰多魔术96@华盛顿奇才116 | calc:116-96 → home",
+  "score": "116-96",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042978:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910031 date=2026-11-23T00:00Z 奥兰多魔术96@华盛顿奇才116 | calc:116+4.5=120.5 vs 96 → home",
+  "score": "116-96",
+  "line": 4.5,
+  "pick": "让分主胜"
+ },
+ "2042978:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910031 date=2026-11-23T00:00Z 奥兰多魔术96@华盛顿奇才116 | calc:116+96=212 vs 222.5 → under",
+  "score": "116-96",
+  "line": 222.5,
+  "pick": "大分"
+ },
+ "2042979:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910033 date=2026-11-23T00:00Z 达拉斯独行侠116@犹他爵士114 | calc:114-116 → away",
+  "score": "114-116",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042979:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910033 date=2026-11-23T00:00Z 达拉斯独行侠116@犹他爵士114 | calc:114+1.5=115.5 vs 116 → away",
+  "score": "114-116",
+  "line": 1.5,
+  "pick": "让分主胜"
+ },
+ "2042979:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910033 date=2026-11-23T00:00Z 达拉斯独行侠116@犹他爵士114 | calc:114+116=230 vs 223.5 → over",
+  "score": "114-116",
+  "line": 223.5,
+  "pick": "大分"
+ },
+ "2042980:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910032 date=2026-11-23T00:00Z 丹佛掘金151@芝加哥公牛145 | calc:145-151 → away",
+  "score": "145-151",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042980:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910032 date=2026-11-23T00:00Z 丹佛掘金151@芝加哥公牛145 | calc:145+8.5=153.5 vs 151 → home",
+  "score": "145-151",
+  "line": 8.5,
+  "pick": "让分主胜"
+ },
+ "2042980:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910032 date=2026-11-23T00:00Z 丹佛掘金151@芝加哥公牛145 | calc:145+151=296 vs 237.5 → over",
+  "score": "145-151",
+  "line": 237.5,
+  "pick": "大分"
+ },
+ "2042981:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910034 date=2026-11-23T01:00Z 印第安那步行者106@纽约尼克斯113 | calc:113-106 → home",
+  "score": "113-106",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042981:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910034 date=2026-11-23T01:00Z 印第安那步行者106@纽约尼克斯113 | calc:113-8.5=104.5 vs 106 → away",
+  "score": "113-106",
+  "line": -8.5,
+  "pick": "让分主胜"
+ },
+ "2042981:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910034 date=2026-11-23T01:00Z 印第安那步行者106@纽约尼克斯113 | calc:113+106=219 vs 215.5 → over",
+  "score": "113-106",
+  "line": 215.5,
+  "pick": "大分"
+ },
+ "2042982:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910035 date=2026-11-23T01:30Z 波士顿凯尔特人87@金州勇士88 | calc:88-87 → home",
+  "score": "88-87",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042982:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910035 date=2026-11-23T01:30Z 波士顿凯尔特人87@金州勇士88 | calc:88+9.5=97.5 vs 87 → home",
+  "score": "88-87",
+  "line": 9.5,
+  "pick": "让分主胜"
+ },
+ "2042982:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910035 date=2026-11-23T01:30Z 波士顿凯尔特人87@金州勇士88 | calc:88+87=175 vs 212.5 → under",
+  "score": "88-87",
+  "line": 212.5,
+  "pick": "大分"
+ },
+ "2042983:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910036 date=2026-11-24T00:00Z 孟菲斯灰熊117@夏洛特黄蜂111 | calc:111-117 → away",
+  "score": "111-117",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042983:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910036 date=2026-11-24T00:00Z 孟菲斯灰熊117@夏洛特黄蜂111 | calc:111+4.5=115.5 vs 117 → away",
+  "score": "111-117",
+  "line": 4.5,
+  "pick": "让分主胜"
+ },
+ "2042983:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910036 date=2026-11-24T00:00Z 孟菲斯灰熊117@夏洛特黄蜂111 | calc:111+117=228 vs 215.5 → over",
+  "score": "111-117",
+  "line": 215.5,
+  "pick": "大分"
+ },
+ "2042984:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910037 date=2026-11-24T00:00Z 波特兰开拓者128@费城76人111 | calc:111-128 → away",
+  "score": "111-128",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042984:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910037 date=2026-11-24T00:00Z 波特兰开拓者128@费城76人111 | calc:111-5.5=105.5 vs 128 → away",
+  "score": "111-128",
+  "line": -5.5,
+  "pick": "让分主胜"
+ },
+ "2042984:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910037 date=2026-11-24T00:00Z 波特兰开拓者128@费城76人111 | calc:111+128=239 vs 233.5 → over",
+  "score": "111-128",
+  "line": 233.5,
+  "pick": "大分"
+ },
+ "2042985:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910038 date=2026-11-24T00:30Z 俄克拉荷马城雷霆120@印第安那步行者125 | calc:125-120 → home",
+  "score": "125-120",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042985:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910038 date=2026-11-24T00:30Z 俄克拉荷马城雷霆120@印第安那步行者125 | calc:125+4.5=129.5 vs 120 → home",
+  "score": "125-120",
+  "line": 4.5,
+  "pick": "让分主胜"
+ },
+ "2042985:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910038 date=2026-11-24T00:30Z 俄克拉荷马城雷霆120@印第安那步行者125 | calc:125+120=245 vs 223.5 → over",
+  "score": "125-120",
+  "line": 223.5,
+  "pick": "大分"
+ },
+ "2042986:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910039 date=2026-11-24T00:30Z 密尔沃基雄鹿116@多伦多猛龙111 | calc:111-116 → away",
+  "score": "111-116",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042986:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910039 date=2026-11-24T00:30Z 密尔沃基雄鹿116@多伦多猛龙111 | calc:111-9.5=101.5 vs 116 → away",
+  "score": "111-116",
+  "line": -9.5,
+  "pick": "让分主胜"
+ },
+ "2042986:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910039 date=2026-11-24T00:30Z 密尔沃基雄鹿116@多伦多猛龙111 | calc:111+116=227 vs 224.5 → over",
+  "score": "111-116",
+  "line": 224.5,
+  "pick": "大分"
+ },
+ "2042987:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910040 date=2026-11-24T00:30Z 布鲁克林篮网116@明尼苏达森林狼142 | calc:142-116 → home",
+  "score": "142-116",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042987:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910040 date=2026-11-24T00:30Z 布鲁克林篮网116@明尼苏达森林狼142 | calc:142-12.5=129.5 vs 116 → home",
+  "score": "142-116",
+  "line": -12.5,
+  "pick": "让分主胜"
+ },
+ "2042987:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910040 date=2026-11-24T00:30Z 布鲁克林篮网116@明尼苏达森林狼142 | calc:142+116=258 vs 223.5 → over",
+  "score": "142-116",
+  "line": 223.5,
+  "pick": "大分"
+ },
+ "2042988:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910041 date=2026-11-24T01:00Z 克利夫兰骑士108@芝加哥公牛122 | calc:122-108 → home",
+  "score": "122-108",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042988:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910041 date=2026-11-24T01:00Z 克利夫兰骑士108@芝加哥公牛122 | calc:122+8.5=130.5 vs 108 → home",
+  "score": "122-108",
+  "line": 8.5,
+  "pick": "让分客胜"
+ },
+ "2042988:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910041 date=2026-11-24T01:00Z 克利夫兰骑士108@芝加哥公牛122 | calc:122+108=230 vs 240.5 → under",
+  "score": "122-108",
+  "line": 240.5,
+  "pick": "大分"
+ },
+ "2042989:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910042 date=2026-11-24T01:00Z 菲尼克斯太阳123@新奥尔良鹈鹕119 | calc:119-123 → away",
+  "score": "119-123",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042989:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910042 date=2026-11-24T01:00Z 菲尼克斯太阳123@新奥尔良鹈鹕119 | calc:119+5.5=124.5 vs 123 → home",
+  "score": "119-123",
+  "line": 5.5,
+  "pick": "让分主胜"
+ },
+ "2042989:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910042 date=2026-11-24T01:00Z 菲尼克斯太阳123@新奥尔良鹈鹕119 | calc:119+123=242 vs 235.5 → over",
+  "score": "119-123",
+  "line": 235.5,
+  "pick": "大分"
+ },
+ "2042990:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910043 date=2026-11-24T01:30Z 洛杉矶快船104@休斯敦火箭116 | calc:116-13.5=102.5 vs 104 → away",
+  "score": "116-104",
+  "line": -13.5,
+  "pick": "让分主胜"
+ },
+ "2042990:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910043 date=2026-11-24T01:30Z 洛杉矶快船104@休斯敦火箭116 | calc:116+104=220 vs 227.5 → under",
+  "score": "116-104",
+  "line": 227.5,
+  "pick": "大分"
+ },
+ "2042991:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401910045 date=2026-11-24T03:00Z 圣安东尼奥马刺123@萨克拉门托国王107 | calc:107+11.5=118.5 vs 123 → away",
+  "score": "107-123",
+  "line": 11.5,
+  "pick": "让分主胜"
+ },
+ "2042991:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401910045 date=2026-11-24T03:00Z 圣安东尼奥马刺123@萨克拉门托国王107 | calc:107+123=230 vs 224.5 → over",
+  "score": "107-123",
+  "line": 224.5,
+  "pick": "大分"
+ },
+ "2042992:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "ESPN NBA scoreboard event=401910044 date=2026-11-24T03:00Z 犹他爵士94@洛杉矶湖人109 | calc:109-13.5=95.5 vs 94 → home",
+  "score": "109-94",
+  "line": -13.5,
+  "pick": "让分主胜"
+ },
+ "2042992:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401910044 date=2026-11-24T03:00Z 犹他爵士94@洛杉矶湖人109 | calc:109+94=203 vs 227.5 → under",
+  "score": "109-94",
+  "line": 227.5,
+  "pick": "大分"
+ },
+ "2042890:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "球探完场比分 results_t7 sid=723035 奥林匹亚科斯-皇家马德里 89-70 | 队名严格配对(日期±2天/开赛±18h) | calc:89-70 → home",
+  "score": "89-70",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042890:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "球探完场比分 results_t7 sid=723035 奥林匹亚科斯-皇家马德里 89-70 | 队名严格配对(日期±2天/开赛±18h) | calc:89-1.5=87.5 vs 70 → home",
+  "score": "89-70",
+  "line": -1.5,
+  "pick": "让分客胜"
+ },
+ "2042890:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=723035 奥林匹亚科斯-皇家马德里 89-70 | 队名严格配对(日期±2天/开赛±18h) | calc:89+70=159 vs 173.5 → under",
+  "score": "89-70",
+  "line": 173.5,
+  "pick": "大分"
+ },
+ "2042891:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=723036 巴塞罗那-贝尔格莱德红星 83-85 | 队名严格配对(日期±2天/开赛±18h) | calc:83-85 → away",
+  "score": "83-85",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042891:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=723036 巴塞罗那-贝尔格莱德红星 83-85 | 队名严格配对(日期±2天/开赛±18h) | calc:83-2.5=80.5 vs 85 → away",
+  "score": "83-85",
+  "line": -2.5,
+  "pick": "让分主胜"
+ },
+ "2042891:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=723036 巴塞罗那-贝尔格莱德红星 83-85 | 队名严格配对(日期±2天/开赛±18h) | calc:83+85=168 vs 171.5 → under",
+  "score": "83-85",
+  "line": 171.5,
+  "pick": "大分"
+ },
+ "2042950:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "球探完场比分 results_t7 sid=722283 塔斯马尼亚跳蚁-伊拉瓦拉老鹰 95-82 | 队名严格配对(日期±2天/开赛±18h) | calc:95-82 → home",
+  "score": "95-82",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042950:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "球探完场比分 results_t7 sid=722283 塔斯马尼亚跳蚁-伊拉瓦拉老鹰 95-82 | 队名严格配对(日期±2天/开赛±18h) | calc:95-5.5=89.5 vs 82 → home",
+  "score": "95-82",
+  "line": -5.5,
+  "pick": "让分主胜"
+ },
+ "2042950:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=722283 塔斯马尼亚跳蚁-伊拉瓦拉老鹰 95-82 | 队名严格配对(日期±2天/开赛±18h) | calc:95+82=177 vs 191.5 → under",
+  "score": "95-82",
+  "line": 191.5,
+  "pick": "大分"
+ },
+ "2042951:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "球探完场比分 results_t7 sid=722284 墨尔本联-新西兰破坏者 94-91 | 队名严格配对(日期±2天/开赛±18h) | calc:94-91 → home",
+  "score": "94-91",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042951:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=722284 墨尔本联-新西兰破坏者 94-91 | 队名严格配对(日期±2天/开赛±18h) | calc:94-6.5=87.5 vs 91 → away",
+  "score": "94-91",
+  "line": -6.5,
+  "pick": "让分主胜"
+ },
+ "2042951:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=722284 墨尔本联-新西兰破坏者 94-91 | 队名严格配对(日期±2天/开赛±18h) | calc:94+91=185 vs 187.5 → under",
+  "score": "94-91",
+  "line": 187.5,
+  "pick": "大分"
+ },
+ "2042957:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=733770 特里尔角斗士-开姆尼茨 73-88 | 队名严格配对(日期±2天/开赛±18h) | calc:73-88 → away",
+  "score": "73-88",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042957:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=733770 特里尔角斗士-开姆尼茨 73-88 | 队名严格配对(日期±2天/开赛±18h) | calc:73-10.5=62.5 vs 88 → away",
+  "score": "73-88",
+  "line": -10.5,
+  "pick": "让分主胜"
+ },
+ "2042957:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=733770 特里尔角斗士-开姆尼茨 73-88 | 队名严格配对(日期±2天/开赛±18h) | calc:73+88=161 vs 182.5 → under",
+  "score": "73-88",
+  "line": 182.5,
+  "pick": "大分"
+ },
+ "2042958:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=733769 EWE奥尔登堡-法兰克福 72-82 | 队名严格配对(日期±2天/开赛±18h) | calc:72-82 → away",
+  "score": "72-82",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042958:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=733769 EWE奥尔登堡-法兰克福 72-82 | 队名严格配对(日期±2天/开赛±18h) | calc:72+1.5=73.5 vs 82 → away",
+  "score": "72-82",
+  "line": 1.5,
+  "pick": "让分主胜"
+ },
+ "2042958:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=733769 EWE奥尔登堡-法兰克福 72-82 | 队名严格配对(日期±2天/开赛±18h) | calc:72+82=154 vs 163.5 → under",
+  "score": "72-82",
+  "line": 163.5,
+  "pick": "大分"
+ },
+ "2042959:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=729618 穆尔西亚-萨拉戈萨 72-73 | 队名严格配对(日期±2天/开赛±18h) | calc:72-73 → away",
+  "score": "72-73",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042959:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=729618 穆尔西亚-萨拉戈萨 72-73 | 队名严格配对(日期±2天/开赛±18h) | calc:72-6.5=65.5 vs 73 → away",
+  "score": "72-73",
+  "line": -6.5,
+  "pick": "让分主胜"
+ },
+ "2042959:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=729618 穆尔西亚-萨拉戈萨 72-73 | 队名严格配对(日期±2天/开赛±18h) | calc:72+73=145 vs 180.5 → under",
+  "score": "72-73",
+  "line": 180.5,
+  "pick": "大分"
+ },
+ "2042972:mnl": {
+  "verified": true,
+  "result": "home",
+  "src": "球探完场比分 results_t7 sid=729623 特内里费-巴塞罗那 91-80 | 队名严格配对(日期±2天/开赛±18h) | calc:91-80 → home",
+  "score": "91-80",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2042972:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "球探完场比分 results_t7 sid=729623 特内里费-巴塞罗那 91-80 | 队名严格配对(日期±2天/开赛±18h) | calc:91+1.5=92.5 vs 80 → home",
+  "score": "91-80",
+  "line": 1.5,
+  "pick": "让分主胜"
+ },
+ "2042972:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=729623 特内里费-巴塞罗那 91-80 | 队名严格配对(日期±2天/开赛±18h) | calc:91+80=171 vs 177.5 → under",
+  "score": "91-80",
+  "line": 177.5,
+  "pick": "大分"
+ },
+ "2042975:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=729624 皇家马德里-约文图特 87-88 | 队名严格配对(日期±2天/开赛±18h) | calc:87-88 → away",
+  "score": "87-88",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2042975:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=729624 皇家马德里-约文图特 87-88 | 队名严格配对(日期±2天/开赛±18h) | calc:87-11.5=75.5 vs 88 → away",
+  "score": "87-88",
+  "line": -11.5,
+  "pick": "让分主胜"
+ },
+ "2042975:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=729624 皇家马德里-约文图特 87-88 | 队名严格配对(日期±2天/开赛±18h) | calc:87+88=175 vs 183.5 → under",
+  "score": "87-88",
+  "line": 183.5,
+  "pick": "大分"
+ },
+ "2043027:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=723038 贝西克塔斯-巴黎 76-86 | 队名严格配对(日期±2天/开赛±18h) | calc:76-86 → away",
+  "score": "76-86",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2043027:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=723038 贝西克塔斯-巴黎 76-86 | 队名严格配对(日期±2天/开赛±18h) | calc:76+1.5=77.5 vs 86 → away",
+  "score": "76-86",
+  "line": 1.5,
+  "pick": "让分主胜"
+ },
+ "2043027:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=723038 贝西克塔斯-巴黎 76-86 | 队名严格配对(日期±2天/开赛±18h) | calc:76+86=162 vs 183.5 → under",
+  "score": "76-86",
+  "line": 183.5,
+  "pick": "大分"
+ },
+ "2043028:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=723039 贝尔格莱德红星-博洛尼亚维图斯 84-108 | 队名严格配对(日期±2天/开赛±18h) | calc:84-108 → away",
+  "score": "84-108",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2043028:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=723039 贝尔格莱德红星-博洛尼亚维图斯 84-108 | 队名严格配对(日期±2天/开赛±18h) | calc:84-8.5=75.5 vs 108 → away",
+  "score": "84-108",
+  "line": -8.5,
+  "pick": "让分主胜"
+ },
+ "2043028:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "球探完场比分 results_t7 sid=723039 贝尔格莱德红星-博洛尼亚维图斯 84-108 | 队名严格配对(日期±2天/开赛±18h) | calc:84+108=192 vs 172.5 → over",
+  "score": "84-108",
+  "line": 172.5,
+  "pick": "大分"
+ },
+ "2043031:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "球探完场比分 results_t7 sid=723043 巴塞罗那-费内巴切 77-80 | 队名严格配对(日期±2天/开赛±18h) | calc:77-80 → away",
+  "score": "77-80",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2043031:hdc": {
+  "verified": true,
+  "result": "home",
+  "src": "球探完场比分 results_t7 sid=723043 巴塞罗那-费内巴切 77-80 | 队名严格配对(日期±2天/开赛±18h) | calc:77+3.5=80.5 vs 80 → home",
+  "score": "77-80",
+  "line": 3.5,
+  "pick": "让分主胜"
+ },
+ "2043031:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "球探完场比分 results_t7 sid=723043 巴塞罗那-费内巴切 77-80 | 队名严格配对(日期±2天/开赛±18h) | calc:77+80=157 vs 170.5 → under",
+  "score": "77-80",
+  "line": 170.5,
+  "pick": "大分"
+ },
+ "2043032:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909314 date=2026-11-25T00:00Z 底特律活塞104@奥兰多魔术86 | calc:86-104 → away",
+  "score": "86-104",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2043032:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909314 date=2026-11-25T00:00Z 底特律活塞104@奥兰多魔术86 | calc:86+1.5=87.5 vs 104 → away",
+  "score": "86-104",
+  "line": 1.5,
+  "pick": "让分主胜"
+ },
+ "2043032:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401909314 date=2026-11-25T00:00Z 底特律活塞104@奥兰多魔术86 | calc:86+104=190 vs 214.5 → under",
+  "score": "86-104",
+  "line": 214.5,
+  "pick": "大分"
+ },
+ "2043033:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909315 date=2026-11-25T01:00Z 波士顿凯尔特人131@华盛顿奇才116 | calc:116-131 → away",
+  "score": "116-131",
+  "line": null,
+  "pick": "客胜"
+ },
+ "2043033:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909315 date=2026-11-25T01:00Z 波士顿凯尔特人131@华盛顿奇才116 | calc:116+9.5=125.5 vs 131 → away",
+  "score": "116-131",
+  "line": 9.5,
+  "pick": "让分主胜"
+ },
+ "2043033:hilo": {
+  "verified": true,
+  "result": "over",
+  "src": "ESPN NBA scoreboard event=401909315 date=2026-11-25T01:00Z 波士顿凯尔特人131@华盛顿奇才116 | calc:116+131=247 vs 216.5 → over",
+  "score": "116-131",
+  "line": 216.5,
+  "pick": "大分"
+ },
+ "2043034:mnl": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909316 date=2026-11-25T03:00Z 达拉斯独行侠120@丹佛掘金101 | calc:101-120 → away",
+  "score": "101-120",
+  "line": null,
+  "pick": "主胜"
+ },
+ "2043034:hdc": {
+  "verified": true,
+  "result": "away",
+  "src": "ESPN NBA scoreboard event=401909316 date=2026-11-25T03:00Z 达拉斯独行侠120@丹佛掘金101 | calc:101-7.5=93.5 vs 120 → away",
+  "score": "101-120",
+  "line": -7.5,
+  "pick": "让分主胜"
+ },
+ "2043034:hilo": {
+  "verified": true,
+  "result": "under",
+  "src": "ESPN NBA scoreboard event=401909316 date=2026-11-25T03:00Z 达拉斯独行侠120@丹佛掘金101 | calc:101+120=221 vs 230.5 → under",
+  "score": "101-120",
+  "line": 230.5,
+  "pick": "大分"
+ },
+ "_meta": {
+  "generatedAt": "2026-11-25T06:43:03.844Z",
+  "source": "ESPN NBA scoreboard 自动同步",
+  "note": "平铺 key→result；verified=ESPN FINAL+冻结盘口标准计算"
+ }
+}

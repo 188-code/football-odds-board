@@ -425,6 +425,9 @@
       let lineTag = '';
       if (x.settledByLine === 'hitByLine') lineTag = '<br><small style="color:#16a34a">让分赢盘✓</small>';
       else if (x.settledByLine === 'missByLine') lineTag = '<br><small style="color:#94a3b8">让分未赢盘(参考)</small>';
+      // 已核验让分赢盘方：不是预测方向，只用于对照外部软件「主让N·推荐X队方向」的受让口径
+      if (x.lineWinSide === 'home' || x.lineWinSide === 'away')
+        lineTag += '<br><small style="color:#a78bfa">实际赢盘方 ' + (x.lineWinSide === 'home' ? '主' : '客') + '</small>';
       // ★ 2026-11-25 锁死状态：赛前随新帧更新结论；过开赛时刻后赛后帧被硬挡、结论锁死。
       //   locked=有真开赛时刻(已上护栏)；kickTs 缺失的场次诚实标"未锁"不冒充。
       const nowS = Date.now() / 1000;
@@ -449,7 +452,8 @@
       '本表仅复现参考软件分档能力，<strong>不进方向账本/ROI/引擎，不构成投注建议</strong>。</p>' +
       '<p class="bh-muted">版本 ' + esc(t.version) + ' · 更新 ' + moment(t.updated) + ' · 全库 ' + esc(s.total) +
       ' 场（强推 ' + esc((s.byTier || {}).强推 || 0) + ' / 精选 ' + esc((s.byTier || {}).精选 || 0) +
-      ' / 优选 ' + esc((s.byTier || {}).优选 || 0) + '）。结算主口径=独赢跟强队是否赢球；让分线仅参考（强队赢球≠赢盘）。</p>' +
+      ' / 优选 ' + esc((s.byTier || {}).优选 || 0) + '）。结算主口径=独赢跟强队是否赢球；让分线仅参考（强队赢球≠赢盘）。' +
+      '<strong style="color:#a78bfa">外部参考软件的「主让N·推荐X队方向」是让分受让口径，与本表独赢方向不是同一口径，不要直接对比；已结算场次在让分列显示「实际赢盘方」供核对。</strong></p>' +
       '<p style="color:#c4b5fd">分档区分度（独赢命中）：' +
       ['强推', '精选', '优选'].map(k => {
         const v = object(ts[k]).mnl || {};
