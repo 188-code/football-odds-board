@@ -10062,6 +10062,7 @@ function fundplateHistoryHTML(){
         var wd = it.watchDir;
         var pr = !!it.promoted;
         var dsp = !!it.displayOnly;
+        var sq = !!(wd && wd.shortSeq); // ★2026-11-25 短序列观察档：给方向但只展示、不入账/不进业绩
         var reFr = (wd && wd.reFrozenAt) ? wd.reFrozenAt : null;
         var flipTxt = reFr
           ? '<div style="font-size:10px;color:#7dd3fc">🔄 赛前已按持续临盘重定方向（原 ' + esc(String(wd.reFrozenFrom || '旧档') || '旧档') + ' · '
@@ -10078,10 +10079,11 @@ function fundplateHistoryHTML(){
             + ((+wd.netAtFreeze) >= 0 ? '+' : '') + (+wd.netAtFreeze).toFixed(1) + 'pp · 同向' + wd.sameN
             + (wd.lead ? ' · 先动' + esc(String(wd.lead)) : '') + lateTag
             + (pr ? ' · <b style="color:#34d399">已入临盘方向账本</b>'
-                  : (dsp ? ' · <b style="color:#fbbf24">真临盘展示核对·不入业绩</b>' : ' · 只读观察·未达入账门槛')) + '</div>';
+                  : (sq ? ' · <b style="color:#7dd3fc">短序列观察·仅展示不入业绩</b>'
+                        : (dsp ? ' · <b style="color:#fbbf24">真临盘展示核对·不入业绩</b>' : ' · 只读观察·未达入账门槛'))) + '</div>';
           if (wd.side === 'weak'){
             var coldSide = (it.strongIdx === 2) ? '主' : '客';
-            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':(dsp?'rgba(251,191,36,.16)':'rgba(229,69,69,.16)')) + ';color:' + (pr?'#6ee7b7':(dsp?'#fcd34d':'#ff8f8f')) + ';font-weight:800;font-size:11px">🎯 ' + (pr?'入围方向':(dsp?'真临盘方向·展示核对':'观察方向')) + '·站对面</span>'
+            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':(dsp?'rgba(251,191,36,.16)':'rgba(229,69,69,.16)')) + ';color:' + (pr?'#6ee7b7':(dsp?'#fcd34d':'#ff8f8f')) + ';font-weight:800;font-size:11px">🎯 ' + (pr?'入围方向':(sq?'短序列观察·仅展示':(dsp?'真临盘方向·展示核对':'观察方向'))) + '·站对面</span>'
               + '<span style="font-size:11px;color:#e5c07b"> ' + coldSide + '队（弱方）独赢</span>' + nEndTag + meta;
             if (flipTxt) dirHtml += flipTxt;
             else if (wd.flips && wd.flips.length)
@@ -10092,7 +10094,7 @@ function fundplateHistoryHTML(){
             dirHtml += '</div>';
           } else if (wd.side === 'strong'){
             var hotSide = (it.strongIdx === 2) ? '客' : '主';
-            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':(dsp?'rgba(245,158,11,.2)':'rgba(245,158,11,.16)')) + ';color:' + (pr?'#6ee7b7':'#fcd34d') + ';font-weight:800;font-size:11px">🧭 ' + (pr?'入围方向':(dsp?'真临盘方向·展示核对':'观察方向')) + '·顺势买强队</span>'
+            dirHtml = '<div style="margin-bottom:2px"><span style="display:inline-block;padding:1px 7px;border-radius:6px;background:' + (pr?'rgba(52,211,153,.18)':(dsp?'rgba(245,158,11,.2)':'rgba(245,158,11,.16)')) + ';color:' + (pr?'#6ee7b7':'#fcd34d') + ';font-weight:800;font-size:11px">🧭 ' + (pr?'入围方向':(sq?'短序列观察·仅展示':(dsp?'真临盘方向·展示核对':'观察方向'))) + '·顺势买强队</span>'
               + '<span style="font-size:11px;color:#e5c07b"> ' + hotSide + '队（强方）独赢</span>' + nEndTag + meta;
             if (flipTxt) dirHtml += flipTxt;
             else if (wd.flips && wd.flips.length)
@@ -10105,8 +10107,9 @@ function fundplateHistoryHTML(){
             dirHtml = '<div style="font-size:10.5px;color:#f59e0b">⚠ 资金撤强队方·背离观察（无标定支持·不出方向）</div>';
           }
         }
-        var resTxt = dirHtml + '<span style="opacity:.45">' + (it.displayOnly ? '真临盘展示核对·不入业绩'
-          : ((it.kickTs && it.kickTs < Date.now()) ? '已过开赛·比分待核' : '未开赛')) + '</span>';
+        var resTxt = dirHtml + '<span style="opacity:.45">' + (sq ? '短序列观察·仅展示不入业绩'
+          : (it.displayOnly ? '真临盘展示核对·不入业绩'
+          : ((it.kickTs && it.kickTs < Date.now()) ? '已过开赛·比分待核' : '未开赛'))) + '</span>';
         if (it.res){
           var vc = it.res.verdict === '受让赢盘' || it.res.verdict === '受让赢半' ? '#7ee2a8'
                  : (it.res.verdict === '走盘' ? '#94a3b8' : '#ff9a9a');
@@ -10240,9 +10243,14 @@ function fundplateHistoryHTML(){
         var hm = isW ? String(it.home||'')  : (_fpName(be.homeId,be.home,be.homeZht) || _cleanName(be.home||''));
         var aw = isW ? String(it.away||'')  : (_fpName(be.awayId,be.away,be.awayZht) || _cleanName(be.away||''));
         var lg = isW ? String(it.league||'') : (_fpName(null,be.league,'') || _cleanName(be.league||''));
-        var badge = isW ? '<span style="color:#fbbf24">观察区·未入围</span>'
+        /* ★2026-11-25 分层门槛：有观察方向的场不再一律标"观察区·未入围"（用户："不要错过好比赛，不要漏而已"）。
+           短序列观察档(10~19帧+齐+同向+真临盘)已给展示方向，徽章改为"观察方向已给·仅展示"，
+           原因用 late.why 的门槛判定（不再拿"未取得北单快照"这类流水账当主因误导）。 */
+        var _hasDir = isW && it.watchDir && (it.watchDir.side==='weak'||it.watchDir.side==='strong');
+        var badge = isW ? (_hasDir ? '<span style="color:#7dd3fc">观察方向已给·仅展示</span>'
+                                   : '<span style="color:#fbbf24">观察区·未入围</span>')
                         : '<span style="color:#34d399">账本区·已登记</span>';
-        var why = esc(String(isW ? (it.watchWhy||'') : (it.why||'')));
+        var why = esc(String(isW ? ((it.late && it.late.why && _hasDir) ? it.late.why : (it.watchWhy||'')) : (it.why||'')));
         var whyHtml = '<div style="font-size:10px;color:#b9c7d8;line-height:1.5;max-width:150px">'+badge+(why?'<br>'+why:'')+'</div>';
         var seqHtml = '<div style="font-size:10.5px;line-height:1.55;color:#cbd5e1">'
           + _segT('①竞彩had', seg.jc)

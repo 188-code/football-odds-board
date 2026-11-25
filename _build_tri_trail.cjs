@@ -1209,26 +1209,46 @@ function _abGate(x, nowMs, tsFn, sgnFn) {
   const signs = (x.align && x.align.signs) || [];
   const pos = signs.filter(s => s > 0).length, neg = signs.filter(s => s < 0).length;
   const dom = pos > neg ? 1 : (neg > pos ? -1 : 0);
-  const valid = ends.filter(v => v.n >= 20 && Math.abs(v.net) >= 8);
-  const domNets = dom ? valid.filter(v => sgnFn(v.net) === dom).map(v => v.net) : [];
+  const sameN = (x.align && x.align.same) || 0;
+  /* ★2026-11-25 分层方向门槛（用户："不要错过好比赛，不要漏而已"）：
+     原唯一门槛 n>=20 && |net|>=8 把"序列齐+同向+真临盘但帧数10~19"的好比赛判成"无明确方向"，
+     全库 271 观察场里正好卡掉 3 场（含用户截图的大阪钢巴/鹿岛鹿角）。
+     - 强证据档 n>=20 && |net|>=8 → 原逻辑一字不动，可入临盘账本(promoted)；
+     - 短序列观察档 n>=10 && |net|>=5，且 序列齐(x.ok)+同向(same>=2)+真临盘(fresh) →
+       只给【展示方向】(displayOnly)，绝不 promoted、绝不进 ROI/投注建议、不写冻结文件。
+     不降低强方向护栏，只是不再把这类好比赛埋成"无明确方向"。 */
+  const validStrong = ends.filter(v => v.n >= 20 && Math.abs(v.net) >= 8);
+  const validShort = ends.filter(v => v.n >= 10 && Math.abs(v.net) >= 5);
+  const domNetsStrong = dom ? validStrong.filter(v => sgnFn(v.net) === dom).map(v => v.net) : [];
+  const domNetsShort = dom ? validShort.filter(v => sgnFn(v.net) === dom).map(v => v.net) : [];
   // 冻结 sidecar 没赶上的已开赛场：用同一数据口径现算展示方向，只入 displayOnly，不写冻结文件。
-  let dir = x.watchDir || null, computed = false;
-  if (!dir && dom && domNets.length) {
-    dir = { side: dom > 0 ? 'weak' : 'strong', frozenAt: null,
-      netAtFreeze: +(domNets.reduce((s, v) => s + v, 0) / domNets.length).toFixed(2),
-      sameN: (x.align && x.align.same) || 0, nEnds: valid.length,
-      lead: (x.align && x.align.lead) || null, flips: [], watchOnly: true, displayComputed: true };
-    computed = true;
+  let dir = x.watchDir || null, computed = false, shortSeq = false;
+  if (!dir && dom) {
+    let nets = domNetsStrong, vN = validStrong.length;
+    // 强档无方向时，短序列观察档仅作展示（真临盘+序列齐+同向硬前置）
+    if (!nets.length && fresh && x.ok && sameN >= 2 && domNetsShort.length) {
+      nets = domNetsShort; vN = validShort.length; shortSeq = true;
+    }
+    if (nets.length) {
+      dir = { side: dom > 0 ? 'weak' : 'strong', frozenAt: null,
+        netAtFreeze: +(nets.reduce((s, v) => s + v, 0) / nets.length).toFixed(2),
+        sameN, nEnds: vN, lead: (x.align && x.align.lead) || null, flips: [],
+        watchOnly: true, displayComputed: true, shortSeq };
+      computed = true;
+    }
   }
   const sideOk = !!(dir && (dir.side === 'weak' || dir.side === 'strong'));
   const preKick = !!(x.kickTs && x.kickTs > nowMs);
   const nEnds = (x.flags && x.flags.nSrc) || ends.length;
-  const promoted = !!(fresh && preKick && x.ok && nEnds >= 2 && sideOk);
+  // ★ promoted 只认强证据档：短序列展示方向绝不入临盘账本分母
+  const strongSide = !!(x.watchDir && ['weak', 'strong'].indexOf(x.watchDir.side) >= 0) || domNetsStrong.length > 0;
+  const promoted = !!(fresh && preKick && x.ok && nEnds >= 2 && sideOk && strongSide);
   const displayOnly = !!(fresh && sideOk && !promoted);
   const why = promoted ? '' : (!fresh ? '无真临盘(末帧>' + LATE_FRESH_MIN + '分钟)·不入围'
-    : displayOnly ? (preKick ? '单端真临盘·展示核对不入账' : '已开赛真临盘强信号·展示核对不入账') : '无明确方向');
+    : displayOnly ? (shortSeq ? '短序列观察方向·序列齐同向·仅展示不入账'
+      : (preKick ? '单端真临盘·展示核对不入账' : '已开赛真临盘强信号·展示核对不入账')) : '无明确方向');
   return { dir, computed, promoted, promotedDisplay: !!(promoted || displayOnly), displayOnly,
-    fresh, gapMin, end: best && best.k, why };
+    fresh, gapMin, end: best && best.k, why, shortSeq };
 }
 for (const [key, b] of wb) {
   const mt = b.tid ? eu365Meta.get(b.tid) : null, conflict = !!(b.scheduleConflict || (mt && mt.conflict));
