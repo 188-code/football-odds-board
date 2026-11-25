@@ -1,18 +1,18 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-25T11:48:58.196Z",
+  "updated": "2026-11-25T15:36:55.358Z",
   "summary": {
-    "total": 71,
+    "total": 72,
     "byTier": {
       "强推": 9,
       "精选": 9,
-      "优选": 18,
+      "优选": 19,
       "观察": 35
     },
     "byDay": {
       "2026-11-23": 10,
       "2026-11-21": 14,
-      "2026-11-26": 7,
+      "2026-11-26": 8,
       "2026-11-25": 5,
       "2026-11-22": 12,
       "2026-11-20": 7,
@@ -20,11 +20,11 @@
       "2026-11-19": 1,
       "2026-11-18": 8
     },
-    "withLine": 71,
+    "withLine": 72,
     "settledByLine": 46,
     "deepOddsGuard": 35,
-    "withOverheatFade": 66,
-    "overheatConflict": 66,
+    "withOverheatFade": 67,
+    "overheatConflict": 67,
     "tierStat": {
       "强推": {
         "n": 9,
@@ -53,7 +53,7 @@
         }
       },
       "优选": {
-        "n": 18,
+        "n": 19,
         "mnl": {
           "n": 10,
           "hit": 7,
@@ -381,7 +381,7 @@
         },
         "bd": null
       },
-      "line": -7.5,
+      "line": -6.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-25T14:38:01+08:00",
       "locked": true,
@@ -600,7 +600,7 @@
         },
         "bd": null
       },
-      "line": -4.5,
+      "line": -5.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-25T14:38:02+08:00",
       "locked": true,
@@ -1840,7 +1840,7 @@
         },
         "bd": null
       },
-      "line": 4.5,
+      "line": 3.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-25T17:57:52+08:00",
       "locked": true,
@@ -1949,6 +1949,134 @@
         "sameAsOurs": false,
         "heatScore": 2,
         "verdict": "一盘大热主·北单共振→站对面(客)"
+      }
+    },
+    {
+      "id": "2043038",
+      "day": "2026-11-26",
+      "league": "美国职业篮球联盟",
+      "home": "夏洛特黄蜂",
+      "away": "芝加哥公牛",
+      "kickTs": 1795651200,
+      "tier": "优选",
+      "hot": "home",
+      "hotName": "夏洛特黄蜂",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 3.1,
+      "strongP": 58.9,
+      "blendP": 57.7,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.63,
+        "jcMnl": {
+          "home": 1.52,
+          "away": 1.92
+        },
+        "euMnl": {
+          "home": 1.63,
+          "away": 2.34
+        },
+        "bd": null
+      },
+      "line": -2.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T18:12:56+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 58.9,
+          "hot": "home"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 55.8,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 夏洛特黄蜂)",
+      "advice": null,
+      "deepOddsRisk": false,
+      "strongOdds": 1.63,
+      "hotFlag": false,
+      "heatScore": 1,
+      "overheatFade": null
+    },
+    {
+      "id": "2043039",
+      "day": "2026-11-26",
+      "league": "美国职业篮球联盟",
+      "home": "纽约尼克斯",
+      "away": "克利夫兰骑士",
+      "kickTs": 1795653000,
+      "tier": "优选",
+      "hot": "home",
+      "hotName": "纽约尼克斯",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 0,
+      "strongP": 57.3,
+      "blendP": 57.4,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.48,
+        "jcMnl": {
+          "home": 1.48,
+          "away": 1.99
+        },
+        "euMnl": null,
+        "bd": {
+          "home": 1.74,
+          "away": 2.34,
+          "line": "-3.5"
+        }
+      },
+      "line": -2.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T14:21:30+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 57.3,
+          "hot": "home"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 57.4,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 纽约尼克斯)",
+      "advice": null,
+      "deepOddsRisk": false,
+      "strongOdds": 1.48,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "away",
+        "team": "克利夫兰骑士",
+        "text": "过热反向·站客 克利夫兰骑士",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热主·北单分歧→降档"
       }
     },
     {
@@ -2203,66 +2331,6 @@
         "heatScore": 1,
         "verdict": "一盘大热客·仅一盘→站对面(主)"
       }
-    },
-    {
-      "id": "2043038",
-      "day": "2026-11-26",
-      "league": "美国职业篮球联盟",
-      "home": "夏洛特黄蜂",
-      "away": "芝加哥公牛",
-      "kickTs": 1795651200,
-      "tier": "优选",
-      "hot": "home",
-      "hotName": "夏洛特黄蜂",
-      "pickSide": "home",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 7.4,
-      "strongP": 58.9,
-      "blendP": 56,
-      "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.63,
-        "jcMnl": {
-          "home": 1.65,
-          "away": 1.75
-        },
-        "euMnl": {
-          "home": 1.63,
-          "away": 2.34
-        },
-        "bd": null
-      },
-      "line": -1.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T18:12:56+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 58.9,
-          "hot": "home"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 51.5,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 夏洛特黄蜂)",
-      "advice": null,
-      "deepOddsRisk": false,
-      "strongOdds": 1.63,
-      "hotFlag": false,
-      "heatScore": 1,
-      "overheatFade": null
     },
     {
       "id": "2042878",
