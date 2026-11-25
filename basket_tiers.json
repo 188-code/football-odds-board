@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_follow_strong_20261124",
-  "updated": "2026-11-25T01:21:08.946Z",
+  "updated": "2026-11-25T02:44:56.615Z",
   "summary": {
     "total": 64,
     "byTier": {
@@ -1133,7 +1133,7 @@
       "league": "美国职业篮球联盟",
       "home": "华盛顿奇才",
       "away": "波士顿凯尔特人",
-      "kickTs": 1795568400,
+      "kickTs": null,
       "tier": "强推",
       "hot": "away",
       "hotName": "波士顿凯尔特人",
@@ -1162,7 +1162,7 @@
       "line": 9.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-25T06:10:11+08:00",
-      "locked": true,
+      "locked": false,
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
@@ -1368,10 +1368,10 @@
       "hot": "home",
       "hotName": "丹佛掘金",
       "strongP": 72.6,
-      "blendP": 70.8,
+      "blendP": 70.7,
       "nSrc": 3,
-      "agree": 2,
-      "disagree": 1,
+      "agree": 3,
+      "disagree": 0,
       "mainSrc": "365独赢",
       "odds": {
         "strong": 1.32,
@@ -1384,8 +1384,8 @@
           "away": 3.5
         },
         "bd": {
-          "home": 2.25,
-          "away": 1.79,
+          "home": 1.82,
+          "away": 2.2,
           "line": "-8.5"
         }
       },
@@ -1409,8 +1409,8 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 44.3,
-          "hot": "away"
+          "homeP": 54.7,
+          "hot": "home"
         }
       ],
       "direction": "跟强队(主 丹佛掘金)"
@@ -2978,7 +2978,7 @@
       "league": "美国职业篮球联盟",
       "home": "奥兰多魔术",
       "away": "底特律活塞",
-      "kickTs": 1795564800,
+      "kickTs": null,
       "tier": "优选",
       "hot": "away",
       "hotName": "底特律活塞",
@@ -3007,7 +3007,7 @@
       "line": 2.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-25T06:40:33+08:00",
-      "locked": true,
+      "locked": false,
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
