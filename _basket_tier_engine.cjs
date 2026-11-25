@@ -20,9 +20,18 @@ const ROOT = __dirname + path.sep;
 const DDIR = 'D:/北单竞彩数据/篮球/快照流水' + path.sep;
 const HEAT = ROOT + 'basket_overheat.json';
 const LEDGER = ROOT + 'basket_dir_ledger.json';
+const HEAT_RAW = ROOT + 'basket_heat.json';   // ★ 2026-11-25：补 kickTs（新场在过热板/账本尚无条目）
 const RESULT = ROOT + 'basket_result.json';
 const OUT = ROOT + 'basket_tiers.json';
-const VERSION = 'basket_tier_follow_strong_20261124';
+/* ★2026-11-25 v2 方向口径修正（用户截图两场 ★★ 精选复盘）：
+   1) 深盘(|line|>8)跟大热门独赢实测为负边：全样本 n=19 跟强队 ROI -33.8% vs 站对面 +68.8%；
+      训练段(11-18~23,n=11) -18.8% vs +16.6%，留出段(11-23~25,n=8) -54.4% vs +140.6%，两段同向。
+      按项目铁律「一盘竞彩 mnl 隐含概率高方=大热门→站对面」，深盘翻到受让/冷门独赢一侧。
+      中浅盘(<=8)实测跟强队更优(+8.1%/+2.1%)，保持不变——不是全面推翻，是分层修正。
+   2) agree 只看方向不看强度：掘金场 72.6/75.8/54.0 spread=21.8pp 被误判 agree=3 给强推。
+      新增 lineSpread>=15pp 降一档（假分歧门控）。
+   3) 深盘 n=19<40，按铁律仍标观察档，不进 ROI 引擎/投注建议。 */
+const VERSION = 'basket_tier_deepfade_20261125';
 
 function readJSON(f, dflt) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return dflt; } }
 const num = v => { const n = +v; return Number.isFinite(n) ? n : null; };
@@ -109,6 +118,14 @@ function main() {
     const id = String(e.id || (k.split(':')[0]));
     if (e.kickTs) kickOf[id] = +e.kickTs;
   }
+  // ★ 2026-11-25 锁死护栏修复：新场尚未进方向账本时，kickTs 从 basket_heat.rows 补。
+  //   没有 kickTs 就挡不住开赛后帧（结论会一路变），故必须优先补齐；只认 captureTimeVerified 的真时刻。
+  const heatRaw = readJSON(HEAT_RAW, { rows: [] });
+  for (const r of (heatRaw.rows || [])) {
+    const id = String(r.id || '');
+    if (!id || kickOf[id]) continue;
+    if (r.kickTs && r.captureTimeVerified === true) kickOf[id] = +r.kickTs;
+  }
   const frames = collectFrames(kickOf);
   const items = [];
   for (const x of (heat.items || [])) {
@@ -116,37 +133,52 @@ function main() {
     const fr = frames[id] || {};
     const info = pickStrong(fr);
     if (!info) continue;
-    const tier = tierOf(info);
-    if (tier === '观察') continue;
-    const hotName = info.hot === 'home' ? x.home : x.away;
-    // 让分线（竞彩优先）
+    // 让分线（竞彩优先）——方向判据要用到盘口深度，必须在 tier 之前取
     const hdc = fr.jc_hdc || fr.eu_hdc || null;
     const line = hdc ? num(hdc.line) : null;
+    // ★方向：深盘站对面(受让/冷门)，中浅盘跟强队；pickSide=本次真正推荐的独赢方
+    const deep = line !== null && Math.abs(line) > 8;
+    const pickSide = deep ? (info.hot === 'home' ? 'away' : 'home') : info.hot;
+    const pickName = pickSide === 'home' ? x.home : x.away;
+    // ★假共振门控：三源强度分歧>=15pp 时降一档（方向一致但强度已分裂，不能当铁共振）
+    const homePs = info.sources.map(s => s.homeP);
+    const spread = homePs.length ? Math.max(...homePs) - Math.min(...homePs) : 0;
+    let tier = tierOf(info);
+    if (spread >= 15 && tier !== '观察') tier = tier === '强推' ? '精选' : tier === '精选' ? '优选' : '观察';
+    if (tier === '观察') continue;
+    const hotName = info.hot === 'home' ? x.home : x.away;  // 强队名（统计口径，不随 pickSide 变）
+    void pickName; // direction 用 pickName 展示推荐方，hotName 保持强队语义
     // 已完赛：按真实让分线核对跟强队方向（让分盘赢盘方）
     let settled = null, settleNote = null;
     const rHdc = result[id + ':hdc'];
     if (rHdc && rHdc.verified === true && rHdc.result && line !== null) {
-      // rHdc.result=winning side by line (home/away)
-      settled = rHdc.result === info.hot ? 'hitByLine' : 'missByLine';
+      // rHdc.result=winning side by line (home/away)；按本次推荐方(pickSide)判，不再固定 hot
+      settled = rHdc.result === pickSide ? 'hitByLine' : 'missByLine';
       settleNote = '让分线' + line + ' · ' + (rHdc.score || '') + ' · ' + (rHdc.src || '');
     }
-    // 独赢赛果（跟强队方向）
+    // 独赢赛果（按本次推荐方 pickSide：深盘=站对面，中浅盘=跟强队）
     const rMnl = result[id + ':mnl'];
     let mnlWin = null;
-    if (rMnl && rMnl.verified === true && rMnl.result) mnlWin = rMnl.result === info.hot ? 'hit' : 'miss';
+    if (rMnl && rMnl.verified === true && rMnl.result) mnlWin = rMnl.result === pickSide ? 'hit' : 'miss';
     items.push({
       id, day: x.day, league: x.league, home: x.home, away: x.away,
       kickTs: kickOf[id] || null,
       tier, hot: info.hot, hotName,
+      pickSide, directionRule: deep ? '深盘站对面(|line|>8)' : '跟强队',
+      deep, lineSpread: +spread.toFixed(1),
       strongP: info.strongP, blendP: info.blendP, nSrc: info.nSrc,
       agree: info.agree, disagree: info.disagree, mainSrc: info.mainSrc,
       odds: { strong: info.strongOdds, jcMnl: fr.jc_mnl ? fr.jc_mnl.quote : null,
               euMnl: fr.eu_mnl ? fr.eu_mnl.quote : null, bd: fr.bd_sfgg ? fr.bd_sfgg.quote : null },
       line, lineSrc: hdc ? (hdc.source + '/' + hdc.market) : null,
       capturedAt: (fr[info.mainSrc === '365独赢' ? 'eu_mnl' : info.mainSrc === '竞彩独赢' ? 'jc_mnl' : 'bd_sfgg'] || {}).observed_at || null,
+      // ★ 2026-11-25 锁死状态：有真开赛时刻→赛前帧被硬挡，开赛后结论不再变；无 kickTs→帧会继续进来，标未锁死
+      locked: !!kickOf[id],
       settledByLine: settled, settleNote, mnlWin,
+      // ★ 已核验的让分赢盘方（不是预测方向）：供对照外部软件「主让N·推荐X队方向」的让分口径。
+      lineWinSide: (rHdc && rHdc.verified === true && ['home', 'away'].includes(rHdc.result)) ? rHdc.result : null,
       sources: info.sources,
-      direction: '跟强队(' + (info.hot === 'home' ? '主' : '客') + ' ' + hotName + ')',
+      direction: (deep ? '深盘站对面(' : '跟强队(') + (pickSide === 'home' ? '主' : '客') + ' ' + pickName + ')',
     });
   }
   // 分档排序：强推>精选>优选，同档按强度降序，日期降序
@@ -173,9 +205,10 @@ function main() {
     withLine: items.filter(x => x.line !== null).length,
     settledByLine: items.filter(x => x.settledByLine).length,
     tierStat,
-    sourceNote: 'D盘快照流水真实临盘帧；赛前<kickTs硬过滤；跟强队=独赢方向；档位=信号强度分级',
-    settleNote: '结算主口径=独赢(跟强队是否赢球)；让分线仅参考展示(强队赢球≠赢盘，深盘打不住)',
-    risk: '观察分档 n=25<40、ROI z≈0，未达进引擎铁律，不进方向账本/ROI/投注建议',
+    sourceNote: 'D盘快照流水真实临盘帧；赛前<kickTs硬过滤；深盘(|line|>8)=站对面受让/冷门独赢、中浅盘=跟强队；档位=信号强度分级；lineSpread>=15pp 假共振降一档',
+    settleNote: '结算主口径=按本表推荐方(pickSide)的独赢胜负；深盘推荐受让/冷门，中浅盘推荐强队；lineWinSide=已核验让分赢盘方，供对照外部软件「主让N·推荐X队方向」的受让口径',
+    risk: '观察分档未达进引擎铁律(n<40 / ROI z / 训练留出同向)，不进方向账本/ROI/投注建议；深盘站对面分层训练+留出同向但 n=19，继续累积',
+    directionEvidence: '深盘|line|>8 n=19 跟强队独赢 11/19=57.9% ROI-33.8% vs 站对面 8/19=42.1% ROI+68.8%；训练(11场)-18.8%/+16.6%、留出(8场)-54.4%/+140.6% 两段同向；去最高赔1场仍+78.2%；中盘5-8跟强队+8.1%、浅盘<=5+2.1% 故不翻',
   };
   const out = { version: VERSION, updated: new Date().toISOString(), summary, items };
   fs.writeFileSync(OUT, JSON.stringify(out, null, 2));
