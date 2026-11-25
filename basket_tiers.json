@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-25T17:43:30.020Z",
+  "updated": "2026-11-25T18:44:48.657Z",
   "summary": {
     "total": 72,
     "byTier": {
@@ -2317,74 +2317,6 @@
       "overheatFade": null
     },
     {
-      "id": "2043039",
-      "day": "2026-11-26",
-      "league": "美国职业篮球联盟",
-      "home": "纽约尼克斯",
-      "away": "克利夫兰骑士",
-      "kickTs": 1795653000,
-      "tier": "优选",
-      "hot": "home",
-      "hotName": "纽约尼克斯",
-      "pickSide": "home",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 0,
-      "strongP": 57.3,
-      "blendP": 55.5,
-      "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.48,
-        "jcMnl": {
-          "home": 1.48,
-          "away": 1.99
-        },
-        "euMnl": null,
-        "bd": {
-          "home": 1.92,
-          "away": 2.07,
-          "line": "-3.5"
-        }
-      },
-      "line": -2.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T14:21:30+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 57.3,
-          "hot": "home"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 51.9,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 纽约尼克斯)",
-      "advice": null,
-      "deepOddsRisk": false,
-      "strongOdds": 1.48,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "away",
-        "team": "克利夫兰骑士",
-        "text": "过热反向·站客 克利夫兰骑士",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热主·北单分歧→降档"
-      }
-    },
-    {
       "id": "2043032",
       "day": "2026-11-25",
       "league": "美国职业篮球联盟",
@@ -2458,6 +2390,74 @@
         "sameAsOurs": false,
         "heatScore": 2,
         "verdict": "一盘大热客·北单共振→站对面(主)"
+      }
+    },
+    {
+      "id": "2043039",
+      "day": "2026-11-26",
+      "league": "美国职业篮球联盟",
+      "home": "纽约尼克斯",
+      "away": "克利夫兰骑士",
+      "kickTs": 1795653000,
+      "tier": "优选",
+      "hot": "home",
+      "hotName": "纽约尼克斯",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 0,
+      "strongP": 57.3,
+      "blendP": 55.4,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.48,
+        "jcMnl": {
+          "home": 1.48,
+          "away": 1.99
+        },
+        "euMnl": null,
+        "bd": {
+          "home": 1.94,
+          "away": 2.06,
+          "line": "-3.5"
+        }
+      },
+      "line": -2.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T14:21:30+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 57.3,
+          "hot": "home"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 51.5,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 纽约尼克斯)",
+      "advice": null,
+      "deepOddsRisk": false,
+      "strongOdds": 1.48,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "away",
+        "team": "克利夫兰骑士",
+        "text": "过热反向·站客 克利夫兰骑士",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热主·北单分歧→降档"
       }
     },
     {
