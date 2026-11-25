@@ -81,8 +81,21 @@
     function signed(n) { return (n > 0 ? '+' : '') + n.toFixed(2); }
     return ls[0] + ' ' + signed((pb.a - pa.a) * 100) + ' pp / ' + ls[1] + ' ' + signed((pb.b - pa.b) * 100) + ' pp';
   }
+  /* 2026-11-25：旧版把 errors 全量 join 后塞进每一场详情，页面可膨胀到 75 万字符。
+     改为归并摘要（同型×N + 前若干条首行），完整原文仍留在 basket_heat.json，不删数据。 */
   function sourceErrors(data, source) {
-    return list(object(object(data.sourceStatus)[source]).errors).map(text).filter(Boolean).join('；');
+    const errs = list(object(object(data.sourceStatus)[source]).errors).map(text).filter(Boolean);
+    if (!errs.length) return '';
+    const buckets = new Map();
+    errs.forEach(raw => {
+      const one = String(raw).split(/\r?\n/)[0].replace(/^\s*\d{6,8}:\s*/, '').trim();
+      const key = /<!DOCTYPE|<html/i.test(String(raw)) ? '源站拦截页（HTML 正文已省略）'
+        : /HTTP\s*567/.test(one) ? '源站 HTTP 567 访问限制' : (one || '未分类错误');
+      buckets.set(key, (buckets.get(key) || 0) + 1);
+    });
+    const top = Array.from(buckets.entries()).sort((a, b) => b[1] - a[1]).slice(0, 2)
+      .map(x => x[0].slice(0, 64) + (x[1] > 1 ? '×' + x[1] : '')).join('；');
+    return '共 ' + errs.length + ' 条：' + top + (buckets.size > 2 ? '，另有 ' + (buckets.size - 2) + ' 类' : '');
   }
   function euIdentity(row) {
     const match = object(row.euMatch);
@@ -102,11 +115,16 @@
     const rejected = object(evidence[source === 'eu' ? 'euRejected' : 'bdRejected']);
     const linked = source === 'eu' && euIdentity(row);
     const blocked = source === 'eu' && euBlocked(row);
-    const reasons = [text(status.reason), text(endpoint.sourceError),
-      blocked ? text(object(status.blockEvidence).pageText) || text(object(endpoint.blockEvidence).pageText) || '源站访问受限，已停用，不绕过重试' : '',
+    const reasons = [clipReason(text(status.reason)), clipReason(text(endpoint.sourceError)),
+      blocked ? clipReason(text(object(status.blockEvidence).pageText) || text(object(endpoint.blockEvidence).pageText)) || '源站访问受限，已停用，不绕过重试' : '',
       text(endpoint.reason), text(object(endpoint.marketErrors)[market]), sourceErrors(data, source),
       !linked && !blocked ? text(rejected[row.id]) : '', !linked && !blocked ? text(evidence.externalLinkBlocker) : ''];
     return Array.from(new Set(reasons.filter(Boolean))).join('；') || '采集结果未提供本场此端报价，不能推定已取得';
+  }
+  function clipReason(s) {
+    s = text(s);
+    if (/<!DOCTYPE|<html/i.test(s)) return '源站返回拦截页（HTML 正文略，完整原文见 JSON）';
+    return s.length > 160 ? s.slice(0, 160) + '…' : s;
   }
   function flag(value, yes, no) { return value === true ? yes : value === false ? no : '未核实'; }
   function staleText(row, endpoint) {
@@ -658,16 +676,50 @@
       '<p><strong>证据与迁移边界：</strong>不采纳“庄家永不亏”“100%真实资金”等无统计验证的断言；没有经过篮球按时间留出 / 前向验证，不输出强推或下注信号。胜率：尚未建立 / 待前向样本；ROI：尚未建立 / 待前向样本，不用 0% 冒充战绩。</p>' +
       '<p>数据白名单：basket-observe-1.1 的竞彩 basketball 接口比赛 ID；仅读取同源 basket_heat.json，不混入足球 MATCHES、足球热度分或其他赛程候选。独立采集流水目录 D:/北单竞彩数据/篮球（原始响应 / 快照流水）；本前端不访问本机目录，也不把 Bet365 候选赛程数当作已关联场数。</p></details>';
   }
+  /* 2026-11-25 来源状态折叠：原始 errors 可达数百条（含整页 HTML 拦截页），
+     旧版把 sourceErrors() 全量拼进一个 <p>，白占整屏且拖慢渲染。
+     现在主视图只留三源状态摘要；原始错误全文放默认收起的 <details>，限长不丢关键首行。 */
+  function errorClasses(data, source) {
+    const buckets = new Map();
+    list(object(object(data.sourceStatus)[source]).errors).map(text).filter(Boolean).forEach(raw => {
+      const one = String(raw).split(/\r?\n/)[0].replace(/^\s*\d{6,8}:\s*/, '').trim();
+      let key = /<!DOCTYPE|<html/i.test(String(raw)) ? '源站拦截页（HTML 正文已省略）'
+        : /HTTP\s*567/.test(one) ? '源站 HTTP 567 访问限制' : (one || '未分类错误');
+      if (key.length > 64) key = key.slice(0, 64) + '…';
+      buckets.set(key, (buckets.get(key) || 0) + 1);
+    });
+    return Array.from(buckets.entries()).sort((a, b) => b[1] - a[1]);
+  }
   function statusHTML(data) {
-    return Object.keys(SOURCES).map(source => {
+    const sources = Object.keys(SOURCES);
+    const brief = sources.map(source => {
       const s = object(object(data.sourceStatus)[source]);
+
+      const n = list(s.errors).length;
+      return SOURCES[source].replace(/（[^）]*）/, '') + ' ' + (STATES[s.state] || s.state || '未知') + (n ? '·异常' + n : '');
+    }).join('　');
+    const cards = sources.map(source => {
+      const s = object(object(data.sourceStatus)[source]);
+      const times = s.state === 'cached_sample'
+        ? '导入 ' + moment(s.imported_at) + '；原始采集 ' + moment(s.observed_at) + '；核验 ' + flag(s.captureTimeVerified, '已核', '未核')
+        : '尝试 ' + moment(s.attempted_at) + '；最近成功 ' + moment(s.lastSuccess);
+      const note = source === 'eu' ? '候选赛程，不是已取报价' : source === 'bd' ? '源侧记录，不是已关联数' : '源侧有效名单';
+      const classes = errorClasses(data, source);
+      const total = classes.reduce((a, x) => a + x[1], 0);
+      const digest = classes.slice(0, 2).map(x => x[0] + (x[1] > 1 ? '×' + x[1] : '')).join('；');
+      const more = classes.length > 2 ? '，另有 ' + (classes.length - 2) + ' 类' : '';
+      const tail = [clipReason(text(s.reason)), s.stopped === true ? '此源已停用，不绕过重试' : ''].filter(Boolean).join('；');
       return '<div class="bh-status" data-basket-source-status="' + source + '"><strong>' + SOURCES[source] + ' · ' +
-        esc(STATES[s.state] || s.state || '未知') + '</strong>' + (s.state === 'cached_sample' ? '<p>导入时间 ' + moment(s.imported_at) +
-        '<br>原始采集时刻 ' + moment(s.observed_at) + '；采集时刻核验 ' + flag(s.captureTimeVerified, '已核', '未核') + '</p>' :
-        '<p>尝试 ' + moment(s.attempted_at) + '<br>最近成功 ' + moment(s.lastSuccess) + '</p>') +
-        '<p>源返回计数 ' + fmt(s.count, 0) + '（' + (source === 'eu' ? '候选赛程，不是已取报价' : source === 'bd' ? '源侧记录，不是已关联数' : '源侧有效名单') + '）</p>' +
-        '<p class="bh-missing">' + esc(sourceErrors(data, source)) + (s.reason ? '；' + esc(s.reason) : '') + (s.stopped === true ? '；此源已停用，不绕过重试' : '') + '</p></div>';
+        esc(STATES[s.state] || s.state || '未知') + '</strong>' +
+        '<p class="bh-muted">' + esc(times) + '</p>' +
+        '<p class="bh-muted">源返回计数 ' + fmt(s.count, 0) + '（' + note + '）</p>' +
+        (total ? '<p class="bh-missing">采集异常 ' + total + ' 条：' + esc(digest + more) + '</p>' +
+          '<details class="bh-err-fold"><summary>查看异常分类（' + classes.length + ' 类，原始全文未删除）</summary><ol>' +
+          classes.slice(0, 20).map(x => '<li>' + esc(x[0]) + '（' + x[1] + ' 次）</li>').join('') + '</ol>' +
+          '<p class="bh-muted">同型错误归并计数；完整原文仍在 basket_heat.json 的 sourceStatus.' + source + '.errors。</p></details>' : '') +
+        (tail ? '<p class="bh-missing">' + esc(tail) + '</p>' : '') + '</div>';
     }).join('');
+    return '<details class="bh-sources-fold"><summary>数据源状态（点开查看）：' + esc(brief) + '</summary><div class="bh-statuses">' + cards + '</div></details>';
   }
   function render() {
     if (!state.data) return;
@@ -827,6 +879,11 @@
 #basketHeatModal .bh-mode-warning{padding:14px;margin:10px 0;border:3px solid currentColor;border-radius:10px;font-size:16px;font-weight:800;background:var(--bg,#0f1419);color:var(--fg,var(--txt,#e6edf3))}
 #basketHeatModal .bh-error{border:2px solid currentColor;font-weight:700}#basketHeatModal .bh-muted,#basketHeatModal .bh-missing{color:var(--mut,#8b98a9)}
 #basketHeatModal .bh-missing{overflow-wrap:anywhere}#basketHeatModal .bh-statuses,#basketHeatModal .bh-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#basketHeatModal .bh-sources-fold{margin:10px 0;padding:8px 10px;border:1px solid var(--line,#2c3848);border-radius:8px;background:var(--bg,#0f1419)}
+#basketHeatModal .bh-sources-fold>summary{font-size:12px;color:var(--mut,#8b98a9);font-weight:600}
+#basketHeatModal .bh-err-fold{margin-top:6px}#basketHeatModal .bh-err-fold>summary{font-size:12px;font-weight:600}
+#basketHeatModal .bh-err-fold ol{margin:6px 0;padding-left:20px;max-height:180px;overflow:auto}
+#basketHeatModal .bh-err-fold li{font-size:12px;overflow-wrap:anywhere;margin:3px 0}
 #basketHeatModal .bh-status,#basketHeatModal .bh-source{padding:12px;border:1px solid var(--line,#2c3848);border-radius:10px;min-width:0;background:var(--bg,#0f1419)}
 #basketHeatModal .bh-match{margin:16px 0;border:1px solid var(--line,#2c3848);border-radius:12px;padding:14px;background:var(--card,#1a2230)}
 #basketHeatModal .bh-match header{padding-bottom:8px}#basketHeatModal .bh-match footer{margin-top:12px;border-top:1px solid var(--line,#2c3848);padding-top:10px}
