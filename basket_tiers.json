@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_strongbase_revert_20261125",
-  "updated": "2026-11-25T09:43:49.257Z",
+  "updated": "2026-11-25T10:46:15.002Z",
   "summary": {
     "total": 71,
     "byTier": {
@@ -436,7 +436,7 @@
         "euMnl": null,
         "bd": null
       },
-      "line": -8.5,
+      "line": -9.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-25T17:27:27+08:00",
       "locked": true,
@@ -1546,6 +1546,60 @@
       "direction": "跟强队(主 穆尔西亚天主大学)"
     },
     {
+      "id": "2043035",
+      "day": "2026-11-26",
+      "league": "欧洲篮球联赛",
+      "home": "迪拜",
+      "away": "贝尔格莱德游击",
+      "kickTs": 1795622400,
+      "tier": "强推",
+      "hot": "home",
+      "hotName": "迪拜",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 0.5,
+      "strongP": 71.4,
+      "blendP": 71.6,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.32,
+        "jcMnl": {
+          "home": 1.18,
+          "away": 3.02
+        },
+        "euMnl": {
+          "home": 1.32,
+          "away": 3.3
+        },
+        "bd": null
+      },
+      "line": -6.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T17:57:47+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 71.4,
+          "hot": "home"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 71.9,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 迪拜)"
+    },
+    {
       "id": "2043034",
       "day": "2026-11-25",
       "league": "美国职业篮球联盟",
@@ -1607,60 +1661,6 @@
         }
       ],
       "direction": "跟强队(主 丹佛掘金)"
-    },
-    {
-      "id": "2043035",
-      "day": "2026-11-26",
-      "league": "欧洲篮球联赛",
-      "home": "迪拜",
-      "away": "贝尔格莱德游击",
-      "kickTs": 1795622400,
-      "tier": "强推",
-      "hot": "home",
-      "hotName": "迪拜",
-      "pickSide": "home",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 2.4,
-      "strongP": 69.5,
-      "blendP": 70.5,
-      "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.36,
-        "jcMnl": {
-          "home": 1.18,
-          "away": 3.02
-        },
-        "euMnl": {
-          "home": 1.36,
-          "away": 3.1
-        },
-        "bd": null
-      },
-      "line": -6.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T11:18:40+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 69.5,
-          "hot": "home"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 71.9,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 迪拜)"
     },
     {
       "id": "2042956",
@@ -3128,60 +3128,6 @@
       "direction": "跟强队(客 伊斯坦布尔埃菲斯)"
     },
     {
-      "id": "2043045",
-      "day": "2026-11-26",
-      "league": "美国职业篮球联盟",
-      "home": "波特兰开拓者",
-      "away": "圣安东尼奥马刺",
-      "kickTs": 1795662000,
-      "tier": "优选",
-      "hot": "away",
-      "hotName": "圣安东尼奥马刺",
-      "pickSide": "away",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 2.4,
-      "strongP": 58.2,
-      "blendP": 59.2,
-      "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.65,
-        "jcMnl": {
-          "home": 2.15,
-          "away": 1.4
-        },
-        "euMnl": {
-          "home": 2.3,
-          "away": 1.65
-        },
-        "bd": null
-      },
-      "line": 4.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T14:38:02+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 41.8,
-          "hot": "away"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 39.4,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 圣安东尼奥马刺)"
-    },
-    {
       "id": "2043031",
       "day": "2026-11-25",
       "league": "欧洲篮球联赛",
@@ -3281,6 +3227,60 @@
         }
       ],
       "direction": "跟强队(客 洛杉矶快船)"
+    },
+    {
+      "id": "2043045",
+      "day": "2026-11-26",
+      "league": "美国职业篮球联盟",
+      "home": "波特兰开拓者",
+      "away": "圣安东尼奥马刺",
+      "kickTs": 1795662000,
+      "tier": "优选",
+      "hot": "away",
+      "hotName": "圣安东尼奥马刺",
+      "pickSide": "away",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 2.8,
+      "strongP": 57.8,
+      "blendP": 58.9,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.66,
+        "jcMnl": {
+          "home": 2.15,
+          "away": 1.4
+        },
+        "euMnl": {
+          "home": 2.27,
+          "away": 1.66
+        },
+        "bd": null
+      },
+      "line": 4.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T17:57:52+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 42.2,
+          "hot": "away"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 39.4,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 圣安东尼奥马刺)"
     },
     {
       "id": "2042984",
@@ -3559,8 +3559,8 @@
       "pickSide": "home",
       "directionRule": "跟强队(独赢隐含高方)",
       "deep": false,
-      "lineSpread": 7.5,
-      "strongP": 59,
+      "lineSpread": 7.4,
+      "strongP": 58.9,
       "blendP": 56,
       "nSrc": 2,
       "agree": 2,
@@ -3574,13 +3574,13 @@
         },
         "euMnl": {
           "home": 1.63,
-          "away": 2.35
+          "away": 2.34
         },
         "bd": null
       },
       "line": -1.5,
       "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T14:37:59+08:00",
+      "capturedAt": "2026-11-25T18:12:56+08:00",
       "locked": true,
       "settledByLine": null,
       "settleNote": null,
@@ -3589,7 +3589,7 @@
       "sources": [
         {
           "src": "365独赢",
-          "homeP": 59,
+          "homeP": 58.9,
           "hot": "home"
         },
         {
