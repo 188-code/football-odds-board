@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_follow_strong_20261124",
-  "updated": "2026-11-25T06:43:25.428Z",
+  "updated": "2026-11-25T06:44:46.133Z",
   "summary": {
     "total": 72,
     "byTier": {
@@ -63,7 +63,7 @@
       }
     },
     "sourceNote": "D盘快照流水真实临盘帧；赛前<kickTs硬过滤；跟强队=独赢方向；档位=信号强度分级",
-    "settleNote": "结算主口径=独赢(跟强队是否赢球)；让分线仅参考展示(强队赢球≠赢盘，深盘打不住)",
+    "settleNote": "结算主口径=独赢(跟强队是否赢球)；让分线仅参考展示(强队赢球≠赢盘，深盘打不住)；lineWinSide=已核验让分赢盘方，供对照外部软件「主让N·推荐X队方向」的受让口径，不是本表预测方向",
     "risk": "观察分档 n=25<40、ROI z≈0，未达进引擎铁律，不进方向账本/ROI/投注建议"
   },
   "items": [
@@ -99,6 +99,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -140,6 +141,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-11.5 · 87-88 · 球探完场比分 results_t7 sid=729624 皇家马德里-约文图特 87-88 | 队名严格配对(日期±2天/开赛±18h) | calc:87-11.5=75.5 vs 88 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -184,6 +186,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-12.5 · 126-120 · ESPN NBA scoreboard event=401909310 date=2026-11-21T01:00Z 新奥尔良鹈鹕120@俄克拉荷马城雷霆126 | calc:126-11.5=114.5 vs 120 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -230,6 +233,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-10.5 · 73-88 · 球探完场比分 results_t7 sid=733770 特里尔角斗士-开姆尼茨 73-88 | 队名严格配对(日期±2天/开赛±18h) | calc:73-10.5=62.5 vs 88 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -275,6 +279,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-16.5 · 114-91 · ESPN NBA scoreboard event=401910027 date=2026-11-22T01:00Z 新奥尔良鹈鹕91@圣安东尼奥马刺114 | calc:114-15.5=98.5 vs 91 → home",
       "mnlWin": null,
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -321,6 +326,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-11.5 · 92-87 · EuroLeague J13 · 瓦伦西亚官网/Sportando/球迷屋(2046113273641) · 巴伦西亚92-87博洛尼亚 | calc:92-9.5=82.5 vs 87 → away | 线取自D盘快照流水首登帧(账本无条目回退)",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -362,6 +368,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线11.5 · 114-124 · ESPN NBA scoreboard event=401910020 date=2026-11-20T01:00Z 波特兰开拓者124@密尔沃基雄鹿114 | calc:114+9.5=123.5 vs 124 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -403,6 +410,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-9.5 · 113-106 · ESPN NBA scoreboard event=401910034 date=2026-11-23T01:00Z 印第安那步行者106@纽约尼克斯113 | calc:113-8.5=104.5 vs 106 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -448,6 +456,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-14.5 · 106-104 · ESPN 20261120 Kings@Lakers 106:104 | calc:106-14.5=91.5 vs 104 → away(受让赢盘)",
       "mnlWin": null,
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -501,6 +510,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-11.5 · 132-129 · ESPN NBA scoreboard event=401910023 date=2026-11-21T18:00Z 密尔沃基雄鹿129@费城76人132 | calc:132-10.5=121.5 vs 129 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -552,6 +562,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -593,6 +604,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -637,6 +649,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-10.5 · 84-108 · 球探完场比分 results_t7 sid=723039 贝尔格莱德红星-博洛尼亚维图斯 84-108 | 队名严格配对(日期±2天/开赛±18h) | calc:84-8.5=75.5 vs 108 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -690,6 +703,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-12.5 · 142-116 · ESPN NBA scoreboard event=401910040 date=2026-11-24T00:30Z 布鲁克林篮网116@明尼苏达森林狼142 | calc:142-12.5=129.5 vs 116 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -741,6 +755,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线8.5 · 122-108 · ESPN NBA scoreboard event=401910041 date=2026-11-24T01:00Z 克利夫兰骑士108@芝加哥公牛122 | calc:122+8.5=130.5 vs 108 → home",
       "mnlWin": "miss",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -785,6 +800,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线9.5 · 88-87 · ESPN NBA scoreboard event=401910035 date=2026-11-23T01:30Z 波士顿凯尔特人87@金州勇士88 | calc:88+9.5=97.5 vs 87 → home",
       "mnlWin": "miss",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -834,6 +850,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "365独赢",
@@ -880,6 +897,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -928,6 +946,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-9.5 · 111-116 · ESPN NBA scoreboard event=401910039 date=2026-11-24T00:30Z 密尔沃基雄鹿116@多伦多猛龙111 | calc:111-9.5=101.5 vs 116 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -979,6 +998,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-7.5 · 128-119 · ESPN NBA scoreboard event=401909307 date=2026-11-21T00:30Z 印第安那步行者119@克利夫兰骑士128 | calc:128-6.5=121.5 vs 119 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1027,6 +1047,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线8.5 · 145-151 · ESPN NBA scoreboard event=401910032 date=2026-11-23T00:00Z 丹佛掘金151@芝加哥公牛145 | calc:145+8.5=153.5 vs 151 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -1078,6 +1099,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1119,6 +1141,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-8.5 · 100-81 · EuroLeague J13 · Sportando/3StepsBasket(MUNBAS-261119) · 拜仁慕尼黑100-81巴斯克尼亚 | calc:100-5.5=94.5 vs 81 → home | 线取自D盘快照流水首登帧(账本无条目回退)",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1160,6 +1183,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1208,6 +1232,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线9.5 · 116-131 · ESPN NBA scoreboard event=401909315 date=2026-11-25T01:00Z 波士顿凯尔特人131@华盛顿奇才116 | calc:116+9.5=125.5 vs 131 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -1259,6 +1284,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-6.5 · 94-91 · 球探完场比分 results_t7 sid=722284 墨尔本联-新西兰破坏者 94-91 | 队名严格配对(日期±2天/开赛±18h) | calc:94-6.5=87.5 vs 91 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1300,6 +1326,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-8.5 · 126-98 · ESPN NBA scoreboard event=401910019 date=2026-11-20T01:00Z 金州勇士98@孟菲斯灰熊126 | calc:126-4.5=121.5 vs 98 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1344,6 +1371,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-7.5 · 102-105 · ESPN NBA scoreboard event=401909308 date=2026-11-21T00:30Z 多伦多猛龙105@底特律活塞102 | calc:102-7.5=94.5 vs 105 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -1390,6 +1418,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-6.5 · 72-73 · 球探完场比分 results_t7 sid=729618 穆尔西亚-萨拉戈萨 72-73 | 队名严格配对(日期±2天/开赛±18h) | calc:72-6.5=65.5 vs 73 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1438,6 +1467,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-8.5 · 101-120 · ESPN NBA scoreboard event=401909316 date=2026-11-25T03:00Z 达拉斯独行侠120@丹佛掘金101 | calc:101-7.5=93.5 vs 120 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -1492,6 +1522,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "365独赢",
@@ -1538,6 +1569,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1579,6 +1611,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1624,6 +1657,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-10.5 · 118-114 · ESPN NBA scoreboard event=401910005 date=2026-11-18T04:00Z 夏洛特黄蜂114@洛杉矶湖人118 | calc:118-10.5=107.5 vs 114 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1677,6 +1711,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-7.5 · 111-97 · ESPN NBA scoreboard event=401909305 date=2026-11-21T00:00Z 夏洛特黄蜂97@亚特兰大老鹰111 | calc:111-6.5=104.5 vs 97 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -1732,6 +1767,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-8.5 · 107-132 · ESPN NBA scoreboard event=401910006 date=2026-11-18T03:30Z 犹他爵士132@洛杉矶快船107 | calc:107-8.5=98.5 vs 132 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -1785,6 +1821,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线7.5 · 111-113 · ESPN NBA scoreboard event=401909306 date=2026-11-21T00:30Z 奥兰多魔术113@布鲁克林篮网111 | calc:111+4.5=115.5 vs 113 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -1839,6 +1876,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "365独赢",
@@ -1888,6 +1926,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "365独赢",
@@ -1941,6 +1980,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-7.5 · 110-100 · ESPN NBA scoreboard event=401910025 date=2026-11-22T01:00Z 洛杉矶快船100@达拉斯独行侠110 | calc:110-5.5=104.5 vs 100 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -1992,6 +2032,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2033,6 +2074,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2074,6 +2116,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2115,6 +2158,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2156,6 +2200,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线4.5 · 78-70 · EuroLeague J13 · Sportando/Fanatik(2645125) · 米兰78-70费内巴切 | calc:78+4.5=82.5 vs 70 → home | 线取自D盘快照流水首登帧(账本无条目回退)",
       "mnlWin": "miss",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2197,6 +2242,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2241,6 +2287,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "365独赢",
@@ -2294,6 +2341,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-6.5 · 123-113 · ESPN NBA scoreboard event=401910030 date=2026-11-22T23:00Z 俄克拉荷马城雷霆113@迈阿密热火123 | calc:123-1.5=121.5 vs 113 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -2352,6 +2400,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-5.5 · 104-95 · ESPN NBA scoreboard event=401910026 date=2026-11-22T01:00Z 孟菲斯灰熊95@明尼苏达森林狼104 | calc:104-5.5=98.5 vs 95 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -2406,6 +2455,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线6.5 · 101-111 · ESPN NBA scoreboard event=401909311 date=2026-11-21T02:30Z 菲尼克斯太阳111@犹他爵士101 | calc:101+3.5=104.5 vs 111 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -2455,6 +2505,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线5.5 · 119-123 · ESPN NBA scoreboard event=401910042 date=2026-11-24T01:00Z 菲尼克斯太阳123@新奥尔良鹈鹕119 | calc:119+5.5=124.5 vs 123 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -2508,6 +2559,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线4.5 · 116-96 · ESPN NBA scoreboard event=401910031 date=2026-11-23T00:00Z 奥兰多魔术96@华盛顿奇才116 | calc:116+4.5=120.5 vs 96 → home",
       "mnlWin": "miss",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -2566,6 +2618,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线4.5 · 111-117 · ESPN NBA scoreboard event=401910036 date=2026-11-24T00:00Z 孟菲斯灰熊117@夏洛特黄蜂111 | calc:111+4.5=115.5 vs 117 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -2617,6 +2670,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2658,6 +2712,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-5.5 · 95-82 · 球探完场比分 results_t7 sid=722283 塔斯马尼亚跳蚁-伊拉瓦拉老鹰 95-82 | 队名严格配对(日期±2天/开赛±18h) | calc:95-5.5=89.5 vs 82 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2699,6 +2754,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2740,6 +2796,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线4.5 · 125-120 · ESPN NBA scoreboard event=401910038 date=2026-11-24T00:30Z 俄克拉荷马城雷霆120@印第安那步行者125 | calc:125+4.5=129.5 vs 120 → home",
       "mnlWin": "miss",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2781,6 +2838,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -2825,6 +2883,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线3.5 · 77-80 · 球探完场比分 results_t7 sid=723043 巴塞罗那-费内巴切 77-80 | 队名严格配对(日期±2天/开赛±18h) | calc:77+3.5=80.5 vs 80 → home",
       "mnlWin": "hit",
+      "lineWinSide": "home",
       "sources": [
         {
           "src": "365独赢",
@@ -2872,6 +2931,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线-16.5 · 124-112 · ESPN NBA scoreboard event=401910022 date=2026-11-20T01:00Z 洛杉矶快船112@圣安东尼奥马刺124 | calc:124-15.5=108.5 vs 112 → away",
       "mnlWin": null,
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "北单sfgg",
@@ -2916,6 +2976,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "365独赢",
@@ -2969,6 +3030,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-5.5 · 111-128 · ESPN NBA scoreboard event=401910037 date=2026-11-24T00:00Z 波特兰开拓者128@费城76人111 | calc:111-5.5=105.5 vs 128 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -3020,6 +3082,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -3061,6 +3124,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-2.5 · 106-105 · ESPN NBA scoreboard event=401910003 date=2026-11-18T01:00Z 波特兰开拓者105@明尼苏达森林狼106 | calc:106-2.5=103.5 vs 105 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -3105,6 +3169,7 @@
       "settledByLine": "missByLine",
       "settleNote": "让分线-4.5 · 83-85 · 球探完场比分 results_t7 sid=723036 巴塞罗那-贝尔格莱德红星 83-85 | 队名严格配对(日期±2天/开赛±18h) | calc:83-2.5=80.5 vs 85 → away",
       "mnlWin": "miss",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -3155,6 +3220,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线3.5 · 102-111 · ESPN NBA scoreboard event=401910002 date=2026-11-18T00:30Z 纽约尼克斯111@多伦多猛龙102 | calc:102+3.5=105.5 vs 111 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -3201,6 +3267,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -3245,6 +3312,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "365独赢",
@@ -3291,6 +3359,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线2.5 · 99-102 · ESPN NBA scoreboard event=401910021 date=2026-11-20T01:00Z 纽约尼克斯102@明尼苏达森林狼99 | calc:99-1.5=97.5 vs 102 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "竞彩独赢",
@@ -3336,6 +3405,7 @@
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
+      "lineWinSide": null,
       "sources": [
         {
           "src": "竞彩独赢",
@@ -3389,6 +3459,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线2.5 · 86-104 · ESPN NBA scoreboard event=401909314 date=2026-11-25T00:00Z 底特律活塞104@奥兰多魔术86 | calc:86+1.5=87.5 vs 104 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
@@ -3443,6 +3514,7 @@
       "settledByLine": "hitByLine",
       "settleNote": "让分线1.5 · 114-116 · ESPN NBA scoreboard event=401910033 date=2026-11-23T00:00Z 达拉斯独行侠116@犹他爵士114 | calc:114+1.5=115.5 vs 116 → away",
       "mnlWin": "hit",
+      "lineWinSide": "away",
       "sources": [
         {
           "src": "365独赢",
