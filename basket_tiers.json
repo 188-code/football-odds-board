@@ -1,25 +1,25 @@
 {
   "version": "basket_tier_deepfade_20261125",
-  "updated": "2026-11-25T07:31:07.568Z",
+  "updated": "2026-11-25T07:39:41.747Z",
   "summary": {
-    "total": 72,
+    "total": 71,
     "byTier": {
       "强推": 31,
       "精选": 21,
-      "优选": 20
+      "优选": 19
     },
     "byDay": {
       "2026-11-23": 10,
       "2026-11-21": 14,
       "2026-11-22": 12,
       "2026-11-20": 7,
-      "2026-11-26": 8,
+      "2026-11-26": 7,
       "2026-11-18": 8,
       "2026-11-25": 5,
       "2026-11-24": 7,
       "2026-11-19": 1
     },
-    "withLine": 72,
+    "withLine": 71,
     "settledByLine": 46,
     "tierStat": {
       "强推": {
@@ -49,7 +49,7 @@
         }
       },
       "优选": {
-        "n": 20,
+        "n": 19,
         "mnl": {
           "n": 11,
           "hit": 7,
@@ -3708,61 +3708,6 @@
         }
       ],
       "direction": "跟强队(主 夏洛特黄蜂)"
-    },
-    {
-      "id": "2043039",
-      "day": "2026-11-26",
-      "league": "美国职业篮球联盟",
-      "home": "纽约尼克斯",
-      "away": "克利夫兰骑士",
-      "kickTs": 1795653000,
-      "tier": "优选",
-      "hot": "home",
-      "hotName": "纽约尼克斯",
-      "pickSide": "home",
-      "directionRule": "跟强队",
-      "deep": false,
-      "lineSpread": 5.9,
-      "strongP": 57.3,
-      "blendP": 55.4,
-      "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.48,
-        "jcMnl": {
-          "home": 1.48,
-          "away": 1.99
-        },
-        "euMnl": null,
-        "bd": {
-          "home": 1.94,
-          "away": 2.05,
-          "line": "-3.5"
-        }
-      },
-      "line": -3.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T14:21:30+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 57.3,
-          "hot": "home"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 51.4,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 纽约尼克斯)"
     },
     {
       "id": "2042979",
