@@ -1,0 +1,1163 @@
+{
+  "version": "overheat_watch_v4",
+  "updated": "2026-11-25T11:29:14.774Z",
+  "summary": {
+    "total": 52,
+    "ours": {
+      "n": 52,
+      "roi": -22.6,
+      "hit": 33
+    },
+    "fade": {
+      "n": 51,
+      "roi": 19,
+      "hit": 19
+    },
+    "nonDeep": {
+      "n": 25,
+      "ours": {
+        "n": 25,
+        "roi": -13.6,
+        "hit": 16
+      },
+      "fade": {
+        "n": 24,
+        "roi": 1.1,
+        "hit": 9
+      }
+    },
+    "byDay": [
+      {
+        "day": "2026-11-18",
+        "ours": {
+          "n": 8,
+          "roi": -35.1,
+          "hit": 4
+        },
+        "fade": {
+          "n": 8,
+          "roi": 40,
+          "hit": 4
+        }
+      },
+      {
+        "day": "2026-11-20",
+        "ours": {
+          "n": 6,
+          "roi": -1,
+          "hit": 5
+        },
+        "fade": {
+          "n": 5,
+          "roi": -51.2,
+          "hit": 1
+        }
+      },
+      {
+        "day": "2026-11-21",
+        "ours": {
+          "n": 10,
+          "roi": -5.6,
+          "hit": 8
+        },
+        "fade": {
+          "n": 10,
+          "roi": -43.2,
+          "hit": 2
+        }
+      },
+      {
+        "day": "2026-11-22",
+        "ours": {
+          "n": 7,
+          "roi": -30.7,
+          "hit": 4
+        },
+        "fade": {
+          "n": 7,
+          "roi": 53.7,
+          "hit": 3
+        }
+      },
+      {
+        "day": "2026-11-23",
+        "ours": {
+          "n": 9,
+          "roi": -19.6,
+          "hit": 6
+        },
+        "fade": {
+          "n": 9,
+          "roi": 24.8,
+          "hit": 3
+        }
+      },
+      {
+        "day": "2026-11-24",
+        "ours": {
+          "n": 7,
+          "roi": -48.6,
+          "hit": 3
+        },
+        "fade": {
+          "n": 7,
+          "roi": 72.6,
+          "hit": 4
+        }
+      },
+      {
+        "day": "2026-11-25",
+        "ours": {
+          "n": 5,
+          "roi": -19.8,
+          "hit": 3
+        },
+        "fade": {
+          "n": 5,
+          "roi": 46.4,
+          "hit": 2
+        }
+      }
+    ],
+    "note": "前瞻账本：两套方向按真实独赢赔率结算。ours=我方跟强队(pickSide)；fade=外部过热反向(站对面)。nonDeep=剔除强赔≤1.25高危区后的子集。每轮刷新追加，样本随真实赛果增长。"
+  },
+  "rows": [
+    {
+      "id": "2042982",
+      "day": "2026-11-23",
+      "home": "金州勇士",
+      "away": "波士顿凯尔特人",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 3.95,
+        "away": 1.08
+      },
+      "result": "home",
+      "ours": {
+        "side": "away",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": 2.95
+      }
+    },
+    {
+      "id": "2042894",
+      "day": "2026-11-21",
+      "home": "底特律活塞",
+      "away": "多伦多猛龙",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.12,
+        "away": 3.5
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 2.5
+      }
+    },
+    {
+      "id": "2043034",
+      "day": "2026-11-25",
+      "home": "丹佛掘金",
+      "away": "达拉斯独行侠",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.12,
+        "away": 3.5
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 2.5
+      }
+    },
+    {
+      "id": "2042893",
+      "day": "2026-11-21",
+      "home": "亚特兰大老鹰",
+      "away": "夏洛特黄蜂",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.16,
+        "away": 3.15
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.16
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042896",
+      "day": "2026-11-21",
+      "home": "布鲁克林篮网",
+      "away": "奥兰多魔术",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.95,
+        "away": 1.19
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.19
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042961",
+      "day": "2026-11-22",
+      "home": "达拉斯独行侠",
+      "away": "洛杉矶快船",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.22,
+        "away": 2.78
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.22
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042873",
+      "day": "2026-11-20",
+      "home": "米兰",
+      "away": "费内巴切",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.44,
+        "away": 1.3
+      },
+      "result": "home",
+      "ours": {
+        "side": "away",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": 1.44
+      }
+    },
+    {
+      "id": "2042968",
+      "day": "2026-11-22",
+      "home": "拉科鲁尼亚",
+      "away": "列伊达",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.28,
+        "away": 2.51
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.28
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042977",
+      "day": "2026-11-23",
+      "home": "迈阿密热火",
+      "away": "俄克拉荷马城雷霆",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.33,
+        "away": 2.34
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.33
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042963",
+      "day": "2026-11-22",
+      "home": "明尼苏达森林狼",
+      "away": "孟菲斯灰熊",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.33,
+        "away": 2.34
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.33
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042899",
+      "day": "2026-11-21",
+      "home": "犹他爵士",
+      "away": "菲尼克斯太阳",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.48,
+        "away": 1.29
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.29
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042989",
+      "day": "2026-11-24",
+      "home": "新奥尔良鹈鹕",
+      "away": "菲尼克斯太阳",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.48,
+        "away": 1.29
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.29
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042978",
+      "day": "2026-11-23",
+      "home": "华盛顿奇才",
+      "away": "奥兰多魔术",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.13,
+        "away": 1.41
+      },
+      "result": "home",
+      "ours": {
+        "side": "away",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": 1.13
+      }
+    },
+    {
+      "id": "2042983",
+      "day": "2026-11-24",
+      "home": "夏洛特黄蜂",
+      "away": "孟菲斯灰熊",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.48,
+        "away": 1.29
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.29
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042950",
+      "day": "2026-11-21",
+      "home": "塔斯马尼亚跳蚁",
+      "away": "伊拉瓦拉老鹰",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.33,
+        "away": 2.34
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.33
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042985",
+      "day": "2026-11-24",
+      "home": "印第安那步行者",
+      "away": "俄克拉荷马城雷霆",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.15,
+        "away": 1.4
+      },
+      "result": "home",
+      "ours": {
+        "side": "away",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": 1.15
+      }
+    },
+    {
+      "id": "2043031",
+      "day": "2026-11-25",
+      "home": "巴塞罗那",
+      "away": "费内巴切",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.09,
+        "away": 1.43
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.43
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042984",
+      "day": "2026-11-24",
+      "home": "费城76人",
+      "away": "波特兰开拓者",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.29,
+        "away": 2.48
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 1.48
+      }
+    },
+    {
+      "id": "2042853",
+      "day": "2026-11-18",
+      "home": "明尼苏达森林狼",
+      "away": "波特兰开拓者",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.48,
+        "away": 1.99
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.48
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042891",
+      "day": "2026-11-21",
+      "home": "巴塞罗那",
+      "away": "贝尔格莱德红星",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.39,
+        "away": 2.18
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 1.18
+      }
+    },
+    {
+      "id": "2042852",
+      "day": "2026-11-18",
+      "home": "多伦多猛龙",
+      "away": "纽约尼克斯",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 2.06,
+        "away": 1.44
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.44
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042848",
+      "day": "2026-11-18",
+      "home": "米兰",
+      "away": "贝尔格莱德红星",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.94,
+        "away": 1.51
+      },
+      "result": "home",
+      "ours": {
+        "side": "away",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": 0.94
+      }
+    },
+    {
+      "id": "2042878",
+      "day": "2026-11-20",
+      "home": "明尼苏达森林狼",
+      "away": "纽约尼克斯",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.87,
+        "away": 1.55
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.55
+      },
+      "fade": null
+    },
+    {
+      "id": "2043032",
+      "day": "2026-11-25",
+      "home": "奥兰多魔术",
+      "away": "底特律活塞",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.99,
+        "away": 1.48
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.48
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042979",
+      "day": "2026-11-23",
+      "home": "犹他爵士",
+      "away": "达拉斯独行侠",
+      "deepOddsRisk": false,
+      "odds": {
+        "home": 1.92,
+        "away": 1.52
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.52
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042971",
+      "day": "2026-11-23",
+      "home": "巴伦西亚",
+      "away": "卢戈",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.015,
+        "away": 5.15
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.015
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042975",
+      "day": "2026-11-23",
+      "home": "皇家马德里",
+      "away": "约文图特",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.015,
+        "away": 5.15
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 4.15
+      }
+    },
+    {
+      "id": "2042898",
+      "day": "2026-11-21",
+      "home": "俄克拉荷马城雷霆",
+      "away": "新奥尔良鹈鹕",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.02,
+        "away": 5.05
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.02
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042957",
+      "day": "2026-11-22",
+      "home": "特里尔角斗士",
+      "away": "开姆尼茨",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.025,
+        "away": 4.9
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 3.9
+      }
+    },
+    {
+      "id": "2042874",
+      "day": "2026-11-20",
+      "home": "巴伦西亚",
+      "away": "博洛尼亚",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.05,
+        "away": 4.4
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.05
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042877",
+      "day": "2026-11-20",
+      "home": "密尔沃基雄鹿",
+      "away": "波特兰开拓者",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 4.08,
+        "away": 1.07
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.07
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042981",
+      "day": "2026-11-23",
+      "home": "纽约尼克斯",
+      "away": "印第安那步行者",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.08,
+        "away": 3.95
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.08
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042955",
+      "day": "2026-11-22",
+      "home": "费城76人",
+      "away": "密尔沃基雄鹿",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.02,
+        "away": 5.05
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.02
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042851",
+      "day": "2026-11-18",
+      "home": "博洛尼亚",
+      "away": "帕纳辛纳科斯",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 3.7,
+        "away": 1.1
+      },
+      "result": "home",
+      "ours": {
+        "side": "away",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": 2.7
+      }
+    },
+    {
+      "id": "2043028",
+      "day": "2026-11-25",
+      "home": "贝尔格莱德红星",
+      "away": "博洛尼亚",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.09,
+        "away": 3.82
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 2.82
+      }
+    },
+    {
+      "id": "2042987",
+      "day": "2026-11-24",
+      "home": "明尼苏达森林狼",
+      "away": "布鲁克林篮网",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.02,
+        "away": 5.05
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.02
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042988",
+      "day": "2026-11-24",
+      "home": "芝加哥公牛",
+      "away": "克利夫兰骑士",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 3.5,
+        "away": 1.12
+      },
+      "result": "home",
+      "ours": {
+        "side": "away",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": 2.5
+      }
+    },
+    {
+      "id": "2042888",
+      "day": "2026-11-21",
+      "home": "伊斯坦布尔埃菲斯",
+      "away": "阿斯维尔",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.15,
+        "away": 3.24
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.15
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042986",
+      "day": "2026-11-24",
+      "home": "多伦多猛龙",
+      "away": "密尔沃基雄鹿",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.08,
+        "away": 3.95
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 2.95
+      }
+    },
+    {
+      "id": "2042895",
+      "day": "2026-11-21",
+      "home": "克利夫兰骑士",
+      "away": "印第安那步行者",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.14,
+        "away": 3.32
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.14
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042980",
+      "day": "2026-11-23",
+      "home": "芝加哥公牛",
+      "away": "丹佛掘金",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 3.95,
+        "away": 1.08
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.08
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042872",
+      "day": "2026-11-20",
+      "home": "拜仁慕尼黑",
+      "away": "巴斯克尼亚",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.15,
+        "away": 3.24
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.15
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042846",
+      "day": "2026-11-18",
+      "home": "迪拜",
+      "away": "伊斯坦布尔埃菲斯",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.15,
+        "away": 3.24
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.15
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2043033",
+      "day": "2026-11-25",
+      "home": "华盛顿奇才",
+      "away": "波士顿凯尔特人",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 3.7,
+        "away": 1.1
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042951",
+      "day": "2026-11-21",
+      "home": "墨尔本联",
+      "away": "新西兰破坏者",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.16,
+        "away": 3.15
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.16
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042876",
+      "day": "2026-11-20",
+      "home": "孟菲斯灰熊",
+      "away": "金州勇士",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.12,
+        "away": 3.5
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.12
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042959",
+      "day": "2026-11-22",
+      "home": "穆尔西亚天主大学",
+      "away": "萨拉戈萨",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.17,
+        "away": 3.08
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 2.08
+      }
+    },
+    {
+      "id": "2042973",
+      "day": "2026-11-23",
+      "home": "柏林阿尔巴",
+      "away": "拜仁慕尼黑",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 2.83,
+        "away": 1.21
+      },
+      "result": "away",
+      "ours": {
+        "side": "away",
+        "pnl": 0.21
+      },
+      "fade": {
+        "side": "home",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042856",
+      "day": "2026-11-18",
+      "home": "洛杉矶湖人",
+      "away": "夏洛特黄蜂",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.12,
+        "away": 3.5
+      },
+      "result": "home",
+      "ours": {
+        "side": "home",
+        "pnl": 0.12
+      },
+      "fade": {
+        "side": "away",
+        "pnl": -1
+      }
+    },
+    {
+      "id": "2042954",
+      "day": "2026-11-22",
+      "home": "不伦瑞克雄狮",
+      "away": "班堡",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 2.78,
+        "away": 1.22
+      },
+      "result": "home",
+      "ours": {
+        "side": "away",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "home",
+        "pnl": 1.78
+      }
+    },
+    {
+      "id": "2042849",
+      "day": "2026-11-18",
+      "home": "巴塞罗那",
+      "away": "巴黎",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.22,
+        "away": 2.78
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 1.78
+      }
+    },
+    {
+      "id": "2042855",
+      "day": "2026-11-18",
+      "home": "洛杉矶快船",
+      "away": "犹他爵士",
+      "deepOddsRisk": true,
+      "odds": {
+        "home": 1.22,
+        "away": 2.78
+      },
+      "result": "away",
+      "ours": {
+        "side": "home",
+        "pnl": -1
+      },
+      "fade": {
+        "side": "away",
+        "pnl": 1.78
+      }
+    }
+  ]
+}
