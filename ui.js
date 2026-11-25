@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-26-badge端数诚实-v11';   // ★ v11：徽章「三盘合流」绑定真实序列端数——65场挂徽章里真3端仅16场、2端34场(竞彩缺)、单端7场，2端/单端/元数据冲突一律不再冒称三盘合流，只改文案不动方向/引擎/分母（用户抓包「2盘不齐这叫三盘合流」）。前版 v10：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
+const UI_V = '2026-11-24-convdiag-v10';   // ★ v8：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -8816,28 +8816,6 @@ function fundplateHistoryHTML(){
     if (o.over != null && +o.over <= 0) return false;
     return true;
   };
-  /* ★★ 2026-11-26 用户抓包「2盘不齐，这叫三盘合流？」根治（只改徽章文案）：
-     旧徽章把 heatScore≥3+破缺口（资金面合流）直接写成「（三盘合流）」，
-     但真机 65 场挂徽章里只有 16 场序列真三端齐，34 场只是两端(竞彩 had 缺)、7 场单端。
-     ⇒ 徽章文案必须绑定 __TRI_TRAIL__ 的实际 nSrc/ok/元数据冲突，缺端就写清楚，
-       绝不冒称"三盘"。冻结 recDir / _fpConverged 统计口径 / 引擎 / 分母一律不动。
-     返回 null 表示未达资金面合流(走原"未合流"文案)。 */
-  const _fpConvLabel = function(e){
-    if (!_fpConverged(e)) return null;
-    var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
-    var it = T[String(e && e.tid)] || null;
-    var f = (it && it.flags) || null;
-    var why = String((it && it.why) || '');
-    // 元数据冲突/排期冲突：序列不可信，即使资金面合流也只观察（守护栏，不放宽）
-    if ((f && f.scheduleConflict) || /冲突|conflict|不可信/i.test(why))
-      return { label:'⚠ 元数据冲突·序列不可信·只观察', col:'#94a3b8' };
-    var n = (it && it.nSrc) ? (+it.nSrc) : (f ? (+f.nSrc) : null);
-    var ok = !!(it && it.ok);
-    if (n == null) return { label:'🔥 资金合流·买受让（三盘端数未知·非三盘确认）', col:'#fbbf24' };
-    if (n >= 3 && ok) return { label:'🔥 正式强推·买受让（三盘合流）', col:'#f59e0b' };
-    if (n === 2 && ok) return { label:'🔥 资金合流·买受让（两盘·竞彩缺·非三盘）', col:'#fbbf24' };
-    return { label:'⚠ 资金信号强·序列仅'+n+'端·只观察', col:'#94a3b8' };
-  };
   /* ★★ 2026-11-23 让球轴合流·独立通道（用户拍板「纳入，然后记得加个标签」）。
      口径：tri_trail.rqAxis 三端同线同向(converge) 且 n===3 且非深盘。
      标定（_eval_rqstrong_20261123.cjs，真实完场 + 沿用 recDir 冻结方向 + 逐注真实水位）：
@@ -9627,7 +9605,7 @@ function fundplateHistoryHTML(){
            (_altV3.rate!=null && _altV3.rate>=50 ? '#16a34a' : '#dc2626'))
     + _kpi('其中 · v2 旧算法', (_altV2.n ? (_altV2.hit+'/'+_altV2.n+' 中 · '+_altV2.rate+'%') : '无样本'),
            (_altV2.rate!=null && _altV2.rate>=50 ? '#16a34a' : '#dc2626'))
-    + _kpi('🔥 资金合流·赛前(heatScore≥3 且破缺口)', (_strongRows.length ? (_strongHit+'/'+_strongRows.length+' 中 · '+_strongRate+'%') : '—'),
+    + _kpi('🔥 真三盘合流·赛前(heatScore≥3 且破缺口)', (_strongRows.length ? (_strongHit+'/'+_strongRows.length+' 中 · '+_strongRate+'%') : '—'),
            (_strongRate!=null && _strongRate>=50 ? '#f59e0b' : '#dc2626'))
     /* ★ 2026-11-23 独立通道：单独一格，紫标 + 明确「未验证」，绝不混进上面 A强推业绩 */
     + (_rqTagged ? _kpi('🏷 让球轴合流·独立通道(未验证)',
@@ -9727,9 +9705,8 @@ function fundplateHistoryHTML(){
       + (function(){
           const _a = _sp.alt || '';
           if (_a.indexOf('买受让')===0){
-            const _lb = _fpConvLabel(e);
-            return _lb
-              ? '<div style="margin-top:4px;font-size:10.5px;font-weight:800;color:'+_lb.col+'">'+_lb.label+'</div>'
+            return _fpConverged(e)
+              ? '<div style="margin-top:4px;font-size:10.5px;font-weight:800;color:#f59e0b">🔥 正式强推·买受让（真三盘合流）</div>'
               : '<div style="margin-top:4px;font-size:10px;font-weight:700;color:#94a3b8">🎯 票差方向·买受让（未合流·非强推）</div>';
           }
           if (_a.indexOf('买强队')===0) return '<div style="margin-top:4px;font-size:9.5px;font-weight:700;color:#34d399">可跟·买强队(边际)</div>';
@@ -9743,8 +9720,7 @@ function fundplateHistoryHTML(){
       + (function(){
           const _a = _sp.alt || ''; let _badge, _col;
           if (_a.indexOf('买受让')===0){
-            const _lb = _fpConvLabel(e);
-            if (_lb){ _badge=_lb.label; _col=_lb.col; }
+            if (_fpConverged(e)){ _badge='🔥 正式强推·买受让（三盘合流）'; _col='#f59e0b'; }
             else { _badge='🎯 票差方向·买受让（未合流·吃水区·非强推）'; _col='#94a3b8'; }
           }
           else           if (_a.indexOf('买强队')===0){ _badge='可跟·买强队（边际·主流主场）'; _col='#34d399'; }
