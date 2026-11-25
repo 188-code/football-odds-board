@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_follow_strong_20261124",
-  "updated": "2026-11-25T03:30:37.438Z",
+  "updated": "2026-11-25T04:31:43.903Z",
   "summary": {
     "total": 71,
     "byTier": {
@@ -1774,7 +1774,7 @@
         },
         "bd": null
       },
-      "line": -5.5,
+      "line": -6.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-25T11:18:41+08:00",
       "locked": true,
@@ -3030,55 +3030,6 @@
       "direction": "跟强队(客 伊斯坦布尔埃菲斯)"
     },
     {
-      "id": "2043038",
-      "day": "2026-11-26",
-      "league": "美国职业篮球联盟",
-      "home": "夏洛特黄蜂",
-      "away": "芝加哥公牛",
-      "kickTs": 1795651200,
-      "tier": "优选",
-      "hot": "home",
-      "hotName": "夏洛特黄蜂",
-      "strongP": 59.3,
-      "blendP": 57.4,
-      "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.62,
-        "jcMnl": {
-          "home": 1.55,
-          "away": 1.87
-        },
-        "euMnl": {
-          "home": 1.62,
-          "away": 2.36
-        },
-        "bd": null
-      },
-      "line": -1.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T11:18:40+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 59.3,
-          "hot": "home"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 54.7,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 夏洛特黄蜂)"
-    },
-    {
       "id": "2042853",
       "day": "2026-11-18",
       "league": "美国职业篮球联盟",
@@ -3167,6 +3118,55 @@
         }
       ],
       "direction": "跟强队(主 巴塞罗那)"
+    },
+    {
+      "id": "2043038",
+      "day": "2026-11-26",
+      "league": "美国职业篮球联盟",
+      "home": "夏洛特黄蜂",
+      "away": "芝加哥公牛",
+      "kickTs": 1795651200,
+      "tier": "优选",
+      "hot": "home",
+      "hotName": "夏洛特黄蜂",
+      "strongP": 59.3,
+      "blendP": 56.8,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.62,
+        "jcMnl": {
+          "home": 1.6,
+          "away": 1.81
+        },
+        "euMnl": {
+          "home": 1.62,
+          "away": 2.36
+        },
+        "bd": null
+      },
+      "line": -1.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-25T11:18:40+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 59.3,
+          "hot": "home"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 53.1,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 夏洛特黄蜂)"
     },
     {
       "id": "2042852",
