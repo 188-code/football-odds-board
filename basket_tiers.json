@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_follow_strong_20261124",
-  "updated": "2026-11-24T22:39:40.700Z",
+  "updated": "2026-11-25T01:21:08.946Z",
   "summary": {
     "total": 64,
     "byTier": {
@@ -2982,21 +2982,21 @@
       "tier": "优选",
       "hot": "away",
       "hotName": "底特律活塞",
-      "strongP": 54.6,
-      "blendP": 55.7,
+      "strongP": 54.3,
+      "blendP": 55.5,
       "nSrc": 3,
       "agree": 3,
       "disagree": 0,
       "mainSrc": "365独赢",
       "odds": {
-        "strong": 1.76,
+        "strong": 1.77,
         "jcMnl": {
           "home": 1.99,
           "away": 1.48
         },
         "euMnl": {
-          "home": 2.12,
-          "away": 1.76
+          "home": 2.1,
+          "away": 1.77
         },
         "bd": {
           "home": 2.24,
@@ -3006,7 +3006,7 @@
       },
       "line": 2.5,
       "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-25T03:08:45+08:00",
+      "capturedAt": "2026-11-25T06:40:33+08:00",
       "locked": true,
       "settledByLine": null,
       "settleNote": null,
@@ -3014,7 +3014,7 @@
       "sources": [
         {
           "src": "365独赢",
-          "homeP": 45.4,
+          "homeP": 45.7,
           "hot": "away"
         },
         {
