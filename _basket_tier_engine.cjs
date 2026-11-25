@@ -23,15 +23,17 @@ const LEDGER = ROOT + 'basket_dir_ledger.json';
 const HEAT_RAW = ROOT + 'basket_heat.json';   // ★ 2026-11-25：补 kickTs（新场在过热板/账本尚无条目）
 const RESULT = ROOT + 'basket_result.json';
 const OUT = ROOT + 'basket_tiers.json';
-/* ★2026-11-25 v2 方向口径修正（用户截图两场 ★★ 精选复盘）：
-   1) 深盘(|line|>8)跟大热门独赢实测为负边：全样本 n=19 跟强队 ROI -33.8% vs 站对面 +68.8%；
-      训练段(11-18~23,n=11) -18.8% vs +16.6%，留出段(11-23~25,n=8) -54.4% vs +140.6%，两段同向。
-      按项目铁律「一盘竞彩 mnl 隐含概率高方=大热门→站对面」，深盘翻到受让/冷门独赢一侧。
-      中浅盘(<=8)实测跟强队更优(+8.1%/+2.1%)，保持不变——不是全面推翻，是分层修正。
-   2) agree 只看方向不看强度：掘金场 72.6/75.8/54.0 spread=21.8pp 被误判 agree=3 给强推。
-      新增 lineSpread>=15pp 降一档（假分歧门控）。
-   3) 深盘 n=19<40，按铁律仍标观察档，不进 ROI 引擎/投注建议。 */
-const VERSION = 'basket_tier_deepfade_20261125';
+/* ★2026-11-25 v3 方向口径纠偏（撤销 v2「深盘站对面」——它是过度拟合）：
+   1) v2 只为迎合掘金单场(软件推荐客队、爆冷赢)引入「深盘一律翻到受让方」，凯尔特人场即反例：
+      凯尔特人客队让9.5、独赢1.23是强队，v2 翻到主队奇才，结果凯尔特人131-116赢球+赢盘 → 错。
+   2) 全量43场证伪 v2：跟强队 28/43=65.1% vs v2(深翻) 25/43=58.1%；深盘19场跟强队 11/19=57.9%
+      vs 站对面 8/19=42.1%。阈值敏感性 thr=1.15~1.32 命中率从50%跳到73.7%、n=19，典型过拟合，
+      拒绝再拟合任何阈值，回退到数据支持的「全跟强队(隐含高方)」基线。
+   3) 假分歧 bug：v2 用三源 homeP 算 spread，北单sfgg是让分胜负盘(line=10.5)，其 homeP=53 是让分盘
+      概率，被当成独赢概率去减 365/竞彩独赢的 21.8/22.9 → 假分歧31.2pp。真实独赢分歧仅1.1pp。
+      修：spread 只用 365/竞彩两个独赢源，北单让分盘不参与。
+   4) 仍为观察分档：n=43 但 ROI z 未达标、深盘分层过拟合风险高，不进方向账本/ROI/投注建议。 */
+const VERSION = 'basket_tier_strongbase_revert_20261125';
 
 function readJSON(f, dflt) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return dflt; } }
 const num = v => { const n = +v; return Number.isFinite(n) ? n : null; };
@@ -136,12 +138,14 @@ function main() {
     // 让分线（竞彩优先）——方向判据要用到盘口深度，必须在 tier 之前取
     const hdc = fr.jc_hdc || fr.eu_hdc || null;
     const line = hdc ? num(hdc.line) : null;
-    // ★方向：深盘站对面(受让/冷门)，中浅盘跟强队；pickSide=本次真正推荐的独赢方
+    // ★v3 方向：统一跟强队(365独赢隐含高方)。深盘站对面已证伪，见文件头纠偏说明。
+    //   deep/line 仍保留用于展示与让分口径对照，但不再改方向。
     const deep = line !== null && Math.abs(line) > 8;
-    const pickSide = deep ? (info.hot === 'home' ? 'away' : 'home') : info.hot;
+    const pickSide = info.hot;
     const pickName = pickSide === 'home' ? x.home : x.away;
-    // ★假共振门控：三源强度分歧>=15pp 时降一档（方向一致但强度已分裂，不能当铁共振）
-    const homePs = info.sources.map(s => s.homeP);
+    // ★假共振门控：只用两个独赢源(365/竞彩)算强度分歧；北单sfgg是让分胜负盘(line≠0)，
+    //   其 homeP 是让分盘概率，与独赢概率不同口径，混算会造出假分歧（凯尔特人31.2pp实为1.1pp）。
+    const homePs = info.sources.filter(s => s.src.indexOf('独赢') >= 0).map(s => s.homeP);
     const spread = homePs.length ? Math.max(...homePs) - Math.min(...homePs) : 0;
     let tier = tierOf(info);
     if (spread >= 15 && tier !== '观察') tier = tier === '强推' ? '精选' : tier === '精选' ? '优选' : '观察';
@@ -164,7 +168,7 @@ function main() {
       id, day: x.day, league: x.league, home: x.home, away: x.away,
       kickTs: kickOf[id] || null,
       tier, hot: info.hot, hotName,
-      pickSide, directionRule: deep ? '深盘站对面(|line|>8)' : '跟强队',
+      pickSide, directionRule: '跟强队(独赢隐含高方)',
       deep, lineSpread: +spread.toFixed(1),
       strongP: info.strongP, blendP: info.blendP, nSrc: info.nSrc,
       agree: info.agree, disagree: info.disagree, mainSrc: info.mainSrc,
@@ -178,7 +182,7 @@ function main() {
       // ★ 已核验的让分赢盘方（不是预测方向）：供对照外部软件「主让N·推荐X队方向」的让分口径。
       lineWinSide: (rHdc && rHdc.verified === true && ['home', 'away'].includes(rHdc.result)) ? rHdc.result : null,
       sources: info.sources,
-      direction: (deep ? '深盘站对面(' : '跟强队(') + (pickSide === 'home' ? '主' : '客') + ' ' + pickName + ')',
+      direction: '跟强队(' + (pickSide === 'home' ? '主' : '客') + ' ' + pickName + ')',
     });
   }
   // 分档排序：强推>精选>优选，同档按强度降序，日期降序
@@ -205,10 +209,10 @@ function main() {
     withLine: items.filter(x => x.line !== null).length,
     settledByLine: items.filter(x => x.settledByLine).length,
     tierStat,
-    sourceNote: 'D盘快照流水真实临盘帧；赛前<kickTs硬过滤；深盘(|line|>8)=站对面受让/冷门独赢、中浅盘=跟强队；档位=信号强度分级；lineSpread>=15pp 假共振降一档',
-    settleNote: '结算主口径=按本表推荐方(pickSide)的独赢胜负；深盘推荐受让/冷门，中浅盘推荐强队；lineWinSide=已核验让分赢盘方，供对照外部软件「主让N·推荐X队方向」的受让口径',
-    risk: '观察分档未达进引擎铁律(n<40 / ROI z / 训练留出同向)，不进方向账本/ROI/投注建议；深盘站对面分层训练+留出同向但 n=19，继续累积',
-    directionEvidence: '深盘|line|>8 n=19 跟强队独赢 11/19=57.9% ROI-33.8% vs 站对面 8/19=42.1% ROI+68.8%；训练(11场)-18.8%/+16.6%、留出(8场)-54.4%/+140.6% 两段同向；去最高赔1场仍+78.2%；中盘5-8跟强队+8.1%、浅盘<=5+2.1% 故不翻',
+    sourceNote: 'D盘快照流水真实临盘帧；赛前<kickTs硬过滤；方向=跟强队(365独赢隐含高方)，深盘不翻；档位=信号强度分级；lineSpread只用365/竞彩独赢两源、>=15pp 假共振降一档（北单sfgg让分盘不参与，避免假分歧）',
+    settleNote: '结算主口径=按本表推荐方(pickSide=强队)的独赢胜负；lineWinSide=已核验让分赢盘方，供对照外部软件「主让N·推荐X队方向」的让分受让口径，不是本表预测方向',
+    risk: '观察分档未达进引擎铁律(n=43但ROI z未达标)，不进方向账本/ROI/投注建议；v2深盘站对面已证伪撤销，勿再单场拟合阈值',
+    directionEvidence: '★纠偏(2026-11-25)：v2「深盘站对面」过度拟合已撤销。全量43场跟强队28/43=65.1% vs v2深翻25/43=58.1%；深盘19场跟强队11/19=57.9% vs 站对面8/19=42.1%；阈值敏感性thr1.15~1.32命中50%~73.7%剧烈波动(n=19)=过拟合，拒绝不拟合。凯尔特人场假分歧31.2pp系北单让分盘homeP=53混入独赢21.8/22.9，真实独赢分歧仅1.1pp，已修。',
   };
   const out = { version: VERSION, updated: new Date().toISOString(), summary, items };
   fs.writeFileSync(OUT, JSON.stringify(out, null, 2));

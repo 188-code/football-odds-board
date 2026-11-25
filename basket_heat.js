@@ -401,12 +401,12 @@
       '<th>日期 / 开赛</th><th>对阵</th><th>玩法</th><th>冻结方向（观察）</th><th>最终比分</th><th>结算</th><th>规则</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
-  /* ★★ 2026-11-25 v2 精选/优选/强推分档（深盘站对面 / 中浅盘跟强队 · 真实临盘价）
-     读 basket_tiers.json：方向按 pickSide（深盘|line|>8 站到受让/冷门侧，中浅盘跟隐含概率高方）；
-     档位按信号强度分级，lineSpread>=15pp 假共振降一档。观察档，不进方向账本/ROI/引擎。 */
+  /* ★★ 2026-11-25 v3 精选/优选/强推分档（统一跟强队 · 真实临盘价）
+     读 basket_tiers.json：方向=跟强队(365独赢隐含高方)；v2「深盘站对面」已全量证伪并撤销。
+     lineSpread>=15pp 假共振降一档（只用365/竞彩独赢两源，北单让分盘不参与）。观察档。 */
   function tierHTML() {
     const t = state.tiers;
-    const none = '<details class="bh-reference" id="basketHeatTiers"><summary>精选 / 优选 / 强推 分档（深盘站对面·真实临盘）· 尚未生成</summary>' +
+    const none = '<details class="bh-reference" id="basketHeatTiers"><summary>精选 / 优选 / 强推 分档（跟强队·真实临盘）· 尚未生成</summary>' +
       '<p class="bh-muted">basket_tiers.json 尚未生成；运行 _basket_tier_engine.cjs 后显示。</p></details>';
     if (!t || !Array.isArray(t.items)) return none;
     const s = t.summary || {};
@@ -437,23 +437,23 @@
       else if (nowS < kick) lockTag = '<br><small style="color:#2563eb">🔄 赛前·随盘口更新</small>';
       else lockTag = '<br><small style="color:#64748b">🔒 开赛后·已锁死</small>';
       const odds = object(x.odds) || {};
-      const dirTag = x.directionRule === '深盘站对面(|line|>8)'
-        ? '<br><small style="color:#e11d48">深盘站对面' + (x.lineSpread >= 15 ? '·分歧' + esc(x.lineSpread) + 'pp降档' : '') + '</small>'
+      const dirTag = (x.lineSpread >= 15)
+        ? '<br><small style="color:#e11d48">独赢分歧' + esc(x.lineSpread) + 'pp降档</small>'
         : '';
       return '<tr><td>' + badge(x.tier) + '</td><td>' + esc(x.day) + '</td><td>' + esc(x.home) + ' vs ' + esc(x.away) +
         '</td><td>' + esc(x.direction || '') + dirTag + '</td><td>' + esc(x.blendP) + '%<br><small>' + esc(x.nSrc) + '源·共振' + esc(x.agree) + '</small></td>' +
         '<td>' + (x.line !== null && x.line !== undefined ? '让 ' + esc(x.line) : '—') + '<br><small>' + esc(x.lineSrc || '') + '</small>' + lineTag + '</td>' +
         '<td>' + st + lockTag + '</td><td><small>' + srcs + '</small></td></tr>';
     }).join('');
-    const head = '<details class="bh-reference" id="basketHeatTiers" open><summary>精选 / 优选 / 强推 分档（深盘站对面 / 中浅盘跟强队 · D盘真实临盘价）· ' +
+    const head = '<details class="bh-reference" id="basketHeatTiers" open><summary>精选 / 优选 / 强推 分档（跟强队·D盘真实临盘价）· ' +
       items.length + ' 场' + (state.day ? '（📅 ' + esc(state.day) + ' 当日）' : '') + '</summary>' +
       '<p class="bh-missing">档位=信号强度分级：强推（强队隐含≥70%或≥65%且≥2源共振）/ 精选（≥60%且≥2源）/ 优选（≥55%且≥2源）；' +
-      '<strong style="color:#e11d48">三源强度分歧≥15pp 降一档</strong>（方向一致但强度已分裂，不当铁共振）。' +
-      '<strong style="color:#2563eb">方向分两段：深盘 |让分|>8 站到受让/冷门侧；中浅盘 ≤8 跟隐含概率高方。</strong>' +
-      '（真实365/竞彩/北单临盘价，赛前&lt;开赛硬过滤。）' +
+      '<strong style="color:#e11d48">两独赢源强度分歧≥15pp 降一档</strong>（只用365/竞彩独赢算，北单sfgg是让分盘不参与，避免假分歧）。' +
+      '<strong style="color:#2563eb">方向=跟强队（365独赢隐含概率高方），深盘不翻。</strong>' +
+      '（真实临盘价，赛前&lt;开赛硬过滤。）' +
       '<strong style="color:#2563eb">数据是活的：赛前每15分钟随新盘口帧重算、结论会变；一过开赛时刻，赛后帧被硬挡、方向/强度锁死不再变（结算另按核验赛果填）。</strong>' +
       '（⚠ 无开赛时刻的场次无法上此护栏，标「未锁」不冒充。）' +
-      '<strong style="color:#7c3aed">盘口分层实证：深盘&gt;8 共19场，跟强队 ROI −33.8% vs 站对面 +68.8%（训练段 −18.8%/+16.6%、留出段 −54.4%/+140.6% 两段同向）；中盘5-8 跟强队 +8.1%、浅盘≤5 +2.1% 故保持跟强队。</strong> ' +
+      '<strong style="color:#7c3aed">★方向纠偏(2026-11-25)：v2「深盘站对面」过度拟合已撤销。全量43场跟强队 28/43=65.1% vs 深翻 58.1%；深盘19场跟强队 57.9% vs 站对面 42.1%；阈值敏感性 thr1.15~1.32 命中 50%~73.7% 剧烈波动(n=19)=过拟合，故统一跟强队、不再按单场翻盘。凯尔特人场假分歧31.2pp 系北单让分盘homeP=53 混入独赢21.8/22.9，真实独赢分歧仅1.1pp，已修。</strong> ' +
       'ROI edge 样本未达 n≥40 铁律，' +
       '<strong>本表仅复现参考软件分档能力，不进方向账本/ROI/引擎，不构成投注建议</strong>。</p>' +
       '<p class="bh-muted">版本 ' + esc(t.version) + ' · 更新 ' + moment(t.updated) + ' · 全库 ' + esc(s.total) +
@@ -468,7 +468,7 @@
       esc((object(ts['强推']).byLine || {}).rate === null || (object(ts['强推']).byLine || {}).rate === undefined ? '—' : object(ts['强推']).byLine.rate + '%') +
       '，深盘打不住属正常）</span></p>' +
       '<div class="bh-scroll" tabindex="0" aria-label="篮球精选优选强推分档表"><table><thead><tr>' +
-      '<th>档位</th><th>日期</th><th>对阵</th><th>方向（深盘站对面 / 中浅盘跟强队）</th><th>强度 / 共振</th><th>让分线</th><th>结算</th><th>三盘信号源</th>' +
+      '<th>档位</th><th>日期</th><th>对阵</th><th>方向（跟强队）</th><th>强度 / 共振</th><th>让分线</th><th>结算</th><th>三盘信号源</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div></details>';
     return head;
   }
