@@ -454,6 +454,10 @@
       '<p class="bh-muted">basket_overheat.json 尚未生成；不虚构判定与命中率。</p></details>';
     const s = o.summary || {};
     const allItems = o.items || [];
+    // ★2026-11-25 赛前/锁死标记：开赛时刻从同链分档 JSON 取（无时刻就诚实标未锁）
+    const tierBy = {};
+    list(object(state.tiers).items).forEach(t => { if (t && text(t.id)) tierBy[text(t.id)] = t; });
+    const nowS = Date.now() / 1000;
     // ★2026-11-20 过热表接入全局日期筛选（与主列表/账本联动）
     const items = allItems.filter(x => !state.day || text(x.day) === state.day);
     // ★2026-11-24 让分独赢观察候选与 mnl 主口径完全分表：候选不进任何统计/方向账本/ROI
@@ -479,7 +483,8 @@
       '（另 ' + candItems.length + ' 场让分独赢候选·不进统计）' + '</summary>' +
       '<p class="bh-missing">观察档，非投注信号，不计入方向账本/引擎/仓位。<strong>洋哥三盘是顺序链：一盘竞彩独赢资金趋势→二盘365操盘→三盘北单资金分布</strong>。' +
       '本板块一盘用竞彩独赢（篮球完全可得，站大热门对面给方向）；<strong>二盘365自2026-11-20起用球探滚动帧补位</strong>（此前被567封死长期缺位，历史场无365=真实缺不回补）；' +
-      '三盘北单270让分胜负两项作近似共振确认。<strong>强置信口径=三端合流：竞彩+365+北单同侧（heatScore=3/3）</strong>；北单缺失不吞一盘方向，只降档标"仅一盘"。第4步「临场盘水印证」篮球无连续序列做不到。</p>';
+      '三盘北单270让分胜负两项作近似共振确认。<strong>强置信口径=三端合流：竞彩+365+北单同侧（heatScore=3/3）</strong>；北单缺失不吞一盘方向，只降档标"仅一盘"。第4步「临场盘水印证」篮球无连续序列做不到。' +
+      '<br><span style="color:#93c5fd">🔄 本表随上游每30分钟重算的数据自动跟进（前端每15分钟自检，updated 变化才重渲）；赛前显示「随盘口更新」，有开赛时刻的场次开赛后标「已锁死」，无时刻标「未锁」不冒充。</span></p>';
     // 快捷日期条（统计条上方：点哪天→下面数字立即变哪天）
     const daybar = quickDayBar(allItems.map(x => text(x.day)));
     // 统计条（★2026-11-20 足球板视觉语言：绿=命中、红=未中、橙=中热、灰=正常；数字随日期筛选联动）
@@ -554,6 +559,11 @@
         ? '<b style="color:' + (x.result === 'home' ? '#e54545' : '#2563eb') + '">' + (x.result === 'home' ? '主胜' : '客胜') + '</b>' +
           (x.resultScore ? ' <b>' + esc(x.resultScore) + '</b>' : '')
         : '<span style="color:var(--mut,#8b98a9)">未完赛</span>';
+      const tk = tierBy[text(x.id)];
+      const kick = tk ? num(tk.kickTs) : null;
+      const lockTag = kick !== null && tk.locked === true
+        ? (nowS < kick ? '<br><small style="color:#2563eb">🔄 赛前·随盘口更新</small>' : '<br><small style="color:#94a3b8">🔒 开赛后·已锁死</small>')
+        : '<br><small style="color:#f59e0b">⚠ 无开赛时刻·未锁</small>';
       table += '<tr><td>' + esc(x.day) + '<br>' + esc(x.away) + '@' + esc(x.home) + '</td>' +
         '<td>' + esc(x.mnl ? x.mnl.home : '—') + ' / ' + esc(x.mnl ? x.mnl.away : '—') + '</td>' +
         '<td>' + fmt(m.pH, 1) + '% / ' + fmt(m.pA, 1) + '%' +
@@ -562,7 +572,7 @@
         '<td>' + dirCell + '</td>' +
         '<td>' + bdCell + '</td>' +
         '<td style="' + verdictCls + '">' + verdictCell + '</td>' +
-        '<td>' + resCell + '<br>' + setCell + '</td></tr>';
+        '<td>' + resCell + '<br>' + setCell + lockTag + '</td></tr>';
     }
     table += '</tbody></table></div>';
     // ★2026-11-24 让分独赢候选单独展示：只复现外部精选错位线索，永不混入主表统计
@@ -786,7 +796,7 @@
       await loadTiers(scriptURL || window.location.href);
       try { render(); } catch (error) { state.data = previous; if (previous) render(); throw error; }
       notice.className = 'bh-notice';
-      notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '主画面手动刷新；精选/优选/强推分档每15分钟自动跟进。';
+      notice.textContent = (imported(next) ? IMPORT_NOTICE + '。updated 仅为导入 / 结果生成时间。' : '已读取本次采集结果；报价可能为历史快照，以各端观察时点和逐源状态为准。') + '主画面手动刷新；精选/优选/强推分档与三盘资金过热表每15分钟自动跟进。';
     } catch (error) {
       notice.className = 'bh-notice bh-error';
       notice.textContent = '篮球数据读取失败：' + (error && error.name === 'AbortError' ? '请求超过 15 秒' : text(error && error.message) || '未知错误') +
@@ -872,7 +882,7 @@
       '<div id="basketHeatModeNotice" class="bh-mode-warning" data-basket-mode-notice role="status" hidden></div>' +
       '<p>独立于足球。下方「精选/优选/强推」按 D盘真实临盘价 + 跟强队方向分级（复现参考软件分档）；' +
       '旧「三盘资金过热」按洋哥顺序链站对面口径保留仅供对照。两表均为观察档，未过 n≥40 / ROI 验证，不构成投注建议。</p>' +
-      '<div id="basketHeatNotice" class="bh-notice" role="status" aria-live="polite">尚未读取；首次打开时读取同源 basket_heat.json，分档每15分钟自动跟进。</div>' +
+      '<div id="basketHeatNotice" class="bh-notice" role="status" aria-live="polite">尚未读取；首次打开时读取同源 basket_heat.json，分档与三盘资金过热表每15分钟自动跟进。</div>' +
       '<div id="basketHeatSummary" class="bh-summary"><p>总场数 / 结果生成时间：尚未读取，不用 0 代替未知。</p><p>胜率、ROI：尚未建立 / 待前向样本。</p></div>' +
       '<div id="basketHeatSourceStatus" class="bh-statuses"></div>' +
       '<details class="bh-dir" id="basketHeatDir" open><summary>方向观察账本 · 赛前冻结 + 逐场复盘（观察档，非投注建议）</summary>' +
@@ -930,28 +940,34 @@
     modal.setAttribute('aria-hidden', 'true');
     if (state.focus && state.focus.isConnected) state.focus.focus();
   };
-  /* ★ 2026-11-24 分档自动跟进：精选/优选/强推由本机每15分钟重算后推上线，
-     前端每15分钟自检一次 basket_tiers.json（cache:no-store），updated 变化才重渲分档表。
-     只更新分档表槽位，不动主画面/筛选/焦点；弹窗未打开时不发请求。 */
+  /* ★ 2026-11-24/25 自动跟进：精选/优选/强推 + 三盘资金过热表都由本机每30分钟重算推上线，
+     前端每15分钟自检（cache:no-store），updated 变化才重渲对应槽位。
+     只更新这两个槽位，不动主画面/筛选/焦点；弹窗未打开时不发请求。 */
   function startTierWatch() {
     if (window.__bkTierWatch) return;
     window.__bkTierWatch = true;
+    const WATCH = [
+      { key: 'tiers', file: 'basket_tiers.json', slot: '#basketHeatTierSlot', draw: tierHTML },
+      { key: 'overheat', file: 'basket_overheat.json', slot: '#basketHeatOverheatSlot', draw: overheatHTML }
+    ];
     setInterval(async () => {
       if (!modal || !modal.classList.contains('show')) return;
-      const before = state.tiers && state.tiers.updated;
-      try {
-        const url = new URL('basket_tiers.json', scriptURL || window.location.href);
-        if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) return;
-        const r = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!d || !Array.isArray(d.items) || !d.summary) return;
-        state.tiers = d;
-        if (d.updated !== before) {
-          const slot = modal.querySelector('#basketHeatTierSlot');
-          if (slot) slot.innerHTML = tierHTML();
-        }
-      } catch (_) { /* 自检失败不影响已有分档画面，下一轮重试 */ }
+      for (const cfg of WATCH) {
+        try {
+          const before = state[cfg.key] && state[cfg.key].updated;
+          const url = new URL(cfg.file, scriptURL || window.location.href);
+          if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) continue;
+          const r = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
+          if (!r.ok) continue;
+          const d = await r.json();
+          if (!d || !Array.isArray(d.items) || !d.summary) continue;
+          state[cfg.key] = d;
+          if (d.updated !== before) {
+            const slot = modal.querySelector(cfg.slot);
+            if (slot) slot.innerHTML = cfg.draw();
+          }
+        } catch (_) { /* 自检失败不影响已有画面，下一轮重试 */ }
+      }
     }, 15 * 60 * 1000);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
