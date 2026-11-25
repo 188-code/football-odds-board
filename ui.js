@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-26-badge端数诚实-v11';   // ★ v11：徽章「三盘合流」绑定真实序列端数——65场挂徽章里真3端仅16场、2端34场(竞彩缺)、单端7场，2端/单端/元数据冲突一律不再冒称三盘合流，只改文案不动方向/引擎/分母（用户抓包「2盘不齐这叫三盘合流」）。前版 v10：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
+const UI_V = '2026-11-26-badge端数诚实-v12';   // ★ v12：临盘账本「三盘合流/三端同向」标签同样绑定 align.nSrc，2端不再冒称三端（承接 v11 历史板徽章修复）。前版 v11：徽章「三盘合流」绑定真实序列端数——65场挂徽章里真3端仅16场、2端34场(竞彩缺)、单端7场，2端/单端/元数据冲突一律不再冒称三盘合流，只改文案不动方向/引擎/分母（用户抓包「2盘不齐这叫三盘合流」）。前版 v10：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -9896,7 +9896,7 @@ function fundplateHistoryHTML(){
         var _isRef = !it.promoted;
         return '<tr style="border-top:1px solid rgba(52,211,153,.4);background:rgba(52,211,153,.05)">'
           +'<td style="padding:6px 7px;white-space:nowrap">'+esc(String(it.day||''))+' '+esc(String(it.kickoff||''))
-            +'<div style="font-size:9.5px;color:'+(_isRef?'#fbbf24':'#34d399')+';font-weight:700">'+(it.promoted===true?'🎯 临盘入账':(_fromLedger?'🎯 临盘·三盘合流(已并入主表)':'🎯 临盘·三盘合流'))+'</div></td>'
+            +'<div style="font-size:9.5px;color:'+(_isRef?'#fbbf24':'#34d399')+';font-weight:700">'+(it.promoted===true?'🎯 临盘入账':(_fromLedger?('🎯 临盘·'+((it.align&&+it.align.nSrc>=3)?'三盘合流':'多盘合流')+'(已并入主表)'):('🎯 临盘·'+((it.align&&+it.align.nSrc>=3)?'三盘合流':'多盘合流'))))+'</div></td>'
           +'<td style="padding:6px 7px;font-size:11.5px">'+esc(_lpLg(it)||'—')+'</td>'
           +'<td style="padding:6px 7px"><b>'+esc(_lpNm(it,'home')||'待核')+'</b> vs <b>'+esc(_lpNm(it,'away')||'待核')+'</b></td>'
           +'<td style="padding:6px 7px;font-size:10.5px;color:'+dirCol+';font-weight:700">'+esc(dirTxt)+'</td>'
@@ -9904,7 +9904,7 @@ function fundplateHistoryHTML(){
             +'<div style="font-size:10px;opacity:.8;margin-top:2px">冻结净Δ <b>'+netTxt+'</b>'
             +' · 同向 '+((wd.sameN)||0)+'/'+((it.align&&it.align.nSrc)||0)+(wd.lead?(' · 先动'+esc(String(wd.lead))):'')+'</div>'
             +'<div style="font-size:9.5px;opacity:.65;line-height:1.5;margin-top:2px">'+_lpSeqLine(it)+'</div></td>'
-          +'<td style="padding:6px 7px;font-size:10px;color:'+(_isRef?'#fbbf24':'#34d399')+';font-weight:700;white-space:normal">'+(_isRef?('三盘合流·'+(it.align&&it.align.converge?'三端同向':'破缺口')+'·'+((it.align&&it.align.nSrc)||0)+'端序列齐·独赢口径'):'A门真临盘·序列齐·赛前冻结方向')+'</td>'
+          +'<td style="padding:6px 7px;font-size:10px;color:'+(_isRef?'#fbbf24':'#34d399')+';font-weight:700;white-space:normal">'+(_isRef?(((it.align&&+it.align.nSrc>=3)?'三盘合流':'多盘合流')+'·'+((it.align&&+it.align.nSrc>=3&&it.align.converge)?'三端同向':(((it.align&&it.align.nSrc)||0)+'端同向'))+'·'+((it.align&&it.align.nSrc)||0)+'端序列齐·独赢口径'):'A门真临盘·序列齐·赛前冻结方向')+'</td>'
           +'<td style="padding:6px 7px;white-space:nowrap;font-weight:700">'+sc+'</td>'
           +'<td style="padding:6px 7px;font-weight:800;color:'+settleCol+';white-space:nowrap;font-size:10.5px">'+settle
             +'<div style="font-size:9px;opacity:.7;font-weight:400">独赢口径·不并入亚盘让球统计</div></td>'
