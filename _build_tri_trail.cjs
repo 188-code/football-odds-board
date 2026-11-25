@@ -559,8 +559,14 @@ for (const _edir of EU365_DIRS) {
         const cur = eu365Meta.get(tid);
         if (!cur) eu365Meta.set(tid, next);
         else {
-          const changed = !!(cur.kick_ts && kick && cur.kick_ts !== kick)
-            || wnorm(cur.home) !== wnorm(next.home) || wnorm(cur.away) !== wnorm(next.away);
+          /* ★ 2026-11-25 根治「同队全称/简称被误判元数据冲突」：
+             实测 tid 3000193 札幌场，365 逐帧同时存在「札幌冈萨多」(41帧)与
+             「北海道札幌冈萨多」(30帧)两种写法，kick_ts/day 全一致。旧式 wnorm 严格不等
+             → changed=true → conflict 永久锁定 → 三端 seg 全 null、整场"赛程元数据冲突不可结算"，
+             北单153帧+365的71帧全被扔掉。改为 sim>=0.8 判同队：全称/简称(双向包含)视为未变，
+             真不同队(sim<0.8)仍判 changed，护栏不放宽（与 matchEu365/subsid 同一套 sim）。 */
+          const sameTeamNames = sim(cur.home, next.home) >= 0.8 && sim(cur.away, next.away) >= 0.8;
+          const changed = !!(cur.kick_ts && kick && cur.kick_ts !== kick) || !sameTeamNames;
           // 只有双队身份一致且官方快照开赛时间独立支持的新元数据，才解除旧时间冲突。
           const supported = !invalidMeta && glist.some(g => g.kick && Math.abs(g.kick-kick)<=10*60e3
             && leagueOK(g.league,next.league) && sim(g.home,next.home)>=0.8 && sim(g.away,next.away)>=0.8);
