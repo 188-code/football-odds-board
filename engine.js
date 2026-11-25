@@ -39,7 +39,7 @@
    但 ENGINE_V 没动 ⇒ bake_pack 里那 930 条 an 全打的是旧戳，_recalc_bake_an.cjs / _merge_analysis.cjs
    的版本门认不出它们陈旧，CDP 一查线上 t1 仍有 44 场 mk<0.80（全是 snapshot:true 的旧结论在说话）。
    ⇒ 以后凡是动到「结论口径」的改动（含门槛数值、门控条件），都要顺手改这个戳，再跑 _recalc_bake_an.cjs。 */
-const ENGINE_V = '2026-11-16-rqlevel-v1';  // 🔴 2026-11-16 加 yg.rqLvl(让球盘→盘级，纯展示) + rqHcapLevel(修让球盘硬编码n=1)。原 vote-engine-v1 的 lvlDiff TDZ 修复保留。
+const ENGINE_V = '2026-11-26-trigroupfix-v1';  // 🔴 2026-11-26 修北单编号冲突污染：_build_tri_trail 归组键追加队名前3字签名，拆开16号后新官方源挂错no导致的跨场混组，救回225组被淹没独赢帧(yg365+36/bd.n=0 -29)。不动方向/结算口径。原 2026-11-16 rqlevel 保留。
                                             //     2026-10-12b：#305 扩展——强档剔除不再只看联赛名，联赛名"国际友谊"等主流名下藏 U19/女足/青年队也被一并降权（用户曾投诉 U21/U19 错标强档），故 _leagueHtFlag 同时扫描 home/away 队名。
                                             //     正确判据下逐格受让覆盖 44~57%，全线低于 54.1% 盈亏线，无 alpha → 回到「无方向」；
                                             //     十三修市场认同门 / 十四修小球线区 [2.5,3.0] 保留；见 ou_stable 下方 ASIA_PICK 块）
