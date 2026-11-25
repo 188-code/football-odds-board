@@ -7948,7 +7948,20 @@ function _fundHeat(tid){
     const _pk = OFFLINE_PACK && OFFLINE_PACK[tid] && OFFLINE_PACK[tid].an;
     const _raw = window.__BAKE_RAW__ && window.__BAKE_RAW__.packs && window.__BAKE_RAW__.packs[tid] && window.__BAKE_RAW__.packs[tid].an;
     const an = (_pk && (_pk.yg || _pk.ygMin)) ? _pk : (_raw || _pk);   // 首屏只有 ygMin(轻量)，明细包到位后才有完整 yg
-    const yg = an && (an.yg || an.ygMin);                              // ★ gen_index 把 yg 拆进懒加载，首屏只剩 ygMin，兼容读取
+    let yg = an && (an.yg || an.ygMin);                              // ★ gen_index 把 yg 拆进懒加载，首屏只剩 ygMin，兼容读取
+    let _liveFallback = false;
+    /* ★★ 2026-11-25 修「三盘资金过热·今日实时榜恒空」：
+       bake_pack 冻结在 11-15（gqj2 567），今天的比赛 tid 不在 pack → yg 恒 null → 榜空。
+       tri_trail 已用 CVM 自采 365 帧 + 北单 spf 本地复算 yg365（同 engine.ygDiff 公式），
+       gen_index 导出为 window.__TRI_YG_LIVE__。仅在 pack 缺失时回退读取，
+       且回退表刻意不带 pan2.def → 下方 bigHot 恒 false → 只显示过热事实、不给可下注方向（守铁律）。 */
+    if ((!yg || !yg.ygDiff) && window.__TRI_YG_LIVE__ && window.__TRI_YG_LIVE__.items){
+      const _LI = window.__TRI_YG_LIVE__.items;
+      // MATCHES 里今日场 tid 形如 'T73000201'、t7id='3000201'；tri_trail 用 t7id 数字做 key。
+      const _t7id = /^T7(\d+)$/.exec(String(tid));
+      const _ly = _LI[String(tid)] || (_t7id ? _LI[_t7id[1]] : null);
+      if (_ly){ yg = _ly; _liveFallback = true; }
+    }
     // ★ 洋哥三盘·北单赔率池热度：只认北单真实占比源；bdDirOk=true 才是干净配对(排除北单错行假热)
     if (!yg || yg.heatSrc !== 'beidan' || yg.bdDirOk !== true) return null;
     const tf = yg.triFlow;
@@ -7979,11 +7992,13 @@ function _fundHeat(tid){
     const _side1 = (_pan && _pan.side && yg.heatSide && _pan.side === yg.heatSide)
                 || (yg.jc && yg.jc.hotSide && yg.heatSide && yg.jc.hotSide === yg.heatSide);
     const _noDefend = !!(_pan && (_pan.def === 'flat' || _pan.def === 'fade'));
-    const bigHot = daHot && _side1 && _noDefend;       // ★ 三盘合流才算大热必死
+    /* ★ 2026-11-25 铁律护栏：tri365 实时回退场只恢复「显示过热事实」，绝不给可下注方向。
+       回退表本就不带 pan2.def（_noDefend 自然 false），这里再显式兜底，防将来有人误加字段。 */
+    const bigHot = (!_liveFallback) && daHot && _side1 && _noDefend;   // ★ 三盘合流才算大热必死
     /* ★ 2026-10-30：单因子（仅③盘）拥挤但未三盘合流 → 标"拥挤·未合流"，不标大热必死 */
     const soloHot = daHot && !bigHot;
     const lvl = _ptToLvl(over);   // ★ 复用量化分档，但单位已改为「洋哥差值%」而非净超买pt
-    return { excess:ex, gap, over, lvl, side:ygd.hotSide||yg.heatSide||null, maxFlow:(tf?tf.maxFlow:null), daHot, extreme, bigHot, soloHot, triFlowOK: !!_side1, panDef: (_pan?_pan.def:null), ygDiff: ygd, yg: yg };
+    return { excess:ex, gap, over, lvl, side:ygd.hotSide||yg.heatSide||null, maxFlow:(tf?tf.maxFlow:null), daHot, extreme, bigHot, soloHot, triFlowOK: !!_side1, panDef: (_pan?_pan.def:null), ygDiff: ygd, yg: yg, liveFallback: _liveFallback };
   }catch(e){ return null; }
 }
 /* ★★ 2026-11-04 分级标尺（按【洋哥差值%】，替换净超买 pt）：
@@ -8017,7 +8032,10 @@ function _fundPlateTodayPicks(opt){
     if (!h) continue;
     if (String(m.state)==='-1') continue;             // 只收即将开赛
     const a=m.analysis||packAnalysis(m.tid)||{};
-    const exph=(a.exp_hcap!=null && isFinite(+a.exp_hcap)) ? +a.exp_hcap : null;
+    let exph=(a.exp_hcap!=null && isFinite(+a.exp_hcap)) ? +a.exp_hcap : null;
+    /* ★ 2026-11-25：tri365 实时回退场在 t7 里没有烘焙 exp_hcap，用 LIVE 表的 strongIdx 符号占位。
+       仅用于判"被超买方是否=强队方"，不参与方向/盘口深度（回退场方向已被强制观察）。 */
+    if (exph==null && h && h.liveFallback && h.yg && h.yg.exp_hcap!=null) exph=+h.yg.exp_hcap;
     if (exph==null) continue;                          // 无亚盘(无强弱)不标
     const favTeam = exph>0 ? '主' : '客';              // 强队 = 让球方(盘口方)
     const hiTeam  = h.side==='W'?'主':(h.side==='L'?'客':'平');   // 被超买方
@@ -8097,6 +8115,9 @@ function _fundPlateTodayPicks(opt){
        与 gen_index.py 账本 recDir 生成严格同口径（复盘可对齐）。 */
     const _recDirReal = (function(){
       try{
+        /* ★ 2026-11-25 铁律护栏：tri365 实时回退场（pack 冻结期的数据补救）只恢复「过热事实显示」，
+           绝不发下注方向——缺二盘365操盘字段(pan2.def)，三盘合流不成立，按铁律一律观察。 */
+        if (h && h.liveFallback) return '观察·实时三盘仅显示过热事实(缺二盘365操盘·不给方向)';
         const _aa3 = (m.analysis || packAnalysis(m.tid) || {});
         const _yg3 = _aa3.yg || _aa3.ygMin || {};
         const _wtr = (_aa3.grade_water_a != null && isFinite(+_aa3.grade_water_a)) ? +_aa3.grade_water_a : null;
@@ -8305,12 +8326,18 @@ function _fundPlateCoverage(){
   let rqPool = 0, winPool = 0;
   for (const r of bd){ if (r.rq !== 0 && r.rq != null) rqPool++; else winPool++; }
   const OP = (typeof OFFLINE_PACK !== 'undefined' && OFFLINE_PACK) ? OFFLINE_PACK : {};
-  let pre = 0, paired = 0, dirOk = 0, dirFalse = 0, betfaN = 0;
+  const LIVE = (window.__TRI_YG_LIVE__ && window.__TRI_YG_LIVE__.items) || {};
+  let pre = 0, paired = 0, dirOk = 0, dirFalse = 0, betfaN = 0, livePaired = 0;
   for (const m of MATCHES){
     if (String(m.state) === '-1') continue;
     pre++;
-    const a = OP[m.tid] && OP[m.tid].an; if (!a) continue;
-    const y = a.yg || a.ygMin; if (!y) continue;
+    const a = OP[m.tid] && OP[m.tid].an;
+    let y = a && (a.yg || a.ygMin);
+    /* ★ 2026-11-25：pack 冻结在 11-15，今日场不在 pack；用 tri365 实时回退源计入「配对」，
+       并在漏斗里单列「其中实时三盘」数量，诚实区分冻结 pack 与实时复算。 */
+    const _lk = LIVE[String(m.tid)] || LIVE[String(m.t7id)];
+    if (!y && _lk){ y = _lk; livePaired++; }
+    if (!y) continue;
     /* ★ 2026-10-30：必发那条腿此前整条断掉（okooo WAF 对桌面 UA 返 405 → betfa 恒为 []），
        已修（移动端 UA+Accept+Referer）。这里把两源都算进漏斗，用户能自证"必发接回来了"，
        但本板（三盘·洋哥口径）**只收北单**：洋哥明言「必发并不能反应球队购买热度」，
@@ -8320,7 +8347,7 @@ function _fundPlateCoverage(){
     paired++;
     if (y.bdDirOk === false) dirFalse++; else dirOk++;
   }
-  return { total, rqPool, winPool, pre, paired, dirOk, dirFalse, betfaN };
+  return { total, rqPool, winPool, pre, paired, dirOk, dirFalse, betfaN, livePaired };
 }
 /* ★ 2026-10-28 三盘资金·过热板「历史复盘」区（用户："看不到历史，怎么复盘"）。
    数据源 window.__FUNDPLATE_HISTORY__（gen_index 每轮构建 upsert：当天登记 → 开赛后回填）。
@@ -10718,9 +10745,11 @@ function openFundPlate(){
     +'<div style="background:rgba(168,85,247,.07);border:1px solid rgba(168,85,247,.25);border-radius:6px;padding:8px 11px;margin:0 0 14px;font-size:11.5px;line-height:1.85">'
     +'<div style="font-weight:800;color:#c4a5ff;margin-bottom:3px">🔎 本轮北单数据覆盖率（为什么榜可能是空的 · 每 15 分钟刷新）</div>'
     +'<div>北单在售 <b style="color:#fff">'+cov.total+'</b> 行 → 胜平负池 <b>'+cov.winPool+'</b> ／ 让球池 <b style="color:#0e7490">'+cov.rqPool+'</b>（让球池口径不同、不算超买）'
-    +' → 成功配对到比赛 <b style="color:#fff">'+cov.paired+'</b> 场 → 其中方向同侧(可判信号) <b>'+cov.dirOk+'</b> ／ <span style="color:#b45309">方向背离(观察) <b>'+cov.dirFalse+'</b></span>。</div>'
-    +'<div style="color:var(--mut)">赛前未完场共 '+cov.pre+' 场，只有这 '+cov.paired+' 场有北单真实资金 —— <b style="color:#fff">不是板子没算，是北单池本身只覆盖这么点比赛</b>（北单每天开售约 20~60 场，绝大多数比赛没有真实资金源）。'
-    +'想让榜更满，唯一的办法是等北单开售更多场次；我不会用澳客合成热度去凑数（那已被证实是假信号）。</div>'
+    +' → 成功配对到比赛 <b style="color:#fff">'+cov.paired+'</b> 场（其中 <b style="color:#7ee2a8">实时三盘复算 '+cov.livePaired+' 场</b>）→ 其中方向同侧(可判信号) <b>'+cov.dirOk+'</b> ／ <span style="color:#b45309">方向背离(观察) <b>'+cov.dirFalse+'</b></span>。</div>'
+    +'<div style="color:var(--mut)">赛前未完场共 '+cov.pre+' 场，其中 '+cov.paired+' 场有北单/三盘真实资金数据。'
+    +'<b style="color:#fca5a5">⚠ 2026-11-25 修复说明</b>：本榜原只认 <code>bake_pack</code>（gqj2 限流后冻结在 11-15），今天的比赛不在其中 → 长期显示 0 场；现已接入 <b>tri365 实时复算源</b>（CVM 自采 365 帧 + 北单 spf，同 engine.ygDiff 公式）回退。'
+    +'<b style="color:#7ee2a8">回退场只恢复「过热事实显示」，一律维持观察档、不给可下注方向</b>（缺二盘365操盘字段，三盘合流 bigHot 恒 false）——守铁律不让不完整的三盘数据变成下注信号。'
+    +'我用澳客合成热度凑数（已被证实是假信号）。</div>'
     /* ★ 2026-10-30：必发源已复活（此前被 okooo WAF 405 整条拦死，betfa 恒为 []）。
        这里明示"必发接回来了 N 场"，同时说明它按洋哥口径不进本板，避免被当成丢数据。 */
     +'<div style="margin-top:4px;color:var(--mut)">必发(澳客交易所)源：<b style="color:'+(cov.betfaN>0?'#2faa6a':'#b45309')+'">'+(cov.betfaN||0)+' 场</b>已挂载'
