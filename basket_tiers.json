@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-26T18:59:03.289Z",
+  "updated": "2026-11-26T20:00:08.992Z",
   "summary": {
     "total": 80,
     "byTier": {
@@ -777,7 +777,7 @@
       "league": "男篮世界杯预选赛",
       "home": "冰岛",
       "away": "波黑",
-      "kickTs": 1795721400,
+      "kickTs": null,
       "tier": "精选",
       "hot": "away",
       "hotName": "波黑",
@@ -803,7 +803,7 @@
       "line": 4.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-26T16:46:56+08:00",
-      "locked": true,
+      "locked": false,
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
@@ -1577,7 +1577,7 @@
       "league": "男篮世界杯预选赛",
       "home": "意大利",
       "away": "土耳其",
-      "kickTs": 1795719600,
+      "kickTs": null,
       "tier": "优选",
       "hot": "home",
       "hotName": "意大利",
@@ -1603,7 +1603,7 @@
       "line": -5.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-26T17:32:42+08:00",
-      "locked": true,
+      "locked": false,
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
