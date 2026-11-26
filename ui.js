@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-26-口径文案诚实-v13';   // ★ v13：序列护栏文案诚实化——「序列不齐/缺独立盘口」改为「资金口径不可比·让球↔独赢不混算」并显式带出北单让球已抓帧数，数据没丢、是玩法口径不可比；只改文案不改判定/方向/分母。前版 v12：临盘账本「三盘合流/三端同向」标签同样绑定 align.nSrc，2端不再冒称三端（承接 v11 历史板徽章修复）。前版 v11：徽章「三盘合流」绑定真实序列端数——65场挂徽章里真3端仅16场、2端34场(竞彩缺)、单端7场，2端/单端/元数据冲突一律不再冒称三盘合流，只改文案不动方向/引擎/分母（用户抓包「2盘不齐这叫三盘合流」）。前版 v10：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
+const UI_V = '2026-11-26-帝哥综合意见可执行-v15';   // ★ v15：综合意见列重写——只给「档位→动作＋关键数字＋甲一句话」，删掉「模拟盘不成立·源站未收录/疑似抓取失败/禁止据此下结论/按教程口径可继续跟踪」等重复废话；缺步只说缺①②③④哪几步、不参与判档，故障细节留在五步算式明细卡。判定/tier/acts/分母全部不变，只改展示层。前版 v14：按用户要求删除「非竞彩北单·野鸡区」——帝哥模块只做竞彩北单区(只收有官方SP场次)，野鸡区tab/入场过滤移除。配套 fetch_zhiyun_battle.cjs tid来源加titan007+tri_trail，修复bake冻结(11-12起)导致新场次307xxxx交锋永远抓不到、五步恒缺的断链(11-27场从0场有交锋→30场有交锋/10场五步齐全)。前版 v13：序列护栏文案诚实化——「序列不齐/缺独立盘口」改为「资金口径不可比·让球↔独赢不混算」并显式带出北单让球已抓帧数，数据没丢、是玩法口径不可比；只改文案不改判定/方向/分母。前版 v12：临盘账本「三盘合流/三端同向」标签同样绑定 align.nSrc，2端不再冒称三端（承接 v11 历史板徽章修复）。前版 v11：徽章「三盘合流」绑定真实序列端数——65场挂徽章里真3端仅16场、2端34场(竞彩缺)、单端7场，2端/单端/元数据冲突一律不再冒称三盘合流，只改文案不动方向/引擎/分母（用户抓包「2盘不齐这叫三盘合流」）。前版 v10：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -20171,13 +20171,17 @@ function _dgVerdict(m, opt){
   const rawGateSym=(delta!=null&&Math.abs(delta)>6);       // 本模块对称化，仅作展示对照
   const overGate=medUsable?(Math.abs(dev)>6):rawGate;
   // 数据源错配闸门：两端热门侧不一致 / 单侧偏差≥20pt / 去基差后抽水差≥15pt → 「不判」
-  let mismatch=false;
+  let mismatch=false, mismWhy=[];   // ★ v15：mismWhy 只用于「综合意见」列给出可执行的错配原因，不参与判定
   if(A&&B&&maxPer){
     const fa=A.p.indexOf(Math.max.apply(null,A.p)), fb=B.p.indexOf(Math.max.apply(null,B.p));
     const big=(dev!=null?Math.abs(dev):Math.abs(delta||0))>=15;
     const sortedA=A.p.slice().sort((x,y)=>y-x), sortedB=B.p.slice().sort((x,y)=>y-x);
     const fuzzy=(sortedA[0]-sortedA[1])<0.01 || (sortedB[0]-sortedB[1])<0.01;  // 平手/胜负极接近的模糊盘
-    mismatch=(fa!==fb&&!fuzzy)||Math.abs(maxPer.v)>=20||big;
+    const sideDiff=(fa!==fb&&!fuzzy);
+    mismatch=sideDiff||Math.abs(maxPer.v)>=20||big;
+    if(sideDiff) mismWhy.push('热门侧不同源（官方'+['主胜','平局','客胜'][fa]+'／外围'+['主胜','平局','客胜'][fb]+'）');
+    if(Math.abs(maxPer.v)>=20) mismWhy.push('逐项偏差'+maxPer.v.toFixed(1)+'pt≥20pt');
+    if(big) mismWhy.push('抽水差'+(dev!=null?dev:(delta||0)).toFixed(1)+'pt≥15pt');
   }
   const spread=(zone==='wild')?_dgCompanySpread(m):null;
   const drift=(zone==='wild')?_dgDrift(m):null;
@@ -20223,7 +20227,7 @@ function _dgVerdict(m, opt){
       }
     }
     else if(mismatch){
-      tier='⚠ 数据错配·不判'; col='var(--mut)'; act='两端盘口疑似不同源，禁止据此下结论';
+      tier='⚠ 数据错配·不判'; col='var(--mut)'; act='先核对来源或重抓，再判本场';
       why.push('<b style="color:var(--red)">热门侧不一致 / 逐项偏差≥20pt / 去基差抽水差≥15pt</b>：可能是让球行混入、跨场配对或初盘临盘混用，本场抽水差结论作废（不判「放弃」也不判「正常」）');
     }
     else {
@@ -20251,7 +20255,7 @@ function _dgVerdict(m, opt){
       why.push('<span style="color:var(--mut);font-size:9.5px">异常项合计 <b>'+abnItems+'</b>（去基差抽水差 '+(overGate?1:0)+' + 逐项热门 '+(hotSide?1:0)+' + 模拟盘 '+abnN+' + 文档第五步基准 '+docAbn+'）→ 叠加 ≥2 项按原文「分析数据有异常则建议放弃」</span>');
       if(abnItems>=2){ tier='⚠ 放弃'; col='var(--red)'; act='按教程：分析数据异常 → 放弃本场'; }
       else if(abnItems===1){ tier='⚠ 谨慎'; col='#f59e0b'; act='异常项未叠加，降仓/只观察'; }
-      else { tier='✔ 正常盘'; act='按教程口径可继续跟踪'; }
+      else { tier='✔ 正常盘'; act='抽水差与热门侧均未触发异常，可继续跟踪'; }
     }
   } else {
     why.push('<b>无竞彩/北单官方 SP → 返还抽水换算法不适用</b>（缺官方端，不能拿外围一家自比自）');
@@ -20276,7 +20280,7 @@ function _dgVerdict(m, opt){
   why.push('<span style="color:var(--mut)">近期数据源：'+_dgEsc(sim.formSrc)+'；异常门 |Δ|≥'+gate+' 球</span>');
   return {m,zone,sim,off,out,A,B,delta,dev,med,medSrc:opt.medSrc||'',medN:opt.medN||0,medFallback:!!opt.medFallback,
           rawGate,rawGateSym,overGate,medUsable,medGlobalN:opt.globalN||0,per,maxPer,hotPer,favPer,hotSide,spread,drift,live,formRecent:sim.formRecent,
-          realOU,realHc,ouGap,hcGap,ouAbn,hcAbn,abnN,gate,tier,col,act,why,acts,degraded:(!sim.simComplete)};
+          realOU,realHc,ouGap,hcGap,ouAbn,hcAbn,abnN,gate,tier,col,act,why,acts,mismWhy,degraded:(!sim.simComplete)};
 }
 
 /* ---- 组装行（两遍：先算本批抽水差中位数，再去基差判档） ---- */
@@ -20292,10 +20296,12 @@ function _dgBuildRows(){
     const rawOuter=RAW[String(m.tid||'')];
     const hasOuter=!!(an.coLive&&Object.keys(an.coLive).length) || (+an.o1h>1) || (+an.o0h>1) || !!rawOuter;
     const off=_dgOfficial(m);
-    // 野鸡区只收有外围赔率 + 有真实盘/近期战绩的场，避免几千场噪声
-    if(!off && !hasOuter) continue;
+    /* ★★ 2026-11-26 用户拍板：删除「非竞彩北单·野鸡区」，本模块只做竞彩北单区。
+       野鸡区无官方 SP、外围口径无法与文档返还换算对照，长期「模拟盘不成立·放养0」，
+       留着只会稀释可信度。这里直接只收有官方 SP（竞彩 had / 北单七玩法 / 澳客北单）的场次；
+       下方 hasOuter/sim/rawOuter 仅用于竞彩北单区自身的入场判定，不再为野鸡区放行。 */
+    if(!off) continue;
     const sim=_dgSim(m);
-    if(!off && !(sim.ouLine!=null || sim.hcLine!=null || (an.ou&&an.ou.c_line!=null) || rawOuter)) continue;
     const out=_dgOuter(m);
     const k=(typeof heatKick==='function')?heatKick(m):{day:m.day||'',time:m.kickoff||''};
     let ts=''; try{ ts=(typeof kickTs==='function')?kickTs(m):''; }catch(e){}
@@ -20361,12 +20367,12 @@ function _dgLiveCell(v){
 }
 function _dgCellLine(label, simV, realV, gap, unit, incomplete, gapKind, gapNote){
   if(incomplete){
+    // ★ v15：这两列只显示「甲未建盘」这一个事实和参考值；为什么缺步、抓取是否失败，
+    //   全部移到「五步算式」明细卡，不让同一句故障文案在大小球/让球/综合意见三列重复刷屏。
     const k=gapKind||'noH2H';
-    if(k==='noH2H')               // 设计行为：本源已收录本场，但两队无历史交锋
-      return '<span style="color:var(--mut);font-size:9.5px" title="设计行为：本源已收录本场，但两队无历史交锋记录，按文档五步不成立（不建模拟盘、不判档，单步外推可能是不存在的盘口）">模拟盘不成立 · 无历史交锋</span>'
-        + (simV!=null?'<br><span style="color:var(--mut);font-size:9px">参考 '+simV.toFixed(2)+'（仅展示）</span>':'');
-    // fetchFail / noCapture → 疑似抓取失败 / 本源未收录，琥珀色警示
-    return '<span style="color:#f59e0b;font-size:9.5px" title="'+_dgEsc(gapNote||'源站未收录本场，疑似抓取失败')+'">⚠ 模拟盘不成立 · 源站未收录</span>'
+    const tip=(k==='noH2H'?'本源已收录本场但两队无历史交锋':(gapNote||'源站未收录本场'))
+      +'；缺步细节见「五步算式」。单步外推仅参考，不与实盘比较、不参与判档。';
+    return '<span style="color:var(--mut);font-size:9.5px" title="'+_dgEsc(tip)+'">甲未建盘 · 不比</span>'
         + (simV!=null?'<br><span style="color:var(--mut);font-size:9px">参考 '+simV.toFixed(2)+'（仅展示）</span>':'');
   }
   if(simV==null) return '<span style="color:var(--mut)">缺数据</span>';
@@ -20456,23 +20462,59 @@ function _dgDetailHTML(r){
   return x;
 }
 function _dgMed(){ return (window._dgState||{}).med; }
+/* ★★ 2026-11-26 v15 用户拍板：综合意见 = 能看、能判、能执行。
+   固定四段：① 档位→动作  ② 乙判档关键数字/错配具体原因  ③ 甲一句话  ④ 完场核验/已验证真边。
+   故障细节（fetchFail / noH2H / noCapture、源站未收录、疑似抓取失败）只在「五步算式」明细卡里说明，
+   不再刷满综合意见列；判定逻辑 / tier / acts / 分母一律不动，只改展示层。 */
 function _dgOpinion(r){
   const v=r.v, s=v.sim, esc=_dgEsc;
-  const abbr=t=>{ if(/放弃/.test(t)) return '放弃'; if(/谨慎/.test(t)) return '谨慎'; if(/错配/.test(t)) return '不判'; if(/观察/.test(t)) return '观察'; if(/正常/.test(t)) return '正常'; if(/不足/.test(t)) return '数据不足'; return t.replace(/^[⚠✔◦]\s*/,''); };
+  const num=(x,d)=>(x==null||!isFinite(x))?'—':(+x).toFixed(d==null?1:d);
   const segs=[];
-  const a=v.acts||[];
-  const reason=a.length?a.map(esc).join('；'):(v.act&&v.act!=='—'?esc(v.act):'各项未见异常');
-  segs.push('<b style="color:'+v.col+'">'+abbr(v.tier)+'</b>：'+reason);
+
+  /* ① 档位 → 明确动作（下注 / 观察 / 不判 / 补数据），不再说「按教程可继续跟踪」这种空话 */
+  const action=()=>{
+    const t=String(v.tier||'');
+    if(/放弃/.test(t)) return '本场放弃，不下注（异常项≥2）';
+    if(/错配/.test(t)) return '本场不判、不下注；先核对来源或重抓后再判';
+    if(/代理/.test(t)) return '外围为官方SP代理，Δ不计入判档；补到真实365欧赔再判';
+    if(/漏抓/.test(t)) return '外围欧赔漏抓，暂不下注；补采后可重判';
+    if(/不足/.test(t)) return '缺外围1X2，不判；补采后再看';
+    if(/谨慎/.test(t)) return '降仓或只观察，不按常规仓位';
+    if(/观察/.test(t)) return '仅观察，不出手';
+    if(/正常/.test(t)) return '乙口径正常：可列跟踪，按甲模拟线决定是否出手';
+    return '数据不足，暂不出手';
+  };
+  segs.push('<b style="color:'+v.col+'">'+esc(v.tier)+'</b> → '+action());
+
+  /* ② 乙：给判档数字；错配给具体触发项，不再只说「禁止据此下结论」 */
+  if(v.mismWhy&&v.mismWhy.length){
+    segs.push('乙不判：'+v.mismWhy.map(esc).join('、')+'（抽水差结论作废）');
+  } else if(v.zone==='jc'&&v.A&&v.B&&!(v.out&&v.out.proxy)){
+    let ev='乙 Δ'+(v.delta>=0?'+':'')+num(v.delta)+'pt（官方'+num(v.A.over)+'%−外围'+num(v.B.over)+'%）';
+    if(v.dev!=null) ev+='，去基差'+(v.dev>=0?'+':'')+num(v.dev)+'pt'+(v.medFallback?'·小样本回退全局':'·中位n='+v.medN);
+    if(v.hotPer&&v.hotPer.v>=6) ev+='；<b style="color:var(--red)">'+esc(v.hotPer.side)+'官方端更热 +'+num(v.hotPer.v)+'pt</b>';
+    else if(v.maxPer) ev+='；逐项最大 '+esc(v.maxPer.side)+' '+(v.maxPer.v>=0?'+':'')+num(v.maxPer.v)+'pt（未越热门门）';
+    segs.push(ev);
+  }
+
+  /* ③ 甲：一句话说清能不能用；缺步只点名缺①②③④哪几步，故障性质留在明细卡 */
   if(s){
     if(s.simComplete){
-      const seg=[];
-      if(s.ouLine!=null) seg.push('大小球'+s.ouLine+'→实盘'+(v.realOU!=null?v.realOU:'?'));
-      if(s.hcLine!=null) seg.push('让球'+(s.hcLine>0?'主让'+s.hcLine:(s.hcLine<0?'客让'+Math.abs(s.hcLine):'平手'))+'→实盘'+(v.realHc!=null?v.realHc:'?'));
-      segs.push((seg.join('、')||'缺模拟线')+(v.abnN?('，'+v.abnN+'项异常'):'，吻合'));
-    } else segs.push(s.simGapKind==='noH2H'
-      ? '模拟盘不成立·无历史交锋（'+(s.simWhy?esc(s.simWhy):'缺步')+'）'
-      : '⚠ 模拟盘不成立·源站未收录（'+(s.simGapKind==='fetchFail'?'疑似抓取失败':'本源无此场')+'）');
+      const line=[];
+      if(s.ouLine!=null) line.push('大小'+s.ouLine+'→实盘'+(v.realOU!=null?v.realOU:'缺'));
+      if(s.hcLine!=null) line.push('让球'+(s.hcLine>0?'主让'+s.hcLine:(s.hcLine<0?'客让'+Math.abs(s.hcLine):'平手'))+'→实盘'+(v.realHc!=null?v.realHc:'缺'));
+      segs.push('甲五步齐全：'+(line.join('、')||'模拟线缺')+(v.abnN?('，'+v.abnN+'项异常'):('，与实盘吻合')));
+    } else {
+      const miss=[];
+      if(s.s1==null) miss.push('①交锋造球');
+      if(s.s2==null) miss.push('②近期造球');
+      if(s.s3==null) miss.push('③交锋净胜');
+      if(s.s4==null) miss.push('④近期净胜');
+      segs.push('甲缺'+(miss.join('/')||'五步')+'，不建模拟线、不参与判档；本场只按乙口径判');
+    }
   }
+
+  /* ④ 完场核验 + 已验证真边（仅命中时出现） */
   if(r.score && /^\d+\s*:\s*\d+$/.test(String(r.score))){
     const q=String(r.score).split(':').map(Number), B=v.B;
     let cons='';
@@ -20625,17 +20667,17 @@ function _dgReviewHTML(st){
   const Tiers=[
     {re:/放弃/,label:'⚠ 放弃',col:'var(--red)',note:'分析数据异常 → 放弃'},
     {re:/谨慎/,label:'⚠ 谨慎',col:'#f59e0b',note:'异常项未叠加 → 降仓/只观察'},
-    {re:/错配/,label:'⚠ 数据错配·不判',col:'var(--mut)',note:'两端盘口不同源，禁止下结论'},
-    {re:/正常/,label:'✔ 正常盘',col:'var(--grn)',note:'可继续跟踪'},
-    {re:/观察/,label:'◦ 仅观察',col:'var(--mut)',note:'野鸡区无官方判据'},
+    {re:/错配/,label:'⚠ 数据错配·不判',col:'var(--mut)',note:'先核对来源或重抓后再判'},
+    {re:/正常/,label:'✔ 正常盘',col:'var(--grn)',note:'未触发异常·可跟踪'},
+    {re:/观察/,label:'◦ 仅观察',col:'var(--mut)',note:'无官方判据·不出手'},
     {re:/不足/,label:'数据不足',col:'var(--mut)',note:'缺外围赔率'}
   ];
   let html='<details style="margin-top:9px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--card2)">'
-    +'<summary style="cursor:pointer;font-size:11px;font-weight:700">📅 历史回测 · 综合意见（已完场 '+done.length+' 场｜竞彩北单区 '+jc.length+' · 野鸡区 '+wild.length+'）</summary>'
+    +'<summary style="cursor:pointer;font-size:11px;font-weight:700">📅 历史回测 · 综合意见（已完场 '+done.length+' 场 · 竞彩北单区）</summary>'
     +'<div style="font-size:10.5px;line-height:1.8;color:var(--txt);margin-top:5px">';
   /* 一 · 总览 */
   html+='<div style="font-weight:800;margin:6px 0 3px">一 · 总览</div>';
-  html+='已完场 <b>'+done.length+'</b> 场（竞彩北单区 '+jc.length+' · 野鸡区 '+wild.length+'）。全样本判档分布：'+distStr+'。<br>';
+  html+='已完场 <b>'+done.length+'</b> 场（竞彩北单区）。全样本判档分布：'+distStr+'。<br>';
   const _zS=(L,S)=>S.nOU? (L+' '+S.nOU+'场·MAE '+(S.mae!=null?S.mae.toFixed(2):'—')+(S.nBoth?('（模拟 '+S.simE.toFixed(2)+' vs 真实 '+S.realE.toFixed(2)+'，均距 '+S.gapE.toFixed(2)+'，'+pct(S.simWin,S.nBoth)+'更贴）'):'')) : (L+' 无五步齐全场');
   html+='甲·模拟盘第⑤步（仅五步齐全、模拟盘真正成立的完场，缺①③交锋真值已排除）：'
     +'全部 '+_zS('',allS)+'；<b style="color:#0d9488">竞彩北单区</b> '+_zS('',jcS)+'；<b style="color:#8b98a9">野鸡区</b> '+_zS('',wildS)+'。<br>';
@@ -20755,7 +20797,7 @@ function openDg(){
   + '<div class="modal show" id="dgModal" style="display:flex;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:12px">'
   + '<div style="background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:12px;max-width:1440px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
   + '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line)">'
-  +   '<b>🧭 解说帝哥 · 模拟盘 × 返还抽水换算（竞彩北单 / 野鸡区）</b>'
+  +   '<b>🧭 解说帝哥 · 模拟盘 × 返还抽水换算（竞彩北单区）</b>'
   +   '<button onclick="closeDg()" style="background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:2px 10px;cursor:pointer">✕</button></div>'
   + '<div style="padding:11px 14px">'
   + '<div style="background:linear-gradient(90deg,rgba(229,69,69,.12),rgba(13,148,136,.12));border:1px solid var(--line);border-radius:8px;padding:8px 11px;margin-bottom:9px;font-size:11px;line-height:1.7;color:var(--txt)">'
@@ -20770,12 +20812,12 @@ function openDg(){
   +  '<details style="margin:4px 0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--card2)"><summary style="cursor:pointer;font-size:10.5px;font-weight:700;color:var(--red)">⚖ 原文三处需留意（符号笔误 / 相加相减口径 / 2.5 锚点）· 点开逐项核对</summary><div style="font-size:10.5px;line-height:1.7;margin-top:5px;color:var(--txt)">'
   +  '① 表2 第三步「1.4−1.2 | −0.2」符号错，应为 <b>+0.2</b>；② 「历史盘口值+近期盘口值÷2」那格写成「−0.2+−0.6=0.4÷2=0.2」符号丢失，<b>但同一行结果栏「负-0.2」与第五步结论「客让 0.25」是自洽的</b>（(+0.2−0.6)/2=−0.2 → 落档 −0.25），错的是中间算式、不是结论（此前本页写「第五步不成立」措辞过头，已更正）；③ 表1 定义行第四步写「两项<b>相加</b>」、表2 例题写「两项<b>相减</b>」并算出 −0.6，<b>看似矛盾其实自洽</b>：表1 标题「以主场为准」，客队盘口值已按主队视角取反（−D_a），相加 = D_h + (−D_a) = D_h − D_a，与表2 相减同式（此前本页写「原文自相矛盾」是误判，2026-11-12 更正）。另：原文第五步「2.5（开盘不能低于2.5、也不能高于2.5）」是<b>基准/约束</b>——(①+②)/2 实算落档得到的模拟大小球线应为 2.5，落在其它档即「分析数据有异常」，按原文计 1 项异常（竞彩北单区参与判档）。<b>2026-11-15 更正</b>：曾误做成「结论恒等于 2.5」，那会把 ①~④ 全废掉（所有场结论相同），已撤销。'
   +  '</div></details>'
-  +  '<b>分区</b>：<b>竞彩北单区</b>=有竞彩 had / 北单官方七玩法 SP，甲乙全跑；<b style="color:#8b98a9">非竞彩北单区（野鸡区）</b>=无官方 SP，乙缺官方端<b>明确不适用</b>，改跑甲 + 外围多公司抽水离散 + 初→临漂移，只给观察/谨慎，不冒充可下注结论。<br>'
+  +  '<b>范围</b>：本模块<b>只做竞彩北单区</b>（有竞彩 had / 北单官方七玩法 SP 的场次，甲五步 + 乙返还换算全跑）。无官方 SP 的场次按用户要求已整体移除，不再另设野鸡区，也不拿外围自比自冒充结论。<br>'
   +  '<b style="color:#0d9488">数据口径（重要 · 2026-11-12 更正）</b>：五步 ①②③④ 的逐场原始数据<b>优先取源站雷速分析接口</b>（<code>bake_pack.json → packs[tid].analysis.battle</code>：两队历史交锋逐场、主队近期逐场、客队近期逐场，每行带日期 + 队名 + 比分），构建时已 gzip 内联进首页（<span id="dgBattleN">'+_dgBattleN()+'</span>），随 CVM 每 15 分钟刷新。<b style="color:var(--yel)">此前为给首屏瘦身把整个 analysis 字段删掉，前端根本拿不到，只能退回 7m 老库（数据止于 2026-10-13，不是文档「近 10 场」）→ 竞彩北单区五步齐全 0 场；这是数据捕捉缺口，现已补齐。</b>源站每组通常给 5 场（文档要 10 场），<b>逐场标注样本数：近况 &lt;3 场不进公式、交锋 &lt;2 场不进公式</b>（2026-11-15 修：旧版交锋也套 3 场门，把 118 场源站确有 2 场真交锋的比赛误判成「模拟盘不成立」）；只有源站缺步才回退 7m 交锋/近况表并注明时效，回退时<b>自定</b>异常门从 0.5 放宽到 1.0 球。交锋 &lt;2 场不进公式（防单场 7:0 带飞大小球线）。真实让球盘取 grade_hcap_a（真实盘口，不用模型 exp_hcap）。<br>'
   +  '<details style="margin:4px 0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--card2)"><summary style="cursor:pointer;font-size:10.5px;font-weight:700;color:var(--yel)">⚖ 哪些是原文、哪些不是（原文只有两块公式，其余为分区要求/自研/校准）· 点开</summary><div style="font-size:10.5px;line-height:1.7;margin-top:5px;color:var(--txt)">'
-  +  '<b>原文只有两块</b>——五步模拟盘 + 返还抽水换算，外加「如分析数据有异常，则建议放弃」。「竞彩北单 / 野鸡区」<b>分区是按用户要求加的，原文没有</b>；野鸡区的「外围多公司抽水离散 + 初→临漂移」、两道防脏数据闸、逐项热门方向符号、0.5/1.0 球门、去基差判档，<b>均为本模块自研/校准，不是原文公式</b>。原文的 6pt 门是拿<b>竞彩 vs 一家外围</b>（截图为「独赢」一家 4.48/4.15/1.71）标定的，本模块外围优先 Bet365、其次欧赔汇总（口径已变），套到<b>北单 SP 属外推</b>，虽按官方源分组去基差缓解，仍未经样本外验证。'
+  +  '<b>原文只有两块</b>——五步模拟盘 + 返还抽水换算，外加「如分析数据有异常，则建议放弃」。「只做竞彩北单有官方 SP 场次」<b>是按用户要求定的范围，原文没有</b>；两道防脏数据闸、逐项热门方向符号、0.5/1.0 球门、去基差判档，<b>均为本模块自研/校准，不是原文公式</b>。原文的 6pt 门是拿<b>竞彩 vs 一家外围</b>（截图为「独赢」一家 4.48/4.15/1.71）标定的，本模块外围优先 Bet365、其次欧赔汇总（口径已变），套到<b>北单 SP 属外推</b>，虽按官方源分组去基差缓解，仍未经样本外验证。'
   +  '</div></details>'
-  +  '<b style="color:var(--red)">两道防脏数据闸</b>：官方与外围热门侧不一致 / 单侧偏差≥20pt / 抽水差≥15pt → 判「<b>数据错配·不判</b>」，不拿跨场或让球行混入的配对出结论；野鸡区模拟盘与外围盘的偏离<b>只作对照、不单独触发判档</b>（无官方盘可校验）。<br>'
+  +  '<b style="color:var(--red)">两道防脏数据闸</b>：官方与外围热门侧不一致 / 单侧偏差≥20pt / 抽水差≥15pt → 判「<b>数据错配·不判</b>」，综合意见列直接写出是哪一条触发、处理动作是先核对来源或重抓，不再只说「禁止下结论」。<br>'
   +  '<b style="color:#0d9488">📈 实时动态（真逐帧）</b>：弹窗每 60 秒重算，数据本体随 CVM <b>每 15 分钟</b>刷新。<b>外围端</b> <code>odds_timeline.json</code>（原始每场≤48 帧、注入取末 24 帧，盘口/水位/欧赔有变化才记、开赛定格）；<b>官方端</b> <code>jc_history.json</code>（竞彩 had 持续累积）+ <b>D 盘「快照流水」回流</b> <code>dg_history.json</code>（竞彩 had / 北单 SP，逐 5 分钟一帧、每场≤48 帧，每轮由官方七玩法续记）。<b>任一端有帧即建轨迹</b>，时间轴取并集；官方帧按「≤ 帧时刻的最近快照」对齐（<b>非同刻</b>），Δ 与逐项偏差只在两端齐的帧算、缺端显示「—」，折线只画单一口径序列。<b style="color:var(--red)">同源铁律</b>：竞彩官方 +4~5pt、北单 −8~−9pt 差约 12pt，一个序列绝不混源，来源标在明细卡。「官方端持续推高」分两口径：<b>相对</b>（文档原义，需 ≥3 双端帧、单调上行、末帧越 6pt）与<b>绝对</b>（本模块扩展，官方 SP 自身隐含上行 ≥3pt）；不足 3 帧明写「判不了」。跨时点判读<b>不代入 6pt 门、不直接判档</b>（文档只给静态截面公式）。<br>'
   +  '<span style="color:var(--mut)">数据源：雷速源站逐场交锋/近况（五步主源）· 7m 交锋+近期真值库（回退，止于 10-13）· 竞彩官方 had · 北京体彩网七玩法 XML · 澳客北单 SP · Bet365/欧赔 · odds_timeline 逐帧 · jc_history 逐帧。每 15 分钟随 CVM 刷新；点「五步算式」逐项核对每一步原始数据与样本数。</span>'
   +  _dgDataStatusHTML(built)
@@ -20784,7 +20826,7 @@ function openDg(){
   + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;margin-bottom:8px;color:var(--txt);position:sticky;top:0;z-index:6;background:var(--card);padding:6px 0 7px;border-bottom:1px solid var(--line)">'
   +   '<div class="htab-bar" style="margin:0">'
   +     '<button class="htab-btn on dgtab" data-z="jc" onclick="_dgZone(\'jc\')">🏛 竞彩北单区</button>'
-  +     '<button class="htab-btn dgtab" data-z="wild" onclick="_dgZone(\'wild\')">🦆 非竞彩北单 · 野鸡区</button>'
+  +     '<span style="color:var(--mut);font-size:10px;margin-left:8px">仅收录竞彩/北单官方在售场次（有官方 SP，可做返还抽水换算）</span>'
   +   '</div>'
   +   '<span id="dgCount" style="margin-left:4px"></span>'
   +   '<span id="dgLiveTs" style="margin-left:6px;color:var(--mut);font-size:9.5px" title="弹窗打开期间每 60 秒自动重算一次；数据本体由页面云端融合刷新（CVM 15 分钟一轮）">本帧 '+new Date().toLocaleTimeString('zh-CN',{hour12:false})+'</span>'
@@ -20845,7 +20887,7 @@ function _dgMountBtn(n){
     if(document.getElementById('btnDg')) return;
     const b=document.createElement('button'); b.className='sec'; b.id='btnDg';
     b.style.cssText='color:#0d9488;border-color:#0d9488;font-weight:700';
-    b.title='🧭 解说帝哥：模拟盘（交锋+近10场造球/净胜 → 大小球线·让球盘）与返还抽水换算（官方SP vs 外围，6pt 门 + 单侧过热）。分「竞彩北单区」与「非竞彩北单·野鸡区」，后者无官方盘、只观察。';
+    b.title='🧭 解说帝哥：模拟盘（交锋+近10场造球/净胜 → 大小球线·让球盘）与返还抽水换算（官方SP vs 外围，6pt 门 + 单侧过热）。仅竞彩北单官方在售场次。';
     b.textContent='🧭 解说帝哥'; b.onclick=openDg; tbr.appendChild(b);
   }catch(e){ console.warn('解说帝哥按钮注入失败',e&&e.message); }
 }
