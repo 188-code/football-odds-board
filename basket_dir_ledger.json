@@ -25656,7 +25656,7 @@
    "kickoff": "2026-11-27T06:10:00+08:00",
    "kickTs": 1795731000,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "乌拉圭",
    "away": "加拿大",
@@ -25707,7 +25707,7 @@
    "kickoff": "2026-11-27T06:10:00+08:00",
    "kickTs": 1795731000,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "乌拉圭",
    "away": "加拿大",
@@ -25753,7 +25753,7 @@
    "kickoff": "2026-11-27T06:10:00+08:00",
    "kickTs": 1795731000,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "乌拉圭",
    "away": "加拿大",
@@ -25799,7 +25799,7 @@
    "kickoff": "2026-11-27T08:40:00+08:00",
    "kickTs": 1795740000,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "阿根廷",
    "away": "巴哈马",
@@ -25850,7 +25850,7 @@
    "kickoff": "2026-11-27T08:40:00+08:00",
    "kickTs": 1795740000,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "阿根廷",
    "away": "巴哈马",
@@ -25896,7 +25896,7 @@
    "kickoff": "2026-11-27T08:40:00+08:00",
    "kickTs": 1795740000,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "阿根廷",
    "away": "巴哈马",
@@ -25942,7 +25942,7 @@
    "kickoff": "2026-11-27T09:40:00+08:00",
    "kickTs": 1795743600,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "巴拿马",
    "away": "波多黎各",
@@ -25993,7 +25993,7 @@
    "kickoff": "2026-11-27T09:40:00+08:00",
    "kickTs": 1795743600,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "巴拿马",
    "away": "波多黎各",
@@ -26039,7 +26039,7 @@
    "kickoff": "2026-11-27T09:40:00+08:00",
    "kickTs": 1795743600,
    "firstSeen": 1795719607,
-   "lastSeen": 1795721408,
+   "lastSeen": 1795722309,
    "pre": true,
    "home": "巴拿马",
    "away": "波多黎各",
@@ -27047,11 +27047,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-26T11:15:02+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=728011 希腊-格鲁吉亚 68-68 | 队名严格配对(日期±2天/开赛±18h) | calc:68-68 → away",
+   "settledAt": 1795722309,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795662902,
@@ -27111,7 +27111,8 @@
     "first": "2026-11-26T11:15:02+08:00",
     "last": "2026-11-26T20:15:03+08:00",
     "frames": 4
-   }
+   },
+   "finalScore": "68-68"
   },
   "2043048:hdc": {
    "id": "2043048",
@@ -27143,11 +27144,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-26T11:15:02+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=728011 希腊-格鲁吉亚 68-68 | 队名严格配对(日期±2天/开赛±18h) | calc:68-8.5=59.5 vs 68 → away",
+   "settledAt": 1795722309,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795662902,
@@ -27233,7 +27234,8 @@
     "first": "2026-11-26T11:15:02+08:00",
     "last": "2026-11-26T20:00:03+08:00",
     "frames": 6
-   }
+   },
+   "finalScore": "68-68"
   },
   "2043048:hilo": {
    "id": "2043048",
@@ -27265,11 +27267,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-26T11:15:02+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=728011 希腊-格鲁吉亚 68-68 | 队名严格配对(日期±2天/开赛±18h) | calc:68+68=136 vs 158.5 → under",
+   "settledAt": 1795722309,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795662902,
@@ -27368,7 +27370,8 @@
     "first": "2026-11-26T11:15:02+08:00",
     "last": "2026-11-26T22:00:02+08:00",
     "frames": 7
-   }
+   },
+   "finalScore": "68-68"
   },
   "2043049:hdc": {
    "id": "2043049",
@@ -27400,11 +27403,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-26T11:15:02+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=728012 黑山-西班牙 61-92 | 队名严格配对(日期±2天/开赛±18h) | calc:61+17.5=78.5 vs 92 → away",
+   "settledAt": 1795722309,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795662902,
@@ -27438,7 +27441,8 @@
     "first": "2026-11-26T11:15:02+08:00",
     "last": "2026-11-26T14:30:03+08:00",
     "frames": 2
-   }
+   },
+   "finalScore": "61-92"
   },
   "2043049:hilo": {
    "id": "2043049",
@@ -27470,11 +27474,11 @@
    "captureTimeVerified": true,
    "observed_at": "2026-11-26T11:15:02+08:00",
    "state": "Selling",
-   "result": null,
-   "pl": null,
-   "settleSrc": null,
-   "settledAt": null,
-   "verified": false,
+   "result": "lose",
+   "pl": -1,
+   "settleSrc": "球探完场比分 results_t7 sid=728012 黑山-西班牙 61-92 | 队名严格配对(日期±2天/开赛±18h) | calc:61+92=153 vs 157.5 → under",
+   "settledAt": 1795722309,
+   "verified": true,
    "dirTrail": [
     {
      "t": 1795662902,
@@ -27573,60 +27577,61 @@
     "first": "2026-11-26T11:15:02+08:00",
     "last": "2026-11-26T21:30:03+08:00",
     "frames": 7
-   }
+   },
+   "finalScore": "61-92"
   }
  },
  "summary": {
-  "updatedAt": 1795721408,
+  "updatedAt": 1795722309,
   "srcUsed": "cloud_app basket_heat.json(离线兜底)(竞彩真实报价·赛前冻结)",
   "ruleV": "basket_odds_lean_observe_1",
   "total": 347,
-  "settled": 256,
-  "pending": 91,
+  "settled": 261,
+  "pending": 86,
   "pre": 347,
   "post": 0,
   "all": {
-   "n": 256,
+   "n": 261,
    "win": 121,
-   "lose": 135,
+   "lose": 140,
    "push": 0,
-   "hit": 47.3,
-   "roi": -27.4,
-   "se": 6.3,
+   "hit": 46.4,
+   "roi": -28.8,
+   "se": 6.2,
    "significant": true,
    "crossZero": false
   },
   "byPick": {
    "主胜": {
-    "n": 49,
+    "n": 50,
     "win": 26,
-    "lose": 23,
+    "lose": 24,
     "push": 0,
-    "hit": 53.1,
-    "roi": -32,
-    "se": 14.3,
+    "hit": 52,
+    "roi": -33.4,
+    "se": 14.1,
     "significant": true,
     "crossZero": false
    },
    "让分主胜": {
-    "n": 68,
+    "n": 70,
     "win": 30,
-    "lose": 38,
+    "lose": 40,
     "push": 0,
-    "hit": 44.1,
-    "roi": -26,
-    "se": 12.1,
+    "hit": 42.9,
+    "roi": -28.1,
+    "se": 12,
     "significant": true,
     "crossZero": false
    },
    "大分": {
-    "n": 87,
+    "n": 89,
     "win": 34,
-    "lose": 53,
+    "lose": 55,
     "push": 0,
-    "hit": 39.1,
-    "roi": -34.5,
-    "se": 10.7,
+    "hit": 38.2,
+    "roi": -36,
+    "se": 10.6,
     "significant": true,
     "crossZero": false
    },
@@ -27666,35 +27671,35 @@
   },
   "byMarket": {
    "mnl": {
-    "n": 80,
+    "n": 81,
     "win": 44,
-    "lose": 36,
+    "lose": 37,
     "push": 0,
-    "hit": 55,
-    "roi": -28.5,
-    "se": 11.2,
+    "hit": 54.3,
+    "roi": -29.4,
+    "se": 11.1,
     "significant": true,
     "crossZero": false
    },
    "hdc": {
-    "n": 88,
+    "n": 90,
     "win": 42,
-    "lose": 46,
+    "lose": 48,
     "push": 0,
-    "hit": 47.7,
-    "roi": -20.5,
-    "se": 10.7,
+    "hit": 46.7,
+    "roi": -22.3,
+    "se": 10.5,
     "significant": true,
     "crossZero": false
    },
    "hilo": {
-    "n": 88,
+    "n": 90,
     "win": 35,
-    "lose": 53,
+    "lose": 55,
     "push": 0,
-    "hit": 39.8,
-    "roi": -33.3,
-    "se": 10.7,
+    "hit": 38.9,
+    "roi": -34.8,
+    "se": 10.5,
     "significant": true,
     "crossZero": false
    }
@@ -27800,26 +27805,26 @@
     "crossZero": false
    },
    "2026-11-27": {
-    "n": 3,
+    "n": 8,
     "win": 2,
-    "lose": 1,
+    "lose": 6,
     "push": 0,
-    "hit": 66.7,
-    "roi": -8.7,
-    "se": 57.7,
+    "hit": 25,
+    "roi": -65.7,
+    "se": 35.4,
     "significant": false,
-    "crossZero": true
+    "crossZero": false
    }
   },
   "byRuleV": {
    "basket_odds_lean_observe_1": {
-    "n": 256,
+    "n": 261,
     "win": 121,
-    "lose": 135,
+    "lose": 140,
     "push": 0,
-    "hit": 47.3,
-    "roi": -27.4,
-    "se": 6.3,
+    "hit": 46.4,
+    "roi": -28.8,
+    "se": 6.2,
     "significant": true,
     "crossZero": false
    }
