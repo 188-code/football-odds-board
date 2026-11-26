@@ -1,29 +1,29 @@
 {
   "version": "basket_overheat_seqchain_mnl_20261124hdcobs2",
-  "updated": "2026-11-26T04:34:16.064Z",
+  "updated": "2026-11-26T04:45:15.378Z",
   "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。★★2026-11-24修:①D盘快照eu帧按竞彩id读入,不再丢365;②竞彩mnl未开售但jc hdc+bd sfgg+365独赢齐、且竞彩/北单让分线一致的场单列_hdcCandidate观察候选,方向只取365独赢强方(≥55%/≤45%)对面并按真实让分线记settleByLine,hotFlag=false不进统计/引擎/账本/投注方向;③二次复核修正:无365独赢不得候选、主统计集严格排除候选、D盘快照按账本kickTs过滤赛后帧;④候选只复现外部精选错位线索,n<40且训练/留出未验证。展示集=统计集=版本集。",
   "summary": {
     "totalMatches": 111,
     "withNorth": 31,
     "noNorth": 80,
     "resonanceN": 23,
-    "withB365": 0,
-    "strongN": 0,
-    "strongSettled": 0,
-    "strongHit": 0,
-    "strongHitRate": null,
-    "strongSe": null,
-    "t7SettledN": 0,
+    "withB365": 51,
+    "strongN": 12,
+    "strongSettled": 12,
+    "strongHit": 2,
+    "strongHitRate": 16.7,
+    "strongSe": 10.8,
+    "t7SettledN": 2,
     "hotFlagged": 91,
     "candidateN": 2,
     "candidateWith365": 2,
     "candidateSettledN": 2,
     "candidateHitN": 1,
     "candidateHitRate": 50,
-    "settledN": 67,
-    "hit": 29,
-    "hitRate": 43.3,
-    "se": 6.1,
+    "settledN": 71,
+    "hit": 30,
+    "hitRate": 42.3,
+    "se": 5.9,
     "significant": true,
     "crossZero": false,
     "caveat": "n<40观察档;一盘=竞彩独赢资金趋势(洋哥顺序链起点);二盘365自2026-11-20起用球探滚动帧补位(此前缺位,历史场无365=真实缺,不回补);三盘北单让分近似确认;强置信=三端合流(JC+365+北单同侧),前瞻口径无历史回测,不进引擎;第4步临场序列篮球做不到;★★2026-11-24新增并二次修正hdc观察候选:竞彩mnl未开售但D盘jc hdc+bd sfgg+365独赢齐、同线且365强方≥55%/≤45%时单列,方向仅取强方对面,按真实让分线记settleByLine,不写hotFlag/不进stats/不进引擎/不给投注方向;主汇总已排除候选,D盘快照按kickTs过滤赛后帧"
@@ -1883,7 +1883,24 @@
         "line": -7.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.29,
+          "away": 3.5
+        },
+        "hdc": {
+          "line": 7.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 177.5,
+          "over": 0.8,
+          "under": 0.95
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.87,
@@ -1894,12 +1911,12 @@
         "hotPct": 73.8,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 73.1,
+        "p365A": 26.9,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -1911,7 +1928,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -2157,7 +2174,24 @@
         "away": 2.7,
         "line": "-5.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.43,
+          "away": 2.9
+        },
+        "hdc": {
+          "line": 6.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 219.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T21:35:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.78,
@@ -2168,12 +2202,12 @@
         "hotPct": 73.1,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 67,
+        "p365A": 33,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0033,
         "shareHome": 63.1,
         "shareAway": 36.9,
@@ -2185,10 +2219,10 @@
         "lineJc": -7.5,
         "lineBd": -5.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "home",
       "resultScore": "111-97",
@@ -2211,7 +2245,24 @@
         "line": -7.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.34,
+          "away": 3.35
+        },
+        "hdc": {
+          "line": 7.5,
+          "home": 0.9,
+          "away": 0.92
+        },
+        "total": {
+          "line": 216.5,
+          "over": 0.97,
+          "under": 0.86
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.85,
@@ -2222,12 +2273,12 @@
         "hotPct": 75.8,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 71.4,
+        "p365A": 28.6,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2239,7 +2290,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -2265,7 +2316,24 @@
         "line": -7.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.34,
+          "away": 3.35
+        },
+        "hdc": {
+          "line": 7.5,
+          "home": 0.94,
+          "away": 0.89
+        },
+        "total": {
+          "line": 234.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -2276,12 +2344,12 @@
         "hotPct": 74.4,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 71.4,
+        "p365A": 28.6,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2293,7 +2361,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -2323,7 +2391,24 @@
         "away": 1.59,
         "line": "5.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.85,
+          "away": 1.43
+        },
+        "hdc": {
+          "line": -5.5,
+          "home": 0.94,
+          "away": 0.88
+        },
+        "total": {
+          "line": 223.5,
+          "over": 0.92,
+          "under": 0.9
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -2334,12 +2419,12 @@
         "hotPct": 71.3,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 33.4,
+        "p365A": 66.6,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0007,
         "shareHome": 37.1,
         "shareAway": 62.9,
@@ -2351,10 +2436,10 @@
         "lineJc": 7.5,
         "lineBd": 5.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(主)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "away",
       "resultScore": "111-113",
@@ -2381,7 +2466,24 @@
         "away": 2.07,
         "line": "-3.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.7,
+          "away": 2.21
+        },
+        "hdc": {
+          "line": 3.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 240.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.84,
@@ -2392,12 +2494,12 @@
         "hotPct": 55.8,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 56.5,
+        "p365A": 43.5,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0039,
         "shareHome": 51.9,
         "shareAway": 48.1,
@@ -2409,10 +2511,10 @@
         "lineJc": -3.5,
         "lineBd": -3.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "hit",
       "result": "away",
       "resultScore": "94-98",
@@ -2435,7 +2537,24 @@
         "line": -12.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.17,
+          "away": 5.25
+        },
+        "hdc": {
+          "line": 11.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 228.5,
+          "over": 0.88,
+          "under": 0.94
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -2446,12 +2565,12 @@
         "hotPct": 83.2,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 81.8,
+        "p365A": 18.2,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2463,7 +2582,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -2489,7 +2608,24 @@
         "line": 6.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.48,
+          "away": 1.57
+        },
+        "hdc": {
+          "line": -4.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 227.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -2500,12 +2636,12 @@
         "hotPct": 65.8,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 38.8,
+        "p365A": 61.2,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2517,7 +2653,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
@@ -2548,14 +2684,34 @@
       },
       "eu": {
         "mnl": {
-          "home": 1.11,
-          "away": 7.25,
-          "line": null,
-          "observed_at": "2026-11-21T02:15:21+08:00"
+          "home": 1.1,
+          "away": 7.5
         },
-        "hdc": null
+        "hdc": {
+          "line": 14.5,
+          "home": 0.94,
+          "away": 0.89
+        }
       },
-      "b365": null,
+      "b365": {
+        "sid": "728966",
+        "mnl": {
+          "home": 1.1,
+          "away": 7.5
+        },
+        "hdc": {
+          "line": 14.5,
+          "home": 0.94,
+          "away": 0.89
+        },
+        "total": {
+          "line": 229.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T02:00:01+08:00"
+      },
       "fadeSide": "away",
       "verdict": "让分独赢候选·观察（365独赢强方≥55%/≤45% + 竞彩/北单同线）·不进引擎/账本/ROI",
       "hotFlag": false,
@@ -2568,7 +2724,7 @@
       "metrics": {
         "hdcHomeProb": 51.5,
         "bdHomeProb": 48.8,
-        "p365MnlHome": 86.7,
+        "p365MnlHome": 87.2,
         "hot365": "home",
         "lineJc": -14.5,
         "lineBd": -14.5,
@@ -2595,7 +2751,24 @@
         "line": -1.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.81,
+          "away": 2.04
+        },
+        "hdc": {
+          "line": 1.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 225.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-20T20:43:04+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -2606,12 +2779,12 @@
         "hotPct": 51.5,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 53,
+        "p365A": 47,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2649,7 +2822,24 @@
         "line": -5.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.47,
+          "away": 2.7
+        },
+        "hdc": {
+          "line": 5.5,
+          "home": 1,
+          "away": 0.82
+        },
+        "total": {
+          "line": 191.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T13:35:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.8,
@@ -2660,12 +2850,12 @@
         "hotPct": 63.8,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 64.7,
+        "p365A": 35.3,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2677,7 +2867,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -2865,7 +3055,24 @@
         "line": 6.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.55,
+          "away": 1.5
+        },
+        "hdc": {
+          "line": -4.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 176.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T16:50:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -2876,12 +3083,12 @@
         "hotPct": 69.5,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 37,
+        "p365A": 63,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -2893,7 +3100,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
@@ -2923,7 +3130,24 @@
         "away": 2.1,
         "line": "-11.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.15,
+          "away": 5.75
+        },
+        "hdc": {
+          "line": 12.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 228.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T20:25:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -2934,12 +3158,12 @@
         "hotPct": 83.2,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 83.3,
+        "p365A": 16.7,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0025,
         "shareHome": 52.5,
         "shareAway": 47.5,
@@ -2951,10 +3175,10 @@
         "lineJc": -11.5,
         "lineBd": -11.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "home",
       "resultScore": "132-129",
@@ -3197,7 +3421,24 @@
         "away": 2.1,
         "line": "-5.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.48,
+          "away": 2.75
+        },
+        "hdc": {
+          "line": 5.5,
+          "home": 0.94,
+          "away": 0.89
+        },
+        "total": {
+          "line": 216.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T21:10:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -3208,12 +3449,12 @@
         "hotPct": 69.5,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 65,
+        "p365A": 35,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0025,
         "shareHome": 52.5,
         "shareAway": 47.5,
@@ -3225,10 +3466,10 @@
         "lineJc": -6.5,
         "lineBd": -5.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "home",
       "resultScore": "97-96",
@@ -3255,7 +3496,24 @@
         "away": 2.49,
         "line": "-5.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.48,
+          "away": 2.75
+        },
+        "hdc": {
+          "line": 5.5,
+          "home": 0.92,
+          "away": 0.9
+        },
+        "total": {
+          "line": 230.5,
+          "over": 0.9,
+          "under": 0.92
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T21:25:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -3266,12 +3524,12 @@
         "hotPct": 69.5,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 65,
+        "p365A": 35,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.004,
         "shareHome": 60,
         "shareAway": 40,
@@ -3283,10 +3541,10 @@
         "lineJc": -7.5,
         "lineBd": -5.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "home",
       "resultScore": "110-100",
@@ -3314,14 +3572,34 @@
       },
       "eu": {
         "mnl": {
-          "home": 1.05,
-          "away": 12,
-          "line": null,
-          "observed_at": "2026-11-22T08:45:26+08:00"
+          "home": 1.07,
+          "away": 9.75
         },
-        "hdc": null
+        "hdc": {
+          "line": 16.5,
+          "home": 0.89,
+          "away": 0.93
+        }
       },
-      "b365": null,
+      "b365": {
+        "sid": "728969",
+        "mnl": {
+          "home": 1.07,
+          "away": 9.75
+        },
+        "hdc": {
+          "line": 16.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 227.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T16:20:01+08:00"
+      },
       "fadeSide": "away",
       "verdict": "让分独赢候选·观察（365独赢强方≥55%/≤45% + 竞彩/北单同线）·不进引擎/账本/ROI",
       "hotFlag": false,
@@ -3334,7 +3612,7 @@
       "metrics": {
         "hdcHomeProb": 50,
         "bdHomeProb": 54.6,
-        "p365MnlHome": 92,
+        "p365MnlHome": 90.1,
         "hot365": "home",
         "lineJc": -16.5,
         "lineBd": -16.5,
@@ -3365,7 +3643,24 @@
         "away": 2.17,
         "line": "-5.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.45,
+          "away": 2.8
+        },
+        "hdc": {
+          "line": 5.5,
+          "home": 0.88,
+          "away": 0.94
+        },
+        "total": {
+          "line": 227.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-21T13:55:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.8,
@@ -3376,12 +3671,12 @@
         "hotPct": 63.8,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 65.9,
+        "p365A": 34.1,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0014,
         "shareHome": 54,
         "shareAway": 46,
@@ -3393,10 +3688,10 @@
         "lineJc": -5.5,
         "lineBd": -5.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "home",
       "resultScore": "104-95",
@@ -3419,7 +3714,24 @@
         "line": -2.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.7,
+          "away": 2.18
+        },
+        "hdc": {
+          "line": 2.5,
+          "home": 0.85,
+          "away": 0.95
+        },
+        "total": {
+          "line": 200.5,
+          "over": 0.89,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T11:50:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.75,
@@ -3430,12 +3742,12 @@
         "hotPct": 55.4,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 56.2,
+        "p365A": 43.8,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -3447,7 +3759,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -3581,7 +3893,24 @@
         "line": -5.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.54,
+          "away": 2.45
+        },
+        "hdc": {
+          "line": 4.5,
+          "home": 0.91,
+          "away": 0.83
+        },
+        "total": {
+          "line": 194.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T19:25:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.77,
@@ -3592,12 +3921,12 @@
         "hotPct": 66.2,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 61.4,
+        "p365A": 38.6,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -3609,7 +3938,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -3635,7 +3964,24 @@
         "line": -1.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.67,
+          "away": 2.2
+        },
+        "hdc": {
+          "line": 2.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 165.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T16:00:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -3646,12 +3992,12 @@
         "hotPct": 51.5,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 56.8,
+        "p365A": 43.2,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -3743,7 +4089,24 @@
         "line": -11.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.08,
+          "away": 7.5
+        },
+        "hdc": {
+          "line": 13.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 199.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T17:10:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -3754,12 +4117,12 @@
         "hotPct": 83.5,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 87.4,
+        "p365A": 12.6,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -3771,7 +4134,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -3797,7 +4160,24 @@
         "line": 2.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.2,
+          "away": 1.67
+        },
+        "hdc": {
+          "line": -2.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 176.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T21:25:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.75,
@@ -3808,12 +4188,12 @@
         "hotPct": 54.7,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 43.2,
+        "p365A": 56.8,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -3851,7 +4231,24 @@
         "line": 6.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.82,
+          "away": 1.42
+        },
+        "hdc": {
+          "line": -5.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 170.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T16:00:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.76,
@@ -3862,12 +4259,12 @@
         "hotPct": 70,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 33.5,
+        "p365A": 66.5,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -3879,7 +4276,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
@@ -3959,7 +4356,24 @@
         "line": -11.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.11,
+          "away": 6.5
+        },
+        "hdc": {
+          "line": 11.5,
+          "home": 0.83,
+          "away": 0.91
+        },
+        "total": {
+          "line": 182.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T21:25:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -3970,12 +4384,12 @@
         "hotPct": 83.5,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 85.4,
+        "p365A": 14.6,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -3987,7 +4401,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -4017,7 +4431,24 @@
         "away": 2.18,
         "line": "2.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.09,
+          "away": 1.78
+        },
+        "hdc": {
+          "line": -2.5,
+          "home": 0.87,
+          "away": 0.95
+        },
+        "total": {
+          "line": 224.5,
+          "over": 0.92,
+          "under": 0.9
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T19:20:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.75,
@@ -4028,12 +4459,12 @@
         "hotPct": 54.7,
         "fadeSide": "home",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 46,
+        "p365A": 54,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": false,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": 1.0022,
         "shareHome": 54.2,
         "shareAway": 45.8,
@@ -4075,7 +4506,24 @@
         "away": 2.88,
         "line": "-2.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.56,
+          "away": 2.49
+        },
+        "hdc": {
+          "line": 4.5,
+          "home": 0.94,
+          "away": 0.89
+        },
+        "total": {
+          "line": 231.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T05:25:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.8,
@@ -4086,12 +4534,12 @@
         "hotPct": 63.8,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 61.5,
+        "p365A": 38.5,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0008,
         "shareHome": 65.3,
         "shareAway": 34.7,
@@ -4103,10 +4551,10 @@
         "lineJc": -6.5,
         "lineBd": -2.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "home",
       "resultScore": "123-113",
@@ -4133,7 +4581,24 @@
         "away": 2.07,
         "line": "5.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.75,
+          "away": 1.48
+        },
+        "hdc": {
+          "line": -4.5,
+          "home": 0.94,
+          "away": 0.88
+        },
+        "total": {
+          "line": 219.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T01:15:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.84,
@@ -4144,12 +4609,12 @@
         "hotPct": 60.2,
         "fadeSide": "home",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 35,
+        "p365A": 65,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": false,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": 1.0012,
         "shareHome": 51.8,
         "shareAway": 48.3,
@@ -4187,7 +4652,24 @@
         "line": 1.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.92,
+          "away": 1.9
+        },
+        "hdc": {
+          "line": -1.5,
+          "home": 0.85,
+          "away": 0.98
+        },
+        "total": {
+          "line": 224.5,
+          "over": 0.87,
+          "under": 0.95
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T00:35:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.84,
@@ -4198,12 +4680,12 @@
         "hotPct": 55.8,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 49.7,
+        "p365A": 50.3,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -4215,7 +4697,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
@@ -4245,7 +4727,24 @@
         "away": 1.8,
         "line": "8.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 4,
+          "away": 1.26
+        },
+        "hdc": {
+          "line": -9.5,
+          "home": 0.88,
+          "away": 0.94
+        },
+        "total": {
+          "line": 237.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T23:20:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -4256,12 +4755,12 @@
         "hotPct": 78.5,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 24,
+        "p365A": 76,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.004,
         "shareHome": 44.7,
         "shareAway": 55.3,
@@ -4273,10 +4772,10 @@
         "lineJc": 8.5,
         "lineBd": 8.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(主)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "away",
       "resultScore": "145-151",
@@ -4299,7 +4798,24 @@
         "line": -9.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.26,
+          "away": 4
+        },
+        "hdc": {
+          "line": 9.5,
+          "home": 0.94,
+          "away": 0.88
+        },
+        "total": {
+          "line": 215.5,
+          "over": 0.95,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T19:20:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -4310,12 +4826,12 @@
         "hotPct": 78.5,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 76,
+        "p365A": 24,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -4327,7 +4843,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -4353,7 +4869,24 @@
         "line": 9.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 3.8,
+          "away": 1.28
+        },
+        "hdc": {
+          "line": -8.5,
+          "home": 0.9,
+          "away": 0.92
+        },
+        "total": {
+          "line": 210.5,
+          "over": 0.9,
+          "under": 0.92
+        },
+        "crown": null,
+        "observed_at": "2026-11-22T23:10:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -4364,12 +4897,12 @@
         "hotPct": 78.5,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 25.2,
+        "p365A": 74.8,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -4381,7 +4914,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
@@ -4411,7 +4944,24 @@
         "away": 1.8,
         "line": "3.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.24,
+          "away": 1.68
+        },
+        "hdc": {
+          "line": -2.5,
+          "home": 0.92,
+          "away": 0.9
+        },
+        "total": {
+          "line": 213.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-24T03:40:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -4422,12 +4972,12 @@
         "hotPct": 65.8,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 42.9,
+        "p365A": 57.1,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.002,
         "shareHome": 44.6,
         "shareAway": 55.4,
@@ -4439,10 +4989,10 @@
         "lineJc": 4.5,
         "lineBd": 3.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(主)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "away",
       "resultScore": "111-117",
@@ -4469,7 +5019,24 @@
         "away": 2.72,
         "line": "-2.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.64,
+          "away": 2.32
+        },
+        "hdc": {
+          "line": 3.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 231.5,
+          "over": 0.87,
+          "under": 0.95
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T23:45:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -4480,12 +5047,12 @@
         "hotPct": 65.8,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 58.6,
+        "p365A": 41.4,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0046,
         "shareHome": 63.4,
         "shareAway": 36.6,
@@ -4497,10 +5064,10 @@
         "lineJc": -5.5,
         "lineBd": -2.5
       },
-      "verdict": "一盘大热主·北单共振→站对面(客)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(客)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "away",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "hit",
       "result": "away",
       "resultScore": "111-128",
@@ -4577,7 +5144,24 @@
         "line": -9.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.21,
+          "away": 4.6
+        },
+        "hdc": {
+          "line": 10.5,
+          "home": 0.92,
+          "away": 0.9
+        },
+        "total": {
+          "line": 222.5,
+          "over": 0.9,
+          "under": 0.92
+        },
+        "crown": null,
+        "observed_at": "2026-11-24T02:20:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.81,
@@ -4588,12 +5172,12 @@
         "hotPct": 78.5,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 79.2,
+        "p365A": 20.8,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -4605,7 +5189,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -4631,7 +5215,24 @@
         "line": -12.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.18,
+          "away": 5
+        },
+        "hdc": {
+          "line": 10.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 222.5,
+          "over": 0.88,
+          "under": 0.94
+        },
+        "crown": null,
+        "observed_at": "2026-11-24T08:05:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -4642,12 +5243,12 @@
         "hotPct": 83.2,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 80.9,
+        "p365A": 19.1,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -4659,7 +5260,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -4685,7 +5286,24 @@
         "line": 8.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 3.65,
+          "away": 1.3
+        },
+        "hdc": {
+          "line": -8.5,
+          "home": 0.92,
+          "away": 0.9
+        },
+        "total": {
+          "line": 240.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T21:35:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.85,
@@ -4696,12 +5314,12 @@
         "hotPct": 75.8,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 26.3,
+        "p365A": 73.7,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -4713,7 +5331,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
@@ -4739,7 +5357,24 @@
         "line": 5.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.32,
+          "away": 1.64
+        },
+        "hdc": {
+          "line": -3.5,
+          "home": 0.9,
+          "away": 0.92
+        },
+        "total": {
+          "line": 232.5,
+          "over": 0.9,
+          "under": 0.92
+        },
+        "crown": null,
+        "observed_at": "2026-11-23T22:00:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.86,
@@ -4750,12 +5385,12 @@
         "hotPct": 65.8,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 41.4,
+        "p365A": 58.6,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -4767,7 +5402,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
@@ -4793,7 +5428,24 @@
         "line": 1.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.83,
+          "away": 1.91
+        },
+        "hdc": {
+          "line": 1.5,
+          "home": 0.91,
+          "away": 0.83
+        },
+        "total": {
+          "line": 183.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-24T17:50:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -4804,10 +5456,10 @@
         "hotPct": 53.1,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 51.1,
+        "p365A": 48.9,
+        "hot365": "home",
+        "b365Agree": false,
         "bdAgree": null,
         "heatScore": 1,
         "sumBd": null,
@@ -4901,7 +5553,24 @@
         "line": -2.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.77,
+          "away": 2
+        },
+        "hdc": {
+          "line": 1.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 178.5,
+          "over": 0.95,
+          "under": 0.8
+        },
+        "crown": null,
+        "observed_at": "2026-11-24T22:55:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.84,
@@ -4912,12 +5581,12 @@
         "hotPct": 54.4,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 53.1,
+        "p365A": 46.9,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -4934,9 +5603,9 @@
       "fadeSide": "away",
       "strongTier": false,
       "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "result": "home",
+      "resultScore": "79-78",
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043030",
@@ -5009,7 +5678,24 @@
         "line": 3.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.22,
+          "away": 1.65
+        },
+        "hdc": {
+          "line": -2.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 170.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-24T21:30:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.91,
@@ -5020,12 +5706,12 @@
         "hotPct": 59.4,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 42.6,
+        "p365A": 57.4,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -5037,7 +5723,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
@@ -5067,7 +5753,24 @@
         "away": 1.68,
         "line": "1.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.14,
+          "away": 1.75
+        },
+        "hdc": {
+          "line": -2.5,
+          "home": 0.9,
+          "away": 0.92
+        },
+        "total": {
+          "line": 212.5,
+          "over": 0.94,
+          "under": 0.88
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T00:05:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.88,
@@ -5078,12 +5781,12 @@
         "hotPct": 57.3,
         "fadeSide": "home",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 45,
+        "p365A": 55,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0017,
         "shareHome": 40.6,
         "shareAway": 59.4,
@@ -5095,10 +5798,10 @@
         "lineJc": 2.5,
         "lineBd": 1.5
       },
-      "verdict": "一盘大热客·北单共振→站对面(主)",
+      "verdict": "三端合流(竞彩+365+北单)·站对面(主)【强置信·观察】",
       "hotFlag": true,
       "fadeSide": "home",
-      "strongTier": false,
+      "strongTier": true,
       "settle": "miss",
       "result": "away",
       "resultScore": "86-104",
@@ -5125,7 +5828,24 @@
         "away": 2.16,
         "line": "10.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 4.5,
+          "away": 1.22
+        },
+        "hdc": {
+          "line": -10.5,
+          "home": 0.89,
+          "away": 0.93
+        },
+        "total": {
+          "line": 217.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T00:05:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -5136,12 +5856,12 @@
         "hotPct": 77.1,
         "fadeSide": "home",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 21.3,
+        "p365A": 78.7,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": false,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": 1.0006,
         "shareHome": 53.7,
         "shareAway": 46.3,
@@ -5183,7 +5903,24 @@
         "away": 1.6,
         "line": "-8.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.31,
+          "away": 3.6
+        },
+        "hdc": {
+          "line": 8.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 232.5,
+          "over": 0.95,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-24T17:40:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.85,
@@ -5194,12 +5931,12 @@
         "hotPct": 75.8,
         "fadeSide": "away",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 73.3,
+        "p365A": 26.7,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": false,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": 1.0024,
         "shareHome": 37.6,
         "shareAway": 62.4,
@@ -5237,7 +5974,24 @@
         "line": -6.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.29,
+          "away": 3.5
+        },
+        "hdc": {
+          "line": 7.5,
+          "home": 0.87,
+          "away": 0.87
+        },
+        "total": {
+          "line": 163.5,
+          "over": 0.87,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T22:10:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.85,
@@ -5248,12 +6002,12 @@
         "hotPct": 71.9,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 73.1,
+        "p365A": 26.9,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -5265,14 +6019,14 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "settle": "hit",
+      "result": "away",
+      "resultScore": "71-79",
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043036",
@@ -5349,7 +6103,24 @@
         "away": 1.54,
         "line": "-1.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.87,
+          "away": 1.95
+        },
+        "hdc": {
+          "line": 1.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 238.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T14:40:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -5360,12 +6131,12 @@
         "hotPct": 53.1,
         "fadeSide": "away",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 51,
+        "p365A": 49,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": false,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": 1.004,
         "shareHome": 35.3,
         "shareAway": 64.7,
@@ -5382,9 +6153,9 @@
       "fadeSide": "away",
       "strongTier": false,
       "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "result": "home",
+      "resultScore": "102-89",
+      "resSrc": "verified"
     },
     {
       "id": "2043038",
@@ -5403,7 +6174,24 @@
         "line": -1.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.63,
+          "away": 2.33
+        },
+        "hdc": {
+          "line": 3.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 222.5,
+          "over": 0.95,
+          "under": 0.87
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T14:40:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.75,
@@ -5414,12 +6202,12 @@
         "hotPct": 54.7,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 58.8,
+        "p365A": 41.2,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -5436,9 +6224,9 @@
       "fadeSide": "away",
       "strongTier": false,
       "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "result": "away",
+      "resultScore": "84-85",
+      "resSrc": "verified"
     },
     {
       "id": "2043039",
@@ -5461,7 +6249,24 @@
         "away": 1.98,
         "line": "-3.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.65,
+          "away": 2.29
+        },
+        "hdc": {
+          "line": 2.5,
+          "home": 0.86,
+          "away": 0.97
+        },
+        "total": {
+          "line": 218.5,
+          "over": 0.89,
+          "under": 0.94
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T21:05:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.84,
@@ -5472,12 +6277,12 @@
         "hotPct": 55.8,
         "fadeSide": "away",
         "resonance": "三盘分歧·降档",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 58.1,
+        "p365A": 41.9,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": false,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": 1.0026,
         "shareHome": 49.6,
         "shareAway": 50.4,
@@ -5493,10 +6298,10 @@
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "121-102",
+      "resSrc": "verified"
     },
     {
       "id": "2043040",
@@ -5519,7 +6324,24 @@
         "away": 2.01,
         "line": "-1.5"
       },
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.83,
+          "away": 2
+        },
+        "hdc": {
+          "line": 1.5,
+          "home": 0.91,
+          "away": 0.91
+        },
+        "total": {
+          "line": 223.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T14:50:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -5530,12 +6352,12 @@
         "hotPct": 51.5,
         "fadeSide": "away",
         "resonance": "三盘共振·确认",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 52.2,
+        "p365A": 47.8,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": true,
-        "heatScore": 2,
+        "heatScore": 3,
         "sumBd": 1.0026,
         "shareHome": 50.4,
         "shareAway": 49.6,
@@ -5552,9 +6374,9 @@
       "fadeSide": "away",
       "strongTier": false,
       "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "result": "away",
+      "resultScore": "93-96",
+      "resSrc": "verified"
     },
     {
       "id": "2043041",
@@ -5573,7 +6395,24 @@
         "line": -1.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.84,
+          "away": 1.99
+        },
+        "hdc": {
+          "line": 1.5,
+          "home": 0.9,
+          "away": 0.92
+        },
+        "total": {
+          "line": 233.5,
+          "over": 0.91,
+          "under": 0.91
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T23:55:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.93,
@@ -5584,12 +6423,12 @@
         "hotPct": 53.1,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 52,
+        "p365A": 48,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -5606,9 +6445,9 @@
       "fadeSide": "away",
       "strongTier": false,
       "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "result": "away",
+      "resultScore": "71-81",
+      "resSrc": "verified"
     },
     {
       "id": "2043042",
@@ -5627,7 +6466,24 @@
         "line": -5.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.38,
+          "away": 3.1
+        },
+        "hdc": {
+          "line": 6.5,
+          "home": 0.91,
+          "away": 0.91
+        },
+        "total": {
+          "line": 229.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T21:05:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.83,
@@ -5638,12 +6494,12 @@
         "hotPct": 67.9,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 69.2,
+        "p365A": 30.8,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -5655,14 +6511,14 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "88-75",
+      "resSrc": "verified"
     },
     {
       "id": "2043043",
@@ -5681,7 +6537,24 @@
         "line": -8.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.24,
+          "away": 4.25
+        },
+        "hdc": {
+          "line": 9.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 223.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T22:20:02+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.79,
@@ -5692,12 +6565,12 @@
         "hotPct": 77.1,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 77.4,
+        "p365A": 22.6,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -5709,14 +6582,14 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
-      "settle": null,
-      "result": null,
-      "resultScore": null,
-      "resSrc": null
+      "settle": "miss",
+      "result": "home",
+      "resultScore": "116-104",
+      "resSrc": "verified"
     },
     {
       "id": "2043044",
@@ -5735,7 +6608,24 @@
         "line": -4.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 1.37,
+          "away": 3.2
+        },
+        "hdc": {
+          "line": 6.5,
+          "home": 0.9,
+          "away": 0.92
+        },
+        "total": {
+          "line": 217.5,
+          "over": 0.94,
+          "under": 0.89
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T22:40:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.8,
@@ -5746,12 +6636,12 @@
         "hotPct": 63.8,
         "fadeSide": "away",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 70,
+        "p365A": 30,
+        "hot365": "home",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -5763,7 +6653,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热主·仅一盘→站对面(客)",
+      "verdict": "两端合流(竞彩+365)·站对面(客)",
       "hotFlag": true,
       "fadeSide": "away",
       "strongTier": false,
@@ -5789,7 +6679,24 @@
         "line": 2.5
       },
       "bd": null,
-      "b365": null,
+      "b365": {
+        "mnl": {
+          "home": 2.28,
+          "away": 1.65
+        },
+        "hdc": {
+          "line": -2.5,
+          "home": 0.95,
+          "away": 0.87
+        },
+        "total": {
+          "line": 225.5,
+          "over": 0.89,
+          "under": 0.93
+        },
+        "crown": null,
+        "observed_at": "2026-11-25T13:10:01+08:00"
+      },
       "metrics": {
         "mnlFallback": false,
         "Rjc": 84.88,
@@ -5800,12 +6707,12 @@
         "hotPct": 57.3,
         "fadeSide": "home",
         "resonance": "无北单·仅一盘",
-        "p365H": null,
-        "p365A": null,
-        "hot365": null,
-        "b365Agree": null,
+        "p365H": 42,
+        "p365A": 58,
+        "hot365": "away",
+        "b365Agree": true,
         "bdAgree": null,
-        "heatScore": 1,
+        "heatScore": 2,
         "sumBd": null,
         "shareHome": null,
         "shareAway": null,
@@ -5817,7 +6724,7 @@
         "lineJc": null,
         "lineBd": null
       },
-      "verdict": "一盘大热客·仅一盘→站对面(主)",
+      "verdict": "两端合流(竞彩+365)·站对面(主)",
       "hotFlag": true,
       "fadeSide": "home",
       "strongTier": false,
