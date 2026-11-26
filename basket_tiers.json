@@ -1,13 +1,13 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-26T03:32:33.373Z",
+  "updated": "2026-11-26T04:34:16.600Z",
   "summary": {
     "total": 80,
     "byTier": {
       "强推": 9,
       "精选": 9,
-      "优选": 22,
-      "观察": 40
+      "优选": 23,
+      "观察": 39
     },
     "byDay": {
       "2026-11-23": 10,
@@ -23,7 +23,7 @@
     },
     "withLine": 80,
     "settledByLine": 46,
-    "deepOddsGuard": 40,
+    "deepOddsGuard": 39,
     "withOverheatFade": 75,
     "overheatConflict": 75,
     "tierStat": {
@@ -54,7 +54,7 @@
         }
       },
       "优选": {
-        "n": 22,
+        "n": 23,
         "mnl": {
           "n": 10,
           "hit": 7,
@@ -1333,6 +1333,65 @@
         "sameAsOurs": false,
         "heatScore": 2,
         "verdict": "一盘大热客·北单共振→站对面(主)"
+      }
+    },
+    {
+      "id": "2043047",
+      "day": "2026-11-27",
+      "league": "男篮世界杯预选赛",
+      "home": "卡塔尔",
+      "away": "韩国",
+      "kickTs": 1795708800,
+      "tier": "优选",
+      "hot": "away",
+      "hotName": "韩国",
+      "pickSide": "away",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 0,
+      "strongP": 64.8,
+      "blendP": 64.8,
+      "nSrc": 1,
+      "agree": 1,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.31,
+        "jcMnl": {
+          "home": 2.41,
+          "away": 1.31
+        },
+        "euMnl": null,
+        "bd": null
+      },
+      "line": 5.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-26T11:47:12+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 35.2,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 韩国)",
+      "advice": null,
+      "deepOddsRisk": false,
+      "strongOdds": 1.31,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "home",
+        "team": "卡塔尔",
+        "text": "过热反向·站主 卡塔尔",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热客·仅一盘→站对面(主)"
       }
     },
     {
@@ -3083,24 +3142,24 @@
       "directionRule": "跟强队(独赢隐含高方)",
       "deep": true,
       "lineSpread": 0,
-      "strongP": 81.6,
-      "blendP": 81.6,
+      "strongP": 82.3,
+      "blendP": 82.3,
       "nSrc": 1,
       "agree": 1,
       "disagree": 0,
       "mainSrc": "竞彩独赢",
       "odds": {
-        "strong": 1.04,
+        "strong": 1.03,
         "jcMnl": {
-          "home": 4.6,
-          "away": 1.04
+          "home": 4.8,
+          "away": 1.03
         },
         "euMnl": null,
         "bd": null
       },
-      "line": 13.5,
+      "line": 12.5,
       "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-26T11:14:51+08:00",
+      "capturedAt": "2026-11-26T11:47:12+08:00",
       "locked": true,
       "settledByLine": null,
       "settleNote": null,
@@ -3109,14 +3168,14 @@
       "sources": [
         {
           "src": "竞彩独赢",
-          "homeP": 18.4,
+          "homeP": 17.7,
           "hot": "away"
         }
       ],
       "direction": "跟强队(客 中国)",
       "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
       "deepOddsRisk": true,
-      "strongOdds": 1.04,
+      "strongOdds": 1.03,
       "hotFlag": true,
       "heatScore": 1,
       "overheatFade": {
@@ -3424,65 +3483,6 @@
       "hotFlag": false,
       "heatScore": null,
       "overheatFade": null
-    },
-    {
-      "id": "2043047",
-      "day": "2026-11-27",
-      "league": "男篮世界杯预选赛",
-      "home": "卡塔尔",
-      "away": "韩国",
-      "kickTs": 1795708800,
-      "tier": "观察",
-      "hot": "away",
-      "hotName": "韩国",
-      "pickSide": "away",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": true,
-      "lineSpread": 0,
-      "strongP": 77.8,
-      "blendP": 77.8,
-      "nSrc": 1,
-      "agree": 1,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.09,
-        "jcMnl": {
-          "home": 3.82,
-          "away": 1.09
-        },
-        "euMnl": null,
-        "bd": null
-      },
-      "line": 10.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-26T11:14:51+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 22.2,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 韩国)",
-      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
-      "deepOddsRisk": true,
-      "strongOdds": 1.09,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "home",
-        "team": "卡塔尔",
-        "text": "过热反向·站主 卡塔尔",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热客·仅一盘→站对面(主)"
-      }
     },
     {
       "id": "2042955",
