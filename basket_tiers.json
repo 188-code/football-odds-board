@@ -1,13 +1,13 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-26T09:46:43.122Z",
+  "updated": "2026-11-26T15:54:20.290Z",
   "summary": {
     "total": 80,
     "byTier": {
       "强推": 9,
-      "精选": 12,
-      "优选": 20,
-      "观察": 39
+      "精选": 10,
+      "优选": 21,
+      "观察": 40
     },
     "byDay": {
       "2026-11-23": 10,
@@ -15,15 +15,15 @@
       "2026-11-21": 14,
       "2026-11-25": 5,
       "2026-11-22": 12,
-      "2026-11-27": 7,
       "2026-11-20": 7,
+      "2026-11-27": 7,
       "2026-11-24": 7,
       "2026-11-19": 1,
       "2026-11-18": 8
     },
     "withLine": 80,
     "settledByLine": 46,
-    "deepOddsGuard": 39,
+    "deepOddsGuard": 40,
     "withOverheatFade": 75,
     "overheatConflict": 75,
     "tierStat": {
@@ -41,7 +41,7 @@
         }
       },
       "精选": {
-        "n": 12,
+        "n": 10,
         "mnl": {
           "n": 7,
           "hit": 5,
@@ -54,7 +54,7 @@
         }
       },
       "优选": {
-        "n": 20,
+        "n": 21,
         "mnl": {
           "n": 10,
           "hit": 7,
@@ -713,65 +713,6 @@
       }
     },
     {
-      "id": "2043047",
-      "day": "2026-11-27",
-      "league": "男篮世界杯预选赛",
-      "home": "卡塔尔",
-      "away": "韩国",
-      "kickTs": 1795708800,
-      "tier": "精选",
-      "hot": "away",
-      "hotName": "韩国",
-      "pickSide": "away",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 0,
-      "strongP": 67.4,
-      "blendP": 67.4,
-      "nSrc": 1,
-      "agree": 1,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.26,
-        "jcMnl": {
-          "home": 2.6,
-          "away": 1.26
-        },
-        "euMnl": null,
-        "bd": null
-      },
-      "line": 6.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-26T15:00:23+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 32.6,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 韩国)",
-      "advice": null,
-      "deepOddsRisk": false,
-      "strongOdds": 1.26,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "home",
-        "team": "卡塔尔",
-        "text": "过热反向·站主 卡塔尔",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热客·仅一盘→站对面(主)"
-      }
-    },
-    {
       "id": "2042873",
       "day": "2026-11-20",
       "league": "欧洲篮球联赛",
@@ -859,7 +800,7 @@
         "euMnl": null,
         "bd": null
       },
-      "line": 5.5,
+      "line": 4.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-26T16:46:56+08:00",
       "locked": true,
@@ -946,65 +887,6 @@
         "sameAsOurs": false,
         "heatScore": 1,
         "verdict": "一盘大热主·仅一盘→站对面(客)"
-      }
-    },
-    {
-      "id": "2043052",
-      "day": "2026-11-27",
-      "league": "男篮世界杯预选赛",
-      "home": "乌拉圭",
-      "away": "加拿大",
-      "kickTs": 1795731000,
-      "tier": "精选",
-      "hot": "away",
-      "hotName": "加拿大",
-      "pickSide": "away",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 0,
-      "strongP": 65.2,
-      "blendP": 65.2,
-      "nSrc": 1,
-      "agree": 1,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.3,
-        "jcMnl": {
-          "home": 2.44,
-          "away": 1.3
-        },
-        "euMnl": null,
-        "bd": null
-      },
-      "line": 6.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-26T16:31:39+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 34.8,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 加拿大)",
-      "advice": null,
-      "deepOddsRisk": false,
-      "strongOdds": 1.3,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "home",
-        "team": "乌拉圭",
-        "text": "过热反向·站主 乌拉圭",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热客·仅一盘→站对面(主)"
       }
     },
     {
@@ -1718,7 +1600,7 @@
         "euMnl": null,
         "bd": null
       },
-      "line": -3.5,
+      "line": -5.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-26T17:32:42+08:00",
       "locked": true,
@@ -2111,6 +1993,65 @@
       "hotFlag": false,
       "heatScore": 1,
       "overheatFade": null
+    },
+    {
+      "id": "2043054",
+      "day": "2026-11-27",
+      "league": "男篮世界杯预选赛",
+      "home": "巴拿马",
+      "away": "波多黎各",
+      "kickTs": 1795743600,
+      "tier": "优选",
+      "hot": "away",
+      "hotName": "波多黎各",
+      "pickSide": "away",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 0,
+      "strongP": 58.9,
+      "blendP": 58.9,
+      "nSrc": 1,
+      "agree": 1,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.44,
+        "jcMnl": {
+          "home": 2.06,
+          "away": 1.44
+        },
+        "euMnl": null,
+        "bd": null
+      },
+      "line": 3.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-26T21:52:04+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 41.1,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 波多黎各)",
+      "advice": null,
+      "deepOddsRisk": false,
+      "strongOdds": 1.44,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "home",
+        "team": "巴拿马",
+        "text": "过热反向·站主 巴拿马",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热客·仅一盘→站对面(主)"
+      }
     },
     {
       "id": "2042984",
@@ -3098,7 +3039,7 @@
         "euMnl": null,
         "bd": null
       },
-      "line": -17.5,
+      "line": -20.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-26T11:14:51+08:00",
       "locked": true,
@@ -3311,7 +3252,7 @@
       "league": "男篮世界杯预选赛",
       "home": "沙特阿拉伯",
       "away": "中国",
-      "kickTs": 1795698000,
+      "kickTs": null,
       "tier": "观察",
       "hot": "away",
       "hotName": "中国",
@@ -3336,8 +3277,8 @@
       },
       "line": 12.5,
       "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-26T17:32:42+08:00",
-      "locked": true,
+      "capturedAt": "2026-11-26T18:33:23+08:00",
+      "locked": false,
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
@@ -3558,6 +3499,65 @@
         "sameAsOurs": false,
         "heatScore": 2,
         "verdict": "一盘大热主·北单共振→站对面(客)"
+      }
+    },
+    {
+      "id": "2043048",
+      "day": "2026-11-27",
+      "league": "男篮世界杯预选赛",
+      "home": "希腊",
+      "away": "格鲁吉亚",
+      "kickTs": 1795716000,
+      "tier": "观察",
+      "hot": "home",
+      "hotName": "希腊",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": true,
+      "lineSpread": 0,
+      "strongP": 77.1,
+      "blendP": 77.1,
+      "nSrc": 1,
+      "agree": 1,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.1,
+        "jcMnl": {
+          "home": 1.1,
+          "away": 3.7
+        },
+        "euMnl": null,
+        "bd": null
+      },
+      "line": -10.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-26T20:20:47+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 77.1,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 希腊)",
+      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
+      "deepOddsRisk": true,
+      "strongOdds": 1.1,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "away",
+        "team": "格鲁吉亚",
+        "text": "过热反向·站客 格鲁吉亚",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热主·仅一盘→站对面(客)"
       }
     },
     {
@@ -4024,65 +4024,6 @@
       }
     },
     {
-      "id": "2043048",
-      "day": "2026-11-27",
-      "league": "男篮世界杯预选赛",
-      "home": "希腊",
-      "away": "格鲁吉亚",
-      "kickTs": 1795716000,
-      "tier": "观察",
-      "hot": "home",
-      "hotName": "希腊",
-      "pickSide": "home",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": true,
-      "lineSpread": 0,
-      "strongP": 74.4,
-      "blendP": 74.4,
-      "nSrc": 1,
-      "agree": 1,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.14,
-        "jcMnl": {
-          "home": 1.14,
-          "away": 3.32
-        },
-        "euMnl": null,
-        "bd": null
-      },
-      "line": -9.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-26T14:30:14+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 74.4,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 希腊)",
-      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
-      "deepOddsRisk": true,
-      "strongOdds": 1.14,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "away",
-        "team": "格鲁吉亚",
-        "text": "过热反向·站客 格鲁吉亚",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热主·仅一盘→站对面(客)"
-      }
-    },
-    {
       "id": "2042895",
       "day": "2026-11-21",
       "league": "美国职业篮球联盟",
@@ -4471,6 +4412,65 @@
       }
     },
     {
+      "id": "2043052",
+      "day": "2026-11-27",
+      "league": "男篮世界杯预选赛",
+      "home": "乌拉圭",
+      "away": "加拿大",
+      "kickTs": 1795731000,
+      "tier": "观察",
+      "hot": "away",
+      "hotName": "加拿大",
+      "pickSide": "away",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": true,
+      "lineSpread": 0,
+      "strongP": 73.1,
+      "blendP": 73.1,
+      "nSrc": 1,
+      "agree": 1,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.16,
+        "jcMnl": {
+          "home": 3.15,
+          "away": 1.16
+        },
+        "euMnl": null,
+        "bd": null
+      },
+      "line": 8.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-26T22:07:09+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 26.9,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 加拿大)",
+      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
+      "deepOddsRisk": true,
+      "strongOdds": 1.16,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "home",
+        "team": "乌拉圭",
+        "text": "过热反向·站主 乌拉圭",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热客·仅一盘→站对面(主)"
+      }
+    },
+    {
       "id": "2042951",
       "day": "2026-11-21",
       "league": "澳大利亚篮球联赛",
@@ -4645,65 +4645,6 @@
         "sameAsOurs": false,
         "heatScore": 1,
         "verdict": "一盘大热主·仅一盘→站对面(客)"
-      }
-    },
-    {
-      "id": "2043054",
-      "day": "2026-11-27",
-      "league": "男篮世界杯预选赛",
-      "home": "巴拿马",
-      "away": "波多黎各",
-      "kickTs": 1795743600,
-      "tier": "观察",
-      "hot": "away",
-      "hotName": "波多黎各",
-      "pickSide": "away",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 0,
-      "strongP": 70.7,
-      "blendP": 70.7,
-      "nSrc": 1,
-      "agree": 1,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.2,
-        "jcMnl": {
-          "home": 2.9,
-          "away": 1.2
-        },
-        "euMnl": null,
-        "bd": null
-      },
-      "line": 7.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-26T15:30:40+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 29.3,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 波多黎各)",
-      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
-      "deepOddsRisk": true,
-      "strongOdds": 1.2,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "home",
-        "team": "巴拿马",
-        "text": "过热反向·站主 巴拿马",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热客·仅一盘→站对面(主)"
       }
     },
     {
@@ -4890,6 +4831,65 @@
         "sameAsOurs": false,
         "heatScore": 2,
         "verdict": "一盘大热主·北单共振→站对面(客)"
+      }
+    },
+    {
+      "id": "2043047",
+      "day": "2026-11-27",
+      "league": "男篮世界杯预选赛",
+      "home": "卡塔尔",
+      "away": "韩国",
+      "kickTs": 1795708800,
+      "tier": "观察",
+      "hot": "away",
+      "hotName": "韩国",
+      "pickSide": "away",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 0,
+      "strongP": 69.5,
+      "blendP": 69.5,
+      "nSrc": 1,
+      "agree": 1,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.22,
+        "jcMnl": {
+          "home": 2.78,
+          "away": 1.22
+        },
+        "euMnl": null,
+        "bd": null
+      },
+      "line": 6.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-26T20:36:08+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 30.5,
+          "hot": "away"
+        }
+      ],
+      "direction": "跟强队(客 韩国)",
+      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
+      "deepOddsRisk": true,
+      "strongOdds": 1.22,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "home",
+        "team": "卡塔尔",
+        "text": "过热反向·站主 卡塔尔",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热客·仅一盘→站对面(主)"
       }
     },
     {

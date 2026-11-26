@@ -19965,6 +19965,28 @@ function _dgCoLiveFor(m){
   try{ if(typeof localStorage!=='undefined') localStorage.setItem('dgFrozen', JSON.stringify(window.__DG_FROZEN__)); }catch(e){}
   return live;
 }
+/* ★ 2026-11-26 v15b：bake_pack 被 gqj2 567 冻在 11-15，今日 T-tid 场次拿不到 an.o1h/coLive。
+   回退到 CVM 实时 365 逐帧提取的 Bet365 欧赔（__DG_EU_LIVE__，每场赛前最后帧）。
+   队名先精确键、再唯一包含匹配（两端都命中且全局唯一候选才认，防跨场错配），绝不混源。 */
+function _dgEuLiveOf(m){
+  try{
+    const EL=window.__DG_EU_LIVE__; if(!EL||!EL.o) return null;
+    const h=_dgClean(_dgName(m,'home')), a=_dgClean(_dgName(m,'away'));
+    if(!h||!a) return null;
+    const direct=EL.o[h+'|'+a];
+    if(direct&&_dgOver(direct)) return {o:direct,src:'Bet365 365逐帧·赛前末帧 '+(EL.u||'')};
+    const hits=[];
+    for(const k in EL.o){
+      const pp=k.split('|'); if(pp.length!==2) continue;
+      const hk=pp[0], ak=pp[1];
+      const okh=(hk===h||hk.indexOf(h)>=0||h.indexOf(hk)>=0);
+      const oka=(ak===a||ak.indexOf(a)>=0||a.indexOf(ak)>=0);
+      if(okh&&oka) hits.push({k:k,o:EL.o[k]});
+    }
+    if(hits.length===1&&_dgOver(hits[0].o)) return {o:hits[0].o,src:'Bet365 365逐帧·队名唯一匹配 '+(EL.u||'')};
+    return null;
+  }catch(e){ return null; }
+}
 function _dgOuter(m){
   const an=_dgAn(m); if(!an) return null;
   const cl=_dgCoLiveFor(m)||{};
@@ -19988,6 +20010,8 @@ function _dgOuter(m){
   const rw=RAW[String(m.tid||'')];
   if (rw && _dgOver(rw.o)) return {src:rw.src||'单公司外围原始行(非汇总)', o:rw.o, o0:rw.o0||null,
                                    raw:true, coN:rw.n||0};
+  const el=_dgEuLiveOf(m);   // ★ v15b：真实 365 逐帧优先于官方 SP 代理
+  if(el) return {src:el.src, o:el.o, euLive:true};
   /* ★ 2026-11-14 治本兜底：真实外围(365/立博/威廉/英特+欧赔汇总+单公司原始行)全缺，但本场为北单/竞彩收录，
      引擎已用官方 SP 作"外围端代理"填入 an.outProxy（euProxy=true 标记）。此处返回代理（标注 proxy），供判档明确区分
      "非真实外围·Δ不计入判档"，避免把代理当真实外围误判。 */
