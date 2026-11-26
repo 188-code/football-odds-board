@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-26T17:57:10.059Z",
+  "updated": "2026-11-26T18:59:03.289Z",
   "summary": {
     "total": 80,
     "byTier": {
@@ -3507,7 +3507,7 @@
       "league": "男篮世界杯预选赛",
       "home": "希腊",
       "away": "格鲁吉亚",
-      "kickTs": 1795716000,
+      "kickTs": null,
       "tier": "观察",
       "hot": "home",
       "hotName": "希腊",
@@ -3533,7 +3533,7 @@
       "line": -10.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-26T20:20:47+08:00",
-      "locked": true,
+      "locked": false,
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
