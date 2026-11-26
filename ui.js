@@ -20608,7 +20608,7 @@ function _dgRender(){
   const capped=list.slice(0,200);
   const tb=document.getElementById('dgTbody');
   if(tb) tb.innerHTML=capped.length?capped.map(_dgRowHTML).join('')
-    :'<tr><td colspan="13" style="padding:20px;text-align:center;color:var(--mut)">该筛选下没有可分析场次（竞彩北单区需官方 SP；野鸡区需外围赔率 + 近期战绩/真实盘）</td></tr>';
+    :'<tr><td colspan="13" style="padding:20px;text-align:center;color:var(--mut)">该筛选下没有可分析场次（本模块只做竞彩北单区，需官方 SP）</td></tr>';
   const cnt=document.getElementById('dgCount');
   if(cnt){ const nAbn=list.filter(r=>r.v.tier.indexOf('放弃')>=0).length, nWarn=list.filter(r=>r.v.tier.indexOf('谨慎')>=0).length;
     cnt.innerHTML='本区 <b>'+list.length+'</b> 场（显示 '+capped.length+(list.length>capped.length?'，请用日期筛选缩小范围':'')+'）· 放弃 <b style="color:var(--red)">'+nAbn+'</b> · 谨慎 <b style="color:#f59e0b">'+nWarn+'</b>'; }
