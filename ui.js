@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-28-四卡老库真值标注-v24';   // ★ v24：四张卡正上方明确标注「冻结老库·非新源」+新源真实样本量，回应用户「改在哪里」；四卡数字仍是引擎当前输出89/86/100/77，不再误称新版92/93/96/85。v23=新源逐日命中补充段；v22=停更真值告知；v21=资金板标签
+const UI_V = '2026-11-28-精选标签置顶与分页-v26';   // ★ v26：★S级精选/★A级优选/准精选 标签场强制置顶历史表首屏 + 历史表120行分页（原1155场/6.89MB DOM 让标签沉到第1500行后，肉眼翻不到=用户「突然看不到」）。v24=四卡老库真值标注；v23=新源逐日命中；v22=停更告知；v21=资金板标签
 /* ★ 2026-11-27 v19~v21：精选/优选标签的 tid 索引。__TRI_ELITE__ 是异步 gzip 注入，
    到达后建索引并触发一次卡片增量刷新（只更新标签，不重建整页）。
    v21 增 upS/upA/upN：赛前候选（未来场未结算），只在资金板展示，不进命中/ROI 分母。 */
@@ -9797,7 +9797,25 @@ function fundplateHistoryHTML(){
     kick_asc:  function(p,q){ return _tsOf(p)-_tsOf(q) || ((p.ts||0)-(q.ts||0)) || String(p.day||'').localeCompare(String(q.day||'')); },
     reg_desc:  function(p,q){ return ((q.ts||0)-(p.ts||0)) || _tsOf(q)-_tsOf(p); }
   };
+  /* ★ 2026-11-28 v26：★S级精选/★A级优选/准精选 标签场【强制置顶】——
+     用户反馈"资金板历史里突然看不到标签"：真机核对标签其实全在（S8/A32/赛前S4/A36），
+     但 1155 场全量渲染 6.89MB DOM，带标签场按 kick_desc 沉到第 1500 行之后，肉眼根本翻不到。
+     修法：把带 S/A/N/uS/uA/uN 标签的场排到表格最前，首屏即见。统计口径不动（仍用全 items）。 */
+  const _eliteRank = function(e){
+    try{ const T=window._triEliteTag||{}; const k=String((e&&e.tid)||'');
+      if (T.elite&&T.elite[k]) return 6;
+      if (T.prefer&&T.prefer[k]) return 5;
+      if (T.near&&T.near[k]) return 4;
+      if (T.upS&&T.upS[k]) return 3;
+      if (T.upA&&T.upA[k]) return 2;
+      if (T.upN&&T.upN[k]) return 1;
+    }catch(_e){}
+    return 0;
+  };
   const rows = items.slice().sort(function(p,q){
+      /* ★ v26：精选/优选标签场强制置顶，保证打开资金板第一屏就能看到 */
+      const ep=_eliteRank(p), eq=_eliteRank(q);
+      if (ep !== eq) return eq - ep;
       /* ★ 2026-11-27：置顶强推必须与徽章/业绩同口径——资金合流但方向=观察的场不再置顶 */
       const sp=!!_fpConvLabel(p), sq=!!_fpConvLabel(q);
       if (sp !== sq) return sq ? 1 : -1;   // ★ 只有真三盘合流(且有冻结方向)才置顶；v3 未合流场按时间正常排序
@@ -9913,7 +9931,17 @@ function fundplateHistoryHTML(){
         +'<div style="margin-top:3px;font-size:10.5px;font-weight:700;white-space:normal">'+recBadge+'</div></td>'
       + _yanggeGapCell(e)   /* ★ 2026-11-19 洋哥动态缺口核对列（只读观察·不进引擎） */
       +'</tr>';
-  }).join('');
+  }); // ★ v26：保留数组以做首屏限量（原 .join('') 全量 6.89MB DOM 会让资金板卡数分钟）
+  /* ★ 2026-11-28 v26 分页：精选/优选已置顶，首屏只渲染前 FP_ROW_CAP 行，其余点按钮展开。
+     统计仍用全 items（展示集≠统计集此处是刻意的：统计口径冻结不变，表格只是分批呈现）。 */
+  const FP_ROW_CAP = 120;
+  const _fpShowAll = !!(window.__FP_HIST_VIEW__ && window.__FP_HIST_VIEW__.showAll);
+  const rowsTotal = rows.length;
+  const rowsHTML = (_fpShowAll ? rows : rows.slice(0, FP_ROW_CAP)).join('');
+  const _moreBtn = (!_fpShowAll && rowsTotal > FP_ROW_CAP)
+    ? '<tr><td colspan="9" style="padding:10px;text-align:center">'
+      + '<button type="button" onclick="_fpHistSet(\'showAll\',1)" style="font-size:12px;padding:6px 16px;border-radius:8px;cursor:pointer;border:1px solid #a855f7;background:rgba(168,85,247,.2);color:#e9d5ff;font-weight:700">显示其余 '+(rowsTotal-FP_ROW_CAP)+' 场（首屏 '+FP_ROW_CAP+' 行，已含全部精选/优选）</button>'
+      + '</td></tr>' : '';
   /* ★★ 2026-11-21 用户："入账为什么没有进完整意见片区"。
      根因：临盘已入账场只写独立 linpan_ledger(独赢)，fundplate_history(亚盘让球)主表无此场 → 主表永远看不到。
      修：把 __TRI_TRAIL__ 里 promoted(已入账) 场按当前日期筛选，作为【正式意见行】并入本主表顶部，
@@ -10170,7 +10198,9 @@ function fundplateHistoryHTML(){
        + '<th style="padding:5px 7px;font-weight:500">最终比分</th>'
        + '<th style="padding:5px 7px;font-weight:500">结算·按顺买强队</th>'
        + '<th style="padding:5px 7px;font-weight:500" title="洋哥L174动态缺口口径：缺口=100%−365返还率，偏差>缺口才算大热站对面(买受让)，弃用固定15%。只读观察列，不进引擎/方向/仓位。">洋哥动态缺口核对<br><span style="font-size:9px;font-weight:400;opacity:.7">观察·不进引擎</span></th>'
-       + '</tr></thead><tbody>'+_lpPromotedRows+rows+'</tbody></table>';
+       /* ★ v26：精选/优选标签场优先置顶——rowsHTML 内部已按 _eliteRank 把标签场排最前，
+          故整段放在 _lpPromotedRows 之前；否则近300行临盘入账场(无标签)会把标签挤到肉眼翻不到的位置。 */
+       + '</tr></thead><tbody>'+rowsHTML+_moreBtn+_lpPromotedRows+'</tbody></table>';
   } else {
     h += '<div style="padding:14px;text-align:center;border:1px dashed var(--line);border-radius:9px;font-size:12px;color:var(--mut)">该日期 / 范围内暂无登记场次，换个日期或点「全部」即可。</div>';
     /* 即使 fundplate 主表该日无登记场次，临盘已入账场仍要出现在完整意见片区 */
@@ -10506,9 +10536,10 @@ function fundplateHistoryHTML(){
 function _fpHistSet(k, v){
   try{
     const cur = (window.__FP_HIST_VIEW__ = window.__FP_HIST_VIEW__ || { day:'all', range:'all', sort:'kick_desc' });
-    if (k === 'day'){ cur.day = String(v || 'all'); if (cur.day !== 'all') cur.range = 'all'; }
-    else if (k === 'range'){ cur.range = String(v || 'all'); cur.day = 'all'; }
+    if (k === 'day'){ cur.day = String(v || 'all'); if (cur.day !== 'all') cur.range = 'all'; cur.showAll = false; }
+    else if (k === 'range'){ cur.range = String(v || 'all'); cur.day = 'all'; cur.showAll = false; }
     else if (k === 'sort'){ cur.sort = String(v || 'kick_desc'); }
+    else if (k === 'showAll'){ cur.showAll = !!v; }
     else return;
     const host = document.getElementById('fpHistHost');
     if (!host) return;
