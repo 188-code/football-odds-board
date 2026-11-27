@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-27-优选精选停更真值告知-v22';   // ★ v22：用户问「为何这个板块16、17号停更」→ 回放库 built 11-18 16:52(gqj2 567)，bake generated 11-12；把球探5min时刻与烘焙底座时间戳拆开，加真实停更告知；v21=资金板历史行标签
+const UI_V = '2026-11-27-新源逐日命中补充段-v23';   // ★ v23：用户指定 zhiyunsports 源恢复板块→ft2.js完场+1x2.nowscore.com逐次欧赔+亚盘页，独立zhiyun_replay.json同口径算逐日命中，单独展示不并入老库标定；含纯深盘。v22=停更真值告知；v21=资金板标签
 /* ★ 2026-11-27 v19~v21：精选/优选标签的 tid 索引。__TRI_ELITE__ 是异步 gzip 注入，
    到达后建索引并触发一次卡片增量刷新（只更新标签，不重建整页）。
    v21 增 upS/upA/upN：赛前候选（未来场未结算），只在资金板展示，不进命中/ROI 分母。 */
@@ -6569,7 +6569,8 @@ function _pickStaleBanner(){
       本板「精选/优选逐日命中、纯深盘逐日」来自 <b>15 天完场回放库</b>：最后构建 <b>${fb}</b>、最后比赛日 <b>${ds.slice(4,6)}-${ds.slice(6,8)}</b>（${stale} 天前；11-18 只有 15 场残日，最后完整日是 11-17）。
       烘焙底座 generated <b>${gb}</b>、最后比赛日 <b>${bl || '—'}</b>。
       <b>根因</b>：gqj2 自 11-18 起返回 http 567（WAF 限流），回放库/烘焙都拉不到新场次，cron 只能沿用旧库；球探盘口仍在更新，但它<b>不能替代</b>本板的完场真值源。
-      <b>要看 11-19 之后仍在更新的三盘精选/赛前候选，请进「💰 三盘资金·过热」板块</b>（独立快照链，不依赖 gqj2 完场库）。此告知随数据自动消失，不写死日期。
+      <b>11-19~26 历史缺口如实保留、不伪造</b>；从 11-27 起已用 <b style="color:#22d3ee">zhiyunsports/nowscore 新源</b>续上，见本屏下方「🆕 逐日命中 · 新源补充段」（异源单独算，不并入上方历史标定）。
+      要看仍在更新的三盘精选/赛前候选，请进「💰 三盘资金·过热」板块（独立快照链）。此告知随老库恢复自动消失，不写死日期。
     </div>`;
   }catch(e){ return ''; }
 }
@@ -7223,6 +7224,22 @@ function pickPanelHTML(hard, plan, dir, lib, RD){
    </tbody></table>
    <p class="note">近 ${_d.length} 天纯深盘日均 <b style="color:green">${aPure != null ? aPure + '%' : '—'}</b> · 拥挤日均 <b style="color:var(--red)">${aCrowd != null ? aCrowd + '%' : '—'}</b>。（与本屏上表「优选/拥挤」列同口径；原仅在「纯深盘筛选视图」可见，现合并到此屏，无需切视图。）</p>`;
   })();
+  /* ★ 2026-11-27 v23：异源补充段（zhiyunsports/nowscore）——gqj2 567 期间老库停更，
+     从新站抓最近两天的完场+逐次欧赔+亚盘，用同口径算出逐日命中，单独展示、不并入老库标定。 */
+  const zhiyunDailyHTML = (() => {
+    const Z = (typeof window !== 'undefined' && window.ZHIYUN_DAILY__) || null;
+    if (!Z || !Z.days || !Z.days.length) return '';
+    const _d = Z.days.slice(-20);
+    const _cell = o => o && o.n ? (o.hit + '/' + o.n + '<span style="color:' + (o.rate != null && o.rate >= 70 ? 'green' : 'var(--red)') + '"> ' + (o.rate != null ? o.rate + '%' : '—') + '</span>') : '—';
+    const S = Z.summary || {};
+    return `<div style="font-weight:700;margin:18px 0 4px;color:#22d3ee">🆕 逐日命中 · 新源补充段（zhiyunsports · 异源 · 与老库分开算）</div>
+   <p class="note" style="margin:2px 0 6px">数据源 <b>${Z.source || 'zhiyunsports/nowscore'}</b>，采于 <b>${Z.built || '—'}</b>。${Z.note || ''}
+     <b style="color:#22d3ee">口径与老库完全一致，但单独小计、不并入上方 8023 场历史标定</b>；样本小、仅最近两天，别当稳定结论。</p>
+   <table class="htab"><thead><tr><th>日期</th><th>场次</th><th>精选(头号≥80)</th><th>精选·下注级</th><th>优选(纯深盘)</th><th>纯深盘</th><th>拥挤</th></tr></thead><tbody>
+     ${_d.map(x => `<tr><td>${x.date}</td><td>${x.rows}</td><td>${_cell(x.prem)}</td><td>${_cell(x.t1)}</td><td>${_cell(x.sel)}</td><td>${_cell(x.deep)}</td><td>${_cell(x.crowd)}</td></tr>`).join('')}
+   </tbody></table>
+   <p class="note">新源累计（仅本段）：精选 <b>${S.prem ? S.prem.hit + '/' + S.prem.n + ' (' + S.prem.rate + '%)' : '—'}</b> · 下注级 <b>${S.t1 ? S.t1.hit + '/' + S.t1.n + ' (' + S.t1.rate + '%)' : '—'}</b> · 优选 <b>${S.sel ? S.sel.hit + '/' + S.sel.n + ' (' + S.sel.rate + '%)' : '—'}</b> · 纯深盘 <b>${S.deep ? S.deep.hit + '/' + S.deep.n + ' (' + S.deep.rate + '%)' : '—'}</b>。采集 ${Z.meta ? Z.meta.analyzed + '/' + Z.meta.total : '—'} 场。</p>`;
+  })();
   /* ★ 2026-10-28 双栏分离（用户选A·晨间锁定快照 + 实时监测）：
      洋哥自传三线索(PICK/MID/SMALL)靠 stakePlan 实时信号逐场翻牌，随资金流跳变是特性；
      首次打开当天把当前 PICK/MID/SMALL 集合锁进 localStorage(按日期)，整日不再变，作稳定参考；
@@ -7307,6 +7324,7 @@ function pickPanelHTML(hard, plan, dir, lib, RD){
     <p class="note"><b>为什么这两档最硬：</b>7870 场完场真值标定 ——「深盘热门方==模型方向」单信号方向命中 85%，再叠加「市场头号概率≥0.80」抬到 <b>96%</b>；而深盘一旦同时被大热确认（拥挤交易），三信号全中反而砸到 <b style="color:var(--red)">48%</b>（散户全压强队、价值被吃光）。故本面板<b>只收无大热确认的纯深盘</b>。</p>
     ${pdDailyHTML}
     ${deepDailyHTML}
+    ${zhiyunDailyHTML}
     ${backtestPanelHTML()}
     ${snapHTML}
     <div style="font-weight:700;margin:18px 0 4px;color:var(--acc)">📜 洋哥自传 · 问题盘三线索（自传原文"10% 的精选推荐"）</div>
