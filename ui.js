@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-27-新源逐日命中补充段-v23';   // ★ v23：用户指定 zhiyunsports 源恢复板块→ft2.js完场+1x2.nowscore.com逐次欧赔+亚盘页，独立zhiyun_replay.json同口径算逐日命中，单独展示不并入老库标定；含纯深盘。v22=停更真值告知；v21=资金板标签
+const UI_V = '2026-11-28-四卡老库真值标注-v24';   // ★ v24：四张卡正上方明确标注「冻结老库·非新源」+新源真实样本量，回应用户「改在哪里」；四卡数字仍是引擎当前输出89/86/100/77，不再误称新版92/93/96/85。v23=新源逐日命中补充段；v22=停更真值告知；v21=资金板标签
 /* ★ 2026-11-27 v19~v21：精选/优选标签的 tid 索引。__TRI_ELITE__ 是异步 gzip 注入，
    到达后建索引并触发一次卡片增量刷新（只更新标签，不重建整页）。
    v21 增 upS/upA/upN：赛前候选（未来场未结算），只在资金板展示，不进命中/ROI 分母。 */
@@ -7176,13 +7176,27 @@ function pickPanelHTML(hard, plan, dir, lib, RD){
    </tbody></table>
    <p class="note">📌 <b>怎么读这张表</b>：①<b>让胜(穿盘)</b>=让球方净胜 > 让球数（买"主让1球"要赢盘=主队净胜≥2）；<b>让平(走水)</b>=恰好等于（退本金）；<b>让负(输盘)</b>=净胜 < 让球数。
      ② <b>"让几球最稳"的诚实答案 = 浅盘（0.5 / 0.75）让球穿盘最可靠（≈56~60%）</b>；中深盘(1.0~1.5)让球方常赢球但<b>赢不够盘</b>，穿盘反而只有 40~49%（且 1.0/2.0 还有 20~27% 走水）；深盘(≥2)热门方赢球率极高(79~92%)但穿盘率回到 ~49~54%。
-     ③ 上方"精选96%/优选85%/深盘81.7%"是<b>深盘热门方的"赢球率"期望</b>（大热门本来就常赢，不是模型多厉害的 alpha）；它<b>不等于</b>让球穿盘命中率。
+     ③ 上方四张卡的老库命中率是<b>胜平负方向</b>的实测（已标注「冻结老库·非新源」），深盘热门方"赢球率高"是<b>大热门本来就常赢</b>的常识，不是模型 alpha；它<b>不等于</b>让球穿盘命中率。
      所以：<b>买让球选浅盘，买独赢/胜平负才考虑深盘大热门</b>。表为静态标定（数据源 9180 场完场·2026-10-18 刷新），仅作历史参考，不替代实时盘口。</p>`;
-  const hist = (sP||sS) ? `<div class="rstats" style="margin-top:8px">
-      ${sP?`<div class="rcard"><div class="rn" style="color:var(--grn)">${sP.rate}%</div><div class="rl">精选 · 纯深盘∩头号≥80%</div><div class="rr" style="color:green">方向命中 ${sP.hit}/${sP.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">7870 场完场真值标定</div></div>`:''}
-      ${sT1?`<div class="rcard" style="border-color:var(--grn)"><div class="rn" style="color:var(--grn)">${sT1.rate}%</div><div class="rl">精选·下注级 · ∩模型tier=1</div><div class="rr" style="color:green">方向命中 ${sT1.hit}/${sT1.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">pd_t1_mk80 · 最硬子集</div></div>`:''}
-      ${sT1m85?`<div class="rcard" style="border-color:var(--grn);background:linear-gradient(135deg,var(--bg),rgba(0,128,0,.08))"><div class="rn" style="color:var(--grn)">${sT1m85.rate}%</div><div class="rl">精选·下注级·头号≥85</div><div class="rr" style="color:green">方向命中 ${sT1m85.hit}/${sT1m85.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">pd_t1_mk85 · 最最硬子集</div></div>`:''}
-      ${sS?`<div class="rcard"><div class="rn" style="color:var(--acc)">${sS.rate}%</div><div class="rl">优选 · 纯深盘(方向一致·无大热)</div><div class="rr" style="color:green">方向命中 ${sS.hit}/${sS.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">同上标定 · 拥挤对照 ${sc&&sc.crowd?sc.crowd.rate+'%':'48%'}(深盘+大热)</div></div>`:''}
+  /* ★ 2026-11-28 v24：四张卡的数据源状态条——直接贴在四卡上方，回答「改在哪里 / 为什么数字没变」。
+     铁事实：四卡数字来自 REVIEW_DATA.pickScan，引擎 gen_review.cjs 只读 11-18 冻结的 _replay_finish.json；
+     gqj2 http 567 后老库没有新完场，故数字不可能自己变。新源 zhiyun 另算、样本个位数，绝不冒充老库标定。 */
+  const _zyNow = (typeof window !== 'undefined' && window.ZHIYUN_DAILY__) || null;
+  const _pfNow = (typeof window !== 'undefined' && window.__PICK_FRESHNESS__) || {};
+  const _zyDaysNow = (_zyNow && _zyNow.days) ? _zyNow.days : [];
+  const _zyMatchN = _zyDaysNow.reduce((s, d) => s + (Number(d.rows) || 0), 0);
+  const _zySelN = _zyDaysNow.reduce((s, d) => s + (((d.sel || {}).n) || 0), 0);
+  const _zyDeepN = _zyDaysNow.reduce((s, d) => s + (((d.deep || {}).n) || 0), 0);
+  const _zySrcStrip = `<div style="margin:10px 0 6px;padding:8px 10px;border:1px solid var(--yel);border-radius:8px;background:rgba(255,180,0,.06);font-size:11.5px;line-height:1.75">
+    <b style="color:var(--yel)">⚠ 下面四张卡 = 冻结老库的数字，不是新源</b>：回放库 built <b>${_pfNow.replayBuilt || '2026-11-18'}</b>（gqj2 http 567 起停更），这些命中率与今日盘口无关，<b>别当成"改完变好了"</b>。<br>
+    <b style="color:var(--grn)">🆕 你指定的新源 zhiyunsports / nowscore 已接入</b>：覆盖 <b>${_zyDaysNow.length}</b> 天 / <b>${_zyMatchN}</b> 场（逐次欧赔 1x2.nowscore.com，纯深盘同源），精选有方向样本 <b>${_zySelN}</b> 场、纯深盘 <b>${_zyDeepN}</b> 场 —— ${_zySelN < 5 ? '<b>样本个位数，不显示命中率、不可做策略结论</b>；每日自动续接累积中。' : '详见下方新源补充段。'}<br>
+    <span style="color:var(--mut)">往下还有「📈 精选/优选 逐日命中」与「🆕 新源补充段（带纯深盘）」；三盘资金过热板块历史行另有 S/A 精选标签。</span>
+  </div>`;
+  const hist = (sP||sS) ? `${_zySrcStrip}<div class="rstats" style="margin-top:8px">
+      ${sP?`<div class="rcard"><div class="rn" style="color:var(--grn)">${sP.rate}%</div><div class="rl">精选 · 纯深盘∩头号≥80%</div><div class="rr" style="color:green">方向命中 ${sP.hit}/${sP.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">7870 场完场真值标定 · <b style="color:var(--yel)">冻结老库11-18·非新源</b></div></div>`:''}
+      ${sT1?`<div class="rcard" style="border-color:var(--grn)"><div class="rn" style="color:var(--grn)">${sT1.rate}%</div><div class="rl">精选·下注级 · ∩模型tier=1</div><div class="rr" style="color:green">方向命中 ${sT1.hit}/${sT1.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">pd_t1_mk80 · 最硬子集 · <b style="color:var(--yel)">冻结老库</b></div></div>`:''}
+      ${sT1m85?`<div class="rcard" style="border-color:var(--grn);background:linear-gradient(135deg,var(--bg),rgba(0,128,0,.08))"><div class="rn" style="color:var(--grn)">${sT1m85.rate}%</div><div class="rl">精选·下注级·头号≥85</div><div class="rr" style="color:green">方向命中 ${sT1m85.hit}/${sT1m85.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">pd_t1_mk85 · 最最硬子集 · <b style="color:var(--yel)">冻结老库</b></div></div>`:''}
+      ${sS?`<div class="rcard"><div class="rn" style="color:var(--acc)">${sS.rate}%</div><div class="rl">优选 · 纯深盘(方向一致·无大热)</div><div class="rr" style="color:green">方向命中 ${sS.hit}/${sS.n}</div><div style="font-size:11px;opacity:.7;margin-top:3px">同上标定 · 拥挤对照 ${sc&&sc.crowd?sc.crowd.rate+'%':'48%'}(深盘+大热) · <b style="color:var(--yel)">冻结老库</b></div></div>`:''}
     </div>` : '<p class="note">历史标定数据加载中…（复盘库未就绪时暂隐，稍后重开即可见）</p>';
   /* ★ 2026-10-09e：精选/优选 逐日命中（自我证伪）—— 与头条 pickScan 同谓词，逐日稳定性回答"是否靠运气" */
   const pdDailyHTML = (() => {
