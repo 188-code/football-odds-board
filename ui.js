@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-26-帝哥综合意见可执行-v15';   // ★ v15：综合意见列重写——只给「档位→动作＋关键数字＋甲一句话」，删掉「模拟盘不成立·源站未收录/疑似抓取失败/禁止据此下结论/按教程口径可继续跟踪」等重复废话；缺步只说缺①②③④哪几步、不参与判档，故障细节留在五步算式明细卡。判定/tier/acts/分母全部不变，只改展示层。前版 v14：按用户要求删除「非竞彩北单·野鸡区」——帝哥模块只做竞彩北单区(只收有官方SP场次)，野鸡区tab/入场过滤移除。配套 fetch_zhiyun_battle.cjs tid来源加titan007+tri_trail，修复bake冻结(11-12起)导致新场次307xxxx交锋永远抓不到、五步恒缺的断链(11-27场从0场有交锋→30场有交锋/10场五步齐全)。前版 v13：序列护栏文案诚实化——「序列不齐/缺独立盘口」改为「资金口径不可比·让球↔独赢不混算」并显式带出北单让球已抓帧数，数据没丢、是玩法口径不可比；只改文案不改判定/方向/分母。前版 v12：临盘账本「三盘合流/三端同向」标签同样绑定 align.nSrc，2端不再冒称三端（承接 v11 历史板徽章修复）。前版 v11：徽章「三盘合流」绑定真实序列端数——65场挂徽章里真3端仅16场、2端34场(竞彩缺)、单端7场，2端/单端/元数据冲突一律不再冒称三盘合流，只改文案不动方向/引擎/分母（用户抓包「2盘不齐这叫三盘合流」）。前版 v10：三盘资金实时诊断区正式上线（本地含代码但CVM此前被重建覆盖，逐场三端Δ/资金指向/入围判定，每轮重建自动重算；资金指向≠下注方向，净方向留出≈50%）。前版 v7：11-07至今逐场独立复盘——严格拆半口径证「三盘合流强推」边全在 over>0(23场58.7%/ROI+34.3%)，over<=0 的冷门破缺口场 8场37.5%/ROI−12.5% 是负edge噪声 → 强推判定加 op.over>0 护栏(剔除10场，不新增假设、不改冻结recDir)。前版 v6：极端净超买独立标签。
+const UI_V = '2026-11-27-强推合流加方向门-v16';   // ★ v16：资金合流但recDir=观察不再贴强推徽章/置顶/高亮；阈值/方向/分母不动。前版v15=帝哥综合意见可执行；v14=删野鸡区；v13=序列护栏文案诚实化；v12/v11=徽章绑真序列端数；v7=over>0护栏
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -8824,6 +8824,12 @@ function fundplateHistoryHTML(){
      返回 null 表示未达资金面合流(走原"未合流"文案)。 */
   const _fpConvLabel = function(e){
     if (!_fpConverged(e)) return null;
+    /* ★★ 2026-11-27 用户授权修：资金合流63场里30场方向实际是「只观察」(48%)，
+       旧徽章只看资金面字段不看 recDir，把观察场也贴成「🔥正式强推·三盘合流」并置顶/高亮。
+       KPI(_strongRows)层已有 recDir 方向门，这里补同一道门，保证徽章/高亮/排序与业绩口径一致。
+       只改展示标签，不改冻结 recDir/_fpConverged统计口径/引擎/分母。 */
+    var _rd = String((e && e.recDir) || '');
+    if (_rd.indexOf('买受让') !== 0 && _rd.indexOf('买强队') !== 0) return null;
     var T = (typeof window !== 'undefined' && window.__TRI_TRAIL__ && window.__TRI_TRAIL__.items) || {};
     var it = T[String(e && e.tid)] || null;
     var f = (it && it.flags) || null;
@@ -9651,8 +9657,9 @@ function fundplateHistoryHTML(){
     reg_desc:  function(p,q){ return ((q.ts||0)-(p.ts||0)) || _tsOf(q)-_tsOf(p); }
   };
   const rows = items.slice().sort(function(p,q){
-      const sp=_strongPickOf(p).strong && _fpConverged(p), sq=_strongPickOf(q).strong && _fpConverged(q);
-      if (sp !== sq) return sq ? 1 : -1;   // ★ 只有真三盘合流才置顶；v3 未合流场按时间正常排序
+      /* ★ 2026-11-27：置顶强推必须与徽章/业绩同口径——资金合流但方向=观察的场不再置顶 */
+      const sp=!!_fpConvLabel(p), sq=!!_fpConvLabel(q);
+      if (sp !== sq) return sq ? 1 : -1;   // ★ 只有真三盘合流(且有冻结方向)才置顶；v3 未合流场按时间正常排序
       /* ★ 2026-11-23 让球轴合流独立通道：只作次级置顶（排在 A强推之后、普通场之前），
          物理隔离，不抢 A强推首位、不进 A强推业绩。 */
       const rp=!!_rqStrongOf(p), rq=!!_rqStrongOf(q);
@@ -9713,7 +9720,8 @@ function fundplateHistoryHTML(){
     /* ★ 2026-11-23：独立通道行用紫色左边框（A强推=橙 #f59e0b），同排不同色不混读 */
     const _rqRow = _rqStrongOf(e);
     const _nhRow = _netHotOf(e);
-    const _rowHL = (_sp.strong&&_fpConverged(e)) ? 'rgba(245,158,11,.14);box-shadow:inset 3px 0 0 #f59e0b'
+    /* ★ 2026-11-27：金色强推高亮与徽章同口径，观察场不再被高亮成强推 */
+    const _rowHL = (_sp.strong&&_fpConvLabel(e)) ? 'rgba(245,158,11,.14);box-shadow:inset 3px 0 0 #f59e0b'
       : (_rqRow ? 'rgba(167,139,250,.10);box-shadow:inset 3px 0 0 #a78bfa'
       : (_nhRow ? 'rgba(34,211,238,.08);box-shadow:inset 3px 0 0 #22d3ee' : bg));
     return '<tr style="border-top:1px solid var(--line);background:'+_rowHL+'">'
