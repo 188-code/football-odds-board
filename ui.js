@@ -6,7 +6,21 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-27-强推合流加方向门-v16';   // ★ v16：资金合流但recDir=观察不再贴强推徽章/置顶/高亮；阈值/方向/分母不动。前版v15=帝哥综合意见可执行；v14=删野鸡区；v13=序列护栏文案诚实化；v12/v11=徽章绑真序列端数；v7=over>0护栏
+const UI_V = '2026-11-27-精选标签上卡-v19';   // ★ v19：主看板每张比赛卡头部贴「★S级精选/★A级优选/准精选」标签（按__TRI_ELITE__的tid索引，随tri-elite-ready增量刷新）；不改方向/引擎/分母。前版v18=优选层A级
+/* ★ 2026-11-27 v19：精选/优选标签的 tid 索引。__TRI_ELITE__ 是异步 gzip 注入，
+   到达后建索引并触发一次卡片增量刷新（只更新标签，不重建整页）。 */
+window._triEliteTag = { elite:{}, prefer:{}, near:{}, ready:false };
+function _buildTriEliteTag(){
+  try{
+    const d = window.__TRI_ELITE__ || {};
+    const T = window._triEliteTag;
+    T.elite = {}; T.prefer = {}; T.near = {};
+    (d.elite||[]).forEach(r=>{ T.elite[String(r.tid)] = r; });
+    (d.prefer||[]).forEach(r=>{ T.prefer[String(r.tid)] = r; });
+    (d.near||[]).forEach(r=>{ T.near[String(r.tid)] = r; });
+    T.ready = true;
+  }catch(e){}
+}
 /* ★★ 2026-11-16 纯2盘「反北单净Δ」观察方向 —— 全局轻量版（实时板按 tid 读 tri_trail）。
    只读 __TRI_TRAIL__ 的 bd.net / eu.net，与回测 bNet 同口径（79场零差异已核对）。
    ★ 铁律：观察档参考方向，不进引擎、不叫业绩、非下注指令。返回 null=非纯2盘/序列不齐。 */
@@ -10893,6 +10907,75 @@ function openFundPlate(){
   $('fundPlateModal').classList.add('show');
 }
 function closeFundPlate(){ const _m=$('fundPlateModal'); if(_m)_m.classList.remove('show'); }
+/* ★ 2026-11-27 精选三盘合流池：只读展示 _select_tri_elite.cjs 的产出。
+   不改 recDir / 引擎 / 主账分母；留出仅4场，界面必须显式“小样本·不放量”。 */
+function triEliteRowsHTML(rows, withWhy, tier){
+  if(!rows || !rows.length) return '<p class="note">暂无入选场次。</p>';
+  /* ★ v19：每行首列打「精选/优选」标签，tier 由调用方给定；无 tier 时按行字段兜底 */
+  const _tag = r => {
+    const t = tier || (r.elite ? 'S' : (r.prefer ? 'A' : (r.near ? 'N' : '')));
+    if (t === 'S') return '<span class="pill" style="color:#f59e0b;border-color:#f59e0b;font-weight:800" data-tri-elite-tag="S">★S级精选</span>';
+    if (t === 'A') return '<span class="pill" style="color:#2563eb;border-color:#2563eb;font-weight:800" data-tri-elite-tag="A">★A级优选</span>';
+    if (t === 'N') return '<span class="pill" style="color:#7c3aed;border-color:#7c3aed" data-tri-elite-tag="N">准精选</span>';
+    return '<span style="opacity:.4">—</span>';
+  };
+  const cell = r => {
+    const res = r.result == null ? '待结算' : (r.result === 1 ? '中' : '错');
+    const col = r.result == null ? '#64748b' : (r.result === 1 ? '#dc2626' : '#16a34a');
+    const sig = [r.fund ? '资金破缺口' : '', r.converge ? '三端同向' : ''].filter(Boolean).join(' + ') || '—';
+    return '<tr onclick="closeTriElite();try{jumpToMatch(\''+esc(r.tid)+'\')}catch(e){}" style="cursor:pointer" title="点击定位主看板该场">'
+      + '<td>'+_tag(r)+'</td><td>'+esc(r.day)+'</td><td>'+esc(r.tid)+'</td>'
+      + '<td>'+esc(r.home||'')+' <span style="opacity:.55">vs</span> '+esc(r.away||'')+'</td>'
+      + '<td>'+esc(r.league||'')+'</td><td>'+esc(r.dir||'')+'</td>'
+      + '<td>'+esc(sig)+'</td><td>'+(r.heatScore==null?'—':r.heatScore)+'</td>'
+      + '<td>'+(r.over==null?'—':esc(r.over))+'</td><td>'+(r.hcap==null?'—':esc(r.hcap))+'</td>'
+      + '<td>'+esc(r.settledSrc||'—')+'</td>'
+      + '<td style="color:'+col+';font-weight:800">'+res+'</td>'
+      + '<td>'+(r.nSrc||0)+'/'+(r.same==null?'?':r.same)+'</td>'
+      + (withWhy ? '<td style="color:#b45309">'+esc(r.whyFail||'—')+'</td>' : '')
+      + '</tr>';
+  };
+  return '<table><tr><th>档位</th><th>日期</th><th>tid</th><th>比赛</th><th>联赛</th><th>冻结方向</th><th>合流信号</th><th>热度</th><th>over</th><th>hcap</th><th>结算源</th><th>结果</th><th>端/同向</th>'
+    + (withWhy ? '<th>未进精选原因</th>' : '') + '</tr>' + rows.map(cell).join('') + '</table>';
+}
+function renderTriElite(){
+  const host = $('triEliteContent'); if(!host) return;
+  const d = window.__TRI_ELITE__;
+  if(!d){ host.innerHTML = '<p class="note">精选数据尚未注入完成，请稍后重开本板。</p>'; return; }
+  const st = d.summary && d.summary.stats ? d.summary.stats : {};
+  const el = st.elite || {};
+  const pf = st.prefer || {}, pfT = st.preferTrain || {}, pfH = st.preferHoldout || {};
+  const kpi = '<div class="rcard" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">'
+    + '<div class="rcard"><div class="rn" style="color:#f59e0b">'+((d.elite||[]).length)+'</div><div class="rl">S级精选场数</div></div>'
+    + '<div class="rcard"><div class="rn" style="color:#dc2626">'+(el.w==null?'—':el.w+'/'+(el.settled||0))+'</div><div class="rl">S级命中</div></div>'
+    + '<div class="rcard"><div class="rn">'+(el.pct==null?'—':el.pct+'%')+'</div><div class="rl">S级命中率</div></div>'
+    + '<div class="rcard"><div class="rn" style="color:#2563eb">'+((d.prefer||[]).length)+'</div><div class="rl">A级优选场数</div></div>'
+    + '<div class="rcard"><div class="rn" style="color:#dc2626">'+(pf.w==null?'—':pf.w+'/'+(pf.settled||0))+'</div><div class="rl">优选命中</div></div>'
+    + '<div class="rcard"><div class="rn">'+(pf.pct==null?'—':pf.pct+'%')+'</div><div class="rl">优选命中率</div></div>'
+    + '</div>';
+  const preferNote = '<p class="note" style="margin:10px 0;border-left:3px solid #2563eb"><b>A级优选口径：</b>两盘齐 + 浅盘|hcap|≤0.5 + 有明确方向 + 盘口可信（S级 ⊂ 优选，是上位池不是独立新信号）。'
+    + '全期 <b>'+(pf.w==null?'—':pf.w+'/'+pf.settled+' ('+pf.pct+'%)')+'</b>，训练 <b>'+(pfT.w==null?'—':pfT.w+'/'+pfT.settled+' ('+pfT.pct+'%)')+'</b>，留出 <b>'+(pfH.w==null?'—':pfH.w+'/'+pfH.settled+' ('+pfH.pct+'%)')+'</b>。'
+    + '穷举 100+ 组合后唯一「双端站住且产量放大」的放宽口径；本质是把端数门槛从三端降到两端，<b>命价从 87.5% 降到 '+(pf.pct==null?'—':pf.pct+'%')+'</b>。'
+    + '这是项目早已站住的「浅盘买受让」边的扩大复用，<b>不是新发现信号</b>；剔掉 S 级后剩 32 场留出仅 3 场 33.3%，站不住，故不单列独立边。</p>';
+  host.innerHTML = kpi
+    + '<h3>★ S级精选（三盘合流）</h3>' + triEliteRowsHTML(d.elite || [], false, 'S')
+    + preferNote
+    + '<h3>A级优选（两盘齐·浅盘·有方向；含S级）</h3>' + triEliteRowsHTML(d.prefer || [], false, 'A')
+    + '<h3>准精选（两盘齐·非三盘，不冒称合流）</h3>' + triEliteRowsHTML(d.near || [], false, 'N')
+    + '<h3>旧正式强推但未进精选</h3>' + triEliteRowsHTML(d.formalRejected || [], true, '')
+    + '<p class="note" style="margin-top:10px"><b>边界：</b>两级都是小样本（S级训练4/留出4，优选留出'+((pfH.settled)||0)+'场），只做逐场复盘与展示，<b>不并入主账KPI，不改冻结方向，不放量</b>。</p>';
+}
+function openTriElite(){
+  const m = $('triEliteModal'); if(m) m.classList.add('show');
+  renderTriElite();
+}
+function closeTriElite(){ const m=$('triEliteModal'); if(m)m.classList.remove('show'); }
+window.addEventListener('tri-elite-ready', function(){
+  try{ renderTriElite(); }catch(e){}
+  try{ _buildTriEliteTag(); }catch(e){}
+  /* 标签是卡片头部的一部分：数据晚到时，把已渲染的卡就地补上标签，不整页重建 */
+  try{ if(typeof _paintTriEliteTags==='function') _paintTriEliteTags(); }catch(e){}
+});
 /* ★ 2026-10-29 性能修复：热度榜原来一次性渲染「全部场」（真机实测第二次打开也建了
    73,709 个 DOM 节点 / 335KB 文本，560ms 且之后整页重排都被拖慢）。
    改为首屏只建 HEAT_CAP 行，其余点「显示其余」再追加 —— 与复盘面板同一条原则：
@@ -17494,6 +17577,30 @@ function theoBlock(m, theo){
   </div>`;
 }
 
+/* ★ 2026-11-27 v19：卡片头部「精选/优选」标签。只读 __TRI_ELITE__ 的 tid 索引，
+   不改方向/引擎/分母。S级 ⊂ A级优选 ⊂ 准精选，按最高档只贴一个主标签，避免重复堆砌。 */
+function _triEliteBadge(m){
+  try{
+    const T = window._triEliteTag; if(!T || !T.ready) return '';
+    const tid = String(m && m.tid);
+    if (T.elite[tid])  return '<span class="pill" style="color:#f59e0b;border-color:#f59e0b;font-weight:800" title="S级精选三盘合流：三端齐+方向+浅盘+资金/序列合流；训练4/4·留出3/4，小样本不放量">★S级精选</span>';
+    if (T.prefer[tid]) return '<span class="pill" style="color:#2563eb;border-color:#2563eb;font-weight:800" title="A级优选：两盘齐+浅盘+有方向（S级⊂优选）；全期60%·训练60.6%·留出57.1%，是已知浅盘边的扩大复用，不放量">★A级优选</span>';
+    if (T.near[tid])   return '<span class="pill" style="color:#7c3aed;border-color:#7c3aed" title="准精选：两盘齐但非三盘，不冒称三盘合流">准精选</span>';
+  }catch(e){}
+  return '';
+}
+/* __TRI_ELITE__ 异步晚到时，给已渲染的卡片就地补标签（不整页重建） */
+function _paintTriEliteTags(){
+  try{
+    const grid = document.getElementById('grid'); if(!grid) return;
+    grid.querySelectorAll('.c[data-tid]').forEach(function(card){
+      const tid = card.getAttribute('data-tid');
+      const ct = card.querySelector('.ct'); if(!ct || ct.querySelector('[data-tri-elite-tag]')) return;
+      const tg = _triEliteBadge({ tid: tid }); if(!tg) return;
+      ct.insertAdjacentHTML('afterbegin', tg.replace('class="pill"','class="pill" data-tri-elite-tag="1"'));
+    });
+  }catch(e){}
+}
 function cardHTML(m){
   const dc = m.analysis ? dirClass(m.analysis.dir) : 'G';
   const a = m.analysis;
@@ -17686,7 +17793,7 @@ function cardHTML(m){
     <label class="selwrap" style="display:inline-block;font-size:12px;color:#8b98a9;cursor:pointer;margin:2px 0 4px"><input type="checkbox" class="selbox" data-tid="${m.tid}" ${m._sel?'checked':''} onchange="toggleSel(${m.tid},this.checked)"> <span>选</span></label>
     ${scoreBadge(m)}
     ${val!=null?`<div class="vsco"><b>${val}</b>价值分</div>`:''}
-    <div class="ct"><span class="lg">${m.league||''}</span>${a?faceDirBadge(a):''}${noOddsPill}${(m.t7only&&t7HasOdds(m))?'<span class="pill" style="color:#1a73e8;border-color:#1a73e8" title="球探(titan007)独有场次：gqj2 未收录，已用球探 vip 真实亚盘/大小球（多公司中位）反解进引擎出结论。欧赔为让球盘+大小球盘 Poisson 反解值，非公司真实报价。">🔭球探独有·已分析</span>':''}${(a&&a._t7vip)?'<span class="pill" style="color:#0b8a5a;border-color:#0b8a5a" title="结论来自球探 vip 盘口：GD≈亚盘让球 + T≈大小球盘 → Poisson 反解 1X2（在 gqj2 真实欧赔上留出验证 n=527：概率 MAE 0.055、强弱方向一致率 97.8%）">球探vip·反解</span>':''}${jcHasOdds(m)?(function(){ const _j=jcOf(m); const _hh=(!(_j&&_j.had&&+_j.had.h>1)); return '<span class="pill" style="color:#9b6dff;border-color:#9b6dff" title="'+( _hh?'本场官方只开让球盘(无普通胜平负)，已用让球赔 Poisson 反解为等效 1X2 后进引擎，结论带让球口径':'本场无 gqj2 欧洲盘口包，已改用竞彩官方胜平负赔率进引擎分析')+'">'+( _hh?'让球盘反解→分析':'官方赔率→分析')+'</span>'; })():''}${(a&&(a.strongDraw||/平局/.test(a.dir||'')))?'<span class="pill" style="color:#8b98a9;border-color:#8b98a9" title="⚠参考级·弱信号：平局整体负EV，历史打出率约30~34%(n≈80)，回测命中仅12.5%。非高命中可下注级，勿重注，仅作防平参考">平局·参考级 命中~30%</span>':(a&&drawProb(m)>=0.27?'<span class="pill" style="color:#8b98a9;border-color:#8b98a9" title="参考级·防平关注：市场平局概率≥27%，该场平局打出概率偏高，但平局整体弱信号(历史命中~30%)，建议纳入防平考量而非重注">平局·参考 命中~30%</span>':'' )}${(a&&a.evenlyMatched)?'<span class="pill" style="color:#7a5cff;border-color:#7a5cff" title="势均力敌·已降【观望】不下注：市场隐含平局率≥26%，该段 5042 场回测里模型命中仅 41.1%、最佳单挑上限 40.0%（alpha +1.1pp，等于没有额外信息），命中率随平局率单调塌陷至 37%。方向仍可看，但别投钱。">势均力敌·观望</span>':''}${m.snapshot?'<span class="pill" style="color:#c0392b;border-color:#c0392b">离线快照</span>':''}${m.offline?'<span class="pill" style="color:var(--blu)">离线·缓存</span>':''}${(a&&a.wash)?'<span class="pill" style="color:#f0803c;border-color:#f0803c;font-weight:700" title="'+(a.wash.note||'')+'｜2026-10-05 真实赔率 5063 场复算：**盘口逆势**成立（|Δh|≥0.25反号 跟 fav 命中 65.0% n=386 z=5.1）；**水位拨动不成立**（51.5% vs 基准 52.1%，z=−0.6，旧注 83.1%/93.5% 已作废）">🫧'+(a.wash.kind==='water'?'水位洗盘':(a.wash.kind==='both'?'双洗盘':'洗盘'))+'·锚临场 fav '+a.wash.fav+'</span>':''}${(a&&a.company_div&&a.company_div.flag!=='NEUTRAL')?'<span class="pill" style="color:#f5c542;border-color:#f5c542;font-weight:700" title="跨公司赔率分歧(庄家视角问题盘标记)：'+(a.company_div.note||'')+'">🔀分歧 '+a.company_div.weightedDivScore+'</span>':''}${planPill(a)}<span class="ko">${stateTag(m.state)}</span></div>
+    <div class="ct"><span class="lg">${m.league||''}</span>${_triEliteBadge(m).replace('class="pill"','class="pill" data-tri-elite-tag="1"')}${a?faceDirBadge(a):''}${noOddsPill}${(m.t7only&&t7HasOdds(m))?'<span class="pill" style="color:#1a73e8;border-color:#1a73e8" title="球探(titan007)独有场次：gqj2 未收录，已用球探 vip 真实亚盘/大小球（多公司中位）反解进引擎出结论。欧赔为让球盘+大小球盘 Poisson 反解值，非公司真实报价。">🔭球探独有·已分析</span>':''}${(a&&a._t7vip)?'<span class="pill" style="color:#0b8a5a;border-color:#0b8a5a" title="结论来自球探 vip 盘口：GD≈亚盘让球 + T≈大小球盘 → Poisson 反解 1X2（在 gqj2 真实欧赔上留出验证 n=527：概率 MAE 0.055、强弱方向一致率 97.8%）">球探vip·反解</span>':''}${jcHasOdds(m)?(function(){ const _j=jcOf(m); const _hh=(!(_j&&_j.had&&+_j.had.h>1)); return '<span class="pill" style="color:#9b6dff;border-color:#9b6dff" title="'+( _hh?'本场官方只开让球盘(无普通胜平负)，已用让球赔 Poisson 反解为等效 1X2 后进引擎，结论带让球口径':'本场无 gqj2 欧洲盘口包，已改用竞彩官方胜平负赔率进引擎分析')+'">'+( _hh?'让球盘反解→分析':'官方赔率→分析')+'</span>'; })():''}${(a&&(a.strongDraw||/平局/.test(a.dir||'')))?'<span class="pill" style="color:#8b98a9;border-color:#8b98a9" title="⚠参考级·弱信号：平局整体负EV，历史打出率约30~34%(n≈80)，回测命中仅12.5%。非高命中可下注级，勿重注，仅作防平参考">平局·参考级 命中~30%</span>':(a&&drawProb(m)>=0.27?'<span class="pill" style="color:#8b98a9;border-color:#8b98a9" title="参考级·防平关注：市场平局概率≥27%，该场平局打出概率偏高，但平局整体弱信号(历史命中~30%)，建议纳入防平考量而非重注">平局·参考 命中~30%</span>':'' )}${(a&&a.evenlyMatched)?'<span class="pill" style="color:#7a5cff;border-color:#7a5cff" title="势均力敌·已降【观望】不下注：市场隐含平局率≥26%，该段 5042 场回测里模型命中仅 41.1%、最佳单挑上限 40.0%（alpha +1.1pp，等于没有额外信息），命中率随平局率单调塌陷至 37%。方向仍可看，但别投钱。">势均力敌·观望</span>':''}${m.snapshot?'<span class="pill" style="color:#c0392b;border-color:#c0392b">离线快照</span>':''}${m.offline?'<span class="pill" style="color:var(--blu)">离线·缓存</span>':''}${(a&&a.wash)?'<span class="pill" style="color:#f0803c;border-color:#f0803c;font-weight:700" title="'+(a.wash.note||'')+'｜2026-10-05 真实赔率 5063 场复算：**盘口逆势**成立（|Δh|≥0.25反号 跟 fav 命中 65.0% n=386 z=5.1）；**水位拨动不成立**（51.5% vs 基准 52.1%，z=−0.6，旧注 83.1%/93.5% 已作废）">🫧'+(a.wash.kind==='water'?'水位洗盘':(a.wash.kind==='both'?'双洗盘':'洗盘'))+'·锚临场 fav '+a.wash.fav+'</span>':''}${(a&&a.company_div&&a.company_div.flag!=='NEUTRAL')?'<span class="pill" style="color:#f5c542;border-color:#f5c542;font-weight:700" title="跨公司赔率分歧(庄家视角问题盘标记)：'+(a.company_div.note||'')+'">🔀分歧 '+a.company_div.weightedDivScore+'</span>':''}${planPill(a)}<span class="ko">${stateTag(m.state)}</span></div>
     <div class="tm">${m.home} <span class="vs">vs</span> ${m.away}</div>
     <div class="ko">开赛 ${m.kickoff||'—'}</div>
     ${body}
@@ -19429,6 +19536,8 @@ async function init(){
       }
     }catch(e){ console.warn('波胆按钮注入失败', e && e.message); } }
   { const _m=document.getElementById('fundPlateModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='fundPlateModal') closeFundPlate(); }); }
+  { const _b=document.getElementById('btnTriElite'); if(_b) _b.onclick = openTriElite; }
+  { const _m=document.getElementById('triEliteModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='triEliteModal') closeTriElite(); }); }
   setTimeout(function(){ try{ showStructDownAlert(); }catch(e){} }, 3500);   // 开屏提醒（常驻角标 + 当日一次横幅）
   $('btnDeep').onclick = openDeepPlate;
   { const _m=document.getElementById('deepModal'); if(_m) _m.addEventListener('click', e=>{ if (e.target.id==='deepModal') closeDeepPlate(); }); }
