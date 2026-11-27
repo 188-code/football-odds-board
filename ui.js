@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-27-资金板历史行标签与赛前候选-v21';   // ★ v21：用户澄清「三盘资金过热板块里的历史比赛，不是复盘池」→ 标签直接打进 fundplateHistoryHTML 行内，并加赛前候选区（未结算不进分母）。v20=主看板网格注入（已撤）
+const UI_V = '2026-11-27-优选精选停更真值告知-v22';   // ★ v22：用户问「为何这个板块16、17号停更」→ 回放库 built 11-18 16:52(gqj2 567)，bake generated 11-12；把球探5min时刻与烘焙底座时间戳拆开，加真实停更告知；v21=资金板历史行标签
 /* ★ 2026-11-27 v19~v21：精选/优选标签的 tid 索引。__TRI_ELITE__ 是异步 gzip 注入，
    到达后建索引并触发一次卡片增量刷新（只更新标签，不重建整页）。
    v21 增 upS/upA/upN：赛前候选（未来场未结算），只在资金板展示，不进命中/ROI 分母。 */
@@ -6517,29 +6517,60 @@ function setPickSort(mode){
    以两者中较新的为"新鲜度"基准，>45 分钟标红提醒盘口已旧。 */
 function _pickSnapInner(){
   try{
+    /* ★ 2026-11-27 v22 修「11-12 底座被说成 19 分钟前」：
+       旧代码拿球探 5 分钟时刻(t7)与 bake generated 取 max 算同一个"新鲜度"，
+       gqj2 567 期间 t7 仍在动、bake 冻结在 11-12 → 页面上并排显示
+       「全量重算 11-12」+「19 分钟前」，把停更底座伪装成刚刚重算。
+       现在两路独立算年龄，且 generated 超过 2 天直接标「已停更 N 天」。 */
     const t7 = (typeof t7LocalUpdated === 'function') ? (t7LocalUpdated() || '') : '';
-    let gTxt = '', ms = 0;
-    const g = (typeof BAKE_META !== 'undefined' && BAKE_META && BAKE_META.generated) || '';
+    const PF = (typeof window !== 'undefined' && window.__PICK_FRESHNESS__) || {};
+    let gTxt = '', gAge = '', gCol = 'var(--mut)', ms = 0;
+    const g = PF.bakeGenerated || ((typeof BAKE_META !== 'undefined' && BAKE_META && BAKE_META.generated) || '');
     if (g){
       try{ const d = new Date(g), p = n=>String(n).padStart(2,'0');
         if (!isNaN(d.getTime())){ gTxt = p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); ms = d.getTime(); } }catch(e){}
     }
-    try{ if (t7){ const d2 = new Date(String(t7).replace(' ', 'T')); if (!isNaN(d2.getTime()) && d2.getTime() > ms) ms = d2.getTime(); } }catch(e){}
-    if (!t7 && !gTxt) return '';
-    let age = '';
     if (ms){
+      const days = Math.floor((Date.now() - ms) / 86400000);
       const mins = Math.floor((Date.now() - ms) / 60000);
-      const txt = mins < 1 ? '刚刚' : (mins < 60 ? (mins + ' 分钟前') : (Math.floor(mins/60) + ' 小时' + (mins%60 ? (' ' + (mins%60) + '分') : '') + '前'));
-      const col = mins <= 15 ? 'var(--grn)' : (mins <= 45 ? 'var(--yel)' : 'var(--red)');
-      age = '　·　' + `<b style="color:${col}">${txt}</b>`;
+      gCol = days >= 2 ? 'var(--red)' : (mins <= 45 ? 'var(--grn)' : 'var(--yel)');
+      gAge = days >= 2 ? `　<b style="color:var(--red)">（已停更 ${days} 天）</b>`
+        : `　<span style="color:${gCol}">（${mins < 1 ? '刚刚' : (mins < 60 ? mins + ' 分钟前' : Math.floor(mins/60) + ' 小时前')}）</span>`;
     }
-    return `🕒 <b>本批精选用的盘口</b>：`
-      + (t7 ? ('球探 <b style="color:var(--acc)">' + t7 + '</b>') : '')
+    let t7Age = '';
+    try{ if (t7){ const d2 = new Date(String(t7).replace(' ', 'T'));
+      if (!isNaN(d2.getTime())){ const m2 = Math.floor((Date.now()-d2.getTime())/60000);
+        t7Age = `<span style="color:${m2<=15?'var(--grn)':'var(--mut)'}">（${m2<1?'刚刚':(m2<60?m2+' 分钟前':Math.floor(m2/60)+' 小时前')}）</span>`; } } }catch(e){}
+    if (!t7 && !gTxt) return '';
+    return `🕒 <b>本批盘口时刻</b>：`
+      + (t7 ? ('球探 <b style="color:var(--acc)">' + t7 + '</b>' + t7Age) : '')
       + (t7 && gTxt ? '　｜　' : '')
-      + (gTxt ? ('全量重算 <b style="color:var(--acc)">' + gTxt + '</b>') : '')
-      + age
-      + `<span style="display:block;margin-top:3px">服务端每 <b>5 分钟</b> 重抓球探盘口、每 <b>15 分钟</b> 全量重抓并重算精选；`
-      + `页面检测到新版会<b>自动刷新</b>。停留期间<b>比分每 30 秒更新</b>，但方向/档位/让球要等下一轮快照推上来才会变。</span>`;
+      + (gTxt ? ('全量烘焙底座 <b style="color:' + gCol + '">' + gTxt + '</b>' + gAge) : '')
+      + `<span style="display:block;margin-top:3px">球探盘口每 <b>5 分钟</b> 一轮；<b>全量烘焙底座才是精选/逐日命中的计算源</b>，`
+      + `正常每 15 分钟重算一次。底座停更时下面的场次/命中率仍是旧缓存，不能当作今日新信号——以顶部停更告知为准。</span>`;
+  }catch(e){ return ''; }
+}
+/* ★ 2026-11-27 v22：把回放库/底座的真实停更状态写在板块最显眼处。
+   数据源 window.__PICK_FRESHNESS__ 由 gen_index 从 _replay_finish.json / bake_pack.json 原样读出，
+   前端不猜、不算、不把旧数据说成实时。 */
+function _pickStaleBanner(){
+  try{
+    const F = (typeof window !== 'undefined' && window.__PICK_FRESHNESS__) || {};
+    const ds = String(F.replayLastDay || '');
+    if (!/^\d{8}$/.test(ds)) return '';
+    const _dt = s => { const t=String(s); return Date.UTC(+t.slice(0,4),+t.slice(4,6)-1,+t.slice(6,8)); };
+    const stale = Math.round((_dt(todayStr()) - _dt(ds)) / 86400000);
+    if (stale <= 1) return '';
+    const fb = String(F.replayBuilt || '').replace('T',' ').slice(5,16) || '—';
+    const gb = String(F.bakeGenerated || '').replace('T',' ').slice(5,16) || '—';
+    const bl = String(F.bakeLastDay || '').replace(/(\d{4})(\d{2})(\d{2})/, '$2-$3');
+    return `<div style="margin:0 0 10px;padding:8px 11px;border:1px solid #b45309;background:rgba(180,83,9,.09);border-radius:8px;font-size:12px;line-height:1.65;color:var(--fg,#e5e7eb)">
+      <b style="color:#f59e0b">⚠ 数据停更告知（不是今日新信号）</b>：
+      本板「精选/优选逐日命中、纯深盘逐日」来自 <b>15 天完场回放库</b>：最后构建 <b>${fb}</b>、最后比赛日 <b>${ds.slice(4,6)}-${ds.slice(6,8)}</b>（${stale} 天前；11-18 只有 15 场残日，最后完整日是 11-17）。
+      烘焙底座 generated <b>${gb}</b>、最后比赛日 <b>${bl || '—'}</b>。
+      <b>根因</b>：gqj2 自 11-18 起返回 http 567（WAF 限流），回放库/烘焙都拉不到新场次，cron 只能沿用旧库；球探盘口仍在更新，但它<b>不能替代</b>本板的完场真值源。
+      <b>要看 11-19 之后仍在更新的三盘精选/赛前候选，请进「💰 三盘资金·过热」板块</b>（独立快照链，不依赖 gqj2 完场库）。此告知随数据自动消失，不写死日期。
+    </div>`;
   }catch(e){ return ''; }
 }
 /* A. 硬方向池：纯深盘（方向一致·无大热确认），再按市场头号概率分 精选/优选 */
@@ -7244,6 +7275,7 @@ function pickPanelHTML(hard, plan, dir, lib, RD){
     ${hardpoolTruthBanner()}
     <div style="margin:0 0 8px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:11.5px;color:var(--mut)">🕒 实时欧赔4家（365/立博/威廉/英特）更新于 <b style="color:var(--acc)">${(typeof window!=='undefined'&&window.__coLiveUpdated)?window.__coLiveUpdated:'构建快照'}</b> · 每3分钟自动刷新 · 表格「🟠实时欧赔4家」列显示各家主胜即时赔率（▲升/▼降 = 对比初盘）</div>
     <div id="pickSnapBar" style="margin:0 0 10px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:12px;color:var(--mut)">${_snapInner}</div>
+    ${_pickStaleBanner()}
     ${_sortBar}
     <div style="font-weight:700;margin:16px 0 4px;color:var(--acc)">🎯 今日竞彩 · 让球到底怎么买（官方让球数 · ${jcAll.length} 场 · 这是你真能下注的那批）</div>
     ${_hcapBoardTruth()}
