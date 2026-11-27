@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-28-精选标签置顶与分页-v26';   // ★ v26：★S级精选/★A级优选/准精选 标签场强制置顶历史表首屏 + 历史表120行分页（原1155场/6.89MB DOM 让标签沉到第1500行后，肉眼翻不到=用户「突然看不到」）。v24=四卡老库真值标注；v23=新源逐日命中；v22=停更告知；v21=资金板标签
+const UI_V = '2026-11-28-标签竞态兜底-v27';   // ★ v27：fundplateHistoryHTML 渲染瞬间同步兜底建 _triEliteTag 索引（__TRI_ELITE__ gzip 异步事件偶发丢失→ready 永远 false→标签全空=「又不见了」）。v26=标签置顶+历史表分页；v24=四卡老库真值标注；v23=新源逐日命中；v22=停更告知；v21=资金板标签
 /* ★ 2026-11-27 v19~v21：精选/优选标签的 tid 索引。__TRI_ELITE__ 是异步 gzip 注入，
    到达后建索引并触发一次卡片增量刷新（只更新标签，不重建整页）。
    v21 增 upS/upA/upN：赛前候选（未来场未结算），只在资金板展示，不进命中/ROI 分母。 */
@@ -8837,6 +8837,13 @@ function _fpHistOpCell(e, _eLvl, _hCol, _hTag){
 }
 
 function fundplateHistoryHTML(){
+  /* ★★ 2026-11-28 v27 根治「标签又不见了」：__TRI_ELITE__ gzip 异步解压偶发晚于资金板打开，
+     tri-elite-ready 事件若先于监听器 dispatch 或解压 catch 静默失败 → _triEliteTag.ready 永远 false
+     → _fpEliteTag 首行 `if(!T.ready)return ''` 让所有 ★S/A/N 标签全空。这里在渲染瞬间做同步兜底：
+     数据已到但索引未建 → 立即建（_buildTriEliteTag 幂等，重复无害）。不依赖任何事件/时序。 */
+  try{
+    if (window.__TRI_ELITE__ && !(window._triEliteTag && window._triEliteTag.ready) && typeof _buildTriEliteTag==='function') _buildTriEliteTag();
+  }catch(_e){}
   /* 历史板队名解码：优先 decodeName（PUA 单源、无缓存），再回退 _histName(normTeamName)。
      ★ 坑（2026-10-28 实测）：normTeamName 的 TEAM_CANON 缓存可能存到「剥标签失败」的原始串，
        导致个别场次直接渲染出 <span class="review">&#xe960;</span> 这种字面 HTML。故此处绕开缓存。 */
@@ -11130,12 +11137,17 @@ function openTriElite(){
 function closeTriElite(){ const m=$('triEliteModal'); if(m)m.classList.remove('show'); }
 /* ★ v21：__TRI_ELITE__ 异步到达后，资金板若已打开要就地重绘（历史行标签 + 赛前候选区）。
    v20 曾把历史区块挂到主网格，用户澄清「不是复盘池，要资金板历史比赛里」→ 已撤。 */
-window.addEventListener('tri-elite-ready', function(){
+var _triEliteReadyFn = function(){
   try{ renderTriElite(); }catch(e){}
   try{ _buildTriEliteTag(); }catch(e){}
   try{ if(typeof _paintTriEliteTags==='function') _paintTriEliteTags(); }catch(e){}
   try{ if(typeof _fpRedraw==='function') _fpRedraw(); }catch(e){}
-});
+};
+window.addEventListener('tri-elite-ready', _triEliteReadyFn);
+/* ★ 2026-11-28 v27 双保险：与 tri-trail-ready 同款竞态兜底。__TRI_ELITE__ gzip 解压偶发
+   先于本监听器 dispatch 完（或 catch 静默失败），事件丢失 → 索引永远不建 → 标签全空。
+   数据已在就立即补一次；fundplateHistoryHTML 内还有第三道同步兜底，三重保险。 */
+try{ if (window.__TRI_ELITE__) setTimeout(_triEliteReadyFn, 0); }catch(e){}
 /* ★ 2026-10-29 性能修复：热度榜原来一次性渲染「全部场」（真机实测第二次打开也建了
    73,709 个 DOM 节点 / 335KB 文本，560ms 且之后整页重排都被拖慢）。
    改为首屏只建 HEAT_CAP 行，其余点「显示其余」再追加 —— 与复盘面板同一条原则：
