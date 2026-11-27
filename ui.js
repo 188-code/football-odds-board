@@ -6,7 +6,7 @@
 'use strict';
 /* UI 版本戳（供线上验收 grep 用；engine.js 有 ENGINE_V，前端这一侧原本没有版本标记，
    「改动到底上线没有」只能靠源码特征串猜，这里补一个明确的）。 */
-const UI_V = '2026-11-27-精选标签上卡-v19';   // ★ v19：主看板每张比赛卡头部贴「★S级精选/★A级优选/准精选」标签（按__TRI_ELITE__的tid索引，随tri-elite-ready增量刷新）；不改方向/引擎/分母。前版v18=优选层A级
+const UI_V = '2026-11-27-历史精选场可见-v20';   // ★ v20：精选/优选是历史场且不在主看板数据集(bake_hist冻结11-12)，按当前日期把精选场作为只读补充卡片注入网格顶部并带S/A/N标签；不进MATCHES/分母/引擎。前版v19=卡片贴标签
 /* ★ 2026-11-27 v19：精选/优选标签的 tid 索引。__TRI_ELITE__ 是异步 gzip 注入，
    到达后建索引并触发一次卡片增量刷新（只更新标签，不重建整页）。 */
 window._triEliteTag = { elite:{}, prefer:{}, near:{}, ready:false };
@@ -10970,12 +10970,36 @@ function openTriElite(){
   renderTriElite();
 }
 function closeTriElite(){ const m=$('triEliteModal'); if(m)m.classList.remove('show'); }
+/* ★ v20：精选历史场区块的独立挂载器。不依赖 render 的分支走向——直接读 grid 当前 DOM，
+   把区块插到最前面（或移除/替换）。用 setInterval 兜底，确保切日期、异步加载、增量刷新后都在。 */
+function _mountTriEliteHistory(){
+  try{
+    const grid=document.getElementById('grid'); if(!grid) return;
+    const html=_triEliteHistoryHTML();
+    const old=grid.querySelector('.tri-elite-hist');
+    if(html){
+      const day=(html.match(/data-day="(\d+)"/)||[])[1]||'';
+      if(old){ if(old.getAttribute('data-day')!==day) old.outerHTML=html; }
+      else grid.insertAdjacentHTML('afterbegin', html);
+    } else if(old){ old.remove(); }
+  }catch(e){}
+}
 window.addEventListener('tri-elite-ready', function(){
   try{ renderTriElite(); }catch(e){}
   try{ _buildTriEliteTag(); }catch(e){}
   /* 标签是卡片头部的一部分：数据晚到时，把已渲染的卡就地补上标签，不整页重建 */
   try{ if(typeof _paintTriEliteTags==='function') _paintTriEliteTags(); }catch(e){}
+  /* ★ v20：数据晚到后主动挂载精选历史区块（不依赖 render 分支） */
+  try{ _mountTriEliteHistory(); }catch(e){}
 });
+/* 兜底：grid 存在但区块未挂载/日期变化时，1.5s 轮询校正一次（开销极小，纯字符串比对） */
+try{
+  let _tehDay='';
+  setInterval(function(){
+    const f=document.getElementById('fDay'); const d=f?f.value:'';
+    if(d!==_tehDay){ _tehDay=d; setTimeout(_mountTriEliteHistory,200); }
+  },1500);
+}catch(e){}
 /* ★ 2026-10-29 性能修复：热度榜原来一次性渲染「全部场」（真机实测第二次打开也建了
    73,709 个 DOM 节点 / 335KB 文本，560ms 且之后整页重排都被拖慢）。
    改为首屏只建 HEAT_CAP 行，其余点「显示其余」再追加 —— 与复盘面板同一条原则：
@@ -17020,7 +17044,8 @@ function render(){
       + '<br>说明：①「进行中」走实时列表，若此刻没有比赛正在进行则显示 0，属正常；'
       + '②「只看竞彩」只显示今日竞彩在售场，竞彩按销售日滚动，今日无在售即为 0（未来竞彩到对应日期自动出现）；'
       + '③ 搜索时会临时放宽「置信门槛」和「进行中/完场」筛选；清空搜索框即恢复原条件。'
-      + _scopeTxt() + '均已扫过，非抓取失败。可点「立即刷新」或清空筛选查看全部比赛。</p>';
+      + _scopeTxt() + '均已扫过，非抓取失败。可点「立即刷新」或清空筛选查看全部比赛。</p>'
+      + _triEliteHistoryHTML();   // ★ v20：即便实时列表为空，历史精选场仍要可见
     bindVScroll(false);
   } else {
     /* ⚠ 搜索/小结果时 realN 必须放到 n 为止：只渲染 60 张 = 用户"搜了半天只看到几条" */
@@ -17049,6 +17074,14 @@ function render(){
       }catch(e){ return false; }
     })();
     if (_seqSame && typeof refreshRendered === 'function'){
+      /* ★ v20：增量分支不重建 innerHTML，但精选历史场区块随「当前日期」变化，
+         必须在这里同步更新，否则切到有精选场的日期时区块永远不出现（用户"历史看不到"）。 */
+      try{
+        var _teOld = grid.querySelector('.tri-elite-hist');
+        var _teHtml = _triEliteHistoryHTML();
+        if (_teHtml){ if (_teOld) _teOld.outerHTML = _teHtml; else grid.insertAdjacentHTML('afterbegin', _teHtml); }
+        else if (_teOld) _teOld.remove();
+      }catch(e){}
       /* ★ 2026-10-22 修复「榜单数字停在首帧」：
          增量分支原先只刷卡片+预警条，两张价值榜不更新。首帧渲染时 analysis.plan 还没全量挂上，
          实测榜单标题写着「含破绽 2」，而当前真实值是 26 —— 用户会以为榜算错了。
@@ -17092,6 +17125,9 @@ function render(){
       html += `<button class="sec vmore" style="width:100%;margin:10px 0" onclick="moreRows()">加载更多（已显示 ${realN} / ${n} 场）</button>`;
       for (let i=realN;i<n;i++){ html += `<div class="vph" data-i="${i}" style="height:${_vEst}px"></div>`; }
     }
+    /* ★ v20：精选/优选是历史场且不在 MATCHES（bake_hist 冻结11-12），按当前日期把该日精选
+       作为只读补充区块插到网格顶部。严格只读：不进 _vList/filtered 分母，不碰引擎/KPI。 */
+    html = _triEliteHistoryHTML() + html;
     grid.innerHTML = html;
     _mountBoards();   // ★ 榜单/预警搬到 header 下方宿主（否则被 summary/drawTop 挤到 ~3800px 处）
     // 首屏实测真实卡高度 → 更新占位估算；绑定滚动后补渲染视口内/下方占位卡
@@ -17600,6 +17636,57 @@ function _paintTriEliteTags(){
       ct.insertAdjacentHTML('afterbegin', tg.replace('class="pill"','class="pill" data-tri-elite-tag="1"'));
     });
   }catch(e){}
+}
+/* ★ 2026-11-27 v20：历史精选场补充区块。
+   背景：精选/优选场是历史已结算场（纯数字 tid 如 3073158），而主看板 MATCHES 的历史场来自
+   gqj2 实时源（现被 567 限流）+ bake_hist 冻结快照（11-12 生成，不含这些场）→ 网格里根本不渲染它们，
+   所以 v19 贴在卡片头部的标签永远看不到（弹窗里 56 个标签其实都在）。
+   修法：按当前选中日期从 __TRI_ELITE__ 取该日精选/优选/准精选，作为只读补充卡片注入网格顶部，
+   带 S/A/N 标签 + 冻结方向 + 结果。严格只读：不进 MATCHES、不进 filtered() 分母、不碰引擎/KPI。 */
+function _triEliteHistoryHTML(){
+  try{
+    const d = window.__TRI_ELITE__; if(!d) return '';
+    const T = window._triEliteTag;
+    const fday = (($('fDay')&&$('fDay').value)||'').replace(/-/g,'');
+    if(!fday) return '';
+    // 当前视图是否允许看到历史（日期筛选命中的天）；"全部"范围也应显示
+    const sets = [
+      { tier:'S', label:'★S级精选', color:'#f59e0b', rows:(d.elite||[]) },
+      { tier:'A', label:'★A级优选', color:'#2563eb', rows:(d.prefer||[]) },
+      { tier:'N', label:'准精选', color:'#7c3aed', rows:(d.near||[]) }
+    ];
+    const buckets = sets.map(s=>({...s, hit:s.rows.filter(r=>String(r.day)===fday)}));
+    const total = buckets.reduce((n,b)=>n+b.hit.length,0);
+    if(!total) return '';
+    let h = '<div class="tri-elite-hist" data-day="'+esc(fday)+'" style="margin:2px 0 14px;padding:10px 12px;border:1px solid rgba(245,158,11,.35);border-radius:10px;background:linear-gradient(180deg,rgba(245,158,11,.07),rgba(245,158,11,.02))">'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+      + '<b style="color:#f59e0b;font-size:13px">★ 精选三盘合流 · '+fday.replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3')+' 历史场（'+total+'）</b>'
+      + '<span style="font-size:11px;opacity:.72">这些是已结算的历史精选场，主看板实时源未收录，故此单独列出；只读复盘，<b>不进主账分母/业绩</b>。</span></div>';
+    for(const b of buckets){
+      if(!b.hit.length) continue;
+      h += '<div style="margin:8px 0 4px;font-size:11.5px;font-weight:700;color:'+b.color+'">'+b.label+'（'+b.hit.length+'）</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px"><tr style="opacity:.7;text-align:left">'
+        + '<th style="padding:3px 5px">tid</th><th>比赛</th><th>联赛</th><th>冻结方向</th><th>盘口</th><th>热度/信号</th><th>结果</th></tr>';
+      for(const r of b.hit){
+        const res = r.result==null ? '待结算' : (r.result===1?'<b style="color:#dc2626">中</b>':'<b style="color:#16a34a">错</b>');
+        const sig = [r.fund?'资金破缺口':'', r.converge?'三端同向'+((r.same)||'')+'/3':'', r.elite?'S级':'', r.prefer&&!r.elite?'A级优选':''].filter(Boolean).join('·')||'—';
+        const home = (typeof decodeName==='function')?decodeName(r.home||''):(r.home||'');
+        const away = (typeof decodeName==='function')?decodeName(r.away||''):(r.away||'');
+        const lgn  = (typeof decodeName==='function')?decodeName(r.league||''):(r.league||'');
+        h += '<tr style="border-top:1px solid rgba(148,163,184,.14)">'
+          + '<td style="padding:3px 5px;opacity:.7">'+esc(String(r.tid))+'</td>'
+          + '<td>'+esc(home)+' vs '+esc(away)+'</td>'
+          + '<td style="opacity:.8">'+esc(lgn)+'</td>'
+          + '<td style="max-width:260px">'+esc(String(r.dir||'').slice(0,34))+'</td>'
+          + '<td>'+esc(r.hcap==null?'—':r.hcap)+'</td>'
+          + '<td>'+esc(r.heatScore)+' / '+esc(sig)+'</td>'
+          + '<td>'+res+'</td></tr>';
+      }
+      h += '</table>';
+    }
+    h += '</div>';
+    return h;
+  }catch(e){ return ''; }
 }
 function cardHTML(m){
   const dc = m.analysis ? dirClass(m.analysis.dir) : 'G';
