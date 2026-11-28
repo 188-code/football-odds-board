@@ -1,6 +1,6 @@
 {
   "version": "basket_overheat_seqchain_mnl_20261124hdcobs2",
-  "updated": "2026-11-28T09:30:35.695Z",
+  "updated": "2026-11-28T09:45:30.754Z",
   "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。★★2026-11-24修:①D盘快照eu帧按竞彩id读入,不再丢365;②竞彩mnl未开售但jc hdc+bd sfgg+365独赢齐、且竞彩/北单让分线一致的场单列_hdcCandidate观察候选,方向只取365独赢强方(≥55%/≤45%)对面并按真实让分线记settleByLine,hotFlag=false不进统计/引擎/账本/投注方向;③二次复核修正:无365独赢不得候选、主统计集严格排除候选、D盘快照按账本kickTs过滤赛后帧;④候选只复现外部精选错位线索,n<40且训练/留出未验证。展示集=统计集=版本集。",
   "summary": {
     "totalMatches": 134,
@@ -13,7 +13,7 @@
     "strongHit": 3,
     "strongHitRate": 23.1,
     "strongSe": 11.7,
-    "t7SettledN": 2,
+    "t7SettledN": 0,
     "hotFlagged": 109,
     "candidateN": 2,
     "candidateWith365": 2,
@@ -5605,7 +5605,7 @@
       "settle": null,
       "result": "home",
       "resultScore": "79-78",
-      "resSrc": "球探完场比分"
+      "resSrc": "verified"
     },
     {
       "id": "2043030",
@@ -6026,7 +6026,7 @@
       "settle": "hit",
       "result": "away",
       "resultScore": "71-79",
-      "resSrc": "球探完场比分"
+      "resSrc": "verified"
     },
     {
       "id": "2043036",
