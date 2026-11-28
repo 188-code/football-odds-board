@@ -1,6 +1,6 @@
 {
   "version": "basket_overheat_seqchain_mnl_20261124hdcobs2",
-  "updated": "2026-11-28T04:00:17.578Z",
+  "updated": "2026-11-28T04:15:20.448Z",
   "note": "★★2026-11-19框架重构:洋哥三盘=顺序链。一盘=竞彩独赢mnl资金趋势→大热门方(隐含概率高方)→站对面给方向(篮球完全可得);三盘北单sfgg让分近似确认(共振/分歧,缺失则降档仅一盘,不吞方向)。★★2026-11-20二盘补位:365篮球此前被567封死长期缺位,自今日起用球探(titan007)滚动帧补位——ch_nbaGoal8.xml(365让分/总分/半场/独赢)+sbOddsDataBsk第3组(皇冠,双场实测与ch_nbaGoal3全字段一致),t7_bb.py每5分钟只为白名单场落帧,kick前硬护栏;365是滚动变更表,历史场无365=真实缺,不回补不编造。★强置信口径=三端合流:heatScore=1(竞彩)+北单同侧+365同侧,3/3才标【强置信·观察】,前瞻口径无历史回测(365篮球无历史源),n<40绝不进引擎。★符号约定(球探篮球让分线正=主让,与竞彩相反;独赢列[13]=主[14]=客,736161/740063双场验证)。★赛果兜底:球探完场比分(t7_bb results_t7.json,含欧篮联——修ESPN无赛果缺口)按比分推独赢胜方,resSrc标注。结算=站对面方向vs独赢赛果。★★2026-11-24修:①D盘快照eu帧按竞彩id读入,不再丢365;②竞彩mnl未开售但jc hdc+bd sfgg+365独赢齐、且竞彩/北单让分线一致的场单列_hdcCandidate观察候选,方向只取365独赢强方(≥55%/≤45%)对面并按真实让分线记settleByLine,hotFlag=false不进统计/引擎/账本/投注方向;③二次复核修正:无365独赢不得候选、主统计集严格排除候选、D盘快照按账本kickTs过滤赛后帧;④候选只复现外部精选错位线索,n<40且训练/留出未验证。展示集=统计集=版本集。",
   "summary": {
     "totalMatches": 134,
@@ -13,8 +13,8 @@
     "strongHit": 3,
     "strongHitRate": 23.1,
     "strongSe": 11.7,
-    "t7SettledN": 1,
-    "hotFlagged": 110,
+    "t7SettledN": 13,
+    "hotFlagged": 109,
     "candidateN": 2,
     "candidateWith365": 2,
     "candidateSettledN": 2,
@@ -5605,7 +5605,7 @@
       "settle": null,
       "result": "home",
       "resultScore": "79-78",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043030",
@@ -6026,7 +6026,7 @@
       "settle": "hit",
       "result": "away",
       "resultScore": "71-79",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043036",
@@ -6802,7 +6802,7 @@
       "settle": "hit",
       "result": "home",
       "resultScore": "80-79",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043047",
@@ -6873,7 +6873,7 @@
       "settle": "miss",
       "result": "away",
       "resultScore": "52-74",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043048",
@@ -7214,7 +7214,7 @@
       "settle": "miss",
       "result": "away",
       "resultScore": "72-99",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043068",
@@ -7339,7 +7339,7 @@
       "settle": "miss",
       "result": "away",
       "resultScore": "76-78",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043070",
@@ -7410,7 +7410,7 @@
       "settle": "miss",
       "result": "home",
       "resultScore": "77-74",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043071",
@@ -7535,7 +7535,7 @@
       "settle": null,
       "result": "away",
       "resultScore": "65-77",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043073",
@@ -7606,7 +7606,7 @@
       "settle": "hit",
       "result": "home",
       "resultScore": "66-64",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043074",
@@ -7735,7 +7735,7 @@
       "settle": "hit",
       "result": "away",
       "resultScore": "95-95",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043076",
@@ -8010,7 +8010,7 @@
       "settle": "hit",
       "result": "away",
       "resultScore": "83-86",
-      "resSrc": "verified"
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043081",
@@ -8080,8 +8080,8 @@
       "strongTier": false,
       "settle": "hit",
       "result": "away",
-      "resultScore": "103-109",
-      "resSrc": "verified"
+      "resultScore": "105-111",
+      "resSrc": "球探完场比分"
     },
     {
       "id": "2043082",
@@ -8151,7 +8151,7 @@
       "strongTier": false,
       "settle": null,
       "result": "home",
-      "resultScore": "98-83",
+      "resultScore": "100-94",
       "resSrc": "球探完场比分"
     },
     {
@@ -8452,10 +8452,10 @@
       "league": "美国职业篮球联盟",
       "home": "华盛顿奇才",
       "away": "奥兰多魔术",
-      "capturedAt": "2026-11-28T11:35:46+08:00",
+      "capturedAt": "2026-11-28T12:06:09+08:00",
       "mnl": {
-        "home": 1.92,
-        "away": 1.52
+        "home": 1.87,
+        "away": 1.55
       },
       "jc": {
         "home": 1.7,
@@ -8463,19 +8463,19 @@
         "line": 2.5
       },
       "bd": {
-        "home": 1.93,
-        "away": 2.06,
+        "home": 1.89,
+        "away": 2.11,
         "line": "3.5"
       },
       "b365": null,
       "metrics": {
         "mnlFallback": false,
-        "Rjc": 84.84,
-        "gap": 15.16,
-        "pH": 44.2,
-        "pA": 55.8,
+        "Rjc": 84.75,
+        "gap": 15.25,
+        "pH": 45.3,
+        "pA": 54.7,
         "hot1": "away",
-        "hotPct": 55.8,
+        "hotPct": 54.7,
         "fadeSide": "home",
         "resonance": "三盘分歧·降档",
         "p365H": null,
@@ -8484,19 +8484,19 @@
         "b365Agree": null,
         "bdAgree": false,
         "heatScore": 1,
-        "sumBd": 1.0036,
-        "shareHome": 51.6,
-        "shareAway": 48.4,
+        "sumBd": 1.003,
+        "shareHome": 52.8,
+        "shareAway": 47.2,
         "hotBd": "home",
-        "devHome": 8.99,
-        "devAway": -8.57,
-        "upDev": 8.99,
+        "devHome": 8.95,
+        "devAway": -8.6,
+        "upDev": 8.95,
         "sameLine": false,
         "lineJc": 2.5,
         "lineBd": 3.5
       },
-      "verdict": "一盘大热客·北单分歧→降档",
-      "hotFlag": true,
+      "verdict": "一盘趋势弱(54.7%)·方向参考",
+      "hotFlag": false,
       "fadeSide": "home",
       "strongTier": false,
       "settle": null,
@@ -8510,14 +8510,14 @@
       "league": "美国职业篮球联盟",
       "home": "夏洛特黄蜂",
       "away": "布鲁克林篮网",
-      "capturedAt": "2026-11-28T11:35:46+08:00",
+      "capturedAt": "2026-11-28T12:06:09+08:00",
       "mnl": {
         "home": 1.36,
         "away": 2.25
       },
       "jc": {
-        "home": 1.7,
-        "away": 1.7,
+        "home": 1.65,
+        "away": 1.75,
         "line": -4.5
       },
       "bd": {
@@ -8568,14 +8568,14 @@
       "league": "美国职业篮球联盟",
       "home": "芝加哥公牛",
       "away": "印第安那步行者",
-      "capturedAt": "2026-11-28T11:35:46+08:00",
+      "capturedAt": "2026-11-28T12:06:09+08:00",
       "mnl": {
         "home": 1.6,
         "away": 1.81
       },
       "jc": {
-        "home": 1.7,
-        "away": 1.7,
+        "home": 1.65,
+        "away": 1.75,
         "line": -1.5
       },
       "bd": null,
@@ -8622,7 +8622,7 @@
       "league": "美国职业篮球联盟",
       "home": "密尔沃基雄鹿",
       "away": "俄克拉荷马城雷霆",
-      "capturedAt": "2026-11-28T11:35:46+08:00",
+      "capturedAt": "2026-11-28T12:06:09+08:00",
       "mnl": {
         "home": 4.6,
         "away": 1.04
@@ -8633,8 +8633,8 @@
         "line": 11.5
       },
       "bd": {
-        "home": 2,
-        "away": 1.99,
+        "home": 2.08,
+        "away": 1.92,
         "line": "11.5"
       },
       "b365": null,
@@ -8654,13 +8654,13 @@
         "b365Agree": null,
         "bdAgree": true,
         "heatScore": 2,
-        "sumBd": 1.0025,
-        "shareHome": 49.9,
-        "shareAway": 50.1,
+        "sumBd": 1.0016,
+        "shareHome": 48,
+        "shareAway": 52,
         "hotBd": "away",
-        "devHome": 37.21,
-        "devAway": -36.91,
-        "upDev": -36.91,
+        "devHome": 34.94,
+        "devAway": -34.75,
+        "upDev": -34.75,
         "sameLine": true,
         "lineJc": 11.5,
         "lineBd": 11.5
@@ -8680,14 +8680,14 @@
       "league": "美国职业篮球联盟",
       "home": "休斯敦火箭",
       "away": "费城76人",
-      "capturedAt": "2026-11-28T11:35:46+08:00",
+      "capturedAt": "2026-11-28T12:06:09+08:00",
       "mnl": {
         "home": 1.16,
         "away": 3.15
       },
       "jc": {
-        "home": 1.65,
-        "away": 1.75,
+        "home": 1.6,
+        "away": 1.81,
         "line": -7.5
       },
       "bd": null,
