@@ -21713,7 +21713,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "ESPN NBA scoreboard event=401909317 date=2026-11-25T22:00Z 迈阿密热火104@费城76人111 | calc:111-104 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -21765,7 +21765,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909317 date=2026-11-25T22:00Z 迈阿密热火104@费城76人111 | calc:111-1.5=109.5 vs 104 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -21812,7 +21812,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909317 date=2026-11-25T22:00Z 迈阿密热火104@费城76人111 | calc:111+104=215 vs 238.5 → under",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -21864,7 +21864,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909318 date=2026-11-26T00:00Z 芝加哥公牛107@夏洛特黄蜂105 | calc:105-107 → away",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -21916,7 +21916,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "ESPN NBA scoreboard event=401909318 date=2026-11-26T00:00Z 芝加哥公牛107@夏洛特黄蜂105 | calc:105-1.5=103.5 vs 107 → away",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -21963,7 +21963,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909318 date=2026-11-26T00:00Z 芝加哥公牛107@夏洛特黄蜂105 | calc:105+107=212 vs 223.5 → under",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22015,7 +22015,7 @@
    "result": "win",
    "pl": 0.48,
    "settleSrc": "ESPN NBA scoreboard event=401909319 date=2026-11-26T00:30Z 克利夫兰骑士102@纽约尼克斯121 | calc:121-102 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22062,7 +22062,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "ESPN NBA scoreboard event=401909319 date=2026-11-26T00:30Z 克利夫兰骑士102@纽约尼克斯121 | calc:121-3.5=117.5 vs 102 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22109,7 +22109,7 @@
    "result": "win",
    "pl": 0.66,
    "settleSrc": "ESPN NBA scoreboard event=401909319 date=2026-11-26T00:30Z 克利夫兰骑士102@纽约尼克斯121 | calc:121+102=223 vs 220.5 → over",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22161,7 +22161,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "ESPN NBA scoreboard event=401909320 date=2026-11-26T00:30Z 明尼苏达森林狼113@俄克拉荷马城雷霆106 | calc:106-113 → away",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22208,7 +22208,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909320 date=2026-11-26T00:30Z 明尼苏达森林狼113@俄克拉荷马城雷霆106 | calc:106+1.5=107.5 vs 113 → away",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22255,7 +22255,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909320 date=2026-11-26T00:30Z 明尼苏达森林狼113@俄克拉荷马城雷霆106 | calc:106+113=219 vs 224.5 → under",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22307,7 +22307,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909322 date=2026-11-26T01:00Z 布鲁克林篮网104@密尔沃基雄鹿97 | calc:97-104 → away",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22359,7 +22359,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909322 date=2026-11-26T01:00Z 布鲁克林篮网104@密尔沃基雄鹿97 | calc:97-1.5=95.5 vs 104 → away",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22406,7 +22406,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909322 date=2026-11-26T01:00Z 布鲁克林篮网104@密尔沃基雄鹿97 | calc:97+104=201 vs 231.5 → under",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22458,7 +22458,7 @@
    "result": "win",
    "pl": 0.25,
    "settleSrc": "ESPN NBA scoreboard event=401909321 date=2026-11-26T01:00Z 洛杉矶快船97@孟菲斯灰熊115 | calc:115-97 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22505,7 +22505,7 @@
    "result": "win",
    "pl": 0.6,
    "settleSrc": "ESPN NBA scoreboard event=401909321 date=2026-11-26T01:00Z 洛杉矶快船97@孟菲斯灰熊115 | calc:115-6.5=108.5 vs 97 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22557,7 +22557,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909321 date=2026-11-26T01:00Z 洛杉矶快船97@孟菲斯灰熊115 | calc:115+97=212 vs 229.5 → under",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22609,7 +22609,7 @@
    "result": "win",
    "pl": 0.1,
    "settleSrc": "ESPN NBA scoreboard event=401909323 date=2026-11-26T01:30Z 菲尼克斯太阳104@休斯敦火箭116 | calc:116-104 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22661,7 +22661,7 @@
    "result": "win",
    "pl": 0.6,
    "settleSrc": "ESPN NBA scoreboard event=401909323 date=2026-11-26T01:30Z 菲尼克斯太阳104@休斯敦火箭116 | calc:116-8.5=107.5 vs 104 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22708,7 +22708,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909323 date=2026-11-26T01:30Z 菲尼克斯太阳104@休斯敦火箭116 | calc:116+104=220 vs 225.5 → under",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22760,7 +22760,7 @@
    "result": "win",
    "pl": 0.33,
    "settleSrc": "ESPN NBA scoreboard event=401909324 date=2026-11-26T03:00Z 萨克拉门托国王110@金州勇士129 | calc:129-110 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22812,7 +22812,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "ESPN NBA scoreboard event=401909324 date=2026-11-26T03:00Z 萨克拉门托国王110@金州勇士129 | calc:129-4.5=124.5 vs 110 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22864,7 +22864,7 @@
    "result": "win",
    "pl": 0.66,
    "settleSrc": "ESPN NBA scoreboard event=401909324 date=2026-11-26T03:00Z 萨克拉门托国王110@金州勇士129 | calc:129+110=239 vs 217.5 → over",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22916,7 +22916,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909325 date=2026-11-26T03:00Z 圣安东尼奥马刺111@波特兰开拓者116 | calc:116-111 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -22963,7 +22963,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909325 date=2026-11-26T03:00Z 圣安东尼奥马刺111@波特兰开拓者116 | calc:116+3.5=119.5 vs 111 → home",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -23010,7 +23010,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909325 date=2026-11-26T03:00Z 圣安东尼奥马刺111@波特兰开拓者116 | calc:116+111=227 vs 227.5 → under",
-   "settledAt": 1795839312,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -25369,8 +25369,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T06:00:00+08:00",
    "kickTs": 1795903200,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "华盛顿奇才",
    "away": "奥兰多魔术",
@@ -25392,7 +25392,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25401,7 +25401,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "客胜",
      "side": "b",
      "a": 1.87,
@@ -25411,7 +25411,7 @@
      "line": null,
      "dA": 1.1355909152726829,
      "dB": -1.1355909152726662,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25420,8 +25420,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T06:00:00+08:00",
    "kickTs": 1795903200,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "华盛顿奇才",
    "away": "奥兰多魔术",
@@ -25443,7 +25443,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25452,7 +25452,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "让分主胜",
      "side": "a",
      "a": 1.7,
@@ -25462,7 +25462,7 @@
      "line": 2.5,
      "dA": 0,
      "dB": 0,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25471,8 +25471,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T06:00:00+08:00",
    "kickTs": 1795903200,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "华盛顿奇才",
    "away": "奥兰多魔术",
@@ -25494,7 +25494,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25503,7 +25503,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "大分",
      "side": "a",
      "a": 1.62,
@@ -25513,7 +25513,7 @@
      "line": 218.5,
      "dA": 1.1764705882352788,
      "dB": -1.1764705882352955,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25522,8 +25522,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T07:00:00+08:00",
    "kickTs": 1795906800,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "夏洛特黄蜂",
    "away": "布鲁克林篮网",
@@ -25545,7 +25545,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25554,7 +25554,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "主胜",
      "side": "a",
      "a": 1.36,
@@ -25564,7 +25564,7 @@
      "line": null,
      "dA": 0,
      "dB": 0,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25573,8 +25573,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T07:00:00+08:00",
    "kickTs": 1795906800,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "夏洛特黄蜂",
    "away": "布鲁克林篮网",
@@ -25596,7 +25596,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25605,7 +25605,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "让分主胜",
      "side": "a",
      "a": 1.65,
@@ -25615,7 +25615,7 @@
      "line": -4.5,
      "dA": 1.4705882352941124,
      "dB": -1.4705882352941235,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25624,8 +25624,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T07:00:00+08:00",
    "kickTs": 1795906800,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "夏洛特黄蜂",
    "away": "布鲁克林篮网",
@@ -25647,7 +25647,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25656,7 +25656,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "大分",
      "side": "a",
      "a": 1.62,
@@ -25666,7 +25666,7 @@
      "line": 214.5,
      "dA": 2.35294117647058,
      "dB": -2.352941176470591,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25675,8 +25675,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:00:00+08:00",
    "kickTs": 1795914000,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "芝加哥公牛",
    "away": "印第安那步行者",
@@ -25684,21 +25684,21 @@
    "market": "mnl",
    "pick": "主胜",
    "side": "a",
-   "recDirText": "赔率观察方向·主胜（去水隐含 53.1%·同线Δpp +0.00pp·竞彩真实报价 1.60/1.81）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
-   "oddsA": 1.6,
-   "oddsB": 1.81,
+   "recDirText": "赔率观察方向·主胜（去水隐含 54.7%·同线Δpp +1.60pp·竞彩真实报价 1.55/1.87）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
+   "oddsA": 1.55,
+   "oddsB": 1.87,
    "line": null,
-   "probA": 0.5307917888563051,
-   "probB": 0.4692082111436951,
+   "probA": 0.5467836257309943,
+   "probB": 0.45321637426900585,
    "deltaPP": {
-    "dA": 0,
-    "dB": 0,
+    "dA": 1.5991836874689191,
+    "dB": -1.5991836874689247,
     "firstAt": 1795835703,
-    "nFrames": 2
+    "nFrames": 3
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25707,17 +25707,17 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "主胜",
      "side": "a",
-     "a": 1.6,
-     "b": 1.81,
-     "pa": 0.5307917888563051,
-     "pb": 0.4692082111436951,
+     "a": 1.55,
+     "b": 1.87,
+     "pa": 0.5467836257309943,
+     "pb": 0.45321637426900585,
      "line": null,
-     "dA": 0,
-     "dB": 0,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "dA": 1.5991836874689191,
+     "dB": -1.5991836874689247,
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25726,8 +25726,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:00:00+08:00",
    "kickTs": 1795914000,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "芝加哥公牛",
    "away": "印第安那步行者",
@@ -25735,21 +25735,16 @@
    "market": "hdc",
    "pick": "让分主胜",
    "side": "a",
-   "recDirText": "赔率观察方向·让分主胜（去水隐含 51.5%·线 -1.5·同线Δpp +1.47pp·竞彩真实报价 1.65/1.75）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
-   "oddsA": 1.65,
-   "oddsB": 1.75,
-   "line": -1.5,
-   "probA": 0.5147058823529411,
-   "probB": 0.48529411764705876,
-   "deltaPP": {
-    "dA": 1.4705882352941124,
-    "dB": -1.4705882352941235,
-    "firstAt": 1795835703,
-    "nFrames": 3
-   },
+   "recDirText": "赔率观察方向·让分主胜（去水隐含 50.0%·线 -2.5·同线Δpp 无同线历史帧·竞彩真实报价 1.70/1.70）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
+   "oddsA": 1.7,
+   "oddsB": 1.7,
+   "line": -2.5,
+   "probA": 0.5,
+   "probB": 0.5,
+   "deltaPP": null,
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25758,17 +25753,17 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "让分主胜",
      "side": "a",
-     "a": 1.65,
-     "b": 1.75,
-     "pa": 0.5147058823529411,
-     "pb": 0.48529411764705876,
-     "line": -1.5,
-     "dA": 1.4705882352941124,
-     "dB": -1.4705882352941235,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "a": 1.7,
+     "b": 1.7,
+     "pa": 0.5,
+     "pb": 0.5,
+     "line": -2.5,
+     "dA": null,
+     "dB": null,
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25777,8 +25772,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:00:00+08:00",
    "kickTs": 1795914000,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "芝加哥公牛",
    "away": "印第安那步行者",
@@ -25786,21 +25781,21 @@
    "market": "hilo",
    "pick": "大分",
    "side": "a",
-   "recDirText": "赔率观察方向·大分（去水隐含 51.2%·线 235.5·同线Δpp +0.00pp·竞彩真实报价 1.66/1.74）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
-   "oddsA": 1.66,
-   "oddsB": 1.74,
+   "recDirText": "赔率观察方向·大分（去水隐含 50.0%·线 235.5·同线Δpp -1.18pp·竞彩真实报价 1.70/1.70）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
+   "oddsA": 1.7,
+   "oddsB": 1.7,
    "line": 235.5,
-   "probA": 0.511764705882353,
-   "probB": 0.48823529411764705,
+   "probA": 0.5,
+   "probB": 0.5,
    "deltaPP": {
-    "dA": 0,
-    "dB": 0,
+    "dA": -1.176470588235301,
+    "dB": 1.1764705882352955,
     "firstAt": 1795835703,
-    "nFrames": 2
+    "nFrames": 3
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25809,20 +25804,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
-     "pick": "大分",
-     "side": "a",
-     "a": 1.66,
-     "b": 1.74,
-     "pa": 0.511764705882353,
-     "pb": 0.48823529411764705,
-     "line": 235.5,
-     "dA": 0,
-     "dB": 0,
-     "obs": "2026-11-28T12:00:03+08:00"
-    },
-    {
-     "t": 1795840213,
+     "t": 1795842910,
      "pick": "大分",
      "side": "a",
      "a": 1.7,
@@ -25832,7 +25814,7 @@
      "line": 235.5,
      "dA": -1.176470588235301,
      "dB": 1.1764705882352955,
-     "obs": "2026-11-28T12:15:02+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25841,8 +25823,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:00:00+08:00",
    "kickTs": 1795914000,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "密尔沃基雄鹿",
    "away": "俄克拉荷马城雷霆",
@@ -25850,21 +25832,21 @@
    "market": "mnl",
    "pick": "客胜",
    "side": "b",
-   "recDirText": "赔率观察方向·客胜（去水隐含 81.6%·同线Δpp +0.00pp·竞彩真实报价 4.60/1.04）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
-   "oddsA": 4.6,
-   "oddsB": 1.04,
+   "recDirText": "赔率观察方向·客胜（去水隐含 80.7%·同线Δpp -0.83pp·竞彩真实报价 4.40/1.05）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
+   "oddsA": 4.4,
+   "oddsB": 1.05,
    "line": null,
-   "probA": 0.1843971631205674,
-   "probB": 0.8156028368794326,
+   "probA": 0.1926605504587156,
+   "probB": 0.8073394495412843,
    "deltaPP": {
-    "dA": 0,
-    "dB": 0,
+    "dA": 0.8263387338148215,
+    "dB": -0.8263387338148243,
     "firstAt": 1795835703,
-    "nFrames": 2
+    "nFrames": 3
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25873,17 +25855,17 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "客胜",
      "side": "b",
-     "a": 4.6,
-     "b": 1.04,
-     "pa": 0.1843971631205674,
-     "pb": 0.8156028368794326,
+     "a": 4.4,
+     "b": 1.05,
+     "pa": 0.1926605504587156,
+     "pb": 0.8073394495412843,
      "line": null,
-     "dA": 0,
-     "dB": 0,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "dA": 0.8263387338148215,
+     "dB": -0.8263387338148243,
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25892,8 +25874,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:00:00+08:00",
    "kickTs": 1795914000,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "密尔沃基雄鹿",
    "away": "俄克拉荷马城雷霆",
@@ -25915,7 +25897,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25924,7 +25906,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "让分主胜",
      "side": "a",
      "a": 1.65,
@@ -25934,7 +25916,7 @@
      "line": 11.5,
      "dA": 0,
      "dB": 0,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25943,8 +25925,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:00:00+08:00",
    "kickTs": 1795914000,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "密尔沃基雄鹿",
    "away": "俄克拉荷马城雷霆",
@@ -25966,7 +25948,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -25975,7 +25957,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "大分",
      "side": "a",
      "a": 1.7,
@@ -25985,7 +25967,7 @@
      "line": 227.5,
      "dA": 0,
      "dB": 0,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -25994,8 +25976,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:30:00+08:00",
    "kickTs": 1795915800,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "休斯敦火箭",
    "away": "费城76人",
@@ -26017,7 +25999,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -26026,7 +26008,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "主胜",
      "side": "a",
      "a": 1.16,
@@ -26036,7 +26018,7 @@
      "line": null,
      "dA": 0,
      "dB": 0,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -26045,8 +26027,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:30:00+08:00",
    "kickTs": 1795915800,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "休斯敦火箭",
    "away": "费城76人",
@@ -26054,21 +26036,16 @@
    "market": "hdc",
    "pick": "让分主胜",
    "side": "a",
-   "recDirText": "赔率观察方向·让分主胜（去水隐含 53.1%·线 -7.5·同线Δpp +3.08pp·竞彩真实报价 1.60/1.81）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
+   "recDirText": "赔率观察方向·让分主胜（去水隐含 53.1%·线 -8.5·同线Δpp 无同线历史帧·竞彩真实报价 1.60/1.81）｜观察档·非投注建议·篮球三盘未合流·无样本外验证",
    "oddsA": 1.6,
    "oddsB": 1.81,
-   "line": -7.5,
+   "line": -8.5,
    "probA": 0.5307917888563051,
    "probB": 0.4692082111436951,
-   "deltaPP": {
-    "dA": 3.079178885630507,
-    "dB": -3.0791788856304905,
-    "firstAt": 1795835703,
-    "nFrames": 5
-   },
+   "deltaPP": null,
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -26077,20 +26054,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
-     "pick": "让分主胜",
-     "side": "a",
-     "a": 1.6,
-     "b": 1.81,
-     "pa": 0.5307917888563051,
-     "pb": 0.4692082111436951,
-     "line": -7.5,
-     "dA": 3.079178885630507,
-     "dB": -3.0791788856304905,
-     "obs": "2026-11-28T12:00:03+08:00"
-    },
-    {
-     "t": 1795841111,
+     "t": 1795842910,
      "pick": "让分主胜",
      "side": "a",
      "a": 1.6,
@@ -26100,7 +26064,7 @@
      "line": -8.5,
      "dA": null,
      "dB": null,
-     "obs": "2026-11-28T12:30:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -26109,8 +26073,8 @@
    "day": "2026-11-29",
    "kickoff": "2026-11-29T09:30:00+08:00",
    "kickTs": 1795915800,
-   "firstSeen": 1795839309,
-   "lastSeen": 1795842012,
+   "firstSeen": 1795842910,
+   "lastSeen": 1795842912,
    "pre": true,
    "home": "休斯敦火箭",
    "away": "费城76人",
@@ -26132,7 +26096,7 @@
    },
    "ruleV": "basket_odds_lean_observe_1",
    "captureTimeVerified": true,
-   "observed_at": "2026-11-28T12:00:03+08:00",
+   "observed_at": "2026-11-28T13:00:02+08:00",
    "state": "Selling",
    "result": null,
    "pl": null,
@@ -26141,7 +26105,7 @@
    "verified": false,
    "dirTrail": [
     {
-     "t": 1795839309,
+     "t": 1795842910,
      "pick": "大分",
      "side": "a",
      "a": 1.66,
@@ -26151,7 +26115,7 @@
      "line": 227.5,
      "dA": 1.176470588235301,
      "dB": -1.1764705882352955,
-     "obs": "2026-11-28T12:00:03+08:00"
+     "obs": "2026-11-28T13:00:02+08:00"
     }
    ]
   },
@@ -26188,7 +26152,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728103 沙特阿拉伯-中国 80-79 | 队名严格配对(日期±2天/开赛±18h) | calc:80-79 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -26363,7 +26327,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728103 沙特阿拉伯-中国 80-79 | 队名严格配对(日期±2天/开赛±18h) | calc:80+13.5=93.5 vs 79 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -26525,7 +26489,7 @@
    "result": "win",
    "pl": 0.66,
    "settleSrc": "球探完场比分 results_t7 sid=728103 沙特阿拉伯-中国 80-79 | 队名严格配对(日期±2天/开赛±18h) | calc:80+79=159 vs 157.5 → over",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -26739,7 +26703,7 @@
    "result": "win",
    "pl": 0.09,
    "settleSrc": "球探完场比分 results_t7 sid=728102 卡塔尔-韩国 52-74 | 队名严格配对(日期±2天/开赛±18h) | calc:52-74 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -26849,7 +26813,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "球探完场比分 results_t7 sid=728102 卡塔尔-韩国 52-74 | 队名严格配对(日期±2天/开赛±18h) | calc:52+10.5=62.5 vs 74 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -26998,7 +26962,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728102 卡塔尔-韩国 52-74 | 队名严格配对(日期±2天/开赛±18h) | calc:52+74=126 vs 156.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27121,7 +27085,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728011 希腊-格鲁吉亚 75-75 | 队名严格配对(日期±2天/开赛±18h) | calc:75-75 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27218,7 +27182,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728011 希腊-格鲁吉亚 75-75 | 队名严格配对(日期±2天/开赛±18h) | calc:75-8.5=66.5 vs 75 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27341,7 +27305,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728011 希腊-格鲁吉亚 75-75 | 队名严格配对(日期±2天/开赛±18h) | calc:75+75=150 vs 158.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27477,7 +27441,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728012 黑山-西班牙 61-92 | 队名严格配对(日期±2天/开赛±18h) | calc:61+17.5=78.5 vs 92 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27548,7 +27512,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728012 黑山-西班牙 61-92 | 队名严格配对(日期±2天/开赛±18h) | calc:61+92=153 vs 157.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27684,7 +27648,7 @@
    "result": "win",
    "pl": 0.44,
    "settleSrc": "球探完场比分 results_t7 sid=728030 意大利-土耳其 81-72 | 队名严格配对(日期±2天/开赛±18h) | calc:81-72 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27768,7 +27732,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "球探完场比分 results_t7 sid=728030 意大利-土耳其 81-72 | 队名严格配对(日期±2天/开赛±18h) | calc:81-3.5=77.5 vs 72 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27865,7 +27829,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728030 意大利-土耳其 81-72 | 队名严格配对(日期±2天/开赛±18h) | calc:81+72=153 vs 162.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -27988,7 +27952,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728029 冰岛-波黑 113-101 | 队名严格配对(日期±2天/开赛±18h) | calc:113-101 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -28059,7 +28023,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728029 冰岛-波黑 113-101 | 队名严格配对(日期±2天/开赛±18h) | calc:113+5.5=118.5 vs 101 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -28182,7 +28146,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728029 冰岛-波黑 113-101 | 队名严格配对(日期±2天/开赛±18h) | calc:113+101=214 vs 166.5 → over",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -28344,7 +28308,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728001 乌拉圭-加拿大 79-73 | 队名严格配对(日期±2天/开赛±18h) | calc:79-73 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -28467,7 +28431,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728001 乌拉圭-加拿大 79-73 | 队名严格配对(日期±2天/开赛±18h) | calc:79+4.5=83.5 vs 73 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -28655,7 +28619,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728001 乌拉圭-加拿大 79-73 | 队名严格配对(日期±2天/开赛±18h) | calc:79+73=152 vs 167.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -28988,7 +28952,7 @@
    "result": "win",
    "pl": 0.23,
    "settleSrc": "球探完场比分 results_t7 sid=728000 巴拿马-波多黎各 72-99 | 队名严格配对(日期±2天/开赛±18h) | calc:72-99 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -29137,7 +29101,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "球探完场比分 results_t7 sid=728000 巴拿马-波多黎各 72-99 | 队名严格配对(日期±2天/开赛±18h) | calc:72+6.5=78.5 vs 99 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -29325,7 +29289,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728000 巴拿马-波多黎各 72-99 | 队名严格配对(日期±2天/开赛±18h) | calc:72+99=171 vs 161.5 → over",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -29448,7 +29412,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728085 约旦-新西兰 56-92 | 队名严格配对(日期±2天/开赛±18h) | calc:56+17.5=73.5 vs 92 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -29519,7 +29483,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728085 约旦-新西兰 56-92 | 队名严格配对(日期±2天/开赛±18h) | calc:56+92=148 vs 173.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -29642,7 +29606,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728084 叙利亚-菲律宾 55-91 | 队名严格配对(日期±2天/开赛±18h) | calc:55+23.5=78.5 vs 91 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -29739,7 +29703,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728084 叙利亚-菲律宾 55-91 | 队名严格配对(日期±2天/开赛±18h) | calc:55+91=146 vs 161.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -29849,7 +29813,7 @@
    "result": "win",
    "pl": 0.02,
    "settleSrc": "球探完场比分 results_t7 sid=728066 爱沙尼亚-法国 68-75 | 队名严格配对(日期±2天/开赛±18h) | calc:68-75 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -29907,7 +29871,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728066 爱沙尼亚-法国 68-75 | 队名严格配对(日期±2天/开赛±18h) | calc:68+15.5=83.5 vs 75 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30056,7 +30020,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728066 爱沙尼亚-法国 68-75 | 队名严格配对(日期±2天/开赛±18h) | calc:68+75=143 vs 160.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30114,7 +30078,7 @@
    "result": "win",
    "pl": 0.31,
    "settleSrc": "球探完场比分 results_t7 sid=728047 拉脱维亚-德国 76-78 | 队名严格配对(日期±2天/开赛±18h) | calc:76-78 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30211,7 +30175,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728047 拉脱维亚-德国 76-78 | 队名严格配对(日期±2天/开赛±18h) | calc:76+5.5=81.5 vs 78 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30360,7 +30324,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728047 拉脱维亚-德国 76-78 | 队名严格配对(日期±2天/开赛±18h) | calc:76+78=154 vs 170.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30535,7 +30499,7 @@
    "result": "win",
    "pl": 0.47,
    "settleSrc": "球探完场比分 results_t7 sid=728065 瑞典-匈牙利 77-74 | 队名严格配对(日期±2天/开赛±18h) | calc:77-74 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30593,7 +30557,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728065 瑞典-匈牙利 77-74 | 队名严格配对(日期±2天/开赛±18h) | calc:77-2.5=74.5 vs 74 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30677,7 +30641,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728065 瑞典-匈牙利 77-74 | 队名严格配对(日期±2天/开赛±18h) | calc:77+74=151 vs 160.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30800,7 +30764,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728067 斯洛文尼亚-芬兰 92-107 | 队名严格配对(日期±2天/开赛±18h) | calc:92-107 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30871,7 +30835,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728067 斯洛文尼亚-芬兰 92-107 | 队名严格配对(日期±2天/开赛±18h) | calc:92-5.5=86.5 vs 107 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -30968,7 +30932,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728067 斯洛文尼亚-芬兰 92-107 | 队名严格配对(日期±2天/开赛±18h) | calc:92+107=199 vs 166.5 → over",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31065,7 +31029,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728049 波兰-克罗地亚 65-77 | 队名严格配对(日期±2天/开赛±18h) | calc:65-77 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31149,7 +31113,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728049 波兰-克罗地亚 65-77 | 队名严格配对(日期±2天/开赛±18h) | calc:65-1.5=63.5 vs 77 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31246,7 +31210,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728049 波兰-克罗地亚 65-77 | 队名严格配对(日期±2天/开赛±18h) | calc:65+77=142 vs 173.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31434,7 +31398,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=727988 智利-墨西哥 66-64 | 队名严格配对(日期±2天/开赛±18h) | calc:66-64 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31518,7 +31482,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=727988 智利-墨西哥 66-64 | 队名严格配对(日期±2天/开赛±18h) | calc:66+8.5=74.5 vs 64 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31654,7 +31618,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=727988 智利-墨西哥 66-64 | 队名严格配对(日期±2天/开赛±18h) | calc:66+64=130 vs 156.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31725,7 +31689,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=727987 巴西-美国 91-88 | 队名严格配对(日期±2天/开赛±18h) | calc:91-88 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31822,7 +31786,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "球探完场比分 results_t7 sid=727987 巴西-美国 91-88 | 队名严格配对(日期±2天/开赛±18h) | calc:91+1.5=92.5 vs 88 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -31932,7 +31896,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=727987 巴西-美国 91-88 | 队名严格配对(日期±2天/开赛±18h) | calc:91+88=179 vs 173.5 → over",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32055,7 +32019,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909326 date=2026-11-28T00:00Z 迈阿密热火108@纽约尼克斯105 | calc:105-108 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32113,7 +32077,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909326 date=2026-11-28T00:00Z 迈阿密热火108@纽约尼克斯105 | calc:105-3.5=101.5 vs 108 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32171,7 +32135,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909326 date=2026-11-28T00:00Z 迈阿密热火108@纽约尼克斯105 | calc:105+108=213 vs 224.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32255,7 +32219,7 @@
    "result": "win",
    "pl": 0.48,
    "settleSrc": "ESPN NBA scoreboard event=401909328 date=2026-11-28T00:30Z 费城76人111@印第安那步行者87 | calc:87-111 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32378,7 +32342,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "ESPN NBA scoreboard event=401909328 date=2026-11-28T00:30Z 费城76人111@印第安那步行者87 | calc:87+2.5=89.5 vs 111 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32540,7 +32504,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909328 date=2026-11-28T00:30Z 费城76人111@印第安那步行者87 | calc:87+111=198 vs 232.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32689,7 +32653,7 @@
    "result": "win",
    "pl": 0.14,
    "settleSrc": "ESPN NBA scoreboard event=401909329 date=2026-11-28T00:30Z 布鲁克林篮网100@多伦多猛龙124 | calc:124-100 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32760,7 +32724,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "ESPN NBA scoreboard event=401909329 date=2026-11-28T00:30Z 布鲁克林篮网100@多伦多猛龙124 | calc:124-7.5=116.5 vs 100 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32909,7 +32873,7 @@
    "result": "win",
    "pl": 0.66,
    "settleSrc": "ESPN NBA scoreboard event=401909329 date=2026-11-28T00:30Z 布鲁克林篮网100@多伦多猛龙124 | calc:124+100=224 vs 220.5 → over",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -32967,7 +32931,7 @@
    "result": "win",
    "pl": 0.1,
    "settleSrc": "ESPN NBA scoreboard event=401909327 date=2026-11-28T00:30Z 密尔沃基雄鹿98@底特律活塞113 | calc:113-98 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -33038,7 +33002,7 @@
    "result": "win",
    "pl": 0.65,
    "settleSrc": "ESPN NBA scoreboard event=401909327 date=2026-11-28T00:30Z 密尔沃基雄鹿98@底特律活塞113 | calc:113-8.5=104.5 vs 98 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -33135,7 +33099,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909327 date=2026-11-28T00:30Z 密尔沃基雄鹿98@底特律活塞113 | calc:113+98=211 vs 219.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -33206,7 +33170,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909330 date=2026-11-28T01:00Z 亚特兰大老鹰87@波士顿凯尔特人86 | calc:86-87 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -33290,7 +33254,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909330 date=2026-11-28T01:00Z 亚特兰大老鹰87@波士顿凯尔特人86 | calc:86-8.5=77.5 vs 87 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -33374,7 +33338,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909330 date=2026-11-28T01:00Z 亚特兰大老鹰87@波士顿凯尔特人86 | calc:86+87=173 vs 221.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -33780,7 +33744,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909331 date=2026-11-28T01:30Z 孟菲斯灰熊114@明尼苏达森林狼109 | calc:109-114 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -33851,7 +33815,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "ESPN NBA scoreboard event=401909331 date=2026-11-28T01:30Z 孟菲斯灰熊114@明尼苏达森林狼109 | calc:109-3.5=105.5 vs 114 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -33922,7 +33886,7 @@
    "result": "win",
    "pl": 0.66,
    "settleSrc": "ESPN NBA scoreboard event=401909331 date=2026-11-28T01:30Z 孟菲斯灰熊114@明尼苏达森林狼109 | calc:109+114=223 vs 220.5 → over",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34032,7 +33996,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728985 菲尼克斯太阳-达拉斯独行侠 106-110 | 队名严格配对(日期±2天/开赛±18h) | calc:106-110 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34116,7 +34080,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728985 菲尼克斯太阳-达拉斯独行侠 106-110 | 队名严格配对(日期±2天/开赛±18h) | calc:106-1.5=104.5 vs 110 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34187,7 +34151,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728985 菲尼克斯太阳-达拉斯独行侠 106-110 | 队名严格配对(日期±2天/开赛±18h) | calc:106+110=216 vs 226.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34310,7 +34274,7 @@
    "result": "win",
    "pl": 0.25,
    "settleSrc": "球探完场比分 results_t7 sid=728989 圣安东尼奥马刺-洛杉矶湖人 83-78 | 队名严格配对(日期±2天/开赛±18h) | calc:83-78 → home",
-   "settledAt": 1795841113,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34368,7 +34332,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728989 圣安东尼奥马刺-洛杉矶湖人 83-78 | 队名严格配对(日期±2天/开赛±18h) | calc:83-5.5=77.5 vs 78 → away",
-   "settledAt": 1795841113,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34478,7 +34442,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728989 圣安东尼奥马刺-洛杉矶湖人 83-78 | 队名严格配对(日期±2天/开赛±18h) | calc:83+78=161 vs 226.5 → under",
-   "settledAt": 1795841113,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34614,7 +34578,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728987 犹他爵士-丹佛掘金 93-91 | 队名严格配对(日期±2天/开赛±18h) | calc:93-91 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34698,7 +34662,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728987 犹他爵士-丹佛掘金 93-91 | 队名严格配对(日期±2天/开赛±18h) | calc:93+8.5=101.5 vs 91 → home",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34821,7 +34785,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728987 犹他爵士-丹佛掘金 93-91 | 队名严格配对(日期±2天/开赛±18h) | calc:93+91=184 vs 227.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -34983,7 +34947,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728988 洛杉矶快船-新奥尔良鹈鹕 80-83 | 队名严格配对(日期±2天/开赛±18h) | calc:80-83 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -35041,7 +35005,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728988 洛杉矶快船-新奥尔良鹈鹕 80-83 | 队名严格配对(日期±2天/开赛±18h) | calc:80-3.5=76.5 vs 83 → away",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -35125,7 +35089,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728988 洛杉矶快船-新奥尔良鹈鹕 80-83 | 队名严格配对(日期±2天/开赛±18h) | calc:80+83=163 vs 231.5 → under",
-   "settledAt": 1795840215,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -35222,7 +35186,7 @@
    "result": "win",
    "pl": 0.08,
    "settleSrc": "球探完场比分 results_t7 sid=728986 波特兰开拓者-金州勇士 100-88 | 队名严格配对(日期±2天/开赛±18h) | calc:100-88 → home",
-   "settledAt": 1795841113,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -35293,7 +35257,7 @@
    "result": "win",
    "pl": 0.7,
    "settleSrc": "球探完场比分 results_t7 sid=728986 波特兰开拓者-金州勇士 100-88 | 队名严格配对(日期±2天/开赛±18h) | calc:100-9.5=90.5 vs 88 → home",
-   "settledAt": 1795841113,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -35429,7 +35393,7 @@
    "result": "lose",
    "pl": -1,
    "settleSrc": "球探完场比分 results_t7 sid=728986 波特兰开拓者-金州勇士 100-88 | 队名严格配对(日期±2天/开赛±18h) | calc:100+88=188 vs 221.5 → under",
-   "settledAt": 1795841113,
+   "settledAt": 1795842912,
    "verified": true,
    "dirTrail": [
     {
@@ -35508,7 +35472,7 @@
   }
  },
  "summary": {
-  "updatedAt": 1795842012,
+  "updatedAt": 1795842912,
   "srcUsed": "CVM公网 basket_heat.json(权威·cron15min)(竞彩真实报价·赛前冻结)",
   "ruleV": "basket_odds_lean_observe_1",
   "total": 422,
