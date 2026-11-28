@@ -9893,7 +9893,11 @@ function fundplateHistoryHTML(){
     return '<tr style="border-top:1px solid var(--line);background:'+_rowHL+'">'
       +'<td style="padding:6px 7px;white-space:nowrap;opacity:.85">'+esc((e.day||'')+' '+(e.kickoff||''))+_ri.txt+'</td>'
       +'<td style="padding:6px 7px;font-size:12px">'+esc(lgD)+'<div style="font-size:10px;opacity:.55">'+esc(_hcTxt)+_hcSrc+(e.water!=null?(' · 水'+ (+e.water).toFixed(2)):'')+'</div></td>'
-      +'<td style="padding:6px 7px"><b>'+esc(homeD)+'</b> vs <b>'+esc(awayD)+'</b>'+_fpEliteTag(e)+'</td>'
+      +'<td style="padding:6px 7px"><b>'+esc(homeD)+'</b> vs <b>'+esc(awayD)+'</b>'+_fpEliteTag(e)
+      /* ★ 2026-11-28 v29 胜率80%选场：每场后面追加胜负差指数迷你列（同源只读）。
+         sf80.js 未加载/无该场数据时返回空串；只加 span 到现有 td，不改列数/表头/判定/统计/分母。 */
+      + (function(){ try{ return (typeof window.sf80MiniForTid==='function') ? window.sf80MiniForTid(e && e.tid) : ''; }catch(_x){ return ''; } })()
+      +'</td>'
       +'<td style="padding:6px 7px;font-weight:800">'+esc(strong)+'</td>'
       +'<td style="padding:6px 7px;vertical-align:top">'+_fpHistOpCell(e,_eLvl,_hCol,_hTag)
       + _fpTrailCell(e)
