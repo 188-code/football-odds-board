@@ -11084,20 +11084,27 @@ function triEliteRowsHTML(rows, withWhy, tier){
     if (t === 'N') return '<span class="pill" style="color:#7c3aed;border-color:#7c3aed" data-tri-elite-tag="N">准精选</span>';
     return '<span style="opacity:.4">—</span>';
   };
+  /* ★ 2026-11-28 v27：精选复盘池队名/联赛/方向文案是 gqj2 裸 PUA 码点（"冠忠\ue966区"），
+     此前直接 esc(r.home) 输出 → 方块乱码。统一走 decodeName（engine.js 全局，幂等）还原。 */
+  const _dn = s => {
+    const str = s == null ? '' : String(s);
+    if (!/[\uE000-\uF8FF]|&#x[eE][0-9a-fA-F]{2,4};/.test(str)) return str;   // 无 PUA 码点：原样返回，绝不误伤正常中文/数字/冒号
+    try{ const d = (typeof decodeName==='function') ? decodeName(str) : str; return (d==null||d==='') ? str : d; }catch(e){ return str; }
+  };
   const cell = r => {
     const res = r.result == null ? '待结算' : (r.result === 1 ? '中' : '错');
     const col = r.result == null ? '#64748b' : (r.result === 1 ? '#dc2626' : '#16a34a');
     const sig = [r.fund ? '资金破缺口' : '', r.converge ? '三端同向' : ''].filter(Boolean).join(' + ') || '—';
     return '<tr onclick="closeTriElite();try{jumpToMatch(\''+esc(r.tid)+'\')}catch(e){}" style="cursor:pointer" title="点击定位主看板该场">'
       + '<td>'+_tag(r)+'</td><td>'+esc(r.day)+'</td><td>'+esc(r.tid)+'</td>'
-      + '<td>'+esc(r.home||'')+' <span style="opacity:.55">vs</span> '+esc(r.away||'')+'</td>'
-      + '<td>'+esc(r.league||'')+'</td><td>'+esc(r.dir||'')+'</td>'
+      + '<td>'+esc(_dn(r.home))+' <span style="opacity:.55">vs</span> '+esc(_dn(r.away))+'</td>'
+      + '<td>'+esc(_dn(r.league))+'</td><td>'+esc(_dn(r.dir))+'</td>'
       + '<td>'+esc(sig)+'</td><td>'+(r.heatScore==null?'—':r.heatScore)+'</td>'
       + '<td>'+(r.over==null?'—':esc(r.over))+'</td><td>'+(r.hcap==null?'—':esc(r.hcap))+'</td>'
       + '<td>'+esc(r.settledSrc||'—')+'</td>'
       + '<td style="color:'+col+';font-weight:800">'+res+'</td>'
       + '<td>'+(r.nSrc||0)+'/'+(r.same==null?'?':r.same)+'</td>'
-      + (withWhy ? '<td style="color:#b45309">'+esc(r.whyFail||'—')+'</td>' : '')
+      + (withWhy ? '<td style="color:#b45309">'+esc(_dn(r.whyFail||'—'))+'</td>' : '')
       + '</tr>';
   };
   return '<table><tr><th>档位</th><th>日期</th><th>tid</th><th>比赛</th><th>联赛</th><th>冻结方向</th><th>合流信号</th><th>热度</th><th>over</th><th>hcap</th><th>结算源</th><th>结果</th><th>端/同向</th>'
