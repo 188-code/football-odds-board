@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-28T06:22:16.942Z",
+  "updated": "2026-11-28T07:23:37.025Z",
   "summary": {
     "total": 100,
     "byTier": {
@@ -2559,7 +2559,7 @@
       "deep": false,
       "lineSpread": 0,
       "strongP": 62.3,
-      "blendP": 58.7,
+      "blendP": 58.6,
       "nSrc": 2,
       "agree": 2,
       "disagree": 0,
@@ -2572,8 +2572,8 @@
         },
         "euMnl": null,
         "bd": {
-          "home": 1.94,
-          "away": 2.05,
+          "home": 1.95,
+          "away": 2.04,
           "line": "-6.5"
         }
       },
@@ -2593,7 +2593,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 51.4,
+          "homeP": 51.1,
           "hot": "home"
         }
       ],
@@ -5592,7 +5592,7 @@
         "euMnl": null,
         "bd": null
       },
-      "line": -9.5,
+      "line": -10.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-28T11:20:34+08:00",
       "locked": true,
@@ -5873,10 +5873,10 @@
       "deep": true,
       "lineSpread": 0,
       "strongP": 80.7,
-      "blendP": 70.9,
+      "blendP": 71.5,
       "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
+      "agree": 1,
+      "disagree": 1,
       "mainSrc": "竞彩独赢",
       "odds": {
         "strong": 1.05,
@@ -5886,8 +5886,8 @@
         },
         "euMnl": null,
         "bd": {
-          "home": 2.05,
-          "away": 1.94,
+          "home": 1.88,
+          "away": 2.12,
           "line": "11.5"
         }
       },
@@ -5907,8 +5907,8 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 48.6,
-          "hot": "away"
+          "homeP": 53,
+          "hot": "home"
         }
       ],
       "direction": "跟强队(客 俄克拉荷马城雷霆)",
