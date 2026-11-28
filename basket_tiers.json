@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-28T05:13:26.541Z",
+  "updated": "2026-11-28T06:22:16.942Z",
   "summary": {
     "total": 100,
     "byTier": {
@@ -2299,74 +2299,6 @@
       }
     },
     {
-      "id": "2043140",
-      "day": "2026-11-29",
-      "league": "美国职业篮球联盟",
-      "home": "夏洛特黄蜂",
-      "away": "布鲁克林篮网",
-      "kickTs": 1795906800,
-      "tier": "优选",
-      "hot": "home",
-      "hotName": "夏洛特黄蜂",
-      "pickSide": "home",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 0,
-      "strongP": 62.3,
-      "blendP": 59.1,
-      "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.36,
-        "jcMnl": {
-          "home": 1.36,
-          "away": 2.25
-        },
-        "euMnl": null,
-        "bd": {
-          "home": 1.89,
-          "away": 2.11,
-          "line": "-6.5"
-        }
-      },
-      "line": -4.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-28T11:20:34+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 62.3,
-          "hot": "home"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 52.8,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 夏洛特黄蜂)",
-      "advice": null,
-      "deepOddsRisk": false,
-      "strongOdds": 1.36,
-      "hotFlag": true,
-      "heatScore": 2,
-      "overheatFade": {
-        "side": "away",
-        "team": "布鲁克林篮网",
-        "text": "过热反向·站客 布鲁克林篮网",
-        "sameAsOurs": false,
-        "heatScore": 2,
-        "verdict": "一盘大热主·北单共振→站对面(客)"
-      }
-    },
-    {
       "id": "2043081",
       "day": "2026-11-28",
       "league": "美国职业篮球联盟",
@@ -2610,6 +2542,74 @@
         "sameAsOurs": false,
         "heatScore": 1,
         "verdict": "一盘大热客·仅一盘→站对面(主)"
+      }
+    },
+    {
+      "id": "2043140",
+      "day": "2026-11-29",
+      "league": "美国职业篮球联盟",
+      "home": "夏洛特黄蜂",
+      "away": "布鲁克林篮网",
+      "kickTs": 1795906800,
+      "tier": "优选",
+      "hot": "home",
+      "hotName": "夏洛特黄蜂",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 0,
+      "strongP": 62.3,
+      "blendP": 58.7,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.36,
+        "jcMnl": {
+          "home": 1.36,
+          "away": 2.25
+        },
+        "euMnl": null,
+        "bd": {
+          "home": 1.94,
+          "away": 2.05,
+          "line": "-6.5"
+        }
+      },
+      "line": -4.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-28T11:20:34+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 62.3,
+          "hot": "home"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 51.4,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 夏洛特黄蜂)",
+      "advice": null,
+      "deepOddsRisk": false,
+      "strongOdds": 1.36,
+      "hotFlag": true,
+      "heatScore": 2,
+      "overheatFade": {
+        "side": "away",
+        "team": "布鲁克林篮网",
+        "text": "过热反向·站客 布鲁克林篮网",
+        "sameAsOurs": false,
+        "heatScore": 2,
+        "verdict": "一盘大热主·北单共振→站对面(客)"
       }
     },
     {
@@ -5592,7 +5592,7 @@
         "euMnl": null,
         "bd": null
       },
-      "line": -8.5,
+      "line": -9.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-28T11:20:34+08:00",
       "locked": true,
@@ -5873,7 +5873,7 @@
       "deep": true,
       "lineSpread": 0,
       "strongP": 80.7,
-      "blendP": 71.2,
+      "blendP": 70.9,
       "nSrc": 2,
       "agree": 2,
       "disagree": 0,
@@ -5886,8 +5886,8 @@
         },
         "euMnl": null,
         "bd": {
-          "home": 2.09,
-          "away": 1.91,
+          "home": 2.05,
+          "away": 1.94,
           "line": "11.5"
         }
       },
@@ -5907,7 +5907,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 47.8,
+          "homeP": 48.6,
           "hot": "away"
         }
       ],
