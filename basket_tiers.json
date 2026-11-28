@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-28T07:23:37.025Z",
+  "updated": "2026-11-28T08:24:47.131Z",
   "summary": {
     "total": 100,
     "byTier": {
@@ -2299,6 +2299,74 @@
       }
     },
     {
+      "id": "2043140",
+      "day": "2026-11-29",
+      "league": "美国职业篮球联盟",
+      "home": "夏洛特黄蜂",
+      "away": "布鲁克林篮网",
+      "kickTs": 1795906800,
+      "tier": "优选",
+      "hot": "home",
+      "hotName": "夏洛特黄蜂",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 0,
+      "strongP": 62.3,
+      "blendP": 59.1,
+      "nSrc": 2,
+      "agree": 2,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.36,
+        "jcMnl": {
+          "home": 1.36,
+          "away": 2.25
+        },
+        "euMnl": null,
+        "bd": {
+          "home": 1.9,
+          "away": 2.1,
+          "line": "-6.5"
+        }
+      },
+      "line": -5.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-28T11:20:34+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 62.3,
+          "hot": "home"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 52.5,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 夏洛特黄蜂)",
+      "advice": null,
+      "deepOddsRisk": false,
+      "strongOdds": 1.36,
+      "hotFlag": true,
+      "heatScore": 2,
+      "overheatFade": {
+        "side": "away",
+        "team": "布鲁克林篮网",
+        "text": "过热反向·站客 布鲁克林篮网",
+        "sameAsOurs": false,
+        "heatScore": 2,
+        "verdict": "一盘大热主·北单共振→站对面(客)"
+      }
+    },
+    {
       "id": "2043081",
       "day": "2026-11-28",
       "league": "美国职业篮球联盟",
@@ -2542,74 +2610,6 @@
         "sameAsOurs": false,
         "heatScore": 1,
         "verdict": "一盘大热客·仅一盘→站对面(主)"
-      }
-    },
-    {
-      "id": "2043140",
-      "day": "2026-11-29",
-      "league": "美国职业篮球联盟",
-      "home": "夏洛特黄蜂",
-      "away": "布鲁克林篮网",
-      "kickTs": 1795906800,
-      "tier": "优选",
-      "hot": "home",
-      "hotName": "夏洛特黄蜂",
-      "pickSide": "home",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 0,
-      "strongP": 62.3,
-      "blendP": 58.6,
-      "nSrc": 2,
-      "agree": 2,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.36,
-        "jcMnl": {
-          "home": 1.36,
-          "away": 2.25
-        },
-        "euMnl": null,
-        "bd": {
-          "home": 1.95,
-          "away": 2.04,
-          "line": "-6.5"
-        }
-      },
-      "line": -4.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-28T11:20:34+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 62.3,
-          "hot": "home"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 51.1,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 夏洛特黄蜂)",
-      "advice": null,
-      "deepOddsRisk": false,
-      "strongOdds": 1.36,
-      "hotFlag": true,
-      "heatScore": 2,
-      "overheatFade": {
-        "side": "away",
-        "team": "布鲁克林篮网",
-        "text": "过热反向·站客 布鲁克林篮网",
-        "sameAsOurs": false,
-        "heatScore": 2,
-        "verdict": "一盘大热主·北单共振→站对面(客)"
       }
     },
     {
@@ -4704,6 +4704,65 @@
       }
     },
     {
+      "id": "2043143",
+      "day": "2026-11-29",
+      "league": "美国职业篮球联盟",
+      "home": "休斯敦火箭",
+      "away": "费城76人",
+      "kickTs": 1795915800,
+      "tier": "观察",
+      "hot": "home",
+      "hotName": "休斯敦火箭",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": true,
+      "lineSpread": 0,
+      "strongP": 75.8,
+      "blendP": 75.8,
+      "nSrc": 1,
+      "agree": 1,
+      "disagree": 0,
+      "mainSrc": "竞彩独赢",
+      "odds": {
+        "strong": 1.12,
+        "jcMnl": {
+          "home": 1.12,
+          "away": 3.5
+        },
+        "euMnl": null,
+        "bd": null
+      },
+      "line": -11.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-28T15:54:12+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "竞彩独赢",
+          "homeP": 75.8,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 休斯敦火箭)",
+      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
+      "deepOddsRisk": true,
+      "strongOdds": 1.12,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "away",
+        "team": "费城76人",
+        "text": "过热反向·站客 费城76人",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热主·仅一盘→站对面(客)"
+      }
+    },
+    {
       "id": "2043073",
       "day": "2026-11-28",
       "league": "男篮世界杯预选赛",
@@ -5564,65 +5623,6 @@
       }
     },
     {
-      "id": "2043143",
-      "day": "2026-11-29",
-      "league": "美国职业篮球联盟",
-      "home": "休斯敦火箭",
-      "away": "费城76人",
-      "kickTs": 1795915800,
-      "tier": "观察",
-      "hot": "home",
-      "hotName": "休斯敦火箭",
-      "pickSide": "home",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": true,
-      "lineSpread": 0,
-      "strongP": 73.1,
-      "blendP": 73.1,
-      "nSrc": 1,
-      "agree": 1,
-      "disagree": 0,
-      "mainSrc": "竞彩独赢",
-      "odds": {
-        "strong": 1.16,
-        "jcMnl": {
-          "home": 1.16,
-          "away": 3.15
-        },
-        "euMnl": null,
-        "bd": null
-      },
-      "line": -10.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-28T11:20:34+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "竞彩独赢",
-          "homeP": 73.1,
-          "hot": "home"
-        }
-      ],
-      "direction": "跟强队(主 休斯敦火箭)",
-      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
-      "deepOddsRisk": true,
-      "strongOdds": 1.16,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "away",
-        "team": "费城76人",
-        "text": "过热反向·站客 费城76人",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热主·仅一盘→站对面(客)"
-      }
-    },
-    {
       "id": "2043052",
       "day": "2026-11-27",
       "league": "男篮世界杯预选赛",
@@ -5887,7 +5887,7 @@
         "euMnl": null,
         "bd": {
           "home": 1.88,
-          "away": 2.12,
+          "away": 2.13,
           "line": "11.5"
         }
       },
@@ -5907,7 +5907,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 53,
+          "homeP": 53.1,
           "hot": "home"
         }
       ],
