@@ -1,6 +1,6 @@
 {
   "version": "basket_tier_overheatref_deepguard_20261125",
-  "updated": "2026-11-28T01:50:09.647Z",
+  "updated": "2026-11-28T03:09:03.252Z",
   "summary": {
     "total": 97,
     "byTier": {
@@ -156,7 +156,7 @@
       "deep": true,
       "lineSpread": 5.1,
       "strongP": 74.1,
-      "blendP": 73.7,
+      "blendP": 73.9,
       "nSrc": 3,
       "agree": 3,
       "disagree": 0,
@@ -172,8 +172,8 @@
           "away": 3.7
         },
         "bd": {
-          "home": 1.63,
-          "away": 2.58,
+          "home": 1.59,
+          "away": 2.66,
           "line": "-8.5"
         }
       },
@@ -198,7 +198,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 61.3,
+          "homeP": 62.6,
           "hot": "home"
         }
       ],
@@ -880,7 +880,7 @@
       "deep": false,
       "lineSpread": 0.9,
       "strongP": 67,
-      "blendP": 65.8,
+      "blendP": 66.2,
       "nSrc": 3,
       "agree": 3,
       "disagree": 0,
@@ -896,8 +896,8 @@
           "away": 2.9
         },
         "bd": {
-          "home": 1.72,
-          "away": 2.38,
+          "home": 1.65,
+          "away": 2.52,
           "line": "-5.5"
         }
       },
@@ -922,7 +922,7 @@
         },
         {
           "src": "北单sfgg",
-          "homeP": 58,
+          "homeP": 60.4,
           "hot": "home"
         }
       ],
@@ -2872,7 +2872,7 @@
       "league": "美国职业篮球联盟",
       "home": "菲尼克斯太阳",
       "away": "达拉斯独行侠",
-      "kickTs": 1795831200,
+      "kickTs": null,
       "tier": "优选",
       "hot": "home",
       "hotName": "菲尼克斯太阳",
@@ -2901,7 +2901,7 @@
       "line": -1.5,
       "lineSrc": "jc/hdc",
       "capturedAt": "2026-11-28T09:49:37+08:00",
-      "locked": true,
+      "locked": false,
       "settledByLine": null,
       "settleNote": null,
       "mnlWin": null,
@@ -2983,6 +2983,82 @@
         "sameAsOurs": false,
         "heatScore": 1,
         "verdict": "一盘大热主·仅一盘→站对面(客)"
+      }
+    },
+    {
+      "id": "2043085",
+      "day": "2026-11-28",
+      "league": "美国职业篮球联盟",
+      "home": "洛杉矶快船",
+      "away": "新奥尔良鹈鹕",
+      "kickTs": 1795833000,
+      "tier": "优选",
+      "hot": "home",
+      "hotName": "洛杉矶快船",
+      "pickSide": "home",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": false,
+      "lineSpread": 3,
+      "strongP": 55.9,
+      "blendP": 57,
+      "nSrc": 3,
+      "agree": 3,
+      "disagree": 0,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.72,
+        "jcMnl": {
+          "home": 1.44,
+          "away": 2.06
+        },
+        "euMnl": {
+          "home": 1.72,
+          "away": 2.18
+        },
+        "bd": {
+          "home": 1.77,
+          "away": 2.28,
+          "line": "-3.5"
+        }
+      },
+      "line": -4.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-28T09:49:37+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 55.9,
+          "hot": "home"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 58.9,
+          "hot": "home"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 56.3,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(主 洛杉矶快船)",
+      "advice": null,
+      "deepOddsRisk": false,
+      "strongOdds": 1.72,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "away",
+        "team": "新奥尔良鹈鹕",
+        "text": "过热反向·站客 新奥尔良鹈鹕",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热主·北单分歧→降档"
       }
     },
     {
@@ -3177,82 +3253,6 @@
         "sameAsOurs": false,
         "heatScore": 1,
         "verdict": "一盘大热客·仅一盘→站对面(主)"
-      }
-    },
-    {
-      "id": "2043085",
-      "day": "2026-11-28",
-      "league": "美国职业篮球联盟",
-      "home": "洛杉矶快船",
-      "away": "新奥尔良鹈鹕",
-      "kickTs": 1795833000,
-      "tier": "优选",
-      "hot": "home",
-      "hotName": "洛杉矶快船",
-      "pickSide": "home",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": false,
-      "lineSpread": 3,
-      "strongP": 55.9,
-      "blendP": 55.9,
-      "nSrc": 3,
-      "agree": 2,
-      "disagree": 1,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.72,
-        "jcMnl": {
-          "home": 1.44,
-          "away": 2.06
-        },
-        "euMnl": {
-          "home": 1.72,
-          "away": 2.18
-        },
-        "bd": {
-          "home": 2,
-          "away": 1.99,
-          "line": "-3.5"
-        }
-      },
-      "line": -4.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-28T09:49:37+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 55.9,
-          "hot": "home"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 58.9,
-          "hot": "home"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 49.9,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(主 洛杉矶快船)",
-      "advice": null,
-      "deepOddsRisk": false,
-      "strongOdds": 1.72,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "away",
-        "team": "新奥尔良鹈鹕",
-        "text": "过热反向·站客 新奥尔良鹈鹕",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热主·北单分歧→降档"
       }
     },
     {
@@ -4753,82 +4753,6 @@
       }
     },
     {
-      "id": "2043084",
-      "day": "2026-11-28",
-      "league": "美国职业篮球联盟",
-      "home": "犹他爵士",
-      "away": "丹佛掘金",
-      "kickTs": 1795833000,
-      "tier": "观察",
-      "hot": "away",
-      "hotName": "丹佛掘金",
-      "pickSide": "away",
-      "directionRule": "跟强队(独赢隐含高方)",
-      "deep": true,
-      "lineSpread": 1.9,
-      "strongP": 77.4,
-      "blendP": 75.6,
-      "nSrc": 3,
-      "agree": 3,
-      "disagree": 0,
-      "mainSrc": "365独赢",
-      "odds": {
-        "strong": 1.24,
-        "jcMnl": {
-          "home": 4.1,
-          "away": 1.07
-        },
-        "euMnl": {
-          "home": 4.25,
-          "away": 1.24
-        },
-        "bd": {
-          "home": 2.68,
-          "away": 1.59,
-          "line": "9.5"
-        }
-      },
-      "line": 11.5,
-      "lineSrc": "jc/hdc",
-      "capturedAt": "2026-11-28T09:34:31+08:00",
-      "locked": true,
-      "settledByLine": null,
-      "settleNote": null,
-      "mnlWin": null,
-      "lineWinSide": null,
-      "sources": [
-        {
-          "src": "365独赢",
-          "homeP": 22.6,
-          "hot": "away"
-        },
-        {
-          "src": "竞彩独赢",
-          "homeP": 20.7,
-          "hot": "away"
-        },
-        {
-          "src": "北单sfgg",
-          "homeP": 37.2,
-          "hot": "away"
-        }
-      ],
-      "direction": "跟强队(客 丹佛掘金)",
-      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
-      "deepOddsRisk": true,
-      "strongOdds": 1.24,
-      "hotFlag": true,
-      "heatScore": 1,
-      "overheatFade": {
-        "side": "home",
-        "team": "犹他爵士",
-        "text": "过热反向·站主 犹他爵士",
-        "sameAsOurs": false,
-        "heatScore": 1,
-        "verdict": "一盘大热客·仅一盘→站对面(主)"
-      }
-    },
-    {
       "id": "2042888",
       "day": "2026-11-21",
       "league": "欧洲篮球联赛",
@@ -5239,6 +5163,82 @@
         "sameAsOurs": false,
         "heatScore": 2,
         "verdict": "一盘大热客·北单共振→站对面(主)"
+      }
+    },
+    {
+      "id": "2043084",
+      "day": "2026-11-28",
+      "league": "美国职业篮球联盟",
+      "home": "犹他爵士",
+      "away": "丹佛掘金",
+      "kickTs": 1795833000,
+      "tier": "观察",
+      "hot": "away",
+      "hotName": "丹佛掘金",
+      "pickSide": "away",
+      "directionRule": "跟强队(独赢隐含高方)",
+      "deep": true,
+      "lineSpread": 1.9,
+      "strongP": 77.4,
+      "blendP": 74,
+      "nSrc": 3,
+      "agree": 2,
+      "disagree": 1,
+      "mainSrc": "365独赢",
+      "odds": {
+        "strong": 1.24,
+        "jcMnl": {
+          "home": 4.1,
+          "away": 1.07
+        },
+        "euMnl": {
+          "home": 4.25,
+          "away": 1.24
+        },
+        "bd": {
+          "home": 1.88,
+          "away": 2.12,
+          "line": "9.5"
+        }
+      },
+      "line": 11.5,
+      "lineSrc": "jc/hdc",
+      "capturedAt": "2026-11-28T09:34:31+08:00",
+      "locked": true,
+      "settledByLine": null,
+      "settleNote": null,
+      "mnlWin": null,
+      "lineWinSide": null,
+      "sources": [
+        {
+          "src": "365独赢",
+          "homeP": 22.6,
+          "hot": "away"
+        },
+        {
+          "src": "竞彩独赢",
+          "homeP": 20.7,
+          "hot": "away"
+        },
+        {
+          "src": "北单sfgg",
+          "homeP": 53,
+          "hot": "home"
+        }
+      ],
+      "direction": "跟强队(客 丹佛掘金)",
+      "advice": "深盘高危·不建议出注(强方≤1.25, ROI-34.8% z-4.11)",
+      "deepOddsRisk": true,
+      "strongOdds": 1.24,
+      "hotFlag": true,
+      "heatScore": 1,
+      "overheatFade": {
+        "side": "home",
+        "team": "犹他爵士",
+        "text": "过热反向·站主 犹他爵士",
+        "sameAsOurs": false,
+        "heatScore": 1,
+        "verdict": "一盘大热客·仅一盘→站对面(主)"
       }
     },
     {
